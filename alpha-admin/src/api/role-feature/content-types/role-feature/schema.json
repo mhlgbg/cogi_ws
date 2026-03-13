@@ -1,0 +1,28 @@
+{
+  "kind": "collectionType",
+  "collectionName": "role_features",
+  "info": {
+    "singularName": "role-feature",
+    "pluralName": "role-features",
+    "displayName": "Role Feature",
+    "description": "Maps users-permissions roles to business features"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "role": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.role",
+      "required": true
+    },
+    "feature": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::feature.feature",
+      "required": true
+    }
+  }
+}

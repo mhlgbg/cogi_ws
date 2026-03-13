@@ -1,0 +1,125 @@
+{
+  "kind": "collectionType",
+  "collectionName": "requests",
+  "info": {
+    "singularName": "request",
+    "pluralName": "requests",
+    "displayName": "Request"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "text"
+    },
+    "requester": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "inversedBy": "requests"
+    },
+    "request_category": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::request-category.request-category",
+      "inversedBy": "requests"
+    },
+    "request_tags": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::request-tag.request-tag",
+      "inversedBy": "requests"
+    },
+    "visibilityMode": {
+      "type": "enumeration",
+      "enum": [
+        "COLLABORATIVE",
+        "PRIVATE"
+      ]
+    },
+    "request_status": {
+      "type": "enumeration",
+      "enum": [
+        "OPEN",
+        "IN_PROGRESS",
+        "WAITING",
+        "DONE",
+        "CLOSED",
+        "CANCELLED"
+      ]
+    },
+    "amountProposed": {
+      "type": "decimal"
+    },
+    "amountApproved": {
+      "type": "decimal"
+    },
+    "currency": {
+      "type": "enumeration",
+      "enum": [
+        "VND",
+        "USD"
+      ]
+    },
+    "attachments": {
+      "type": "media",
+      "multiple": true,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "watchers": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::users-permissions.user",
+      "mappedBy": "watcher_requests"
+    },
+    "departmentContext": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::department.department",
+      "inversedBy": "requests"
+    },
+    "closedAt": {
+      "type": "datetime"
+    },
+    "closedDecision": {
+      "type": "enumeration",
+      "enum": [
+        "APPROVED",
+        "REJECTED"
+      ]
+    },
+    "closedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "closeNote": {
+      "type": "text"
+    },
+    "submittedAt": {
+      "type": "datetime"
+    },
+    "request_assignees": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::request-assignee.request-assignee",
+      "mappedBy": "request"
+    },
+    "request_messages": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::request-message.request-message",
+      "mappedBy": "request"
+    }
+  }
+}

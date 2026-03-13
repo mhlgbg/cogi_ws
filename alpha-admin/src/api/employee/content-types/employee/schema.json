@@ -1,0 +1,106 @@
+{
+  "kind": "collectionType",
+  "collectionName": "employees",
+  "info": {
+    "singularName": "employee",
+    "pluralName": "employees",
+    "displayName": "Employee"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "employeeCode": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "fullName": {
+      "type": "string",
+      "required": true
+    },
+    "gender": {
+      "type": "enumeration",
+      "enum": [
+        "male",
+        "female",
+        "other"
+      ]
+    },
+    "dateOfBirth": {
+      "type": "date"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "workEmail": {
+      "type": "email"
+    },
+    "personalEmail": {
+      "type": "email"
+    },
+    "address": {
+      "type": "text"
+    },
+    "joinDate": {
+      "type": "date"
+    },
+    "officialDate": {
+      "type": "date"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "active",
+        "probation",
+        "official",
+        "maternity_leave",
+        "unpaid_leave",
+        "resigned",
+        "retired"
+      ],
+      "default": "active"
+    },
+    "avatar": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "identityNumber": {
+      "type": "string"
+    },
+    "identityIssueDate": {
+      "type": "date"
+    },
+    "identityIssuePlace": {
+      "type": "string"
+    },
+    "note": {
+      "type": "text"
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "currentDepartment": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::department.department"
+    },
+    "currentPosition": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::position.position"
+    },
+    "currentManager": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::employee.employee"
+    }
+  }
+}

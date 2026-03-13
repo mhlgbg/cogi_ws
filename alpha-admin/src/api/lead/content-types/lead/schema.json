@@ -1,0 +1,68 @@
+{
+  "kind": "collectionType",
+  "collectionName": "leads",
+  "info": {
+    "singularName": "lead",
+    "pluralName": "leads",
+    "displayName": "Lead"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "fullName": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "channel": {
+      "type": "enumeration",
+      "enum": [
+        "web",
+        "zalo",
+        "facebook",
+        "phone",
+        "other"
+      ]
+    },
+    "message": {
+      "type": "string"
+    },
+    "fromAt": {
+      "type": "datetime"
+    },
+    "toAt": {
+      "type": "datetime"
+    },
+    "vehicle": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::vehicle.vehicle",
+      "inversedBy": "leads"
+    },
+    "vehicleType": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::vehicle-type.vehicle-type",
+      "inversedBy": "leads"
+    },
+    "leadStatus": {
+      "type": "enumeration",
+      "enum": [
+        "new",
+        "processing",
+        "contacted",
+        "closed",
+        "spam"
+      ]
+    },
+    "noteInternal": {
+      "type": "text"
+    },
+    "pageUrl": {
+      "type": "string"
+    }
+  }
+}

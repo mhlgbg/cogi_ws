@@ -1,0 +1,74 @@
+{
+  "kind": "collectionType",
+  "collectionName": "customers",
+  "info": {
+    "singularName": "customer",
+    "pluralName": "customers",
+    "displayName": "Customer"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "phone": {
+      "type": "string"
+    },
+    "zalo": {
+      "type": "string"
+    },
+    "address": {
+      "type": "text"
+    },
+    "customerType": {
+      "type": "enumeration",
+      "enum": [
+        "RETAIL",
+        "COMPANY",
+        "INTERNAL",
+        "OTHER"
+      ],
+      "default": "RETAIL"
+    },
+    "allowDebt": {
+      "type": "boolean",
+      "default": false
+    },
+    "debtLimit": {
+      "type": "decimal",
+      "default": 0
+    },
+    "note": {
+      "type": "text"
+    },
+    "isDefaultRetailGuest": {
+      "type": "boolean",
+      "default": false
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    },
+    "service_orders": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::service-order.service-order",
+      "mappedBy": "customer"
+    },
+    "payment_transactions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::payment-transaction.payment-transaction",
+      "mappedBy": "customer"
+    }
+  }
+}

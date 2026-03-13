@@ -1,0 +1,32 @@
+{
+  "kind": "collectionType",
+  "collectionName": "feature_groups",
+  "info": {
+    "singularName": "feature-group",
+    "pluralName": "feature-groups",
+    "displayName": "Feature Group",
+    "description": "Internal business collection for grouping RBAC features"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "code": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "order": {
+      "type": "integer",
+      "default": 0
+    },
+    "icon": {
+      "type": "string"
+    }
+  }
+}

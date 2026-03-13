@@ -1,0 +1,15 @@
+/* CoreUI sidebar mặc định ~256px */
+:root {
+  --sidebar-width: 256px;
+}
+
+.body {
+  margin-left: var(--sidebar-width);
+}
+
+/* Mobile: sidebar overlay, không chừa lề */
+@media (max-width: 768px) {
+  .body {
+    margin-left: 0;
+  }
+}

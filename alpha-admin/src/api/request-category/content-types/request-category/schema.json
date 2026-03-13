@@ -1,0 +1,46 @@
+{
+  "kind": "collectionType",
+  "collectionName": "request_categories",
+  "info": {
+    "singularName": "request-category",
+    "pluralName": "request-categories",
+    "displayName": "RequestCategory"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string"
+    },
+    "slug": {
+      "type": "uid",
+      "targetField": "name"
+    },
+    "isActive": {
+      "type": "boolean"
+    },
+    "description": {
+      "type": "text"
+    },
+    "parent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::request-category.request-category",
+      "inversedBy": "children"
+    },
+    "children": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::request-category.request-category",
+      "mappedBy": "parent"
+    },
+    "requests": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::request.request",
+      "mappedBy": "request_category"
+    }
+  }
+}

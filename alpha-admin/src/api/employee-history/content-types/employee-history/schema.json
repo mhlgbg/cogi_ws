@@ -1,0 +1,70 @@
+{
+  "kind": "collectionType",
+  "collectionName": "employee_histories",
+  "info": {
+    "singularName": "employee-history",
+    "pluralName": "employee-histories",
+    "displayName": "Employee History"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "startDate": {
+      "type": "date",
+      "required": true
+    },
+    "endDate": {
+      "type": "date"
+    },
+    "assignmentType": {
+      "type": "enumeration",
+      "enum": [
+        "official",
+        "concurrent",
+        "temporary",
+        "promotion",
+        "transfer"
+      ],
+      "default": "official"
+    },
+    "isPrimary": {
+      "type": "boolean",
+      "default": false
+    },
+    "isCurrent": {
+      "type": "boolean",
+      "default": true
+    },
+    "decisionNo": {
+      "type": "string"
+    },
+    "note": {
+      "type": "text"
+    },
+    "employee": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::employee.employee",
+      "required": true
+    },
+    "department": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::department.department",
+      "required": true
+    },
+    "position": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::position.position",
+      "required": true
+    },
+    "manager": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::employee.employee"
+    }
+  }
+}

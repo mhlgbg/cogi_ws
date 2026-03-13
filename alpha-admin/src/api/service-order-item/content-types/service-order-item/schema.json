@@ -1,0 +1,59 @@
+{
+  "kind": "collectionType",
+  "collectionName": "service_order_items",
+  "info": {
+    "singularName": "service-order-item",
+    "pluralName": "service-order-items",
+    "displayName": "Service Order Item"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "description": {
+      "type": "text"
+    },
+    "quantity": {
+      "type": "decimal",
+      "default": 1
+    },
+    "unitPrice": {
+      "type": "decimal",
+      "default": 0
+    },
+    "amount": {
+      "type": "decimal",
+      "default": 0
+    },
+    "sortOrder": {
+      "type": "integer",
+      "default": 0
+    },
+    "note": {
+      "type": "text"
+    },
+    "attachments": {
+      "type": "media",
+      "multiple": true,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "order": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::service-order.service-order",
+      "inversedBy": "items"
+    },
+    "serviceItem": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::service-item.service-item",
+      "inversedBy": "service_order_items"
+    }
+  }
+}

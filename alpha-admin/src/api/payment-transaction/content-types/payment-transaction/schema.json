@@ -1,0 +1,58 @@
+{
+  "kind": "collectionType",
+  "collectionName": "payment_transactions",
+  "info": {
+    "singularName": "payment-transaction",
+    "pluralName": "payment-transactions",
+    "displayName": "Payment Transaction"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "amount": {
+      "type": "decimal",
+      "required": true
+    },
+    "method": {
+      "type": "enumeration",
+      "enum": [
+        "CASH",
+        "TRANSFER",
+        "MOMO",
+        "OTHER"
+      ],
+      "default": "CASH"
+    },
+    "paidAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "note": {
+      "type": "text"
+    },
+    "order": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::service-order.service-order",
+      "inversedBy": "payments"
+    },
+    "customer": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::customer.customer",
+      "inversedBy": "payment_transactions"
+    },
+    "department": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::department.department"
+    },
+    "collectedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::employee.employee"
+    }
+  }
+}

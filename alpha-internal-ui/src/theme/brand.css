@@ -1,0 +1,18 @@
+:root {
+  --brand-name: "Alpha Internal";
+  --brand-logo-url: url("/images/logo-alpha.png");
+
+  --brand-primary: #2f4bff;
+  --brand-secondary: #5b6b8a;
+
+  --brand-bg: #f8fafc;
+  --brand-surface: #ffffff;
+  --brand-border: #e5e7eb;
+  --brand-text: #111827;
+  --brand-text-muted: #6b7280;
+}
+
+body {
+  background-color: var(--brand-bg);
+  color: var(--brand-text);
+}

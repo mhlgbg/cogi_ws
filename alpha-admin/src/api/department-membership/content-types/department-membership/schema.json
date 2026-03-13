@@ -1,0 +1,58 @@
+{
+  "kind": "collectionType",
+  "collectionName": "department_memberships",
+  "info": {
+    "singularName": "department-membership",
+    "pluralName": "department-memberships",
+    "displayName": "DepartmentMembership"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "user": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "department": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::department.department"
+    },
+    "joinedAt": {
+      "type": "date"
+    },
+    "leftAt": {
+      "type": "date"
+    },
+    "status_record": {
+      "type": "enumeration",
+      "enum": [
+        "PENDING",
+        "ACTIVE",
+        "INACTIVE",
+        "REJECTED"
+      ]
+    },
+    "joinMethod": {
+      "type": "enumeration",
+      "enum": [
+        "SELF_REGISTER",
+        "ASSIGNED"
+      ]
+    },
+    "approved_by": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "approvedAt": {
+      "type": "datetime"
+    },
+    "note": {
+      "type": "text"
+    }
+  }
+}

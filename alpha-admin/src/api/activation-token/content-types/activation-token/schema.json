@@ -1,0 +1,35 @@
+{
+  "kind": "collectionType",
+  "collectionName": "activation_tokens",
+  "info": {
+    "singularName": "activation-token",
+    "pluralName": "activation-tokens",
+    "displayName": "Activation Token"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "token": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "user": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "expiresAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "usedAt": {
+      "type": "datetime"
+    },
+    "note": {
+      "type": "text"
+    }
+  }
+}

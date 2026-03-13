@@ -1,0 +1,104 @@
+{
+  "kind": "collectionType",
+  "collectionName": "service_orders",
+  "info": {
+    "singularName": "service-order",
+    "pluralName": "service-orders",
+    "displayName": "Service Order"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "source": {
+      "type": "enumeration",
+      "enum": [
+        "ZALO",
+        "DIRECT",
+        "PHONE",
+        "FACEBOOK",
+        "OTHER"
+      ],
+      "default": "DIRECT"
+    },
+    "orderDate": {
+      "type": "datetime",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "NEW",
+        "PROCESSING",
+        "READY",
+        "DELIVERED",
+        "CANCELLED"
+      ],
+      "default": "NEW"
+    },
+    "description": {
+      "type": "text"
+    },
+    "totalAmount": {
+      "type": "decimal",
+      "default": 0
+    },
+    "paidAmount": {
+      "type": "decimal",
+      "default": 0
+    },
+    "debtAmount": {
+      "type": "decimal",
+      "default": 0
+    },
+    "paymentStatus": {
+      "type": "enumeration",
+      "enum": [
+        "UNPAID",
+        "PARTIAL",
+        "PAID"
+      ],
+      "default": "UNPAID"
+    },
+    "deliveredAt": {
+      "type": "datetime"
+    },
+    "note": {
+      "type": "text"
+    },
+    "customer": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::customer.customer",
+      "inversedBy": "service_orders"
+    },
+    "department": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::department.department"
+    },
+    "assignedEmployee": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::employee.employee"
+    },
+    "items": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::service-order-item.service-order-item",
+      "mappedBy": "order"
+    },
+    "payments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::payment-transaction.payment-transaction",
+      "mappedBy": "order"
+    }
+  }
+}

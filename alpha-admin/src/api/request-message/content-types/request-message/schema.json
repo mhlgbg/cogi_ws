@@ -1,0 +1,51 @@
+{
+  "kind": "collectionType",
+  "collectionName": "request_messages",
+  "info": {
+    "singularName": "request-message",
+    "pluralName": "request-messages",
+    "displayName": "RequestMessage"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "request": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::request.request",
+      "inversedBy": "request_messages"
+    },
+    "author": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "content": {
+      "type": "text"
+    },
+    "attachments": {
+      "type": "media",
+      "multiple": true,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "linksText": {
+      "type": "string"
+    },
+    "visibility": {
+      "type": "boolean"
+    },
+    "visible_to_users": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "plugin::users-permissions.user",
+      "inversedBy": "request_messages"
+    }
+  }
+}

@@ -1,0 +1,89 @@
+# =========================
+# OS / Editor
+# =========================
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+
+# =========================
+# Logs
+# =========================
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Env files / secrets
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Node
+# =========================
+node_modules/
+npm-cache/
+.pnpm-store/
+
+# =========================
+# Build / cache
+# =========================
+dist/
+build/
+.cache/
+.tmp/
+coverage/
+
+# =========================
+# Strapi
+# =========================
+.strapi/
+.tmp/
+.cache/
+exports/
+data/
+sqlite/
+*.db
+*.sqlite
+*.sqlite3
+
+# upload runtime files if you do not want to store them
+public/uploads/
+**/public/uploads/
+
+# =========================
+# React / Vite / Next common
+# =========================
+**/node_modules/
+**/dist/
+**/build/
+**/.vite/
+**/.next/
+**/coverage/
+
+# local env in subprojects
+**/.env
+**/.env.*
+!**/.env.example
+
+# =========================
+# Certificates / keys
+# =========================
+*.pem
+*.key
+*.crt
+*.pfx
+
+# =========================
+# Temporary files
+# =========================
+tmp/
+temp/
+*.tmp

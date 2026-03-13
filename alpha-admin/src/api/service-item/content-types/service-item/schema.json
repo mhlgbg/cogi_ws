@@ -1,0 +1,54 @@
+{
+  "kind": "collectionType",
+  "collectionName": "service_items",
+  "info": {
+    "singularName": "service-item",
+    "pluralName": "service-items",
+    "displayName": "Service Item"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "unit": {
+      "type": "string"
+    },
+    "defaultPrice": {
+      "type": "decimal",
+      "default": 0
+    },
+    "description": {
+      "type": "text"
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    },
+    "sortOrder": {
+      "type": "integer",
+      "default": 0
+    },
+    "category": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::service-category.service-category",
+      "inversedBy": "service_items"
+    },
+    "service_order_items": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::service-order-item.service-order-item",
+      "mappedBy": "serviceItem"
+    }
+  }
+}

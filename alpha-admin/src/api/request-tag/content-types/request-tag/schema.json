@@ -1,0 +1,44 @@
+{
+  "kind": "collectionType",
+  "collectionName": "request_tags",
+  "info": {
+    "singularName": "request-tag",
+    "pluralName": "request-tags",
+    "displayName": "RequestTag"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string"
+    },
+    "slug": {
+      "type": "uid",
+      "targetField": "name"
+    },
+    "group": {
+      "type": "enumeration",
+      "enum": [
+        "PRIORITY",
+        "PROJECT",
+        "VENDOR",
+        "RISK",
+        "CUSTOM"
+      ]
+    },
+    "isActive": {
+      "type": "boolean"
+    },
+    "description": {
+      "type": "text"
+    },
+    "requests": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::request.request",
+      "mappedBy": "request_tags"
+    }
+  }
+}

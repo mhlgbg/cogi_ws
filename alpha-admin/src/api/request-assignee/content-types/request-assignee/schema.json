@@ -1,0 +1,82 @@
+{
+  "kind": "collectionType",
+  "collectionName": "request_assignees",
+  "info": {
+    "singularName": "request-assignee",
+    "pluralName": "request-assignees",
+    "displayName": "RequestAssignee"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "inversedBy": "request_assignees"
+    },
+    "request": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::request.request",
+      "inversedBy": "request_assignees"
+    },
+    "assignedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "assignedAt": {
+      "type": "datetime"
+    },
+    "removedAt": {
+      "type": "datetime"
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    },
+    "roleType": {
+      "type": "enumeration",
+      "enum": [
+        "ASSIGNEE",
+        "OBSERVER"
+      ]
+    },
+    "dueAt": {
+      "type": "datetime"
+    },
+    "weight": {
+      "type": "integer",
+      "min": 0,
+      "max": 100
+    },
+    "progress": {
+      "type": "integer",
+      "min": 0,
+      "max": 100
+    },
+    "request_assignee_status": {
+      "type": "enumeration",
+      "enum": [
+        "PENDING",
+        "ACCEPTED",
+        "IN_PROGRESS",
+        "DONE",
+        "BLOCKED",
+        "REJECTED"
+      ]
+    },
+    "acceptedAt": {
+      "type": "datetime"
+    },
+    "doneAt": {
+      "type": "datetime"
+    },
+    "note": {
+      "type": "text"
+    }
+  }
+}
