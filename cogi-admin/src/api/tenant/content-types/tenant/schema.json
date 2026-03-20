@@ -1,0 +1,93 @@
+{
+  "kind": "collectionType",
+  "collectionName": "tenants",
+  "info": {
+    "singularName": "tenant",
+    "pluralName": "tenants",
+    "displayName": "Tenant"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "code": {
+      "type": "uid",
+      "targetField": "name",
+      "required": true,
+      "unique": true
+    },
+    "tenantStatus": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "active",
+        "inactive",
+        "suspended"
+      ],
+      "required": true
+    },
+    "shortName": {
+      "type": "string"
+    },
+    "description": {
+      "type": "text"
+    },
+    "logo": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "primaryColor": {
+      "type": "string"
+    },
+    "defaultLocale": {
+      "type": "string"
+    },
+    "timezone": {
+      "type": "string"
+    },
+    "settings": {
+      "type": "json"
+    },
+    "startDate": {
+      "type": "date"
+    },
+    "endDate": {
+      "type": "date"
+    },
+    "note": {
+      "type": "text"
+    },
+    "tenantDomains": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::tenant-domain.tenant-domain",
+      "mappedBy": "tenant"
+    },
+    "userTenants": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::user-tenant.user-tenant",
+      "mappedBy": "tenant"
+    },
+    "tenantRoles": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::tenant-role.tenant-role",
+      "mappedBy": "tenant"
+    },
+    "departments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::department.department",
+      "mappedBy": "tenant"
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "kind": "collectionType",
+  "collectionName": "tenant_roles",
+  "info": {
+    "singularName": "tenant-role",
+    "pluralName": "tenant-roles",
+    "displayName": "Tenant Role"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "tenantRoles",
+      "required": true
+    },
+    "role": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.role",
+      "required": true
+    },
+    "isActive": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
+    "note": {
+      "type": "text"
+    },
+    "label": {
+      "type": "string"
+    }
+  }
+}

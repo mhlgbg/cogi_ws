@@ -39,6 +39,11 @@
       "relation": "manyToMany",
       "target": "api::request.request",
       "mappedBy": "request_tags"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant"
     }
   }
 }

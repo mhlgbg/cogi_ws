@@ -264,24 +264,22 @@ export default function EmployeeDetail() {
             "sort[0]": "fullName:asc",
           },
         }),
-        axios.get("/users", {
-          params: {
-            "pagination[page]": 1,
-            "pagination[pageSize]": 500,
-            sort: "username:asc",
-          },
-        }),
+        axios.get("/account/tenant-users"),
       ])
 
       setDepartments(normalizeOptionRows(departmentRes?.data))
       setPositions(normalizeOptionRows(positionRes?.data))
       setManagers(normalizeOptionRows(managerRes?.data))
 
-      const userRowsRaw = normalizeApiRows(userRes?.data)
+      // tenant-users endpoint returns { data: [{id, username, email}, ...] }
+      const userRows = Array.isArray(userRes?.data?.data) ? userRes.data.data : []
       setUsers(
-        userRowsRaw.map((item) =>
-          item?.attributes ? { id: item.id, documentId: item.documentId, ...item.attributes } : item
-        )
+        userRows.map((item) => ({
+          id: item.id,
+          documentId: item.documentId || '',
+          username: item.username || '',
+          email: item.email || '',
+        }))
       )
     } catch {
       setDepartments([])

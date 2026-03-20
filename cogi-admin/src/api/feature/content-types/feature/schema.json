@@ -33,6 +33,10 @@
     },
     "description": {
       "type": "text"
+    },
+    "path": {
+      "type": "string",
+      "description": "Route path for this feature (e.g., /invite-user)"
     }
   }
 }

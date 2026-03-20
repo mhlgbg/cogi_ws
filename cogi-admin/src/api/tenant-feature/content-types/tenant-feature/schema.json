@@ -1,0 +1,38 @@
+{
+  "kind": "collectionType",
+  "collectionName": "tenant_features",
+  "info": {
+    "singularName": "tenant-feature",
+    "pluralName": "tenant-features",
+    "displayName": "Tenant Feature"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "feature": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::feature.feature",
+      "required": true
+    },
+    "isEnabled": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
+    "note": {
+      "type": "text"
+    },
+    "label": {
+      "type": "string"
+    }
+  }
+}

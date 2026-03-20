@@ -27,6 +27,12 @@
       "type": "boolean",
       "default": true
     },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
     "sortOrder": {
       "type": "integer",
       "default": 0

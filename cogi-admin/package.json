@@ -1,5 +1,5 @@
 {
-  "name": "phuquoc-cms",
+  "name": "Cogi-cms",
   "version": "0.1.0",
   "private": true,
   "description": "A Strapi application",
@@ -11,6 +11,7 @@
     "develop": "strapi develop",
     "admin:create-user": "node ./scripts/create-admin-user.js",
     "seed:example": "node ./scripts/seed.js",
+    "seed:modules": "node ./scripts/seed-modules.js",
     "test:quick:activate-role": "node --test ./scripts/quick-test-activate-role.js",
     "start": "strapi start",
     "strapi": "strapi",

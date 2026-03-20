@@ -8,15 +8,24 @@ import {
   extractDataRelationId,
   getOrderUpdateLevel,
   getOrderViewLevel,
+  hasOrderUpdateOverride,
   hasPermission,
+  isOrderEditableState,
   resolveCurrentUserScope,
 } from '../services/service-sales-access';
 import { generateServiceOrderCode } from '../services/generate-service-order-code';
+import {
+  assertEntityTenantMatch,
+  findEntityByRef,
+  mergeTenantWhere,
+  resolveCurrentTenantId,
+} from '../../../utils/tenant-scope';
 
 const SERVICE_ORDER_UID = 'api::service-order.service-order';
 const CUSTOMER_UID = 'api::customer.customer';
 const SERVICE_ITEM_UID = 'api::service-item.service-item';
 const DEPARTMENT_UID = 'api::department.department';
+const EMPLOYEE_UID = 'api::employee.employee';
 
 type SortOrder = 'asc' | 'desc';
 
@@ -278,6 +287,12 @@ function clampNonNegative(value: number): number {
   return value;
 }
 
+function isOrderOwnedByEmployee(order: any, employeeId: number | null): boolean {
+  if (!employeeId) return false;
+  const assignedId = Number(getRelationId(order?.assignedEmployee) || 0);
+  return Number.isInteger(assignedId) && assignedId > 0 && assignedId === employeeId;
+}
+
 function calculatePaymentStatus(totalAmount: number, paidAmount: number): 'UNPAID' | 'PARTIAL' | 'PAID' {
   if (totalAmount <= 0 && paidAmount <= 0) return 'UNPAID';
   if (paidAmount <= 0) return 'UNPAID';
@@ -294,6 +309,43 @@ function parseBooleanFlag(value: unknown): boolean {
     return ['1', 'true', 'yes', 'on'].includes(normalized);
   }
   return false;
+}
+
+const SERVICE_ORDER_STATUS_KEYS = new Set([
+  'NEW',
+  'PROCESSING',
+  'READY',
+  'DELIVERED',
+  'CANCELLED',
+]);
+
+function hasOwn(data: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(data, key);
+}
+
+function normalizeStatusKey(value: unknown): string {
+  return String(value || '').trim().replace(/[\s-]+/g, '_').toUpperCase();
+}
+
+function normalizeAndValidateOrderStatus(data: Record<string, unknown>, ctx: any): string | null {
+  if (!hasOwn(data, 'status')) return null;
+
+  const normalized = normalizeStatusKey(data.status);
+  if (!normalized || !SERVICE_ORDER_STATUS_KEYS.has(normalized)) {
+    ctx.throw(400, 'Invalid order status');
+  }
+
+  data.status = normalized;
+  return normalized;
+}
+
+function isLockedOrderStatusOnlyUpdate(data: Record<string, unknown>): boolean {
+  const keys = Object.keys(data).filter((key) => key !== 'tenant');
+  if (keys.length === 0) return false;
+  if (!keys.includes('status')) return false;
+
+  const allowedKeys = new Set(['status', 'deliveredAt', 'note']);
+  return keys.every((key) => allowedKeys.has(key));
 }
 
 async function computeOrderSummary(where: Record<string, unknown>) {
@@ -381,6 +433,7 @@ function normalizeOrderRow(row: any) {
     : roundMoney(toMoney(row.paidAmount));
 
   const debtAmount = roundMoney(clampNonNegative(totalAmount - paidAmount));
+  const overpaidAmount = roundMoney(clampNonNegative(paidAmount - totalAmount));
   const paymentStatus = calculatePaymentStatus(totalAmount, paidAmount);
 
   return {
@@ -394,6 +447,7 @@ function normalizeOrderRow(row: any) {
     totalAmount,
     paidAmount,
     debtAmount,
+    overpaidAmount,
     description: row.description,
     note: row.note,
     createdAt: row.createdAt,
@@ -413,6 +467,29 @@ function mergeWhere(baseWhere: Record<string, unknown>, scopeWhere: Record<strin
   return {
     $and: [baseWhere, scopeWhere],
   };
+}
+
+async function validateOrderRelationsInTenant(data: Record<string, unknown>, tenantId: number | string, ctx: any) {
+  const customer = await findEntityByRef(CUSTOMER_UID, data.customer, {
+    tenant: { select: ['id', 'documentId'] },
+  });
+  if (data.customer !== undefined && data.customer !== null) {
+    assertEntityTenantMatch(customer, tenantId, 'Selected customer does not belong to current tenant', ctx);
+  }
+
+  const department = await findEntityByRef(DEPARTMENT_UID, data.department, {
+    tenant: { select: ['id', 'documentId'] },
+  });
+  if (data.department !== undefined && data.department !== null) {
+    assertEntityTenantMatch(department, tenantId, 'Selected department does not belong to current tenant', ctx);
+  }
+
+  const employee = await findEntityByRef(EMPLOYEE_UID, data.assignedEmployee, {
+    tenant: { select: ['id', 'documentId'] },
+  });
+  if (data.assignedEmployee !== undefined && data.assignedEmployee !== null) {
+    assertEntityTenantMatch(employee, tenantId, 'Selected employee does not belong to current tenant', ctx);
+  }
 }
 
 export default factories.createCoreController(SERVICE_ORDER_UID, () => ({
@@ -471,7 +548,7 @@ export default factories.createCoreController(SERVICE_ORDER_UID, () => ({
     }
 
     const baseWhere = (andWhere.length > 1 ? { $and: andWhere } : andWhere[0] || {}) as Record<string, unknown>;
-    const where = mergeWhere(baseWhere, scopeWhere);
+    const where = mergeTenantWhere(mergeWhere(baseWhere, scopeWhere), scope.tenantId);
 
     const total = await strapi.db.query(SERVICE_ORDER_UID).count({ where });
     const start = (page - 1) * safePageSize;
@@ -517,7 +594,7 @@ export default factories.createCoreController(SERVICE_ORDER_UID, () => ({
     const scopeWhere = buildOrderScopeWhere(viewLevel, scope, ctx) as Record<string, unknown>;
 
     const baseOrder = await strapi.db.query(SERVICE_ORDER_UID).findOne({
-      where: { id },
+      where: mergeTenantWhere({ id }, scope.tenantId),
       populate: ['customer', 'department', 'assignedEmployee', 'items'],
     });
 
@@ -525,7 +602,7 @@ export default factories.createCoreController(SERVICE_ORDER_UID, () => ({
       return ctx.notFound('Order not found');
     }
 
-    const where = mergeWhere({ id }, scopeWhere);
+    const where = mergeTenantWhere(mergeWhere({ id }, scopeWhere), scope.tenantId);
 
     const order = await strapi.db.query(SERVICE_ORDER_UID).findOne({
       where,
@@ -560,6 +637,7 @@ export default factories.createCoreController(SERVICE_ORDER_UID, () => ({
 
   async create(ctx) {
     const scope = await resolveCurrentUserScope(ctx);
+    const tenantId = resolveCurrentTenantId(ctx);
     const canUseSalesCounter = canAccessSalesCounter(scope);
 
     if (!hasPermission(scope, ORDER_KEYS.CREATE) && !hasPermission(scope, 'service-orders') && !canUseSalesCounter) {
@@ -574,6 +652,7 @@ export default factories.createCoreController(SERVICE_ORDER_UID, () => ({
     }
 
     const data = (ctx.request?.body?.data || {}) as Record<string, unknown>;
+    normalizeAndValidateOrderStatus(data, ctx);
     const departmentId = extractDataRelationId(data, 'department');
 
     assertDepartmentInScope(
@@ -604,6 +683,9 @@ export default factories.createCoreController(SERVICE_ORDER_UID, () => ({
       );
     }
 
+    await validateOrderRelationsInTenant(data, tenantId, ctx);
+    data.tenant = tenantId;
+
     const providedCode = toSafeString(data.code);
     if (providedCode) {
       data.code = providedCode.toUpperCase();
@@ -628,6 +710,7 @@ export default factories.createCoreController(SERVICE_ORDER_UID, () => ({
     }
 
     const scope = await resolveCurrentUserScope(ctx);
+    const tenantId = resolveCurrentTenantId(ctx);
     const updateLevel = getOrderUpdateLevel(scope);
 
     if (updateLevel === 'NONE') {
@@ -635,7 +718,7 @@ export default factories.createCoreController(SERVICE_ORDER_UID, () => ({
     }
 
     const existing = await strapi.db.query(SERVICE_ORDER_UID).findOne({
-      where: { id },
+      where: mergeTenantWhere({ id }, tenantId),
       populate: ['department', 'assignedEmployee', 'customer', 'items'],
     });
 
@@ -645,6 +728,27 @@ export default factories.createCoreController(SERVICE_ORDER_UID, () => ({
 
     const existingDepartmentId = getRelationId(existing.department);
     const existingAssignedEmployeeId = getRelationId(existing.assignedEmployee);
+
+    const data = (ctx.request?.body?.data || {}) as Record<string, unknown>;
+    const requestedStatus = normalizeAndValidateOrderStatus(data, ctx);
+
+    if (!isOrderEditableState(existing)) {
+      const currentStatus = normalizeStatusKey(existing?.status);
+      const allowReadyToDelivered =
+        currentStatus === 'READY'
+        && requestedStatus === 'DELIVERED'
+        && isLockedOrderStatusOnlyUpdate(data);
+
+      if (!allowReadyToDelivered) {
+        return ctx.forbidden('Order is locked or finalized and cannot be edited');
+      }
+    }
+
+    const canOverrideOwnRestriction = hasOrderUpdateOverride(scope);
+
+    if (!canOverrideOwnRestriction && updateLevel !== 'ALL' && !isOrderOwnedByEmployee(existing, scope.employeeId)) {
+      return ctx.forbidden('You can only edit your own orders');
+    }
 
     if (updateLevel === 'DEPARTMENT') {
       assertDepartmentInScope(
@@ -661,8 +765,6 @@ export default factories.createCoreController(SERVICE_ORDER_UID, () => ({
     if (updateLevel === 'SELF' && existingAssignedEmployeeId !== scope.employeeId) {
       return ctx.forbidden('You do not have permission to update this order');
     }
-
-    const data = (ctx.request?.body?.data || {}) as Record<string, unknown>;
 
     const requestedDepartmentId = extractDataRelationId(data, 'department');
     const targetDepartmentId = requestedDepartmentId || existingDepartmentId;
@@ -691,6 +793,16 @@ export default factories.createCoreController(SERVICE_ORDER_UID, () => ({
         'You do not have permission to re-assign this order'
       );
     }
+
+    if (!canOverrideOwnRestriction && updateLevel !== 'ALL' && Object.prototype.hasOwnProperty.call(data, 'assignedEmployee')) {
+      const targetAssignedEmployeeId = extractDataRelationId(data, 'assignedEmployee') || existingAssignedEmployeeId;
+      if (!targetAssignedEmployeeId || targetAssignedEmployeeId !== scope.employeeId) {
+        return ctx.forbidden('You do not have permission to re-assign this order');
+      }
+    }
+
+    await validateOrderRelationsInTenant(data, tenantId, ctx);
+    data.tenant = tenantId;
 
     const updated = await strapi.entityService.update(SERVICE_ORDER_UID, id, {
       data: data as any,
@@ -728,7 +840,7 @@ export default factories.createCoreController(SERVICE_ORDER_UID, () => ({
     }
 
     const rows = await strapi.db.query(CUSTOMER_UID).findMany({
-      where,
+      where: mergeTenantWhere(where, scope.tenantId),
       orderBy: [{ isDefaultRetailGuest: 'desc' }, { name: 'asc' }, { code: 'asc' }],
       limit,
     });
@@ -764,6 +876,7 @@ export default factories.createCoreController(SERVICE_ORDER_UID, () => ({
       debtLimit: 0,
       isDefaultRetailGuest: false,
       isActive: true,
+      tenant: scope.tenantId,
     };
 
     let lastError: unknown = null;
@@ -819,7 +932,7 @@ export default factories.createCoreController(SERVICE_ORDER_UID, () => ({
     }
 
     const rows = await strapi.db.query(SERVICE_ITEM_UID).findMany({
-      where,
+      where: mergeTenantWhere(where, scope.tenantId),
       populate: ['category'],
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }, { code: 'asc' }],
       limit,
@@ -847,12 +960,12 @@ export default factories.createCoreController(SERVICE_ORDER_UID, () => ({
 
     const departments = departmentIds.length
       ? await strapi.db.query(DEPARTMENT_UID).findMany({
-          where: {
+          where: mergeTenantWhere({
             id: {
               $in: departmentIds,
             },
             isActive: true,
-          },
+          }, scope.tenantId),
           select: ['id', 'documentId', 'name', 'code', 'isActive'],
           orderBy: [{ name: 'asc' }],
         })

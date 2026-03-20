@@ -683,6 +683,8 @@ export interface ApiCustomerCustomer extends Struct.CollectionTypeSchema {
       'oneToMany',
       'api::service-order.service-order'
     >;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -778,6 +780,8 @@ export interface ApiDepartmentDepartment extends Struct.CollectionTypeSchema {
     >;
     slug: Schema.Attribute.UID<'name'>;
     sortOrder: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -826,6 +830,8 @@ export interface ApiEmployeeHistoryEmployeeHistory
       Schema.Attribute.Required;
     publishedAt: Schema.Attribute.DateTime;
     startDate: Schema.Attribute.Date & Schema.Attribute.Required;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -894,6 +900,8 @@ export interface ApiEmployeeEmployee extends Struct.CollectionTypeSchema {
       ]
     > &
       Schema.Attribute.DefaultTo<'active'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -972,6 +980,7 @@ export interface ApiFeatureFeature extends Struct.CollectionTypeSchema {
       Schema.Attribute.Private;
     name: Schema.Attribute.String & Schema.Attribute.Required;
     order: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    path: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -1095,6 +1104,8 @@ export interface ApiPaymentTransactionPaymentTransaction
     >;
     paidAt: Schema.Attribute.DateTime & Schema.Attribute.Required;
     publishedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1131,6 +1142,8 @@ export interface ApiPositionPosition extends Struct.CollectionTypeSchema {
     name: Schema.Attribute.String & Schema.Attribute.Required;
     publishedAt: Schema.Attribute.DateTime;
     slug: Schema.Attribute.UID<'name'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1183,6 +1196,7 @@ export interface ApiRequestAssigneeRequestAssignee
       ['PENDING', 'ACCEPTED', 'IN_PROGRESS', 'DONE', 'BLOCKED', 'REJECTED']
     >;
     roleType: Schema.Attribute.Enumeration<['ASSIGNEE', 'OBSERVER']>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1236,6 +1250,7 @@ export interface ApiRequestCategoryRequestCategory
     publishedAt: Schema.Attribute.DateTime;
     requests: Schema.Attribute.Relation<'oneToMany', 'api::request.request'>;
     slug: Schema.Attribute.UID<'name'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1275,6 +1290,7 @@ export interface ApiRequestMessageRequestMessage
       Schema.Attribute.Private;
     publishedAt: Schema.Attribute.DateTime;
     request: Schema.Attribute.Relation<'manyToOne', 'api::request.request'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1315,6 +1331,7 @@ export interface ApiRequestTagRequestTag extends Struct.CollectionTypeSchema {
     publishedAt: Schema.Attribute.DateTime;
     requests: Schema.Attribute.Relation<'manyToMany', 'api::request.request'>;
     slug: Schema.Attribute.UID<'name'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1385,6 +1402,7 @@ export interface ApiRequestRequest extends Struct.CollectionTypeSchema {
       'plugin::users-permissions.user'
     >;
     submittedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'>;
     title: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -1465,6 +1483,8 @@ export interface ApiServiceCategoryServiceCategory
       'api::service-item.service-item'
     >;
     sortOrder: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1508,6 +1528,8 @@ export interface ApiServiceItemServiceItem extends Struct.CollectionTypeSchema {
       'api::service-order-item.service-order-item'
     >;
     sortOrder: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
     unit: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -1554,6 +1576,8 @@ export interface ApiServiceOrderItemServiceOrderItem
       'api::service-item.service-item'
     >;
     sortOrder: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
     unitPrice: Schema.Attribute.Decimal & Schema.Attribute.DefaultTo<0>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -1619,6 +1643,8 @@ export interface ApiServiceOrderServiceOrder
       ['NEW', 'PROCESSING', 'READY', 'DELIVERED', 'CANCELLED']
     > &
       Schema.Attribute.DefaultTo<'NEW'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
     totalAmount: Schema.Attribute.Decimal & Schema.Attribute.DefaultTo<0>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -1679,6 +1705,272 @@ export interface ApiSettingSetting extends Struct.SingleTypeSchema {
     workingHours: Schema.Attribute.String;
     zaloLink: Schema.Attribute.String;
     zaloPhone: Schema.Attribute.String;
+  };
+}
+
+export interface ApiTenantDomainTenantDomain
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'tenant_domains';
+  info: {
+    displayName: 'Tenant Domain';
+    pluralName: 'tenant-domains';
+    singularName: 'tenant-domain';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    domain: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    isPrimary: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::tenant-domain.tenant-domain'
+    > &
+      Schema.Attribute.Private;
+    note: Schema.Attribute.Text;
+    publishedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    tenantDomainStatus: Schema.Attribute.Enumeration<['active', 'inactive']> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiTenantFeatureTenantFeature
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'tenant_features';
+  info: {
+    displayName: 'Tenant Feature';
+    pluralName: 'tenant-features';
+    singularName: 'tenant-feature';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    feature: Schema.Attribute.Relation<'manyToOne', 'api::feature.feature'> &
+      Schema.Attribute.Required;
+    isEnabled: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    label: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::tenant-feature.tenant-feature'
+    > &
+      Schema.Attribute.Private;
+    note: Schema.Attribute.Text;
+    publishedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiTenantRoleTenantRole extends Struct.CollectionTypeSchema {
+  collectionName: 'tenant_roles';
+  info: {
+    displayName: 'Tenant Role';
+    pluralName: 'tenant-roles';
+    singularName: 'tenant-role';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    isActive: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    label: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::tenant-role.tenant-role'
+    > &
+      Schema.Attribute.Private;
+    note: Schema.Attribute.Text;
+    publishedAt: Schema.Attribute.DateTime;
+    role: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.role'
+    > &
+      Schema.Attribute.Required;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiTenantTenant extends Struct.CollectionTypeSchema {
+  collectionName: 'tenants';
+  info: {
+    displayName: 'Tenant';
+    pluralName: 'tenants';
+    singularName: 'tenant';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    code: Schema.Attribute.UID<'name'> &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    defaultLocale: Schema.Attribute.String;
+    departments: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::department.department'
+    >;
+    description: Schema.Attribute.Text;
+    endDate: Schema.Attribute.Date;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::tenant.tenant'
+    > &
+      Schema.Attribute.Private;
+    logo: Schema.Attribute.Media<'images'>;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    note: Schema.Attribute.Text;
+    primaryColor: Schema.Attribute.String;
+    publishedAt: Schema.Attribute.DateTime;
+    settings: Schema.Attribute.JSON;
+    shortName: Schema.Attribute.String;
+    startDate: Schema.Attribute.Date;
+    tenantDomains: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::tenant-domain.tenant-domain'
+    >;
+    tenantRoles: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::tenant-role.tenant-role'
+    >;
+    tenantStatus: Schema.Attribute.Enumeration<
+      ['draft', 'active', 'inactive', 'suspended']
+    > &
+      Schema.Attribute.Required;
+    timezone: Schema.Attribute.String;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    userTenants: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::user-tenant.user-tenant'
+    >;
+  };
+}
+
+export interface ApiUserTenantRoleUserTenantRole
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'user_tenant_roles';
+  info: {
+    displayName: 'User Tenant Role';
+    pluralName: 'user-tenant-roles';
+    singularName: 'user-tenant-role';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    assignedAt: Schema.Attribute.DateTime;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    isPrimary: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    label: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::user-tenant-role.user-tenant-role'
+    > &
+      Schema.Attribute.Private;
+    note: Schema.Attribute.Text;
+    publishedAt: Schema.Attribute.DateTime;
+    revokedAt: Schema.Attribute.DateTime;
+    role: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.role'
+    > &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    userTenant: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::user-tenant.user-tenant'
+    > &
+      Schema.Attribute.Required;
+    userTenantRoleStatus: Schema.Attribute.Enumeration<['active', 'inactive']> &
+      Schema.Attribute.Required;
+  };
+}
+
+export interface ApiUserTenantUserTenant extends Struct.CollectionTypeSchema {
+  collectionName: 'user_tenants';
+  info: {
+    displayName: 'User Tenant';
+    pluralName: 'user-tenants';
+    singularName: 'user-tenant';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    isDefault: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    joinedAt: Schema.Attribute.DateTime;
+    label: Schema.Attribute.String;
+    leftAt: Schema.Attribute.DateTime;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::user-tenant.user-tenant'
+    > &
+      Schema.Attribute.Private;
+    note: Schema.Attribute.Text;
+    publishedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    > &
+      Schema.Attribute.Required;
+    userTenantRoles: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::user-tenant-role.user-tenant-role'
+    >;
+    userTenantStatus: Schema.Attribute.Enumeration<
+      ['pending', 'active', 'inactive', 'suspended']
+    > &
+      Schema.Attribute.Required;
   };
 }
 
@@ -2317,6 +2609,12 @@ declare module '@strapi/strapi' {
       'api::service-order-item.service-order-item': ApiServiceOrderItemServiceOrderItem;
       'api::service-order.service-order': ApiServiceOrderServiceOrder;
       'api::setting.setting': ApiSettingSetting;
+      'api::tenant-domain.tenant-domain': ApiTenantDomainTenantDomain;
+      'api::tenant-feature.tenant-feature': ApiTenantFeatureTenantFeature;
+      'api::tenant-role.tenant-role': ApiTenantRoleTenantRole;
+      'api::tenant.tenant': ApiTenantTenant;
+      'api::user-tenant-role.user-tenant-role': ApiUserTenantRoleUserTenantRole;
+      'api::user-tenant.user-tenant': ApiUserTenantUserTenant;
       'api::vehicle-type.vehicle-type': ApiVehicleTypeVehicleType;
       'api::vehicle.vehicle': ApiVehicleVehicle;
       'plugin::content-releases.release': PluginContentReleasesRelease;

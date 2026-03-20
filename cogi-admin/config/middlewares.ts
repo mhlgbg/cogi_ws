@@ -2,6 +2,7 @@ export default [
   'strapi::logger',
   'strapi::errors',
   'strapi::security',
+  'global::tenant-resolver',
   {
     name: 'strapi::cors',
     config: {

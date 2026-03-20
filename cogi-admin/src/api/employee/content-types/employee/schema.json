@@ -101,6 +101,12 @@
       "type": "relation",
       "relation": "manyToOne",
       "target": "api::employee.employee"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
     }
   }
 }

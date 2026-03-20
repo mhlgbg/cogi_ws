@@ -1,4 +1,5 @@
 import { extractRelationId } from './recalculate-service-order-totals';
+import { mergeTenantWhere } from '../../../utils/tenant-scope';
 
 const SERVICE_ORDER_UID = 'api::service-order.service-order';
 const DEPARTMENT_UID = 'api::department.department';
@@ -58,6 +59,7 @@ function toRange(date: Date) {
 }
 
 async function loadUsedCodes(params: {
+  tenantId: number | string;
   departmentId: number | null;
   startIso: string;
   endIso: string;
@@ -76,7 +78,7 @@ async function loadUsedCodes(params: {
   }
 
   const rows = await strapi.db.query(SERVICE_ORDER_UID).findMany({
-    where,
+    where: mergeTenantWhere(where, params.tenantId),
     select: ['code'],
   });
 
@@ -110,9 +112,9 @@ function formatSequence(value: number): string {
   return String(value).padStart(3, '0');
 }
 
-async function codeExists(code: string): Promise<boolean> {
+async function codeExists(code: string, tenantId: number | string): Promise<boolean> {
   const existing = await strapi.db.query(SERVICE_ORDER_UID).findOne({
-    where: { code },
+    where: mergeTenantWhere({ code }, tenantId),
     select: ['id'],
   });
   return Boolean(existing?.id);
@@ -122,18 +124,23 @@ export async function generateServiceOrderCode(data: Record<string, unknown>): P
   const orderDate = toValidDate(data?.orderDate);
   const dateKey = toDateKey(orderDate);
 
+  const tenantId = data?.tenant as number | string;
+  if (!tenantId) {
+    throw new Error('Tenant context is required to generate service order code');
+  }
+
   const departmentId = extractRelationId(data?.department);
   const storeCode = await resolveStoreCode(departmentId);
 
   const { startIso, endIso } = toRange(orderDate);
-  const usedCodes = await loadUsedCodes({ departmentId, startIso, endIso });
+  const usedCodes = await loadUsedCodes({ tenantId, departmentId, startIso, endIso });
 
   let sequence = nextSequenceFromUsedCodes(usedCodes, storeCode, dateKey);
 
   while (true) {
     const generated = `${storeCode}-${dateKey}-${formatSequence(sequence)}`.toUpperCase();
 
-    if (!usedCodes.has(generated) && !(await codeExists(generated))) {
+    if (!usedCodes.has(generated) && !(await codeExists(generated, tenantId))) {
       return generated;
     }
 

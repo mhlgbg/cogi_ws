@@ -1,0 +1,60 @@
+{
+  "kind": "collectionType",
+  "collectionName": "user_tenants",
+  "info": {
+    "singularName": "user-tenant",
+    "pluralName": "user-tenants",
+    "displayName": "User Tenant"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "userTenantStatus": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "active",
+        "inactive",
+        "suspended"
+      ],
+      "required": true
+    },
+    "isDefault": {
+      "type": "boolean",
+      "default": false
+    },
+    "joinedAt": {
+      "type": "datetime"
+    },
+    "leftAt": {
+      "type": "datetime"
+    },
+    "note": {
+      "type": "text"
+    },
+    "label": {
+      "type": "string"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "userTenants",
+      "required": true
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "userTenantRoles": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::user-tenant-role.user-tenant-role",
+      "mappedBy": "userTenant"
+    }
+  }
+}

@@ -1,4 +1,17 @@
 import crypto from 'node:crypto';
+import {
+  validateTenantRole,
+  validateTenantDepartment,
+  checkUserTenantExists,
+  inviteNewUser,
+  inviteExistingUserToTenant,
+  ensureDepartmentMembership,
+} from '../services/invite-user';
+import {
+  getTenantEnabledRoles,
+  listTenantUsers,
+  updateTenantUserRoles,
+} from '../services/manage-tenant-users';
 
 function isValidationError(error: unknown) {
   if (!error || typeof error !== 'object') return false;
@@ -41,10 +54,41 @@ function generateActivationToken() {
 }
 
 export default {
+  /**
+   * Multi-tenant invite user action
+   *
+   * CASE A: User already exists
+   * - Adds user to the current tenant (creates userTenant + userTenantRole)
+   * - Does NOT send activation email
+   * - Prevents duplicate membership
+   *
+   * CASE B: User does not exist
+   * - Creates user in invited state (confirmed=false)
+   * - Creates userTenant + userTenantRole
+   * - Generates activation token
+   * - Sends activation email
+   *
+   * Required request body:
+   * - email: string
+   * - roleId: number (must be enabled for this tenant)
+   * - fullName?: string (optional)
+   * - departmentId?: number (must belong to this tenant)
+   *
+   * Tenant is automatically resolved from context (x-tenant-code header)
+   */
   async inviteUser(ctx) {
     try {
       const body = ctx.request.body || {};
 
+      // ============ VALIDATION ============
+
+      // Get tenant context (required)
+      const tenantId = ctx.state?.tenantId ?? ctx.state?.tenant?.id;
+      if (!tenantId) {
+        return ctx.badRequest('Tenant context is required');
+      }
+
+      // Validate email
       const rawEmail = typeof body.email === 'string' ? body.email : '';
       const email = rawEmail.trim().toLowerCase();
 
@@ -57,6 +101,19 @@ export default {
         return ctx.badRequest('email is invalid');
       }
 
+      // Validate roleId (required for multi-tenant)
+      const roleId = typeof body.roleId === 'number' ? body.roleId : Number(body.roleId);
+      if (!Number.isInteger(roleId) || roleId <= 0) {
+        return ctx.badRequest('roleId is required and must be a positive integer');
+      }
+
+      // Validate that role is enabled for this tenant
+      const roleValidation = await validateTenantRole(tenantId, roleId);
+      if (!roleValidation.valid) {
+        return ctx.badRequest(roleValidation.error || 'Invalid role');
+      }
+
+      // Validate fullName (optional)
       let fullName: string | null = null;
       if (body.fullName !== undefined && body.fullName !== null) {
         if (typeof body.fullName !== 'string') {
@@ -71,14 +128,24 @@ export default {
         fullName = normalizedFullName || null;
       }
 
+      // Validate departmentId (optional but if provided must be in this tenant)
       let departmentId: number | null = null;
       if (body.departmentId !== undefined && body.departmentId !== null) {
         const parsedDepartmentId = Number(body.departmentId);
         if (!Number.isInteger(parsedDepartmentId) || parsedDepartmentId <= 0) {
           return ctx.badRequest('departmentId must be a positive integer');
         }
+
+        // Validate department belongs to this tenant
+        const deptValidation = await validateTenantDepartment(tenantId, parsedDepartmentId);
+        if (!deptValidation.valid) {
+          return ctx.badRequest(deptValidation.error || 'Invalid department');
+        }
+
         departmentId = parsedDepartmentId;
       }
+
+      // ============ CHECK EXISTING USER ============
 
       const existingUser = await strapi.db.query('plugin::users-permissions.user').findOne({
         where: {
@@ -88,117 +155,227 @@ export default {
         },
       });
 
-      if (existingUser) {
-        return ctx.conflict('Email already exists');
-      }
+      // ============ CASE B: NEW USER ============
 
-      const password = generateStrongPassword(18);
-      const usersPermissionsUserService = strapi.plugin('users-permissions').service('user');
+      if (!existingUser) {
+        const password = generateStrongPassword(18);
+        const activationToken = generateActivationToken();
+        const expiresAtDate = new Date(Date.now() + 48 * 60 * 60 * 1000);
 
-      let createdUser;
-      try {
-        createdUser = await usersPermissionsUserService.add({
+        const result = await inviteNewUser({
           email,
-          username: email,
-          provider: 'local',
           fullName,
-          confirmed: false,
-          blocked: false,
+          tenantId,
+          roleId,
+          departmentId,
           password,
+          activationToken,
+          expiresAt: expiresAtDate,
         });
-      } catch (createUserError) {
-        if (isValidationError(createUserError)) {
-          return ctx.badRequest('Invalid user data');
+
+        // Send invitation email
+        const frontendUrl = process.env.FRONTEND_URL?.trim() || 'http://localhost:5173';
+        const activationLink = `${frontendUrl}/activate?token=${encodeURIComponent(activationToken)}`;
+        const recipientName = fullName || email;
+        const tenantName =
+          ctx.state?.tenant?.name || ctx.state?.tenantCode || 'the system';
+
+        let emailSent = true;
+        let emailError: string | undefined;
+
+        try {
+          await strapi.plugin('email').service('email').send({
+            to: email,
+            subject: `Bạn được mời tham gia ${tenantName}`,
+            text: `Xin chào ${recipientName},\n\nBạn được mời tham gia ${tenantName}. Vui lòng kích hoạt tài khoản qua link sau:\n${activationLink}\n\nLưu ý: link này sẽ hết hạn sau 48 giờ.`,
+            html: `
+              <p>Xin chào <strong>${recipientName}</strong>,</p>
+              <p>Bạn được mời tham gia <strong>${tenantName}</strong>.</p>
+              <p>
+                <a href="${activationLink}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">
+                  Kích hoạt tài khoản
+                </a>
+              </p>
+              <p>Nếu nút không hoạt động, dùng link sau:</p>
+              <p><a href="${activationLink}">${activationLink}</a></p>
+              <p>Link kích hoạt sẽ hết hạn sau <strong>48 giờ</strong>.</p>
+            `,
+          });
+        } catch (error) {
+          emailSent = false;
+          const rawMessage =
+            (error as { message?: string; response?: { body?: { message?: string } } })?.response?.body
+              ?.message || (error as { message?: string })?.message;
+          emailError = rawMessage ? String(rawMessage).slice(0, 120) : 'Email sending failed';
+          console.error('[inviteUser] Failed to send invite email:', emailError);
         }
-        throw createUserError;
+
+        return (ctx.body = {
+          ok: true,
+          caseType: 'NEW_USER',
+          userId: result.userId,
+          email: result.email,
+          userTenantId: result.userTenantId,
+          expiresAt: result.expiresAt,
+          emailSent,
+          ...(emailError ? { emailError } : {}),
+        });
       }
 
-      const activationToken = generateActivationToken();
-      const expiresAtDate = new Date(Date.now() + 48 * 60 * 60 * 1000);
+      // ============ CASE A: EXISTING USER ============
 
-      await strapi.db.query('api::activation-token.activation-token').create({
-        data: {
-          token: activationToken,
-          expiresAt: expiresAtDate,
-          usedAt: null,
-          user: createdUser.id,
-        },
+      // Check if user already has membership in this tenant
+      const existingMembership = await checkUserTenantExists(existingUser.id, tenantId);
+      if (existingMembership.exists) {
+        return ctx.conflict('User already invited to this tenant');
+      }
+
+      // Add existing user to tenant
+      const result = await inviteExistingUserToTenant({
+        userId: existingUser.id,
+        email: existingUser.email,
+        tenantId,
+        roleId,
+        departmentId,
       });
 
-      const frontendUrl = process.env.FRONTEND_URL?.trim() || 'http://localhost:5173';
-      const activationLink = `${frontendUrl}/activate?token=${encodeURIComponent(activationToken)}`;
-      const recipientName = fullName || email;
+      return (ctx.body = {
+        ok: true,
+        caseType: 'EXISTING_USER',
+        userId: result.userId,
+        email: result.email,
+        userTenantId: result.userTenantId,
+        emailSent: false, // No email for existing users added to new tenant
+      });
+    } catch (error) {
+      console.error('[inviteUser] Unexpected error:', error);
+      return ctx.internalServerError('Failed to invite user');
+    }
+  },
 
-      let emailSent = true;
-      let emailError: string | undefined;
-
-      try {
-        await strapi.plugin('email').service('email').send({
-          to: email,
-          subject: 'Bạn được mời tham gia hệ thống Alpha',
-          text: `Xin chào ${recipientName},\n\nBạn được mời tham gia hệ thống Alpha. Vui lòng kích hoạt tài khoản qua link sau:\n${activationLink}\n\nLưu ý: link này sẽ hết hạn sau 48 giờ.`,
-          html: `
-            <p>Xin chào <strong>${recipientName}</strong>,</p>
-            <p>Bạn được mời tham gia hệ thống Alpha.</p>
-            <p>
-              <a href="${activationLink}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">
-                Kích hoạt tài khoản
-              </a>
-            </p>
-            <p>Nếu nút không hoạt động, dùng link sau:</p>
-            <p><a href="${activationLink}">${activationLink}</a></p>
-            <p>Link kích hoạt sẽ hết hạn sau <strong>48 giờ</strong>.</p>
-          `,
-        });
-      } catch (error) {
-        emailSent = false;
-        const rawMessage =
-          (error as { message?: string; response?: { body?: { message?: string } } })?.response?.body
-            ?.message || (error as { message?: string })?.message;
-        emailError = rawMessage ? String(rawMessage).slice(0, 120) : 'Email sending failed';
-        console.error('[inviteUser] Failed to send invite email:', emailError);
+  /**
+   * Get available roles and departments for inviting users to current tenant
+   * Returns tenant-enabled roles and tenant-scoped departments
+   */
+  async getInviteOptions(ctx) {
+    try {
+      const tenantId = ctx.state?.tenantId ?? ctx.state?.tenant?.id;
+      if (!tenantId) {
+        return ctx.badRequest('Tenant context is required');
       }
 
-      let warning: string | undefined;
+      // Get all active tenant roles
+      const tenantRoles = await strapi.db
+        .query('api::tenant-role.tenant-role')
+        .findMany({
+          where: {
+            tenant: tenantId,
+            isActive: true,
+          },
+          populate: {
+            role: {
+              select: ['id', 'name', 'description', 'type'],
+            },
+          },
+        });
 
-      if (departmentId !== null) {
-        const membershipUid = 'api::department-membership.department-membership';
-        const membershipModel = strapi.getModel(membershipUid);
+      const roles = tenantRoles
+        .map((tr: any) => {
+          const role = tr?.role;
+          if (!role || !role.id) return null;
 
-        if (!membershipModel) {
-          warning = 'DepartmentMembership model not found. Please map manually.';
-        } else {
-          const membershipData: Record<string, unknown> = {
-            user: createdUser.id,
-            department: departmentId,
+          return {
+            id: role.id,
+            name: role.name || role.type || `Role #${role.id}`,
+            description: role.description || null,
+            type: role.type || null,
           };
-          const membershipAttributes = membershipModel.attributes as Record<string, unknown>;
+        })
+        .filter(Boolean);
 
-          if ('isActive' in membershipAttributes) {
-            membershipData.isActive = true;
-          } else if ('status_record' in membershipAttributes) {
-            membershipData.status_record = 'ACTIVE';
-          }
+      // Get all departments in this tenant
+      const departments = await strapi.db
+        .query('api::department.department')
+        .findMany({
+          where: {
+            tenant: tenantId,
+            publishedAt: { $notNull: true }, // Only published departments
+          },
+          select: ['id', 'name', 'code'],
+          orderBy: { sortOrder: 'asc', name: 'asc' },
+        });
 
-          try {
-            await strapi.db.query(membershipUid).create({ data: membershipData });
-          } catch {
-            warning = 'Could not create DepartmentMembership. Please map manually.';
-          }
-        }
+      return (ctx.body = {
+        ok: true,
+        roles: roles || [],
+        departments: departments || [],
+      });
+    } catch (error) {
+      console.error('[getInviteOptions] Unexpected error:', error);
+      return ctx.internalServerError('Failed to load invite options');
+    }
+  },
+
+  async listTenantUsers(ctx) {
+    try {
+      const tenantId = ctx.state?.tenantId ?? ctx.state?.tenant?.id;
+      if (!tenantId) {
+        return ctx.badRequest('Tenant context is required');
+      }
+
+      const query = ctx.request?.query || {};
+      const page = Number(query.page || 1);
+      const pageSize = Number(query.pageSize || 10);
+      const search = typeof query.search === 'string' ? query.search : '';
+
+      const [result, availableRoles] = await Promise.all([
+        listTenantUsers({ tenantId, page, pageSize, search }),
+        getTenantEnabledRoles(tenantId),
+      ]);
+
+      ctx.body = {
+        ok: true,
+        data: result.data,
+        meta: result.meta,
+        availableRoles,
+      };
+    } catch (error) {
+      console.error('[listTenantUsers] Unexpected error:', error);
+      return ctx.internalServerError('Failed to load tenant users');
+    }
+  },
+
+  async updateTenantUserRoles(ctx) {
+    try {
+      const tenantId = ctx.state?.tenantId ?? ctx.state?.tenant?.id;
+      if (!tenantId) {
+        return ctx.badRequest('Tenant context is required');
+      }
+
+      const userTenantId = Number(ctx.params?.userTenantId);
+      if (!Number.isInteger(userTenantId) || userTenantId <= 0) {
+        return ctx.badRequest('Invalid userTenantId');
+      }
+
+      const roleIdsRaw = ctx.request?.body?.roleIds;
+      if (!Array.isArray(roleIdsRaw)) {
+        return ctx.badRequest('roleIds must be an array of positive integers');
+      }
+
+      const roleIds = roleIdsRaw.map((value: unknown) => Number(value));
+
+      const result = await updateTenantUserRoles({ tenantId, userTenantId, roleIds });
+      if (!result.ok) {
+        return ctx.badRequest(result.error || 'Failed to update roles');
       }
 
       ctx.body = {
         ok: true,
-        userId: createdUser.id,
-        email: createdUser.email,
-        fullName: createdUser.fullName ?? null,
-        expiresAt: expiresAtDate.toISOString(),
-        emailSent,
-        ...(emailError ? { emailError } : {}),
+        message: 'Roles updated successfully',
       };
-    } catch {
-      return ctx.internalServerError('Failed to invite user');
+    } catch (error) {
+      console.error('[updateTenantUserRoles] Unexpected error:', error);
+      return ctx.internalServerError('Failed to update user roles');
     }
   },
 };

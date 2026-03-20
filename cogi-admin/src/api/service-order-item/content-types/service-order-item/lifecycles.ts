@@ -7,8 +7,10 @@ import {
   extractRelationId,
   extractEntryRelationId,
 } from '../../../service-order/services/recalculate-service-order-totals';
+import { mergeTenantWhere } from '../../../../utils/tenant-scope';
 
 const SERVICE_ORDER_ITEM_UID = 'api::service-order-item.service-order-item';
+const SERVICE_ORDER_UID = 'api::service-order.service-order';
 
 type GenericRecord = Record<string, unknown>;
 
@@ -99,6 +101,33 @@ async function beforeCreateOrUpdate(event: any, isCreate: boolean) {
 
   const existingOrderId = extractEntryRelationId(existing?.order);
   const nextOrderId = resolveRelationForUpdate(data, 'order', existing?.order);
+
+  const requestState = strapi?.requestContext?.get?.()?.state;
+  const tenantId = requestState?.tenantId ?? requestState?.tenant?.id;
+
+  if (!nextOrderId) {
+    throw new errors.ApplicationError('order is required');
+  }
+
+  const orderWhere = tenantId
+    ? mergeTenantWhere({ id: nextOrderId }, tenantId)
+    : { id: nextOrderId };
+
+  const parentOrder = await strapi.db.query(SERVICE_ORDER_UID).findOne({
+    where: orderWhere,
+    populate: ['tenant'],
+  });
+
+  if (!parentOrder) {
+    throw new errors.ApplicationError('order not found in current tenant scope');
+  }
+
+  const parentTenantId = extractEntryRelationId((parentOrder as any)?.tenant);
+  if (!parentTenantId) {
+    throw new errors.ApplicationError('order tenant is required');
+  }
+
+  data.tenant = parentTenantId;
 
   event.state = event.state || {};
   event.state.recalculateOrderIds = buildRecalculateOrderIds([existingOrderId, nextOrderId]);

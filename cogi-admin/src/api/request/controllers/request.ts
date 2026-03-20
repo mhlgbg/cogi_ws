@@ -1,7 +1,19 @@
+import {
+	assertEntityTenantMatch,
+	findEntityByRef,
+	mergeTenantWhere,
+	resolveCurrentTenantId,
+} from '../../../utils/tenant-scope';
+
 const REQUEST_UID = 'api::request.request';
 const ASSIGNEE_UID = 'api::request-assignee.request-assignee';
 const MESSAGE_UID = 'api::request-message.request-message';
 const USER_UID = 'plugin::users-permissions.user';
+const ROLE_FEATURE_UID = 'api::role-feature.role-feature';
+const USER_TENANT_UID = 'api::user-tenant.user-tenant';
+const USER_TENANT_ROLE_UID = 'api::user-tenant-role.user-tenant-role';
+const REQUEST_CATEGORY_UID = 'api::request-category.request-category';
+const REQUEST_TAG_UID = 'api::request-tag.request-tag';
 
 function parsePositiveInt(value: unknown, fallback: number) {
 	const parsed = Number(value);
@@ -59,6 +71,77 @@ function toAttachmentIds(value: unknown): number[] {
 		.filter((id: unknown): id is number => Number.isInteger(id) && Number(id) > 0);
 }
 
+async function getTenantScopedPermissionKeys(userId: number, tenantId: number | string): Promise<Set<string>> {
+	const userTenant = await strapi.db.query(USER_TENANT_UID).findOne({
+		where: {
+			user: userId,
+			tenant: tenantId,
+			userTenantStatus: 'active',
+		},
+		select: ['id'],
+	});
+
+	const userTenantId = Number(userTenant?.id || 0);
+	if (!Number.isInteger(userTenantId) || userTenantId <= 0) {
+		return new Set();
+	}
+
+	const userTenantRoles = await strapi.db.query(USER_TENANT_ROLE_UID).findMany({
+		where: {
+			userTenant: userTenantId,
+			userTenantRoleStatus: 'active',
+		},
+		populate: {
+			role: true,
+		},
+	});
+
+	const roleIds = (userTenantRoles || [])
+		.map((item: any) => Number(item?.role?.id ?? item?.role))
+		.filter((value: number) => Number.isInteger(value) && value > 0);
+
+	if (roleIds.length === 0) {
+		return new Set();
+	}
+
+	const mappings = await strapi.db.query(ROLE_FEATURE_UID).findMany({
+		where: {
+			role: {
+				id: {
+					$in: roleIds,
+				},
+			},
+		},
+		populate: ['feature'],
+	});
+
+	return new Set(
+		(mappings || [])
+			.map((item: any) => item?.feature?.key)
+			.filter((key: string | null | undefined): key is string => typeof key === 'string' && key.length > 0)
+	);
+}
+
+async function hasTenantPermission(userId: number, tenantId: number | string, keys: string[]): Promise<boolean> {
+	if (!Array.isArray(keys) || keys.length === 0) return false;
+	const permissionKeys = await getTenantScopedPermissionKeys(userId, tenantId);
+	return keys.some((key) => permissionKeys.has(key));
+}
+
+async function assertRequestRelationsInTenant(data: Record<string, unknown>, tenantId: number | string, ctx: any) {
+	if (data.request_category !== undefined && data.request_category !== null) {
+		const category = await findEntityByRef(REQUEST_CATEGORY_UID, data.request_category, ['tenant']);
+		assertEntityTenantMatch(category, tenantId, 'Selected request category does not belong to current tenant', ctx);
+	}
+
+	if (Array.isArray(data.request_tags)) {
+		for (const tagRef of data.request_tags) {
+			const tag = await findEntityByRef(REQUEST_TAG_UID, tagRef, ['tenant']);
+			assertEntityTenantMatch(tag, tenantId, 'Selected request tag does not belong to current tenant', ctx);
+		}
+	}
+}
+
 function hasActiveFlag() {
 	return Boolean(strapi.getModel(ASSIGNEE_UID)?.attributes?.isActive);
 }
@@ -77,9 +160,9 @@ async function isActiveAssignee(requestId: number, userId: number) {
 	return Boolean(existing);
 }
 
-async function canAccessRequest(requestId: number, userId: number) {
+async function canAccessRequest(requestId: number, userId: number, tenantId: number | string) {
 	const request = await strapi.db.query(REQUEST_UID).findOne({
-		where: { id: requestId },
+		where: mergeTenantWhere({ id: requestId }, tenantId),
 		populate: ['requester'],
 	});
 
@@ -92,7 +175,16 @@ async function canAccessRequest(requestId: number, userId: number) {
 		return { allowed: true, request, requesterId };
 	}
 
-	const assignee = await isActiveAssignee(requestId, userId);
+	const assignee = await strapi.db.query(ASSIGNEE_UID).findOne({
+		where: mergeTenantWhere(
+			{
+				request: { id: requestId },
+				user: { id: userId },
+				...(hasActiveFlag() ? { isActive: true } : {}),
+			},
+			tenantId
+		),
+	});
 	return { allowed: assignee, request, requesterId };
 }
 
@@ -100,6 +192,7 @@ export default {
 	async find(ctx) {
 		const authUser = ctx.state.user;
 		if (!authUser?.id) return ctx.unauthorized('Unauthorized');
+		const tenantId = resolveCurrentTenantId(ctx);
 
 		const userId = Number(authUser.id);
 		const page = parsePositiveInt(ctx.query?.page, 1);
@@ -111,7 +204,8 @@ export default {
 		const requesterId = parsePositiveInt(ctx.query?.requesterId, 0);
 		const status = typeof ctx.query?.status === 'string' ? ctx.query.status.trim() : '';
 		const scopeInput = typeof ctx.query?.scope === 'string' ? ctx.query.scope.trim().toUpperCase() : 'RELEVANT';
-		const scope = ['MINE', 'ASSIGNED', 'WATCHING', 'RELEVANT'].includes(scopeInput) ? scopeInput : 'RELEVANT';
+		const scope = ['MINE', 'ASSIGNED', 'WATCHING', 'RELEVANT', 'ALL'].includes(scopeInput) ? scopeInput : 'RELEVANT';
+		const canMonitorAll = await hasTenantPermission(userId, tenantId, ['request.monitor', 'request.admin', 'request.manage']);
 
 		const assigneeWhere: Record<string, unknown> = { user: { id: userId } };
 		if (hasActiveFlag()) {
@@ -119,7 +213,7 @@ export default {
 		}
 
 		const myAssignees = await strapi.db.query(ASSIGNEE_UID).findMany({
-			where: assigneeWhere,
+			where: mergeTenantWhere(assigneeWhere, tenantId),
 			populate: ['request'],
 		});
 
@@ -132,7 +226,9 @@ export default {
 		);
 
 		const accessOr: Record<string, unknown>[] = [];
-		if (scope === 'MINE') {
+		if (scope === 'ALL' && canMonitorAll) {
+			accessOr.push({ id: { $gt: 0 } });
+		} else if (scope === 'MINE') {
 			accessOr.push({ requester: { id: userId } });
 		} else if (scope === 'ASSIGNED') {
 			if (assignedRequestIds.length > 0) {
@@ -160,11 +256,12 @@ export default {
 
 		const where = andWhere.length > 1 ? { $and: andWhere } : andWhere[0];
 
-		const total = await strapi.db.query(REQUEST_UID).count({ where });
+		const tenantWhere = mergeTenantWhere(where, tenantId);
+		const total = await strapi.db.query(REQUEST_UID).count({ where: tenantWhere });
 		const start = (page - 1) * pageSize;
 
 		const requests = await strapi.db.query(REQUEST_UID).findMany({
-			where,
+			where: tenantWhere,
 			orderBy: { updatedAt: 'desc' },
 			offset: start,
 			limit: pageSize,
@@ -185,7 +282,7 @@ export default {
 			}
 
 			const assigneeRows = await strapi.db.query(ASSIGNEE_UID).findMany({
-				where: assigneeCountWhere,
+				where: mergeTenantWhere(assigneeCountWhere, tenantId),
 				populate: ['request'],
 			});
 
@@ -221,18 +318,19 @@ export default {
 	async findOne(ctx) {
 		const authUser = ctx.state.user;
 		if (!authUser?.id) return ctx.unauthorized('Unauthorized');
+		const tenantId = resolveCurrentTenantId(ctx);
 
 		const requestId = Number(ctx.params.id);
 		if (!Number.isInteger(requestId) || requestId <= 0) {
 			return ctx.badRequest('Invalid request id');
 		}
 
-		const access = await canAccessRequest(requestId, Number(authUser.id));
+		const access = await canAccessRequest(requestId, Number(authUser.id), tenantId);
 		if (!access.request) return ctx.notFound('Request not found');
 		if (!access.allowed) return ctx.forbidden('Forbidden');
 
 		const request = await strapi.db.query(REQUEST_UID).findOne({
-			where: { id: requestId },
+			where: mergeTenantWhere({ id: requestId }, tenantId),
 			populate: ['requester', 'request_category', 'request_tags', 'closedBy', 'attachments'],
 		});
 
@@ -242,16 +340,19 @@ export default {
 		}
 
 		const assignees = await strapi.db.query(ASSIGNEE_UID).findMany({
-			where: assigneeWhere,
+			where: mergeTenantWhere(assigneeWhere, tenantId),
 			orderBy: { createdAt: 'asc' },
 			populate: ['user', 'assignedBy'],
 		});
 
 		const messages = await strapi.db.query(MESSAGE_UID).findMany({
-			where: {
-				request: requestId,
-				visibility: true,
-			},
+			where: mergeTenantWhere(
+				{
+					request: requestId,
+					visibility: true,
+				},
+				tenantId
+			),
 			orderBy: { createdAt: 'asc' },
 			populate: ['author', 'attachments'],
 		});
@@ -294,6 +395,7 @@ export default {
 	async create(ctx) {
 		const authUser = ctx.state.user;
 		if (!authUser?.id) return ctx.unauthorized('Unauthorized');
+		const tenantId = resolveCurrentTenantId(ctx);
 
 		const body = ctx.request.body || {};
 		const title = typeof body.title === 'string' ? body.title.trim() : '';
@@ -306,6 +408,7 @@ export default {
 			title,
 			requester: Number(authUser.id),
 			request_status: 'OPEN',
+			tenant: tenantId,
 		};
 
 		if (typeof body.description === 'string') data.description = body.description;
@@ -321,6 +424,8 @@ export default {
 				data.request_tags = tagIds;
 			}
 		}
+
+		await assertRequestRelationsInTenant(data, tenantId, ctx);
 
 		if (body.amount !== undefined && body.amount !== null && body.amount !== '') {
 			data.amountProposed = body.amount;
@@ -347,6 +452,7 @@ export default {
 	async update(ctx) {
 		const authUser = ctx.state.user;
 		if (!authUser?.id) return ctx.unauthorized('Unauthorized');
+		const tenantId = resolveCurrentTenantId(ctx);
 
 		const requestId = Number(ctx.params.id);
 		if (!Number.isInteger(requestId) || requestId <= 0) {
@@ -354,7 +460,7 @@ export default {
 		}
 
 		const request = await strapi.db.query(REQUEST_UID).findOne({
-			where: { id: requestId },
+			where: mergeTenantWhere({ id: requestId }, tenantId),
 			populate: ['requester'],
 		});
 
@@ -393,8 +499,11 @@ export default {
 			data.attachments = toAttachmentIds(body.attachments);
 		}
 
+		await assertRequestRelationsInTenant(data, tenantId, ctx);
+		data.tenant = tenantId;
+
 		const updated = await strapi.db.query(REQUEST_UID).update({
-			where: { id: requestId },
+			where: mergeTenantWhere({ id: requestId }, tenantId),
 			data,
 			populate: ['requester', 'request_category', 'request_tags', 'attachments'],
 		});
@@ -407,6 +516,7 @@ export default {
 	async updateStatus(ctx) {
 		const authUser = ctx.state.user;
 		if (!authUser?.id) return ctx.unauthorized('Unauthorized');
+		const tenantId = resolveCurrentTenantId(ctx);
 
 		const requestId = Number(ctx.params.id);
 		if (!Number.isInteger(requestId) || requestId <= 0) {
@@ -426,7 +536,7 @@ export default {
 		const closeNote = typeof ctx.request.body?.closeNote === 'string' ? ctx.request.body.closeNote : undefined;
 		const amountApproved = ctx.request.body?.amountApproved;
 
-		const access = await canAccessRequest(requestId, Number(authUser.id));
+		const access = await canAccessRequest(requestId, Number(authUser.id), tenantId);
 		if (!access.request) return ctx.notFound('Request not found');
 		if (!access.allowed) return ctx.forbidden('Forbidden');
 
@@ -444,7 +554,7 @@ export default {
 		}
 
 		const updated = await strapi.db.query(REQUEST_UID).update({
-			where: { id: requestId },
+			where: mergeTenantWhere({ id: requestId }, tenantId),
 			data: updateData,
 		});
 
@@ -463,10 +573,11 @@ export default {
 	async close(ctx) {
 		const authUser = ctx.state.user;
 		if (!authUser?.id) return ctx.unauthorized('Unauthorized');
+		const tenantId = resolveCurrentTenantId(ctx);
 
 		const { closedDecision, amountApproved, closeNote } = ctx.request.body || {};
 
-		const result = await strapi.service(REQUEST_UID).closeRequest(ctx.params.id, authUser.id, {
+		const result = await strapi.service(REQUEST_UID).closeRequest(ctx.params.id, authUser.id, tenantId, {
 			closedDecision,
 			amountApproved,
 			closeNote,
@@ -497,6 +608,7 @@ export default {
 	async addAssignee(ctx) {
 		const authUser = ctx.state.user;
 		if (!authUser?.id) return ctx.unauthorized('Unauthorized');
+		const tenantId = resolveCurrentTenantId(ctx);
 
 		const requestId = Number(ctx.params.id);
 		if (!Number.isInteger(requestId) || requestId <= 0) {
@@ -504,7 +616,7 @@ export default {
 		}
 
 		const request = await strapi.db.query(REQUEST_UID).findOne({
-			where: { id: requestId },
+			where: mergeTenantWhere({ id: requestId }, tenantId),
 			populate: ['requester'],
 		});
 
@@ -537,7 +649,7 @@ export default {
 			duplicateWhere.isActive = true;
 		}
 
-		const existing = await strapi.db.query(ASSIGNEE_UID).findOne({ where: duplicateWhere });
+		const existing = await strapi.db.query(ASSIGNEE_UID).findOne({ where: mergeTenantWhere(duplicateWhere, tenantId) });
 		if (existing) {
 			return ctx.badRequest('Assignee already exists');
 		}
@@ -553,6 +665,7 @@ export default {
 			assignedBy: Number(authUser.id),
 			assignedAt: new Date(),
 			isActive: true,
+			tenant: tenantId,
 		};
 
 		if (roleType && roleEnum.includes(roleType)) {
@@ -580,6 +693,7 @@ export default {
 	async removeAssignee(ctx) {
 		const authUser = ctx.state.user;
 		if (!authUser?.id) return ctx.unauthorized('Unauthorized');
+		const tenantId = resolveCurrentTenantId(ctx);
 
 		const requestId = Number(ctx.params.id);
 		const assigneeId = Number(ctx.params.assigneeId);
@@ -589,7 +703,7 @@ export default {
 		}
 
 		const request = await strapi.db.query(REQUEST_UID).findOne({
-			where: { id: requestId },
+			where: mergeTenantWhere({ id: requestId }, tenantId),
 			populate: ['requester'],
 		});
 
@@ -601,7 +715,7 @@ export default {
 		}
 
 		const assignee = await strapi.db.query(ASSIGNEE_UID).findOne({
-			where: { id: assigneeId, request: requestId },
+			where: mergeTenantWhere({ id: assigneeId, request: requestId }, tenantId),
 		});
 
 		if (!assignee) {
@@ -609,7 +723,7 @@ export default {
 		}
 
 		await strapi.db.query(ASSIGNEE_UID).update({
-			where: { id: assigneeId },
+			where: mergeTenantWhere({ id: assigneeId }, tenantId),
 			data: {
 				isActive: false,
 				removedAt: new Date(),
@@ -622,21 +736,25 @@ export default {
 	async listMessages(ctx) {
 		const authUser = ctx.state.user;
 		if (!authUser?.id) return ctx.unauthorized('Unauthorized');
+		const tenantId = resolveCurrentTenantId(ctx);
 
 		const requestId = Number(ctx.params.id);
 		if (!Number.isInteger(requestId) || requestId <= 0) {
 			return ctx.badRequest('Invalid request id');
 		}
 
-		const access = await canAccessRequest(requestId, Number(authUser.id));
+		const access = await canAccessRequest(requestId, Number(authUser.id), tenantId);
 		if (!access.request) return ctx.notFound('Request not found');
 		if (!access.allowed) return ctx.forbidden('Forbidden');
 
 		const messages = await strapi.db.query(MESSAGE_UID).findMany({
-			where: {
-				request: requestId,
-				visibility: true,
-			},
+			where: mergeTenantWhere(
+				{
+					request: requestId,
+					visibility: true,
+				},
+				tenantId
+			),
 			orderBy: { createdAt: 'asc' },
 			populate: ['author', 'attachments'],
 		});
@@ -658,13 +776,14 @@ export default {
 	async createMessage(ctx) {
 		const authUser = ctx.state.user;
 		if (!authUser?.id) return ctx.unauthorized('Unauthorized');
+		const tenantId = resolveCurrentTenantId(ctx);
 
 		const requestId = Number(ctx.params.id);
 		if (!Number.isInteger(requestId) || requestId <= 0) {
 			return ctx.badRequest('Invalid request id');
 		}
 
-		const access = await canAccessRequest(requestId, Number(authUser.id));
+		const access = await canAccessRequest(requestId, Number(authUser.id), tenantId);
 		if (!access.request) return ctx.notFound('Request not found');
 		if (!access.allowed) return ctx.forbidden('Forbidden');
 
@@ -686,6 +805,7 @@ export default {
 				content,
 				visibility: true,
 				attachments: attachmentIds,
+				tenant: tenantId,
 			},
 			populate: ['author', 'attachments'],
 		});

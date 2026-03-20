@@ -1,0 +1,48 @@
+'use strict';
+
+module.exports = {
+  group: {
+    name: 'Requests',
+    code: 'request',
+    order: 10,
+    icon: 'cilTask',
+  },
+  features: [
+    {
+      name: 'Request List',
+      key: 'request.list',
+      order: 1,
+      description: 'Request list module',
+      path: '/requests',
+      icon: 'cilTask',
+      showInMenu: true,
+    },
+    {
+      name: 'Request Create',
+      key: 'request.create',
+      order: 2,
+      description: 'Create and edit request',
+      path: '/requests/new',
+      icon: 'cilTask',
+      showInMenu: false,
+    },
+    {
+      name: 'Request Monitor',
+      key: 'request.monitor',
+      order: 3,
+      description: 'Monitor all requests in tenant',
+      path: '/requests/monitor',
+      icon: 'cilTask',
+      showInMenu: true,
+    },
+    {
+      name: 'Request Category Manage',
+      key: 'request.category.manage',
+      order: 4,
+      description: 'Manage request categories',
+      path: '/request-categories',
+      icon: 'cilTask',
+      showInMenu: true,
+    },
+  ],
+};

@@ -120,6 +120,11 @@
       "relation": "oneToMany",
       "target": "api::request-message.request-message",
       "mappedBy": "request"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant"
     }
   }
 }

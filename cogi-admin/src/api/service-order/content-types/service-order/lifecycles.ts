@@ -1,4 +1,5 @@
 import { generateServiceOrderCode } from '../../services/generate-service-order-code';
+import { resolveCurrentTenantId } from '../../../../utils/tenant-scope';
 
 type GenericRecord = Record<string, unknown>;
 
@@ -10,6 +11,17 @@ export default {
   async beforeCreate(event: any) {
     const params = event.params || {};
     const data = (params.data || {}) as GenericRecord;
+
+    if (!data.tenant) {
+      const state = strapi?.requestContext?.get?.()?.state;
+      if (state) {
+        data.tenant = resolveCurrentTenantId({ state, throw: (status: number, message: string) => {
+          const error = new Error(message) as Error & { status?: number };
+          error.status = status;
+          throw error;
+        } });
+      }
+    }
 
     const providedCode = toSafeString(data.code);
     if (providedCode) {

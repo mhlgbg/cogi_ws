@@ -3,6 +3,7 @@
  */
 
 import { factories } from '@strapi/strapi';
+import { mergeTenantWhere } from '../../../utils/tenant-scope';
 
 const REQUEST_UID = 'api::request.request';
 const ASSIGNEE_UID = 'api::request-assignee.request-assignee';
@@ -26,7 +27,7 @@ function toNumberOrNull(value: unknown): number | null {
 }
 
 export default factories.createCoreService(REQUEST_UID, () => ({
-	async closeRequest(requestIdInput: unknown, currentUserIdInput: unknown, payload: ClosePayload) {
+	async closeRequest(requestIdInput: unknown, currentUserIdInput: unknown, tenantId: number | string, payload: ClosePayload) {
 		const requestId = Number(requestIdInput);
 		const currentUserId = Number(currentUserIdInput);
 
@@ -47,7 +48,7 @@ export default factories.createCoreService(REQUEST_UID, () => ({
 		}
 
 		const request = await strapi.db.query(REQUEST_UID).findOne({
-			where: { id: requestId },
+			where: mergeTenantWhere({ id: requestId }, tenantId),
 			populate: ['closedBy'],
 		});
 
@@ -82,7 +83,7 @@ export default factories.createCoreService(REQUEST_UID, () => ({
 			assigneeWhere.isActive = true;
 		}
 
-		const assignee = await strapi.db.query(ASSIGNEE_UID).findOne({ where: assigneeWhere });
+		const assignee = await strapi.db.query(ASSIGNEE_UID).findOne({ where: mergeTenantWhere(assigneeWhere, tenantId) });
 		if (!assignee) {
 			return {
 				ok: false,
@@ -122,12 +123,12 @@ export default factories.createCoreService(REQUEST_UID, () => ({
 		};
 
 		await strapi.db.query(REQUEST_UID).update({
-			where: { id: requestId },
+			where: mergeTenantWhere({ id: requestId }, tenantId),
 			data: updateData,
 		});
 
 		const updated = await strapi.db.query(REQUEST_UID).findOne({
-			where: { id: requestId },
+			where: mergeTenantWhere({ id: requestId }, tenantId),
 			populate: ['requester', 'request_category', 'request_tags', 'closedBy', 'request_assignees.user', 'request_messages.author'],
 		});
 

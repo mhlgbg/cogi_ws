@@ -1,0 +1,42 @@
+{
+  "kind": "collectionType",
+  "collectionName": "tenant_domains",
+  "info": {
+    "singularName": "tenant-domain",
+    "pluralName": "tenant-domains",
+    "displayName": "Tenant Domain"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "domain": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "tenantDomainStatus": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "inactive"
+      ],
+      "required": true
+    },
+    "isPrimary": {
+      "type": "boolean",
+      "default": false
+    },
+    "note": {
+      "type": "text"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "tenantDomains",
+      "required": true
+    }
+  }
+}

@@ -9,8 +9,17 @@ import {
   assertDepartmentInScope,
   assertEmployeeSelf,
 } from '../../service-order/services/service-sales-access';
+import {
+  assertEntityTenantMatch,
+  findEntityByRef,
+  mergeTenantWhere,
+  resolveCurrentTenantId,
+} from '../../../utils/tenant-scope';
 
 const PAYMENT_TRANSACTION_UID = 'api::payment-transaction.payment-transaction';
+const CUSTOMER_UID = 'api::customer.customer';
+const DEPARTMENT_UID = 'api::department.department';
+const EMPLOYEE_UID = 'api::employee.employee';
 
 type SortOrder = 'asc' | 'desc';
 
@@ -141,13 +150,36 @@ function mergeWhere(baseWhere: Record<string, unknown>, scopeWhere: Record<strin
   };
 }
 
-async function resolveOrderReference(orderId: number | null) {
+async function resolveOrderReference(orderId: number | null, tenantId: number | string) {
   if (!orderId) return null;
 
   return strapi.db.query('api::service-order.service-order').findOne({
-    where: { id: orderId },
-    populate: ['department', 'customer', 'assignedEmployee'],
+    where: mergeTenantWhere({ id: orderId }, tenantId),
+    populate: ['department', 'customer', 'assignedEmployee', 'tenant'],
   });
+}
+
+async function validatePaymentRelationsInTenant(data: Record<string, unknown>, tenantId: number | string, ctx: any) {
+  if (data.customer !== undefined && data.customer !== null) {
+    const customer = await findEntityByRef(CUSTOMER_UID, data.customer, {
+      tenant: { select: ['id', 'documentId'] },
+    });
+    assertEntityTenantMatch(customer, tenantId, 'Selected customer does not belong to current tenant', ctx);
+  }
+
+  if (data.department !== undefined && data.department !== null) {
+    const department = await findEntityByRef(DEPARTMENT_UID, data.department, {
+      tenant: { select: ['id', 'documentId'] },
+    });
+    assertEntityTenantMatch(department, tenantId, 'Selected department does not belong to current tenant', ctx);
+  }
+
+  if (data.collectedBy !== undefined && data.collectedBy !== null) {
+    const employee = await findEntityByRef(EMPLOYEE_UID, data.collectedBy, {
+      tenant: { select: ['id', 'documentId'] },
+    });
+    assertEntityTenantMatch(employee, tenantId, 'Selected collector does not belong to current tenant', ctx);
+  }
 }
 
 export default factories.createCoreController(PAYMENT_TRANSACTION_UID, () => ({
@@ -185,7 +217,7 @@ export default factories.createCoreController(PAYMENT_TRANSACTION_UID, () => ({
     if (dateToIso) andWhere.push({ paidAt: { $lte: dateToIso } });
 
     const baseWhere = (andWhere.length > 1 ? { $and: andWhere } : andWhere[0] || {}) as Record<string, unknown>;
-    const where = mergeWhere(baseWhere, scopeWhere);
+    const where = mergeTenantWhere(mergeWhere(baseWhere, scopeWhere), scope.tenantId);
 
     const total = await strapi.db.query(PAYMENT_TRANSACTION_UID).count({ where });
     const start = (page - 1) * safePageSize;
@@ -226,7 +258,7 @@ export default factories.createCoreController(PAYMENT_TRANSACTION_UID, () => ({
     const scopeWhere = buildPaymentScopeWhere(viewLevel, scope, ctx) as Record<string, unknown>;
 
     const basePayment = await strapi.db.query(PAYMENT_TRANSACTION_UID).findOne({
-      where: { id },
+      where: mergeTenantWhere({ id }, scope.tenantId),
       populate: ['order', 'customer', 'department', 'collectedBy'],
     });
 
@@ -234,7 +266,7 @@ export default factories.createCoreController(PAYMENT_TRANSACTION_UID, () => ({
       return ctx.notFound('Payment not found');
     }
 
-    const where = mergeWhere({ id }, scopeWhere);
+    const where = mergeTenantWhere(mergeWhere({ id }, scopeWhere), scope.tenantId);
 
     const payment = await strapi.db.query(PAYMENT_TRANSACTION_UID).findOne({
       where,
@@ -252,6 +284,7 @@ export default factories.createCoreController(PAYMENT_TRANSACTION_UID, () => ({
 
   async create(ctx) {
     const scope = await resolveCurrentUserScope(ctx);
+    const tenantId = resolveCurrentTenantId(ctx);
     const createLevel = getPaymentCreateLevel(scope);
 
     if (createLevel === 'NONE') {
@@ -263,7 +296,7 @@ export default factories.createCoreController(PAYMENT_TRANSACTION_UID, () => ({
     const payloadDepartmentId = extractDataRelationId(data, 'department');
     const payloadCollectedById = extractDataRelationId(data, 'collectedBy');
 
-    const order = await resolveOrderReference(orderId);
+    const order = await resolveOrderReference(orderId, tenantId);
     const orderDepartmentId = getRelationId(order?.department);
     const orderCustomerId = getRelationId(order?.customer);
     const targetDepartmentId = payloadDepartmentId || orderDepartmentId;
@@ -309,6 +342,9 @@ export default factories.createCoreController(PAYMENT_TRANSACTION_UID, () => ({
       data.customer = orderCustomerId;
     }
 
+    await validatePaymentRelationsInTenant(data, tenantId, ctx);
+    data.tenant = tenantId;
+
     const created = await strapi.entityService.create(PAYMENT_TRANSACTION_UID, {
       data: data as any,
       populate: ['order', 'customer', 'department', 'collectedBy'],
@@ -326,6 +362,7 @@ export default factories.createCoreController(PAYMENT_TRANSACTION_UID, () => ({
     }
 
     const scope = await resolveCurrentUserScope(ctx);
+    const tenantId = resolveCurrentTenantId(ctx);
     const updateLevel = getPaymentUpdateLevel(scope);
 
     if (updateLevel === 'NONE') {
@@ -333,7 +370,7 @@ export default factories.createCoreController(PAYMENT_TRANSACTION_UID, () => ({
     }
 
     const existing = await strapi.db.query(PAYMENT_TRANSACTION_UID).findOne({
-      where: { id },
+      where: mergeTenantWhere({ id }, tenantId),
       populate: ['order', 'department', 'collectedBy', 'customer'],
     });
 
@@ -365,7 +402,7 @@ export default factories.createCoreController(PAYMENT_TRANSACTION_UID, () => ({
     const requestedDepartmentId = extractDataRelationId(data, 'department');
     const requestedCollectedById = extractDataRelationId(data, 'collectedBy');
 
-    const targetOrder = requestedOrderId ? await resolveOrderReference(requestedOrderId) : null;
+    const targetOrder = requestedOrderId ? await resolveOrderReference(requestedOrderId, tenantId) : null;
     if (requestedOrderId && !targetOrder) {
       return ctx.badRequest('Order not found');
     }
@@ -403,6 +440,9 @@ export default factories.createCoreController(PAYMENT_TRANSACTION_UID, () => ({
     if (requestedOrderId && !extractDataRelationId(data, 'customer')) {
       data.customer = getRelationId(targetOrder?.customer);
     }
+
+    await validatePaymentRelationsInTenant(data, tenantId, ctx);
+    data.tenant = tenantId;
 
     const updated = await strapi.entityService.update(PAYMENT_TRANSACTION_UID, id, {
       data: data as any,

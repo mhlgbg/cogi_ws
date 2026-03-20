@@ -58,6 +58,12 @@
       "type": "boolean",
       "default": true
     },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
     "service_orders": {
       "type": "relation",
       "relation": "oneToMany",

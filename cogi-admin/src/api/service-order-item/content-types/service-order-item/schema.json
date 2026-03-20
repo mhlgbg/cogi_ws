@@ -43,6 +43,12 @@
         "audios"
       ]
     },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
     "order": {
       "type": "relation",
       "relation": "manyToOne",

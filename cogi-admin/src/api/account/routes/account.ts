@@ -10,5 +10,15 @@ export default {
         },
       },
     },
+    {
+      method: 'GET',
+      path: '/account/tenant-users',
+      handler: 'account.tenantUsers',
+      config: {
+        auth: {
+          scope: [],
+        },
+      },
+    },
   ],
-}
+};

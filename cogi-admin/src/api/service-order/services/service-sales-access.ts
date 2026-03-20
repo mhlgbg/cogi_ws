@@ -1,11 +1,28 @@
+import { mergeTenantWhere, resolveCurrentTenantId } from '../../../utils/tenant-scope';
+
 const USER_UID = 'plugin::users-permissions.user';
+const USER_TENANT_UID = 'api::user-tenant.user-tenant';
+const USER_TENANT_ROLE_UID = 'api::user-tenant-role.user-tenant-role';
 const ROLE_FEATURE_UID = 'api::role-feature.role-feature';
 const EMPLOYEE_UID = 'api::employee.employee';
 const EMPLOYEE_HISTORY_UID = 'api::employee-history.employee-history';
 
+const SALES_COUNTER_MANAGE_KEYS = [
+  'sales-counter.manage',
+  'sales-counters.manage',
+  'salesCounter.manage',
+  'salesCounters.manage',
+];
+
+const NON_EDITABLE_ORDER_STATUS_KEYS = new Set([
+  'READY',
+  'DELIVERED',
+]);
+
 export type ScopeLevel = 'ALL' | 'DEPARTMENT' | 'SELF' | 'NONE';
 
 export type CurrentUserScope = {
+  tenantId: number | string;
   userId: number;
   roleId: number | null;
   roleName: string | null;
@@ -14,6 +31,23 @@ export type CurrentUserScope = {
   employeeId: number | null;
   accessibleDepartmentIds: number[];
 };
+
+function hasAnyPermission(permissionKeys: Set<string>, keys: string[]): boolean {
+  return keys.some((key) => permissionKeys.has(key));
+}
+
+function normalizeOrderStateKey(value: unknown): string {
+  return String(value || '')
+    .trim()
+    .replace(/[\s-]+/g, '_')
+    .toUpperCase();
+}
+
+export function isOrderEditableState(order: any): boolean {
+  const statusKey = normalizeOrderStateKey(order?.status);
+  if (!statusKey) return true;
+  return !NON_EDITABLE_ORDER_STATUS_KEYS.has(statusKey);
+}
 
 const ORDER_PERMISSION = {
   LEGACY_ALL: 'service-orders',
@@ -128,6 +162,28 @@ async function getPermissionKeysByRoleId(roleId: number | null): Promise<Set<str
   );
 }
 
+async function getPermissionKeysByRoleIds(roleIds: number[]): Promise<Set<string>> {
+  const uniqueRoleIds = Array.from(new Set(roleIds.filter((roleId) => Number.isInteger(roleId) && roleId > 0)));
+  if (uniqueRoleIds.length === 0) return new Set();
+
+  const mappings = await strapi.db.query(ROLE_FEATURE_UID).findMany({
+    where: {
+      role: {
+        id: {
+          $in: uniqueRoleIds,
+        },
+      },
+    },
+    populate: ['feature'],
+  });
+
+  return new Set(
+    (mappings || [])
+      .map((item: any) => item?.feature?.key)
+      .filter((key: string | null | undefined): key is string => typeof key === 'string' && key.length > 0)
+  );
+}
+
 function normalizeRoleName(value: unknown): string {
   return String(value || '').trim().toLowerCase();
 }
@@ -144,9 +200,9 @@ function isSalesCounterRoleName(value: unknown): boolean {
   );
 }
 
-async function findLatestEmployee(where: Record<string, unknown>) {
+async function findLatestEmployee(where: Record<string, unknown>, tenantId: number | string) {
   const employees = await strapi.db.query(EMPLOYEE_UID).findMany({
-    where,
+    where: mergeTenantWhere(where, tenantId),
     populate: ['currentDepartment'],
     orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
     limit: 1,
@@ -159,8 +215,8 @@ async function findLatestEmployee(where: Record<string, unknown>) {
   return employees[0];
 }
 
-async function resolveCurrentUserEmployee(userId: number, user: any | null) {
-  const byRelation = await findLatestEmployee({ user: { id: userId } });
+async function resolveCurrentUserEmployee(userId: number, user: any | null, tenantId: number | string) {
+  const byRelation = await findLatestEmployee({ user: { id: userId } }, tenantId);
   if (byRelation) {
     return byRelation;
   }
@@ -169,7 +225,7 @@ async function resolveCurrentUserEmployee(userId: number, user: any | null) {
   if (userEmail) {
     const byEmail = await findLatestEmployee({
       $or: [{ workEmail: userEmail }, { personalEmail: userEmail }],
-    });
+    }, tenantId);
     if (byEmail) {
       return byEmail;
     }
@@ -177,7 +233,7 @@ async function resolveCurrentUserEmployee(userId: number, user: any | null) {
 
   const username = String(user?.username || '').trim();
   if (username) {
-    const byEmployeeCode = await findLatestEmployee({ employeeCode: username });
+    const byEmployeeCode = await findLatestEmployee({ employeeCode: username }, tenantId);
     if (byEmployeeCode) {
       return byEmployeeCode;
     }
@@ -186,19 +242,19 @@ async function resolveCurrentUserEmployee(userId: number, user: any | null) {
   return null;
 }
 
-async function resolveAccessibleDepartmentIds(employee: any | null): Promise<number[]> {
+async function resolveAccessibleDepartmentIds(employee: any | null, tenantId: number | string): Promise<number[]> {
   const employeeId = parsePositiveInt(employee?.id);
   if (!employeeId) return [];
 
   const nowIso = new Date().toISOString().slice(0, 10);
 
   const histories = await strapi.db.query(EMPLOYEE_HISTORY_UID).findMany({
-    where: {
+    where: mergeTenantWhere({
       employee: employeeId,
       isCurrent: true,
       startDate: { $lte: nowIso },
       $or: [{ endDate: { $null: true } }, { endDate: { $gte: nowIso } }],
-    },
+    }, tenantId),
     populate: ['department'],
     orderBy: [{ isPrimary: 'desc' }, { startDate: 'desc' }, { createdAt: 'desc' }],
   });
@@ -219,7 +275,32 @@ async function resolveAccessibleDepartmentIds(employee: any | null): Promise<num
   return currentDepartmentId ? [currentDepartmentId] : [];
 }
 
+async function findActiveUserTenant(userId: number, tenantId: number | string) {
+  return strapi.db.query(USER_TENANT_UID).findOne({
+    where: {
+      user: userId,
+      tenant: tenantId,
+      userTenantStatus: 'active',
+    },
+    select: ['id'],
+  });
+}
+
+async function findActiveUserTenantRoles(userTenantId: number) {
+  return strapi.db.query(USER_TENANT_ROLE_UID).findMany({
+    where: {
+      userTenant: userTenantId,
+      userTenantRoleStatus: 'active',
+    },
+    populate: {
+      role: true,
+    },
+    orderBy: [{ isPrimary: 'desc' }, { assignedAt: 'desc' }, { createdAt: 'desc' }],
+  });
+}
+
 export async function resolveCurrentUserScope(ctx: any): Promise<CurrentUserScope> {
+  const tenantId = resolveCurrentTenantId(ctx);
   const authUser = ctx?.state?.user;
   const userId = parsePositiveInt(authUser?.id);
 
@@ -232,14 +313,35 @@ export async function resolveCurrentUserScope(ctx: any): Promise<CurrentUserScop
     populate: ['role'],
   });
 
-  const roleId = parsePositiveInt(user?.role?.id);
-  const roleName = typeof user?.role?.name === 'string' ? user.role.name : null;
-  const permissionKeys = await getPermissionKeysByRoleId(roleId);
-  const employee = await resolveCurrentUserEmployee(userId as number, user);
+  const userTenant = await findActiveUserTenant(userId as number, tenantId);
+  const userTenantId = parsePositiveInt(userTenant?.id);
+  const userTenantRoles = userTenantId ? await findActiveUserTenantRoles(userTenantId) : [];
+
+  const tenantRoles = (userTenantRoles || [])
+    .map((item: any) => item?.role)
+    .filter((role: any) => Boolean(parsePositiveInt(role?.id)));
+
+  const primaryTenantRole = tenantRoles[0] ?? null;
+  const tenantRoleIds = tenantRoles
+    .map((role: any) => parsePositiveInt(role?.id))
+    .filter((value: number | null): value is number => Boolean(value));
+
+  const fallbackRoleId = parsePositiveInt(user?.role?.id);
+  const fallbackRoleName = typeof user?.role?.name === 'string' ? user.role.name : null;
+
+  const roleId = parsePositiveInt(primaryTenantRole?.id) ?? fallbackRoleId;
+  const roleName = typeof primaryTenantRole?.name === 'string'
+    ? primaryTenantRole.name
+    : (typeof primaryTenantRole?.type === 'string' ? primaryTenantRole.type : fallbackRoleName);
+  const permissionKeys = tenantRoleIds.length > 0
+    ? await getPermissionKeysByRoleIds(tenantRoleIds)
+    : await getPermissionKeysByRoleId(fallbackRoleId);
+  const employee = await resolveCurrentUserEmployee(userId as number, user, tenantId);
   const employeeId = parsePositiveInt(employee?.id);
-  const accessibleDepartmentIds = await resolveAccessibleDepartmentIds(employee);
+  const accessibleDepartmentIds = await resolveAccessibleDepartmentIds(employee, tenantId);
 
   return {
+    tenantId,
     userId: userId as number,
     roleId,
     roleName,
@@ -251,6 +353,7 @@ export async function resolveCurrentUserScope(ctx: any): Promise<CurrentUserScop
 }
 
 export function canAccessSalesCounter(scope: CurrentUserScope): boolean {
+  if (hasAnyPermission(scope.permissionKeys, SALES_COUNTER_MANAGE_KEYS)) return true;
   if (scope.permissionKeys.has(ORDER_PERMISSION.LEGACY_ALL)) return true;
   if (scope.permissionKeys.has(ORDER_PERMISSION.VIEW_ALL)) return true;
   if (scope.permissionKeys.has(ORDER_PERMISSION.VIEW_DEPARTMENT)) return true;
@@ -279,6 +382,14 @@ export function getOrderViewLevel(scope: CurrentUserScope): ScopeLevel {
     return 'ALL';
   }
 
+  if (scope.permissionKeys.has(ORDER_PERMISSION.VIEW_ALL)) {
+    return 'ALL';
+  }
+
+  if (hasAnyPermission(scope.permissionKeys, SALES_COUNTER_MANAGE_KEYS)) {
+    return 'DEPARTMENT';
+  }
+
   if (isSalesCounterRoleName(scope.roleName)) {
     return 'DEPARTMENT';
   }
@@ -295,6 +406,14 @@ export function getOrderUpdateLevel(scope: CurrentUserScope): ScopeLevel {
     return 'ALL';
   }
 
+  if (scope.permissionKeys.has(ORDER_PERMISSION.UPDATE_ALL)) {
+    return 'ALL';
+  }
+
+  if (hasAnyPermission(scope.permissionKeys, SALES_COUNTER_MANAGE_KEYS)) {
+    return isSalesCounterRoleName(scope.roleName) ? 'SELF' : 'DEPARTMENT';
+  }
+
   return resolveLevelByKeys(scope.permissionKeys, {
     all: ORDER_PERMISSION.UPDATE_ALL,
     department: ORDER_PERMISSION.UPDATE_DEPARTMENT,
@@ -302,9 +421,25 @@ export function getOrderUpdateLevel(scope: CurrentUserScope): ScopeLevel {
   });
 }
 
+export function hasOrderUpdateOverride(scope: CurrentUserScope): boolean {
+  return (
+    scope.permissionKeys.has(ORDER_PERMISSION.LEGACY_ALL)
+    || scope.permissionKeys.has(ORDER_PERMISSION.UPDATE_ALL)
+    || scope.permissionKeys.has(ORDER_PERMISSION.UPDATE_DEPARTMENT)
+  );
+}
+
 export function getPaymentViewLevel(scope: CurrentUserScope): ScopeLevel {
   if (scope.permissionKeys.has(PAYMENT_PERMISSION.LEGACY_ALL)) {
     return 'ALL';
+  }
+
+  if (scope.permissionKeys.has(PAYMENT_PERMISSION.VIEW_ALL)) {
+    return 'ALL';
+  }
+
+  if (hasAnyPermission(scope.permissionKeys, SALES_COUNTER_MANAGE_KEYS)) {
+    return 'DEPARTMENT';
   }
 
   if (isSalesCounterRoleName(scope.roleName)) {
@@ -323,6 +458,14 @@ export function getPaymentCreateLevel(scope: CurrentUserScope): ScopeLevel {
     return 'ALL';
   }
 
+  if (scope.permissionKeys.has(PAYMENT_PERMISSION.CREATE_ALL)) {
+    return 'ALL';
+  }
+
+  if (hasAnyPermission(scope.permissionKeys, SALES_COUNTER_MANAGE_KEYS)) {
+    return 'DEPARTMENT';
+  }
+
   if (isSalesCounterRoleName(scope.roleName)) {
     return 'DEPARTMENT';
   }
@@ -337,6 +480,14 @@ export function getPaymentCreateLevel(scope: CurrentUserScope): ScopeLevel {
 export function getPaymentUpdateLevel(scope: CurrentUserScope): ScopeLevel {
   if (scope.permissionKeys.has(PAYMENT_PERMISSION.LEGACY_ALL)) {
     return 'ALL';
+  }
+
+  if (scope.permissionKeys.has(PAYMENT_PERMISSION.UPDATE_ALL)) {
+    return 'ALL';
+  }
+
+  if (hasAnyPermission(scope.permissionKeys, SALES_COUNTER_MANAGE_KEYS)) {
+    return 'DEPARTMENT';
   }
 
   return resolveLevelByKeys(scope.permissionKeys, {
