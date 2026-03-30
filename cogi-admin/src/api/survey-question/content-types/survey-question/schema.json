@@ -1,0 +1,63 @@
+{
+  "kind": "collectionType",
+  "collectionName": "survey_questions",
+  "info": {
+    "singularName": "survey-question",
+    "pluralName": "survey-questions",
+    "displayName": "Survey Question",
+    "description": "Future extension: feature-based permission (survey.*), tenantFeature, roleFeature, reporting later."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "content": {
+      "type": "text",
+      "required": true
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": [
+        "LIKERT_1_5",
+        "SINGLE_CHOICE",
+        "MULTI_CHOICE",
+        "TEXT"
+      ],
+      "required": true
+    },
+    "isRequired": {
+      "type": "boolean",
+      "default": false
+    },
+    "order": {
+      "type": "integer",
+      "default": 0
+    },
+    "survey_section": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::survey-section.survey-section",
+      "inversedBy": "survey_questions",
+      "required": true
+    },
+    "survey_question_options": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::survey-question-option.survey-question-option",
+      "mappedBy": "survey_question"
+    },
+    "survey_answers": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::survey-answer.survey-answer",
+      "mappedBy": "survey_question"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

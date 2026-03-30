@@ -1,0 +1,74 @@
+{
+  "kind": "collectionType",
+  "collectionName": "survey_assignments",
+  "info": {
+    "singularName": "survey-assignment",
+    "pluralName": "survey-assignments",
+    "displayName": "Survey Assignment",
+    "description": "Future extension: feature-based permission (survey.*), tenantFeature, roleFeature, reporting later. Unique constraint note: COURSE_LECTURER => unique(campaign + user + classSectionId + lecturerId), GRADUATION_EXIT => unique(campaign + user)."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "contextType": {
+      "type": "enumeration",
+      "enum": [
+        "COURSE_LECTURER",
+        "GRADUATION_EXIT"
+      ],
+      "required": true
+    },
+    "isCompleted": {
+      "type": "boolean",
+      "default": false
+    },
+    "courseId": {
+      "type": "string"
+    },
+    "courseName": {
+      "type": "string"
+    },
+    "lecturerName": {
+      "type": "string"
+    },
+    "classSectionId": {
+      "type": "string"
+    },
+    "lecturerId": {
+      "type": "string"
+    },
+    "programId": {
+      "type": "string"
+    },
+    "cohortId": {
+      "type": "string"
+    },
+    "survey_campaign": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::survey-campaign.survey-campaign",
+      "inversedBy": "survey_assignments",
+      "required": true
+    },
+    "respondent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "survey_responses": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::survey-response.survey-response",
+      "mappedBy": "survey_assignment"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

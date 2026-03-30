@@ -12,6 +12,7 @@ import {
   listTenantUsers,
   updateTenantUserRoles,
 } from '../services/manage-tenant-users';
+import { importTenantUsersFromFile } from '../services/import-tenant-users';
 
 function isValidationError(error: unknown) {
   if (!error || typeof error !== 'object') return false;
@@ -376,6 +377,42 @@ export default {
     } catch (error) {
       console.error('[updateTenantUserRoles] Unexpected error:', error);
       return ctx.internalServerError('Failed to update user roles');
+    }
+  },
+
+  async importUsers(ctx) {
+    try {
+      const tenantId = ctx.state?.tenantId ?? ctx.state?.tenant?.id;
+      if (!tenantId) {
+        return ctx.badRequest('Tenant context is required');
+      }
+
+      const roleId = Number(ctx.request?.body?.roleId);
+      if (!Number.isInteger(roleId) || roleId <= 0) {
+        return ctx.badRequest('roleId is required and must be a positive integer');
+      }
+
+      const files = ctx.request?.files || {};
+      const uploadFile = Array.isArray(files.file) ? files.file[0] : files.file;
+      if (!uploadFile) {
+        return ctx.badRequest('file is required');
+      }
+
+      const result = await importTenantUsersFromFile({
+        tenantId: Number(tenantId),
+        roleId,
+        file: uploadFile,
+      });
+
+      ctx.body = {
+        ok: true,
+        data: result,
+      };
+    } catch (error: any) {
+      console.error('[importUsers] Unexpected error:', error);
+
+      const message = typeof error?.message === 'string' ? error.message : 'Failed to import users';
+      return ctx.badRequest(message);
     }
   },
 };

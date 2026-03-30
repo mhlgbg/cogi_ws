@@ -12,6 +12,53 @@ const SERVICE_CATEGORY_UID = 'api::service-category.service-category';
 
 type GenericRecord = Record<string, unknown>;
 
+async function resolveUserFromJwt(ctx: any) {
+	try {
+		const authHeader = ctx.request?.headers?.authorization || ctx.request?.header?.authorization || '';
+		const token = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+			? authHeader.slice(7).trim()
+			: '';
+
+		if (!token) return null;
+
+		const jwtService = strapi.plugin('users-permissions')?.service('jwt');
+		if (!jwtService) return null;
+
+		const decoded = await jwtService.verify(token);
+		const userId = Number(decoded?.id);
+		if (!Number.isInteger(userId) || userId <= 0) return null;
+
+		return strapi.db.query('plugin::users-permissions.user').findOne({
+			where: { id: userId },
+			select: ['id', 'username', 'email', 'blocked'],
+		});
+	} catch {
+		return null;
+	}
+}
+
+async function requireAuthenticatedUser(ctx: any) {
+	let authUser = ctx.state?.user;
+	if (!authUser?.id) {
+		authUser = await resolveUserFromJwt(ctx);
+		if (authUser?.id) {
+			ctx.state.user = authUser;
+		}
+	}
+
+	if (!authUser?.id) {
+		ctx.unauthorized('Unauthorized');
+		return null;
+	}
+
+	if (authUser?.blocked) {
+		ctx.unauthorized('Account is blocked');
+		return null;
+	}
+
+	return authUser;
+}
+
 function resolveRequestData(ctx: any): GenericRecord {
 	const body = (ctx.request.body ??= {});
 	if (!body.data || typeof body.data !== 'object' || Array.isArray(body.data)) {
@@ -23,6 +70,8 @@ function resolveRequestData(ctx: any): GenericRecord {
 
 export default factories.createCoreController(SERVICE_CATEGORY_UID, () => ({
 	async find(ctx) {
+		if (!(await requireAuthenticatedUser(ctx))) return;
+
 		const tenantId = resolveCurrentTenantId(ctx);
 		const query = (ctx.query || {}) as Record<string, unknown>;
 		const page = toPositiveInt((query.pagination as Record<string, unknown> | undefined)?.page, 1);
@@ -54,6 +103,8 @@ export default factories.createCoreController(SERVICE_CATEGORY_UID, () => ({
 	},
 
 	async findOne(ctx) {
+		if (!(await requireAuthenticatedUser(ctx))) return;
+
 		const tenantId = resolveCurrentTenantId(ctx);
 		const entity = await strapi.db.query(SERVICE_CATEGORY_UID).findOne({
 			where: mergeTenantWhere(whereByParam(ctx.params?.id), tenantId),
@@ -68,6 +119,8 @@ export default factories.createCoreController(SERVICE_CATEGORY_UID, () => ({
 	},
 
 	async create(ctx) {
+		if (!(await requireAuthenticatedUser(ctx))) return;
+
 		const tenantId = resolveCurrentTenantId(ctx);
 		const data = resolveRequestData(ctx);
 		data.tenant = tenantId;
@@ -82,6 +135,8 @@ export default factories.createCoreController(SERVICE_CATEGORY_UID, () => ({
 	},
 
 	async update(ctx) {
+		if (!(await requireAuthenticatedUser(ctx))) return;
+
 		const tenantId = resolveCurrentTenantId(ctx);
 		const existing = await strapi.db.query(SERVICE_CATEGORY_UID).findOne({
 			where: mergeTenantWhere(whereByParam(ctx.params?.id), tenantId),
@@ -107,6 +162,8 @@ export default factories.createCoreController(SERVICE_CATEGORY_UID, () => ({
 	},
 
 	async delete(ctx) {
+		if (!(await requireAuthenticatedUser(ctx))) return;
+
 		const tenantId = resolveCurrentTenantId(ctx);
 		const existing = await strapi.db.query(SERVICE_CATEGORY_UID).findOne({
 			where: mergeTenantWhere(whereByParam(ctx.params?.id), tenantId),

@@ -5,9 +5,7 @@ export default {
       path: '/service-orders/counter-context',
       handler: 'service-order.counterContext',
       config: {
-        auth: {
-          scope: [],
-        },
+				auth: false,
       },
     },
   ],

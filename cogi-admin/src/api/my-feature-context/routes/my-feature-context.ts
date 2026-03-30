@@ -5,9 +5,7 @@ export default {
       path: '/my-feature-context',
       handler: 'my-feature-context.index',
       config: {
-        auth: {
-          scope: [],
-        },
+        auth: false,
       },
     },
   ],

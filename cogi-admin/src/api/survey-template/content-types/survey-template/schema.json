@@ -1,0 +1,58 @@
+{
+  "kind": "collectionType",
+  "collectionName": "survey_templates",
+  "info": {
+    "singularName": "survey-template",
+    "pluralName": "survey-templates",
+    "displayName": "Survey Template",
+    "description": "Future extension: feature-based permission (survey.*), tenantFeature, roleFeature, reporting later."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "code": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": [
+        "TEACHING_EVALUATION",
+        "GRADUATION_EXIT"
+      ],
+      "required": true
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    },
+    "survey_sections": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::survey-section.survey-section",
+      "mappedBy": "survey_template"
+    },
+    "survey_campaigns": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::survey-campaign.survey-campaign",
+      "mappedBy": "survey_template"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

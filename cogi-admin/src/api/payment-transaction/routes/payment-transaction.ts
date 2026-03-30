@@ -5,9 +5,7 @@ export default {
 			path: '/payment-transactions',
 			handler: 'payment-transaction.find',
 			config: {
-				auth: {
-					scope: [],
-				},
+				auth: false,
 			},
 		},
 		{
@@ -15,9 +13,7 @@ export default {
 			path: '/payment-transactions/:id',
 			handler: 'payment-transaction.findOne',
 			config: {
-				auth: {
-					scope: [],
-				},
+				auth: false,
 			},
 		},
 		{
@@ -25,9 +21,7 @@ export default {
 			path: '/payment-transactions',
 			handler: 'payment-transaction.create',
 			config: {
-				auth: {
-					scope: [],
-				},
+				auth: false,
 			},
 		},
 		{
@@ -35,9 +29,7 @@ export default {
 			path: '/payment-transactions/:id',
 			handler: 'payment-transaction.update',
 			config: {
-				auth: {
-					scope: [],
-				},
+				auth: false,
 			},
 		},
 		{
@@ -45,9 +37,7 @@ export default {
 			path: '/payment-transactions/:id',
 			handler: 'payment-transaction.delete',
 			config: {
-				auth: {
-					scope: [],
-				},
+				auth: false,
 			},
 		},
 	],

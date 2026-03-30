@@ -1,0 +1,49 @@
+{
+  "kind": "collectionType",
+  "collectionName": "survey_responses",
+  "info": {
+    "singularName": "survey-response",
+    "pluralName": "survey-responses",
+    "displayName": "Survey Response",
+    "description": "Future extension: feature-based permission (survey.*), tenantFeature, roleFeature, reporting later."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "submittedAt": {
+      "type": "datetime"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "IN_PROGRESS",
+        "SUBMITTED"
+      ],
+      "default": "IN_PROGRESS"
+    },
+    "respondentSnapshot": {
+      "type": "json"
+    },
+    "survey_assignment": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::survey-assignment.survey-assignment",
+      "inversedBy": "survey_responses",
+      "required": true
+    },
+    "survey_answers": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::survey-answer.survey-answer",
+      "mappedBy": "survey_response"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

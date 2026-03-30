@@ -86,6 +86,32 @@ function parsePositiveInt(value: unknown): number | null {
   return null;
 }
 
+async function resolveUserFromJwt(ctx: any) {
+  try {
+    const authHeader = ctx.request?.headers?.authorization || ctx.request?.header?.authorization || '';
+    const token = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+      ? authHeader.slice(7).trim()
+      : '';
+
+    if (!token) return null;
+
+    const jwtService = strapi.plugin('users-permissions')?.service('jwt');
+    if (!jwtService) return null;
+
+    const decoded = await jwtService.verify(token);
+    const userId = parsePositiveInt(decoded?.id);
+    if (!userId) return null;
+
+    return strapi.db.query(USER_UID).findOne({
+      where: { id: userId },
+      select: ['id', 'username', 'email', 'blocked'],
+      populate: ['role'],
+    });
+  } catch {
+    return null;
+  }
+}
+
 function extractRelationId(value: unknown): number | null {
   if (value === null || value === undefined) return null;
 
@@ -301,11 +327,18 @@ async function findActiveUserTenantRoles(userTenantId: number) {
 
 export async function resolveCurrentUserScope(ctx: any): Promise<CurrentUserScope> {
   const tenantId = resolveCurrentTenantId(ctx);
-  const authUser = ctx?.state?.user;
+  let authUser = ctx?.state?.user;
+  if (!authUser?.id) {
+    authUser = await resolveUserFromJwt(ctx);
+  }
   const userId = parsePositiveInt(authUser?.id);
 
   if (!userId) {
     toUnauthorized(ctx, 'Unauthorized');
+  }
+
+  if (authUser?.blocked) {
+    toUnauthorized(ctx, 'Account is blocked');
   }
 
   const user = await strapi.db.query(USER_UID).findOne({

@@ -3,6 +3,31 @@ const TENANT_UID = 'api::tenant.tenant';
 const USER_TENANT_UID = 'api::user-tenant.user-tenant';
 const USER_TENANT_ROLE_UID = 'api::user-tenant-role.user-tenant-role';
 
+async function resolveUserFromJwt(ctx: any) {
+  try {
+    const authHeader = ctx.request?.headers?.authorization || ctx.request?.header?.authorization || '';
+    const token = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+      ? authHeader.slice(7).trim()
+      : '';
+
+    if (!token) return null;
+
+    const jwtService = strapi.plugin('users-permissions')?.service('jwt');
+    if (!jwtService) return null;
+
+    const decoded = await jwtService.verify(token);
+    const userId = getRelationId(decoded?.id);
+    if (!userId) return null;
+
+    return strapi.db.query(USER_UID).findOne({
+      where: { id: userId },
+      select: ['id', 'username', 'email', 'blocked'],
+    });
+  } catch {
+    return null;
+  }
+}
+
 function normalizeText(value: unknown): string {
   if (value === null || value === undefined) return '';
   return String(value).trim();
@@ -98,9 +123,17 @@ async function loadRolesByUserTenantId(userTenantId: number) {
 export default {
   async index(ctx: any) {
     try {
-      const authUser = ctx.state?.user;
+      let authUser = ctx.state?.user;
+      if (!authUser?.id) {
+        authUser = await resolveUserFromJwt(ctx);
+      }
+
       if (!authUser?.id) {
         return ctx.unauthorized('Unauthorized');
+      }
+
+      if (authUser?.blocked) {
+        return ctx.unauthorized('Account is blocked');
       }
 
       const user = await strapi.db.query(USER_UID).findOne({

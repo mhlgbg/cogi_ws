@@ -5,9 +5,7 @@ export default {
       path: '/service-orders/lookups/customers',
       handler: 'service-order.lookupCustomers',
       config: {
-        auth: {
-          scope: [],
-        },
+				auth: false,
       },
     },
     {
@@ -15,9 +13,7 @@ export default {
       path: '/service-orders/lookups/customers/quick-create',
       handler: 'service-order.quickCreateCustomer',
       config: {
-        auth: {
-          scope: [],
-        },
+				auth: false,
       },
     },
     {
@@ -25,9 +21,7 @@ export default {
       path: '/service-orders/lookups/service-items',
       handler: 'service-order.lookupServiceItems',
       config: {
-        auth: {
-          scope: [],
-        },
+				auth: false,
       },
     },
   ],

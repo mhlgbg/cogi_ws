@@ -5,9 +5,7 @@ export default {
       path: '/auth/my-tenant-context',
       handler: 'my-tenant-context.index',
       config: {
-        auth: {
-          scope: [],
-        },
+        auth: false,
       },
     },
   ],

@@ -5,9 +5,7 @@ export default {
 			path: '/service-orders',
 			handler: 'service-order.find',
 			config: {
-				auth: {
-					scope: [],
-				},
+				auth: false,
 			},
 		},
 		{
@@ -15,9 +13,7 @@ export default {
 			path: '/service-orders/:id',
 			handler: 'service-order.findOne',
 			config: {
-				auth: {
-					scope: [],
-				},
+				auth: false,
 			},
 		},
 		{
@@ -25,9 +21,7 @@ export default {
 			path: '/service-orders',
 			handler: 'service-order.create',
 			config: {
-				auth: {
-					scope: [],
-				},
+				auth: false,
 			},
 		},
 		{
@@ -35,9 +29,7 @@ export default {
 			path: '/service-orders/:id',
 			handler: 'service-order.update',
 			config: {
-				auth: {
-					scope: [],
-				},
+				auth: false,
 			},
 		},
 		{
@@ -45,9 +37,7 @@ export default {
 			path: '/service-orders/:id',
 			handler: 'service-order.delete',
 			config: {
-				auth: {
-					scope: [],
-				},
+				auth: false,
 			},
 		},
 	],

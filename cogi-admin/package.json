@@ -12,6 +12,7 @@
     "admin:create-user": "node ./scripts/create-admin-user.js",
     "seed:example": "node ./scripts/seed.js",
     "seed:modules": "node ./scripts/seed-modules.js",
+    "seed:survey": "node ./scripts/seed-survey-full.js",
     "test:quick:activate-role": "node --test ./scripts/quick-test-activate-role.js",
     "start": "strapi start",
     "strapi": "strapi",

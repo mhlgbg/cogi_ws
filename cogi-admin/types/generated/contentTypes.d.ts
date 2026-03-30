@@ -1708,6 +1708,387 @@ export interface ApiSettingSetting extends Struct.SingleTypeSchema {
   };
 }
 
+export interface ApiSurveyAnswerSurveyAnswer
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'survey_answers';
+  info: {
+    description: 'Future extension: feature-based permission (survey.*), tenantFeature, roleFeature, reporting later.';
+    displayName: 'Survey Answer';
+    pluralName: 'survey-answers';
+    singularName: 'survey-answer';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::survey-answer.survey-answer'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    survey_question: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::survey-question.survey-question'
+    > &
+      Schema.Attribute.Required;
+    survey_question_option: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::survey-question-option.survey-question-option'
+    >;
+    survey_response: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::survey-response.survey-response'
+    > &
+      Schema.Attribute.Required;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    text: Schema.Attribute.Text;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    value: Schema.Attribute.String;
+  };
+}
+
+export interface ApiSurveyAssignmentSurveyAssignment
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'survey_assignments';
+  info: {
+    description: 'Future extension: feature-based permission (survey.*), tenantFeature, roleFeature, reporting later. Unique constraint note: COURSE_LECTURER => unique(campaign + user + classSectionId + lecturerId), GRADUATION_EXIT => unique(campaign + user).';
+    displayName: 'Survey Assignment';
+    pluralName: 'survey-assignments';
+    singularName: 'survey-assignment';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    classSectionId: Schema.Attribute.String;
+    cohortId: Schema.Attribute.String;
+    contextType: Schema.Attribute.Enumeration<
+      ['COURSE_LECTURER', 'GRADUATION_EXIT']
+    > &
+      Schema.Attribute.Required;
+    courseId: Schema.Attribute.String;
+    courseName: Schema.Attribute.String;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    isCompleted: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    lecturerId: Schema.Attribute.String;
+    lecturerName: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::survey-assignment.survey-assignment'
+    > &
+      Schema.Attribute.Private;
+    programId: Schema.Attribute.String;
+    publishedAt: Schema.Attribute.DateTime;
+    respondent: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    > &
+      Schema.Attribute.Required;
+    survey_campaign: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::survey-campaign.survey-campaign'
+    > &
+      Schema.Attribute.Required;
+    survey_responses: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::survey-response.survey-response'
+    >;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiSurveyCampaignSurveyCampaign
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'survey_campaigns';
+  info: {
+    description: 'Future extension: feature-based permission (survey.*), tenantFeature, roleFeature, reporting later.';
+    displayName: 'Survey Campaign';
+    pluralName: 'survey-campaigns';
+    singularName: 'survey-campaign';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    academicYear: Schema.Attribute.String;
+    campaignStatus: Schema.Attribute.Enumeration<['DRAFT', 'OPEN', 'CLOSED']> &
+      Schema.Attribute.DefaultTo<'DRAFT'>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
+    endAt: Schema.Attribute.DateTime;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::survey-campaign.survey-campaign'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    semester: Schema.Attribute.String;
+    startAt: Schema.Attribute.DateTime;
+    survey_assignments: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::survey-assignment.survey-assignment'
+    >;
+    survey_template: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::survey-template.survey-template'
+    > &
+      Schema.Attribute.Required;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiSurveyQuestionOptionSurveyQuestionOption
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'survey_question_options';
+  info: {
+    description: 'Future extension: feature-based permission (survey.*), tenantFeature, roleFeature, reporting later.';
+    displayName: 'Survey Question Option';
+    pluralName: 'survey-question-options';
+    singularName: 'survey-question-option';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    label: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::survey-question-option.survey-question-option'
+    > &
+      Schema.Attribute.Private;
+    order: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    publishedAt: Schema.Attribute.DateTime;
+    survey_answers: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::survey-answer.survey-answer'
+    >;
+    survey_question: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::survey-question.survey-question'
+    > &
+      Schema.Attribute.Required;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    value: Schema.Attribute.String;
+  };
+}
+
+export interface ApiSurveyQuestionSurveyQuestion
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'survey_questions';
+  info: {
+    description: 'Future extension: feature-based permission (survey.*), tenantFeature, roleFeature, reporting later.';
+    displayName: 'Survey Question';
+    pluralName: 'survey-questions';
+    singularName: 'survey-question';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    content: Schema.Attribute.Text & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    isRequired: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::survey-question.survey-question'
+    > &
+      Schema.Attribute.Private;
+    order: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    publishedAt: Schema.Attribute.DateTime;
+    survey_answers: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::survey-answer.survey-answer'
+    >;
+    survey_question_options: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::survey-question-option.survey-question-option'
+    >;
+    survey_section: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::survey-section.survey-section'
+    > &
+      Schema.Attribute.Required;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    type: Schema.Attribute.Enumeration<
+      ['LIKERT_1_5', 'SINGLE_CHOICE', 'MULTI_CHOICE', 'TEXT']
+    > &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiSurveyResponseSurveyResponse
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'survey_responses';
+  info: {
+    description: 'Future extension: feature-based permission (survey.*), tenantFeature, roleFeature, reporting later.';
+    displayName: 'Survey Response';
+    pluralName: 'survey-responses';
+    singularName: 'survey-response';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::survey-response.survey-response'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    respondentSnapshot: Schema.Attribute.JSON;
+    status: Schema.Attribute.Enumeration<['IN_PROGRESS', 'SUBMITTED']> &
+      Schema.Attribute.DefaultTo<'IN_PROGRESS'>;
+    submittedAt: Schema.Attribute.DateTime;
+    survey_answers: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::survey-answer.survey-answer'
+    >;
+    survey_assignment: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::survey-assignment.survey-assignment'
+    > &
+      Schema.Attribute.Required;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiSurveySectionSurveySection
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'survey_sections';
+  info: {
+    description: 'Future extension: feature-based permission (survey.*), tenantFeature, roleFeature, reporting later.';
+    displayName: 'Survey Section';
+    pluralName: 'survey-sections';
+    singularName: 'survey-section';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::survey-section.survey-section'
+    > &
+      Schema.Attribute.Private;
+    order: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    publishedAt: Schema.Attribute.DateTime;
+    survey_questions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::survey-question.survey-question'
+    >;
+    survey_template: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::survey-template.survey-template'
+    > &
+      Schema.Attribute.Required;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    title: Schema.Attribute.String & Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiSurveyTemplateSurveyTemplate
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'survey_templates';
+  info: {
+    description: 'Future extension: feature-based permission (survey.*), tenantFeature, roleFeature, reporting later.';
+    displayName: 'Survey Template';
+    pluralName: 'survey-templates';
+    singularName: 'survey-template';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    code: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::survey-template.survey-template'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    survey_campaigns: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::survey-campaign.survey-campaign'
+    >;
+    survey_sections: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::survey-section.survey-section'
+    >;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    type: Schema.Attribute.Enumeration<
+      ['TEACHING_EVALUATION', 'GRADUATION_EXIT']
+    > &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiTenantDomainTenantDomain
   extends Struct.CollectionTypeSchema {
   collectionName: 'tenant_domains';
@@ -2609,6 +2990,14 @@ declare module '@strapi/strapi' {
       'api::service-order-item.service-order-item': ApiServiceOrderItemServiceOrderItem;
       'api::service-order.service-order': ApiServiceOrderServiceOrder;
       'api::setting.setting': ApiSettingSetting;
+      'api::survey-answer.survey-answer': ApiSurveyAnswerSurveyAnswer;
+      'api::survey-assignment.survey-assignment': ApiSurveyAssignmentSurveyAssignment;
+      'api::survey-campaign.survey-campaign': ApiSurveyCampaignSurveyCampaign;
+      'api::survey-question-option.survey-question-option': ApiSurveyQuestionOptionSurveyQuestionOption;
+      'api::survey-question.survey-question': ApiSurveyQuestionSurveyQuestion;
+      'api::survey-response.survey-response': ApiSurveyResponseSurveyResponse;
+      'api::survey-section.survey-section': ApiSurveySectionSurveySection;
+      'api::survey-template.survey-template': ApiSurveyTemplateSurveyTemplate;
       'api::tenant-domain.tenant-domain': ApiTenantDomainTenantDomain;
       'api::tenant-feature.tenant-feature': ApiTenantFeatureTenantFeature;
       'api::tenant-role.tenant-role': ApiTenantRoleTenantRole;

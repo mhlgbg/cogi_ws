@@ -17,6 +17,7 @@ const salesCounter = require('./sales-counter');
 const serviceOrders = require('./service-orders');
 const request = require('./request');
 const user = require('./user');
+const survey = require('./survey');
 // const inventory = require('./inventory');
 
 module.exports = [
@@ -29,5 +30,6 @@ module.exports = [
   serviceOrders,
   request,
   user,
+  survey,
   // inventory,
 ];

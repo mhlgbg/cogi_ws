@@ -5,9 +5,7 @@ export default {
       path: '/payment-transactions/list',
       handler: 'payment-transaction.list',
       config: {
-        auth: {
-          scope: [],
-        },
+				auth: false,
       },
     },
   ],

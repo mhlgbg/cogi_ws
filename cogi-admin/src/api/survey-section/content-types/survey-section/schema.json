@@ -1,0 +1,43 @@
+{
+  "kind": "collectionType",
+  "collectionName": "survey_sections",
+  "info": {
+    "singularName": "survey-section",
+    "pluralName": "survey-sections",
+    "displayName": "Survey Section",
+    "description": "Future extension: feature-based permission (survey.*), tenantFeature, roleFeature, reporting later."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "order": {
+      "type": "integer",
+      "default": 0
+    },
+    "survey_template": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::survey-template.survey-template",
+      "inversedBy": "survey_sections",
+      "required": true
+    },
+    "survey_questions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::survey-question.survey-question",
+      "mappedBy": "survey_section"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

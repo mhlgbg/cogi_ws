@@ -1,0 +1,45 @@
+{
+  "kind": "collectionType",
+  "collectionName": "survey_question_options",
+  "info": {
+    "singularName": "survey-question-option",
+    "pluralName": "survey-question-options",
+    "displayName": "Survey Question Option",
+    "description": "Future extension: feature-based permission (survey.*), tenantFeature, roleFeature, reporting later."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "label": {
+      "type": "string"
+    },
+    "value": {
+      "type": "string"
+    },
+    "order": {
+      "type": "integer",
+      "default": 0
+    },
+    "survey_question": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::survey-question.survey-question",
+      "inversedBy": "survey_question_options",
+      "required": true
+    },
+    "survey_answers": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::survey-answer.survey-answer",
+      "mappedBy": "survey_question_option"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

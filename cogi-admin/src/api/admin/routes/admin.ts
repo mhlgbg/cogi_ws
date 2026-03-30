@@ -64,5 +64,21 @@ export default {
         ],
       },
     },
+    {
+      method: 'POST',
+      path: '/users/import',
+      handler: 'admin.importUsers',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'user.manage',
+            },
+          },
+        ],
+      },
+    },
   ],
 };

@@ -1,5 +1,6 @@
 // import type { Core } from '@strapi/strapi';
 import { initServiceSalesMasterData } from './bootstrap/init-service-sales-master-data';
+import { seedSurvey } from './bootstrap/seed-survey';
 
 const WINDOWS_TEMP_UNLINK_EPERM =
   process.platform === 'win32'
@@ -85,5 +86,6 @@ export default {
     }
 
     await initServiceSalesMasterData(strapi);
+    await seedSurvey(strapi);
   },
 };

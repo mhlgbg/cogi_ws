@@ -98,6 +98,30 @@ async function loadRolesByUserTenantId(strapi, userTenantId) {
 	return rows || [];
 }
 
+async function resolveUserFromJwt(strapi, ctx) {
+	try {
+		const authHeader = ctx.request?.headers?.authorization || ctx.request?.header?.authorization || '';
+		const token = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+			? authHeader.slice(7).trim()
+			: '';
+		if (!token) return null;
+
+		const jwtService = strapi.plugin('users-permissions')?.service('jwt');
+		if (!jwtService) return null;
+
+		const decoded = await jwtService.verify(token);
+		const userId = getRelationId(decoded?.id);
+		if (!userId) return null;
+
+		return strapi.db.query(USER_UID).findOne({
+			where: { id: userId },
+			select: ['id', 'username', 'email', 'blocked'],
+		});
+	} catch {
+		return null;
+	}
+}
+
 async function loadTenantBrandingById(strapi, tenantId) {
 	if (!tenantId) return null;
 
@@ -115,9 +139,16 @@ async function loadTenantBrandingById(strapi, tenantId) {
 module.exports = (plugin) => {
 	plugin.controllers.auth.myTenantContext = async (ctx) => {
 		try {
-			const authUser = ctx.state?.user;
+			let authUser = ctx.state?.user;
+			if (!authUser?.id) {
+				authUser = await resolveUserFromJwt(strapi, ctx);
+			}
 			if (!authUser?.id) {
 				return ctx.unauthorized('Unauthorized');
+			}
+
+			if (authUser?.blocked) {
+				return ctx.unauthorized('Account is blocked');
 			}
 
 			const user = await strapi.db.query(USER_UID).findOne({
@@ -262,9 +293,7 @@ module.exports = (plugin) => {
 			handler: 'auth.myTenantContext',
 			config: {
 				prefix: '',
-				auth: {
-					scope: [],
-				},
+				auth: false,
 			},
 		});
 	}

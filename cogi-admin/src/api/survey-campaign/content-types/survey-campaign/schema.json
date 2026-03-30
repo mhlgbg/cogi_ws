@@ -1,0 +1,63 @@
+{
+  "kind": "collectionType",
+  "collectionName": "survey_campaigns",
+  "info": {
+    "singularName": "survey-campaign",
+    "pluralName": "survey-campaigns",
+    "displayName": "Survey Campaign",
+    "description": "Future extension: feature-based permission (survey.*), tenantFeature, roleFeature, reporting later."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "startAt": {
+      "type": "datetime"
+    },
+    "endAt": {
+      "type": "datetime"
+    },
+    "campaignStatus": {
+      "type": "enumeration",
+      "enum": [
+        "DRAFT",
+        "OPEN",
+        "CLOSED"
+      ],
+      "default": "DRAFT"
+    },
+    "academicYear": {
+      "type": "string"
+    },
+    "semester": {
+      "type": "string"
+    },
+    "survey_template": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::survey-template.survey-template",
+      "inversedBy": "survey_campaigns",
+      "required": true
+    },
+    "survey_assignments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::survey-assignment.survey-assignment",
+      "mappedBy": "survey_campaign"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}
