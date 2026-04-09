@@ -8,7 +8,6 @@ import {
   CCardBody,
   CCardHeader,
   CCol,
-  CContainer,
   CForm,
   CFormInput,
   CFormLabel,
@@ -38,6 +37,7 @@ import {
   uploadFiles,
 } from "../services/requestService"
 import "./RequestDetail.css"
+import "./RequestWorkspace.css"
 
 const STATUS_OPTIONS = ["OPEN", "IN_PROGRESS", "WAITING", "DONE", "CLOSED", "CANCELLED"]
 const ASSIGNEE_ROLE_OPTIONS = ["ASSIGNEE", "OBSERVER"]
@@ -100,10 +100,14 @@ function getRoleBadgeColor(roleType) {
   return "secondary"
 }
 
+function getRequestStatus(request) {
+  return request?.requestStatus || request?.request_status || request?.status || ""
+}
+
 export default function RequestDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { me } = useAuth()
+  const { user } = useAuth()
 
   const messagesBottomRef = useRef(null)
 
@@ -144,34 +148,20 @@ export default function RequestDetailPage() {
   }, [request])
 
   const requesterId = Number(request?.requester?.id)
-  const fallbackMe = (() => {
+  const fallbackUser = (() => {
     try {
-      const raw = localStorage.getItem("me")
+      const raw = localStorage.getItem("authUser")
       return raw ? JSON.parse(raw) : null
     } catch {
       return null
     }
   })()
-  const currentUserId = Number(me?.id || fallbackMe?.id)
-
-
-  // DEBUG: Print info to diagnose permission issue
-  useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.log('[DEBUG] me:', me)
-    // eslint-disable-next-line no-console
-    console.log('[DEBUG] fallbackMe:', fallbackMe)
-    // eslint-disable-next-line no-console
-    console.log('[DEBUG] currentUserId:', currentUserId)
-    // eslint-disable-next-line no-console
-    console.log('[DEBUG] requesterId:', requesterId)
-    // eslint-disable-next-line no-console
-    console.log('[DEBUG] request:', request)
-  }, [me, fallbackMe, currentUserId, requesterId, request])
+  const currentUserId = Number(user?.id || fallbackUser?.id)
 
   const isRequester = Boolean(requesterId && currentUserId && requesterId === currentUserId)
   const isCurrentUserAssignee = assignees.some((item) => Number(item?.user?.id) === currentUserId)
-  const isTerminalStatus = request?.request_status === "CLOSED" || request?.request_status === "CANCELLED"
+  const currentRequestStatus = getRequestStatus(request)
+  const isTerminalStatus = currentRequestStatus === "CLOSED" || currentRequestStatus === "CANCELLED"
 
   const canEditRequest = isRequester && !isTerminalStatus
   const canManageAssignees = isRequester && !isTerminalStatus
@@ -244,7 +234,7 @@ export default function RequestDetailPage() {
 
   async function onChangeStatus(event) {
     const nextStatus = event.target.value
-    if (!nextStatus || nextStatus === request?.request_status || !canChangeStatus) return
+    if (!nextStatus || nextStatus === currentRequestStatus || !canChangeStatus) return
 
     if (nextStatus === "CLOSED") {
       setDetailError("Trong V1 không đóng request bằng dropdown trạng thái")
@@ -255,10 +245,10 @@ export default function RequestDetailPage() {
     setDetailError("")
     try {
       const res = await changeRequestStatus(id, nextStatus)
-      const updatedStatus = res?.data?.request_status || nextStatus
+      const updatedStatus = res?.data?.requestStatus || res?.data?.request_status || nextStatus
       setRequest((prev) => {
         if (!prev) return prev
-        return { ...prev, request_status: updatedStatus }
+        return { ...prev, requestStatus: updatedStatus, request_status: updatedStatus, status: updatedStatus }
       })
     } catch (error) {
       const status = error?.response?.status
@@ -462,9 +452,8 @@ export default function RequestDetailPage() {
   }
 
   return (
-    <CContainer className="py-4 rd-detail-page">
-      <CRow className="g-4 justify-content-center">
-        <CCol xxl={10}>
+    <div className="request-workspace request-workspace-detail rd-detail-page">
+      <div className="request-workspace-inner request-workspace-detail-inner">
           <CRow className="g-4">
             <CCol lg={8}>
               <CCard className="mb-4 ai-card">
@@ -498,8 +487,8 @@ export default function RequestDetailPage() {
                       <CCol md={4}>
                         <CFormLabel>Trạng thái</CFormLabel>
                         <div className="pt-1">
-                          <CBadge color={getStatusColor(request?.request_status)} className="ai-status-badge">
-                            {request?.request_status || "-"}
+                          <CBadge color={getStatusColor(currentRequestStatus)} className="ai-status-badge">
+                            {currentRequestStatus || "-"}
                           </CBadge>
                         </div>
                       </CCol>
@@ -509,7 +498,7 @@ export default function RequestDetailPage() {
                       </CCol>
                       <CCol md={4}>
                         <CFormLabel>Loại yêu cầu</CFormLabel>
-                        <CFormInput value={request?.category?.name || "-"} readOnly />
+                        <CFormInput value={request?.category?.name || request?.request_category?.name || "-"} readOnly />
                       </CCol>
                       <CCol md={4}>
                         <CFormLabel>Cập nhật lúc</CFormLabel>
@@ -648,8 +637,8 @@ export default function RequestDetailPage() {
                   <div className="mb-3">
                     <CFormLabel>Trạng thái hiện tại</CFormLabel>
                     <div className="pt-1">
-                      <CBadge color={getStatusColor(request?.request_status)} className="ai-status-badge">
-                        {request?.request_status || "-"}
+                      <CBadge color={getStatusColor(currentRequestStatus)} className="ai-status-badge">
+                        {currentRequestStatus || "-"}
                       </CBadge>
                     </div>
                   </div>
@@ -657,7 +646,7 @@ export default function RequestDetailPage() {
                   <div className="mb-3">
                     <CFormLabel>Đổi trạng thái</CFormLabel>
                     <CFormSelect
-                      value={request?.request_status || ""}
+                      value={currentRequestStatus || ""}
                       onChange={onChangeStatus}
                       disabled={!canChangeStatus || statusUpdating || detailLoading || isTerminalStatus}
                     >
@@ -681,7 +670,7 @@ export default function RequestDetailPage() {
                     </CButton>
                   </div>
 
-                  {request?.request_status === "CLOSED" ? (
+                  {currentRequestStatus === "CLOSED" ? (
                     <div className="mt-4 rd-closed-summary">
                       <div><strong>Quyết định:</strong> {request?.closedDecision || "-"}</div>
                       <div><strong>Người đóng:</strong> {request?.closedBy?.username || "-"}</div>
@@ -902,8 +891,7 @@ export default function RequestDetailPage() {
               <CToastBody>Đã đóng yêu cầu</CToastBody>
             </CToast>
           </CToaster>
-        </CCol>
-      </CRow>
-    </CContainer>
+      </div>
+    </div>
   )
 }

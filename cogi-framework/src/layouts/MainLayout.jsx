@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import AppHeader from '../components/AppHeader'
 import AppFooter from '../components/AppFooter'
 import AppSidebar from '../components/AppSidebar'
@@ -9,8 +9,14 @@ import './main-layout.css'
 
 export default function MainLayout() {
   const feature = useFeature()
+  const location = useLocation()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+
+  const isRequestWorkspaceRoute = useMemo(() => {
+    const pathname = String(location?.pathname || '')
+    return pathname === '/requests' || pathname === '/requests/monitor'
+  }, [location?.pathname])
 
   const navItems = useMemo(
     () => buildNav(feature?.featureGroups || []),
@@ -53,7 +59,7 @@ export default function MainLayout() {
       <div className={[`tenant-main`, sidebarCollapsed ? 'is-sidebar-collapsed' : ''].filter(Boolean).join(' ')}>
         <AppHeader onToggleSidebar={onToggleSidebar} />
 
-        <main className="tenant-content">
+        <main className={["tenant-content", isRequestWorkspaceRoute ? 'tenant-content-full-bleed' : ''].filter(Boolean).join(' ')}>
           <Outlet />
         </main>
 

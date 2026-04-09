@@ -13,6 +13,7 @@ import SetPassword from '../pages/SetPassword'
 import ForgotPassword from '../pages/ForgotPassword'
 import ResetPassword from '../pages/ResetPassword'
 import ChangePassword from '../pages/ChangePassword'
+import AdmissionLanding from '../pages/admission/AdmissionLanding.jsx'
 import { allModuleRoutes } from '../modules'
 
 /**
@@ -46,10 +47,15 @@ export default function AppRouter() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/:tenantCode/login" element={<Login />} />
+      <Route path="/t/:tenantCode/login" element={<Login />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/activate" element={<Activate />} />
       <Route path="/set-password" element={<SetPassword />} />
+      <Route path="/t/:tenantCode" element={<Navigate to="dang-ky-xet-tuyen" replace />} />
+      <Route path="/t/:tenantCode/dang-ky-xet-tuyen" element={<AdmissionLanding />} />
+      <Route path="/t/:tenantCode/dang-ky-xet-tuyen/:campaignCode" element={<AdmissionLanding />} />
 
       <Route
         path="/choose-tenant"
@@ -71,6 +77,14 @@ export default function AppRouter() {
         {/* Dashboard — always present as index route */}
         <Route
           index
+          element={(
+            <FeatureRoute featureKey="dashboard.view">
+              <Dashboard />
+            </FeatureRoute>
+          )}
+        />
+        <Route
+          path="dashboard"
           element={(
             <FeatureRoute featureKey="dashboard.view">
               <Dashboard />

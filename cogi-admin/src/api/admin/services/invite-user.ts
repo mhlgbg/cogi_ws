@@ -10,10 +10,216 @@ const USER_TENANT_UID = 'api::user-tenant.user-tenant';
 const USER_TENANT_ROLE_UID = 'api::user-tenant-role.user-tenant-role';
 const DEPARTMENT_UID = 'api::department.department';
 const DEPARTMENT_MEMBERSHIP_UID = 'api::department-membership.department-membership';
+const NOTIFICATION_SERVICE_UID = 'api::notification.notification';
+
+export type InvitePurpose = 'tenant' | 'admission';
 
 interface ValidationError {
   message: string;
   code: string;
+}
+
+function normalizeText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+}
+
+function escapeHtml(value: unknown): string {
+  return normalizeText(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function getFrontendBaseUrl(): string {
+  return (process.env.FRONTEND_URL?.trim() || 'http://localhost:5173').replace(/\/+$/, '');
+}
+
+function resolveInviteTemplateCode(invitePurpose?: InvitePurpose, templateCode?: string | null): string {
+  const explicitCode = normalizeText(templateCode);
+  if (explicitCode) return explicitCode;
+  return invitePurpose === 'admission' ? 'admission_invite' : 'tenant_invite';
+}
+
+function isTemplateNotFoundError(error: unknown): boolean {
+  const message =
+    (error as { message?: string; details?: { code?: string } })?.message || '';
+  const code = (error as { details?: { code?: string } })?.details?.code || '';
+
+  return code === 'NOTIFICATION_TEMPLATE_NOT_FOUND' || message.includes('Active notification template not found');
+}
+
+async function getTenantSummary(tenantId: number): Promise<{ name: string; code: string }> {
+  const tenant = await strapi.db.query(TENANT_UID).findOne({
+    where: { id: tenantId },
+    select: ['id', 'name', 'code'],
+  });
+
+  return {
+    name: normalizeText(tenant?.name) || 'the system',
+    code: normalizeText(tenant?.code),
+  };
+}
+
+export async function getRoleDisplayName(roleId: number): Promise<string> {
+  const role = await strapi.db.query('plugin::users-permissions.role').findOne({
+    where: { id: roleId },
+    select: ['id', 'name', 'type'],
+  });
+
+  return normalizeText(role?.name) || normalizeText(role?.type) || `Role #${roleId}`;
+}
+
+function buildTenantInviteFallbackEmail(data: {
+  fullName: string;
+  tenantName: string;
+  roleName: string;
+  link: string;
+}) {
+  const subject = `Bạn được mời tham gia ${data.tenantName}`;
+  const roleLine = data.roleName ? ` với vai trò ${data.roleName}` : '';
+
+  return {
+    subject,
+    text:
+      `Xin chào ${data.fullName},\n\n` +
+      `Bạn được mời tham gia ${data.tenantName}${roleLine}. ` +
+      `Vui lòng kích hoạt tài khoản qua link sau:\n${data.link}\n\n` +
+      'Lưu ý: link này sẽ hết hạn sau 48 giờ.',
+    html:
+      `<p>Xin chào <strong>${escapeHtml(data.fullName)}</strong>,</p>` +
+      `<p>Bạn được mời tham gia <strong>${escapeHtml(data.tenantName)}</strong>${roleLine ? ` với vai trò <strong>${escapeHtml(data.roleName)}</strong>` : ''}.</p>` +
+      `<p><a href="${escapeHtml(data.link)}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">Kích hoạt tài khoản</a></p>` +
+      '<p>Nếu nút không hoạt động, dùng link sau:</p>' +
+      `<p><a href="${escapeHtml(data.link)}">${escapeHtml(data.link)}</a></p>` +
+      '<p>Link kích hoạt sẽ hết hạn sau <strong>48 giờ</strong>.</p>',
+  };
+}
+
+function buildAdmissionInviteFallbackEmail(data: {
+  fullName: string;
+  tenantName: string;
+  roleName: string;
+  link: string;
+}) {
+  const subject = `Thư mời tham gia tuyển sinh tại ${data.tenantName}`;
+  const roleLine = data.roleName ? ` với vai trò ${data.roleName}` : '';
+
+  return {
+    subject,
+    text:
+      `Xin chào ${data.fullName},\n\n` +
+      `Nhà trường ${data.tenantName} mời bạn tham gia quy trình tuyển sinh${roleLine}. ` +
+      `Vui lòng kích hoạt tài khoản để tiếp tục hồ sơ tại link sau:\n${data.link}\n\n` +
+      'Sau khi kích hoạt, hệ thống sẽ chuyển bạn sang bước đặt mật khẩu như luồng hiện tại.',
+    html:
+      `<p>Xin chào <strong>${escapeHtml(data.fullName)}</strong>,</p>` +
+      `<p>Nhà trường <strong>${escapeHtml(data.tenantName)}</strong> mời bạn tham gia quy trình tuyển sinh${roleLine ? ` với vai trò <strong>${escapeHtml(data.roleName)}</strong>` : ''}.</p>` +
+      `<p><a href="${escapeHtml(data.link)}" style="display:inline-block;padding:10px 16px;background:#0f766e;color:#fff;text-decoration:none;border-radius:6px;">Kích hoạt tài khoản</a></p>` +
+      '<p>Nếu nút không hoạt động, dùng link sau:</p>' +
+      `<p><a href="${escapeHtml(data.link)}">${escapeHtml(data.link)}</a></p>` +
+      '<p>Sau khi kích hoạt, hệ thống sẽ chuyển bạn sang bước đặt mật khẩu.</p>',
+  };
+}
+
+export async function sendInviteNotification(options: {
+  email: string;
+  fullName?: string | null;
+  tenantId: number;
+  tenantName?: string | null;
+  tenantCode?: string | null;
+  roleName?: string | null;
+  link: string;
+  invitePurpose?: InvitePurpose;
+  templateCode?: string | null;
+}): Promise<{ emailSent: boolean; emailError?: string; usedFallback: boolean; templateCode: string }> {
+  const recipientEmail = normalizeText(options.email).toLowerCase();
+  const templateCode = resolveInviteTemplateCode(options.invitePurpose, options.templateCode);
+  const tenantSummary = await getTenantSummary(options.tenantId);
+  const tenant = {
+    ...tenantSummary,
+    name: normalizeText(options.tenantName) || tenantSummary.name,
+    code: normalizeText(options.tenantCode) || tenantSummary.code,
+  };
+  const recipientName = normalizeText(options.fullName) || recipientEmail;
+  const roleName = normalizeText(options.roleName) || (options.invitePurpose === 'admission' ? 'Applicant' : '');
+  const payload = {
+    email: recipientEmail,
+    fullName: recipientName,
+    tenantName: tenant.name,
+    tenantCode: tenant.code,
+    roleName,
+    link: options.link,
+  };
+
+  try {
+    await (strapi.service(NOTIFICATION_SERVICE_UID) as any).sendNotification(templateCode, options.tenantId, payload);
+
+    return {
+      emailSent: true,
+      usedFallback: false,
+      templateCode,
+    };
+  } catch (error) {
+    if (!isTemplateNotFoundError(error)) {
+      const rawMessage =
+        (error as { message?: string; response?: { body?: { message?: string } } })?.response?.body?.message ||
+        (error as { message?: string })?.message;
+
+      return {
+        emailSent: false,
+        emailError: rawMessage ? String(rawMessage).slice(0, 160) : 'Email sending failed',
+        usedFallback: false,
+        templateCode,
+      };
+    }
+
+    const fallback = options.invitePurpose === 'admission'
+      ? buildAdmissionInviteFallbackEmail({
+          fullName: recipientName,
+          tenantName: tenant.name,
+          roleName,
+          link: options.link,
+        })
+      : buildTenantInviteFallbackEmail({
+          fullName: recipientName,
+          tenantName: tenant.name,
+          roleName,
+          link: options.link,
+        });
+
+    try {
+      await strapi.plugin('email').service('email').send({
+        to: recipientEmail,
+        subject: fallback.subject,
+        text: fallback.text,
+        html: fallback.html,
+      });
+
+      return {
+        emailSent: true,
+        usedFallback: true,
+        templateCode,
+      };
+    } catch (fallbackError) {
+      const rawMessage =
+        (fallbackError as { message?: string; response?: { body?: { message?: string } } })?.response?.body?.message ||
+        (fallbackError as { message?: string })?.message;
+
+      return {
+        emailSent: false,
+        emailError: rawMessage ? String(rawMessage).slice(0, 160) : 'Email sending failed',
+        usedFallback: true,
+        templateCode,
+      };
+    }
+  }
+}
+
+export function buildActivationLink(activationToken: string): string {
+  return `${getFrontendBaseUrl()}/activate?token=${encodeURIComponent(activationToken)}`;
 }
 
 /**
@@ -104,6 +310,18 @@ export async function createUserTenant(
   tenantId: number,
   status: 'active' | 'pending' = 'active'
 ): Promise<{ id: number }> {
+  const existingUserTenant = await strapi.db.query(USER_TENANT_UID).findOne({
+    where: {
+      user: userId,
+      tenant: tenantId,
+    },
+    select: ['id'],
+  });
+
+  if (existingUserTenant?.id) {
+    return { id: existingUserTenant.id };
+  }
+
   const userTenant = await strapi.db.query(USER_TENANT_UID).create({
     data: {
       user: userId,
@@ -181,6 +399,7 @@ export async function ensureDepartmentMembership(
 export async function inviteNewUser(options: {
   email: string;
   fullName?: string | null;
+  phone?: string | null;
   tenantId: number;
   roleId: number;
   departmentId?: number | null;
@@ -194,7 +413,7 @@ export async function inviteNewUser(options: {
   expiresAt: string;
   status: 'created';
 }> {
-  const { email, fullName, tenantId, roleId, departmentId, password, activationToken, expiresAt } =
+  const { email, fullName, phone, tenantId, roleId, departmentId, password, activationToken, expiresAt } =
     options;
 
   // Create user
@@ -204,6 +423,7 @@ export async function inviteNewUser(options: {
     username: email,
     provider: 'local',
     fullName: fullName || undefined,
+    phone: normalizeText(phone) || undefined,
     confirmed: false,
     blocked: false,
     password,
@@ -273,4 +493,24 @@ export async function inviteExistingUserToTenant(options: {
     userTenantId: userTenantData.id,
     status: 'added_to_tenant',
   };
+}
+
+export async function updateUserPhoneIfEmpty(userId: number, phone?: string | null): Promise<void> {
+  const normalizedPhone = normalizeText(phone);
+  if (!normalizedPhone) return;
+
+  const user = await strapi.db.query(USER_UID).findOne({
+    where: { id: userId },
+    select: ['id', 'phone'],
+  });
+
+  if (!user?.id || normalizeText(user.phone)) {
+    return;
+  }
+
+  await strapi.entityService.update(USER_UID, userId, {
+    data: {
+      phone: normalizedPhone,
+    },
+  });
 }

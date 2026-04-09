@@ -1,0 +1,53 @@
+{
+  "kind": "collectionType",
+  "collectionName": "fee_sheets",
+  "info": {
+    "singularName": "fee-sheet",
+    "pluralName": "fee-sheets",
+    "displayName": "Fee Sheet",
+    "description": "Tenant-scoped fee sheet periods for learner billing."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "fromDate": {
+      "type": "date",
+      "required": true
+    },
+    "toDate": {
+      "type": "date",
+      "required": true
+    },
+    "feeSheetStatus": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "open",
+        "closed",
+        "approved"
+      ],
+      "default": "draft"
+    },
+    "note": {
+      "type": "text"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "feeSheetClasses": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::fee-sheet-class.fee-sheet-class",
+      "mappedBy": "feeSheet"
+    }
+  }
+}

@@ -252,6 +252,10 @@
   flex: 1;
 }
 
+.tenant-content.tenant-content-full-bleed {
+  padding: 0;
+}
+
 .tenant-footer {
   border-top: 1px solid #e8edf5;
   background: #ffffff;
@@ -311,6 +315,10 @@
 
   .tenant-content {
     padding: 12px;
+  }
+
+  .tenant-content.tenant-content-full-bleed {
+    padding: 0;
   }
 
   .tenant-footer {

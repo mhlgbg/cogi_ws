@@ -49,14 +49,14 @@ export default {
 
     const request = await strapi.db.query(REQUEST_UID).findOne({
       where: { id: requestId },
-      select: ['id', 'request_status'],
+      select: ['id', 'requestStatus'],
     });
 
     if (!request) {
       throw new errors.ApplicationError('Request not found');
     }
 
-    if (request.request_status === 'CLOSED' || request.request_status === 'CANCELLED') {
+    if ((request.requestStatus || request.request_status) === 'CLOSED' || (request.requestStatus || request.request_status) === 'CANCELLED') {
       const error = new errors.ApplicationError('Cannot create message for CLOSED/CANCELLED request') as Error & {
         status?: number;
       };

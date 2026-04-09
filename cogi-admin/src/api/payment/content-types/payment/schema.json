@@ -1,0 +1,55 @@
+{
+  "kind": "collectionType",
+  "collectionName": "payments",
+  "info": {
+    "singularName": "payment",
+    "pluralName": "payments",
+    "displayName": "Payment",
+    "description": "Tenant-scoped learner payment records."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "learner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::learner.learner",
+      "inversedBy": "payments",
+      "required": true
+    },
+    "amount": {
+      "type": "decimal",
+      "required": true
+    },
+    "paymentDate": {
+      "type": "datetime",
+      "required": true
+    },
+    "method": {
+      "type": "enumeration",
+      "enum": [
+        "cash",
+        "transfer",
+        "other"
+      ],
+      "default": "cash"
+    },
+    "note": {
+      "type": "text"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "allocations": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::payment-allocation.payment-allocation",
+      "mappedBy": "payment"
+    }
+  }
+}

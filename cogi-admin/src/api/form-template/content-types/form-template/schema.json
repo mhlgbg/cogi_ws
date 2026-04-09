@@ -1,0 +1,54 @@
+{
+  "kind": "collectionType",
+  "collectionName": "form_templates",
+  "info": {
+    "singularName": "form-template",
+    "pluralName": "form-templates",
+    "displayName": "FormTemplate",
+    "description": "Tenant-scoped versioned dynamic form templates."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "formTemplates",
+      "required": true
+    },
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "version": {
+      "type": "integer",
+      "required": true
+    },
+    "schema": {
+      "type": "json",
+      "required": true
+    },
+    "formTemplateStatus": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "published",
+        "archived"
+      ],
+      "default": "draft"
+    },
+    "isLocked": {
+      "type": "boolean",
+      "default": false
+    },
+    "campaigns": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::campaign.campaign",
+      "mappedBy": "formTemplate"
+    }
+  }
+}

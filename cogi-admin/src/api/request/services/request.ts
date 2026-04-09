@@ -60,12 +60,13 @@ export default factories.createCoreService(REQUEST_UID, () => ({
 			};
 		}
 
-		if (request.request_status === 'CLOSED' || request.request_status === 'CANCELLED') {
+		const requestStatus = request.requestStatus || request.request_status;
+		if (requestStatus === 'CLOSED' || requestStatus === 'CANCELLED') {
 			return {
 				ok: false,
 				status: 409,
 				body: {
-					message: `Request already ${request.request_status}`,
+					message: `Request already ${requestStatus}`,
 					closedBy: request.closedBy || null,
 					closedAt: request.closedAt || null,
 					closedDecision: request.closedDecision || null,
@@ -114,7 +115,7 @@ export default factories.createCoreService(REQUEST_UID, () => ({
 		}
 
 		const updateData: Record<string, unknown> = {
-			request_status: 'CLOSED',
+			requestStatus: 'CLOSED',
 			closedDecision,
 			closedBy: currentUserId,
 			closedAt: new Date().toISOString(),

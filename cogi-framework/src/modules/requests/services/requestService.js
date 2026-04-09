@@ -1,8 +1,64 @@
 import api from '../../../api/axios'
 
+function normalizeRequestStatus(raw) {
+  if (!raw || typeof raw !== 'object') return raw
+
+  const requestStatus = raw.requestStatus || raw.request_status || raw.status || ''
+  const requestAssignees = Array.isArray(raw.request_assignees)
+    ? raw.request_assignees.map((item) => {
+        if (!item || typeof item !== 'object') return item
+        const requestAssigneeStatus = item.requestAssigneeStatus || item.request_assignee_status || item.status || ''
+        return {
+          ...item,
+          requestAssigneeStatus,
+          request_assignee_status: item.request_assignee_status || requestAssigneeStatus,
+        }
+      })
+    : raw.request_assignees
+
+  return {
+    ...raw,
+    requestStatus,
+    request_status: raw.request_status || requestStatus,
+    request_assignees: requestAssignees,
+  }
+}
+
+function normalizeResponseData(payload) {
+  if (Array.isArray(payload?.data)) {
+    return {
+      ...payload,
+      data: payload.data.map(normalizeRequestStatus),
+    }
+  }
+
+  if (payload?.data && typeof payload.data === 'object') {
+    return {
+      ...payload,
+      data: normalizeRequestStatus(payload.data),
+    }
+  }
+
+  return payload
+}
+
 export async function getRequests(params = {}) {
-  const res = await api.get('/requests', { params })
-  return res.data
+  const normalizedParams = { ...params }
+
+  if (normalizedParams.request_status && !normalizedParams.requestStatus) {
+    normalizedParams.requestStatus = normalizedParams.request_status
+  }
+
+  if (normalizedParams['filters[request_status]'] && !normalizedParams['filters[requestStatus]']) {
+    normalizedParams['filters[requestStatus]'] = normalizedParams['filters[request_status]']
+  }
+
+  if (normalizedParams['filters[request_status][$eq]'] && !normalizedParams['filters[requestStatus][$eq]']) {
+    normalizedParams['filters[requestStatus][$eq]'] = normalizedParams['filters[request_status][$eq]']
+  }
+
+  const res = await api.get('/requests', { params: normalizedParams })
+  return normalizeResponseData(res.data)
 }
 
 export async function getRequestById(id) {
@@ -17,22 +73,22 @@ export async function getRequestById(id) {
       'populate[request_messages][populate][attachments]': '*',
     },
   })
-  return res.data
+  return normalizeResponseData(res.data)
 }
 
 export async function createRequest(payload) {
   const res = await api.post('/requests', payload)
-  return res.data
+  return normalizeResponseData(res.data)
 }
 
 export async function updateRequest(id, payload) {
   const res = await api.put(`/requests/${id}`, payload)
-  return res.data
+  return normalizeResponseData(res.data)
 }
 
 export async function changeRequestStatus(id, status) {
-  const res = await api.post(`/requests/${id}/status`, { status })
-  return res.data
+  const res = await api.post(`/requests/${id}/status`, { requestStatus: status, status })
+  return normalizeResponseData(res.data)
 }
 
 export async function getRequestCategories() {
@@ -80,10 +136,10 @@ export async function uploadFiles(files = []) {
 
 export async function createRequestMessage(requestId, payload) {
   const res = await api.post(`/requests/${requestId}/messages`, payload)
-  return res.data
+  return normalizeResponseData(res.data)
 }
 
 export async function closeRequest(requestId, payload) {
   const res = await api.post(`/requests/${requestId}/close`, payload)
-  return res.data
+  return normalizeResponseData(res.data)
 }

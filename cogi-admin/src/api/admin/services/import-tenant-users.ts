@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import XLSX from 'xlsx';
 import { ensureUserHasAuthenticatedRole } from '../../auth-extended/services/ensure-authenticated-role';
 import {
+  checkUserTenantExists,
   createUserTenant,
   createUserTenantRole,
   validateTenantRole,
@@ -27,12 +28,33 @@ type ParsedRow = {
   password: string;
 };
 
-type ImportRowResult = {
+export type ImportRowResult = {
   rowNumber: number;
   username: string;
   email: string;
   fullName: string | null;
   message: string;
+};
+
+export type ImportTenantUsersResult = {
+  fileName: string | null;
+  summary: {
+    totalRows: number;
+    createdCount: number;
+    skippedCount: number;
+    errorCount: number;
+  };
+  created: ImportRowResult[];
+  skipped: ImportRowResult[];
+  errors: ImportRowResult[];
+};
+
+export type ImportTenantUsersProgress = {
+  totalRows: number;
+  processedRows: number;
+  createdCount: number;
+  skippedCount: number;
+  errorCount: number;
 };
 
 function normalizeText(value: unknown) {
@@ -85,6 +107,11 @@ async function readWorkbookBuffer(file: UploadedFileLike): Promise<Buffer> {
   return fs.readFile(filePath);
 }
 
+type WorkbookSource = {
+  fileName?: string | null;
+  buffer: Buffer;
+};
+
 function validateParsedRow(row: ParsedRow) {
   if (!row.username) {
     return 'username is required';
@@ -118,15 +145,7 @@ function validateParsedRow(row: ParsedRow) {
   return null;
 }
 
-export async function importTenantUsersFromFile(options: {
-  tenantId: number;
-  roleId: number;
-  file: UploadedFileLike;
-}) {
-  const tenantId = Number(options.tenantId);
-  const roleId = Number(options.roleId);
-  const file = options.file;
-
+async function validateImportOptions(tenantId: number, roleId: number) {
   if (!Number.isInteger(tenantId) || tenantId <= 0) {
     throw new Error('Invalid tenantId');
   }
@@ -139,9 +158,21 @@ export async function importTenantUsersFromFile(options: {
   if (!roleValidation.valid) {
     throw new Error(roleValidation.error || 'Role is not enabled for this tenant');
   }
+}
 
-  const buffer = await readWorkbookBuffer(file);
-  const workbook = XLSX.read(buffer, { type: 'buffer' });
+async function importTenantUsersFromWorkbook(options: {
+  tenantId: number;
+  roleId: number;
+  workbook: WorkbookSource;
+  onProgress?: (progress: ImportTenantUsersProgress) => void | Promise<void>;
+  shouldCancel?: () => boolean | Promise<boolean>;
+}): Promise<ImportTenantUsersResult> {
+  const tenantId = Number(options.tenantId);
+  const roleId = Number(options.roleId);
+
+  await validateImportOptions(tenantId, roleId);
+
+  const workbook = XLSX.read(options.workbook.buffer, { type: 'buffer' });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) {
     throw new Error('Workbook does not contain any sheet');
@@ -163,7 +194,24 @@ export async function importTenantUsersFromFile(options: {
   const seenUsernames = new Set<string>();
   const seenEmails = new Set<string>();
 
+  const emitProgress = async (processedRows: number) => {
+    if (!options.onProgress) return;
+    await options.onProgress({
+      totalRows: rows.length,
+      processedRows,
+      createdCount: created.length,
+      skippedCount: skipped.length,
+      errorCount: errors.length,
+    });
+  };
+
+  await emitProgress(0);
+
   for (let index = 0; index < rows.length; index += 1) {
+    if (await options.shouldCancel?.()) {
+      throw new Error('IMPORT_CANCELLED');
+    }
+
     const rowNumber = index + 2;
     const parsedRow = normalizeRow(rows[index] || {});
     const rowKeyUsername = parsedRow.username.toLowerCase();
@@ -178,6 +226,9 @@ export async function importTenantUsersFromFile(options: {
         fullName: parsedRow.fullName,
         message: invalidMessage,
       });
+      if ((index + 1) % 100 === 0 || index === rows.length - 1) {
+        await emitProgress(index + 1);
+      }
       continue;
     }
 
@@ -189,6 +240,9 @@ export async function importTenantUsersFromFile(options: {
         fullName: parsedRow.fullName,
         message: 'username is duplicated in the uploaded file',
       });
+      if ((index + 1) % 100 === 0 || index === rows.length - 1) {
+        await emitProgress(index + 1);
+      }
       continue;
     }
 
@@ -200,6 +254,9 @@ export async function importTenantUsersFromFile(options: {
         fullName: parsedRow.fullName,
         message: 'email is duplicated in the uploaded file',
       });
+      if ((index + 1) % 100 === 0 || index === rows.length - 1) {
+        await emitProgress(index + 1);
+      }
       continue;
     }
 
@@ -225,13 +282,59 @@ export async function importTenantUsersFromFile(options: {
     });
 
     if (existingUser?.id) {
-      skipped.push({
-        rowNumber,
-        username: parsedRow.username,
-        email: parsedRow.email,
-        fullName: parsedRow.fullName,
-        message: 'username or email already exists',
-      });
+      const existingMembership = await checkUserTenantExists(Number(existingUser.id), tenantId);
+
+      if (existingMembership.exists) {
+        skipped.push({
+          rowNumber,
+          username: parsedRow.username,
+          email: parsedRow.email,
+          fullName: parsedRow.fullName,
+          message: 'user already exists in this tenant',
+        });
+      } else {
+        let createdUserTenantId: number | null = null;
+
+        try {
+          await ensureUserHasAuthenticatedRole(strapi, Number(existingUser.id));
+
+          const userTenant = await createUserTenant(Number(existingUser.id), tenantId, 'active');
+          createdUserTenantId = Number(userTenant?.id || 0) || null;
+          if (!createdUserTenantId) {
+            throw new Error('Failed to create tenant membership');
+          }
+
+          await createUserTenantRole(createdUserTenantId, roleId);
+
+          created.push({
+            rowNumber,
+            username: parsedRow.username,
+            email: parsedRow.email,
+            fullName: parsedRow.fullName,
+            message: 'Existing framework user added to tenant successfully',
+          });
+        } catch (error: any) {
+          if (createdUserTenantId) {
+            try {
+              await strapi.db.query('api::user-tenant.user-tenant').delete({ where: { id: createdUserTenantId } });
+            } catch {
+              // Ignore cleanup error.
+            }
+          }
+
+          errors.push({
+            rowNumber,
+            username: parsedRow.username,
+            email: parsedRow.email,
+            fullName: parsedRow.fullName,
+            message: error?.message || 'Unexpected tenant assignment error',
+          });
+        }
+      }
+
+      if ((index + 1) % 100 === 0 || index === rows.length - 1) {
+        await emitProgress(index + 1);
+      }
       continue;
     }
 
@@ -297,10 +400,14 @@ export async function importTenantUsersFromFile(options: {
         message: error?.message || 'Unexpected import error',
       });
     }
+
+    if ((index + 1) % 100 === 0 || index === rows.length - 1) {
+      await emitProgress(index + 1);
+    }
   }
 
   return {
-    fileName: file?.name || null,
+    fileName: options.workbook.fileName || null,
     summary: {
       totalRows: rows.length,
       createdCount: created.length,
@@ -311,4 +418,44 @@ export async function importTenantUsersFromFile(options: {
     skipped,
     errors,
   };
+}
+
+export async function importTenantUsersFromFile(options: {
+  tenantId: number;
+  roleId: number;
+  file: UploadedFileLike;
+}) {
+  const buffer = await readWorkbookBuffer(options.file);
+  return importTenantUsersFromWorkbook({
+    tenantId: Number(options.tenantId),
+    roleId: Number(options.roleId),
+    workbook: {
+      fileName: options.file?.name || null,
+      buffer,
+    },
+  });
+}
+
+export async function importTenantUsersFromBuffer(options: {
+  tenantId: number;
+  roleId: number;
+  fileName?: string | null;
+  buffer: Buffer;
+  onProgress?: (progress: ImportTenantUsersProgress) => void | Promise<void>;
+  shouldCancel?: () => boolean | Promise<boolean>;
+}) {
+  return importTenantUsersFromWorkbook({
+    tenantId: Number(options.tenantId),
+    roleId: Number(options.roleId),
+    workbook: {
+      fileName: options.fileName || null,
+      buffer: options.buffer,
+    },
+    onProgress: options.onProgress,
+    shouldCancel: options.shouldCancel,
+  });
+}
+
+export async function readTenantUsersImportFile(file: UploadedFileLike) {
+  return readWorkbookBuffer(file);
 }

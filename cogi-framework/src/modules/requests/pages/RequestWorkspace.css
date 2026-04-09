@@ -1,0 +1,24 @@
+.request-workspace {
+  width: 100%;
+  min-width: 0;
+}
+
+.request-workspace-inner {
+  width: 100%;
+  min-width: 0;
+  padding: 16px 16px 16px 0;
+}
+
+.request-workspace-detail .request-workspace-inner {
+  padding-top: 16px;
+}
+
+.request-workspace .ai-card {
+  width: 100%;
+}
+
+@media (max-width: 991.98px) {
+  .request-workspace-inner {
+    padding: 12px;
+  }
+}

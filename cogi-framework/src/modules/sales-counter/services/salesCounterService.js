@@ -32,6 +32,10 @@ function toNumberOrZero(value) {
   return parsed
 }
 
+function readServiceOrderStatus(order) {
+  return String(order?.serviceOrderStatus || order?.status || '').trim()
+}
+
 export function normalizeApiRows(payload) {
   if (Array.isArray(payload?.data)) return payload.data
   if (Array.isArray(payload)) return payload
@@ -66,7 +70,7 @@ export function getPaymentStatusMeta(status) {
 }
 
 export function isEditableOrderState(order) {
-  const status = String(order?.status || '').trim().replace(/[\s-]+/g, '_').toUpperCase()
+  const status = readServiceOrderStatus(order).replace(/[\s-]+/g, '_').toUpperCase()
   if (!status) return true
   return !new Set(['READY', 'DELIVERED']).has(status)
 }
@@ -94,12 +98,20 @@ export async function getServiceOrderById(id) {
 }
 
 export async function createServiceOrder(payload) {
-  const res = await api.post('/service-orders', { data: payload })
+  const data = payload?.status && !payload?.serviceOrderStatus
+    ? { ...payload, serviceOrderStatus: payload.status }
+    : payload
+
+  const res = await api.post('/service-orders', { data })
   return res.data
 }
 
 export async function updateServiceOrder(id, payload) {
-  const res = await api.put(`/service-orders/${id}`, { data: payload })
+  const data = payload?.status && !payload?.serviceOrderStatus
+    ? { ...payload, serviceOrderStatus: payload.status }
+    : payload
+
+  const res = await api.put(`/service-orders/${id}`, { data })
   return res.data
 }
 

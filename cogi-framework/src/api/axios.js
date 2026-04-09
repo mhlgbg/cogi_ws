@@ -4,12 +4,22 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:1339/a
 
 const CONTEXT_HEADER_EXCLUDED_PATHS = new Set([
 	'/api/auth/local',
+	'/api/auth/invite',
 	'/api/auth/activate',
 	'/api/auth/set-password',
 	'/api/auth/forgot-password-safe',
 	'/api/auth/reset-password',
 	'/api/auth/forgot-password',
+	'/api/tenants/by-code',
+	'/api/admission-campaigns/by-code',
 ])
+
+const CONTEXT_HEADER_EXCLUDED_PREFIXES = [
+	'/api/tenants/by-code/',
+	'/tenants/by-code/',
+	'/api/admission-campaigns/by-code/',
+	'/admission-campaigns/by-code/',
+]
 
 function readStoredToken() {
 	return localStorage.getItem('authJwt') || ''
@@ -37,6 +47,7 @@ function shouldSkipContextHeaders(url) {
 	return (
 		CONTEXT_HEADER_EXCLUDED_PATHS.has(normalizedPath)
 		|| CONTEXT_HEADER_EXCLUDED_PATHS.has(apiPathVariant)
+		|| CONTEXT_HEADER_EXCLUDED_PREFIXES.some((prefix) => normalizedPath.startsWith(prefix) || apiPathVariant.startsWith(prefix))
 	)
 }
 

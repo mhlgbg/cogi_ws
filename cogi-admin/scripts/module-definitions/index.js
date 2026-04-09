@@ -18,6 +18,10 @@ const serviceOrders = require('./service-orders');
 const request = require('./request');
 const user = require('./user');
 const survey = require('./survey');
+const classManagement = require('./class');
+const learnerManagement = require('./learner');
+const feeSheetManagement = require('./fee-sheet');
+const admissionManagement = require('./admission');
 // const inventory = require('./inventory');
 
 module.exports = [
@@ -31,5 +35,9 @@ module.exports = [
   request,
   user,
   survey,
+  classManagement,
+  learnerManagement,
+  feeSheetManagement,
+  admissionManagement,
   // inventory,
 ];

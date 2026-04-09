@@ -14,6 +14,22 @@ const serviceOrderFeatures = {
       path: '/service-orders',
       showInMenu: true,
     },
+    {
+      name: 'Quan ly service item',
+      key: 'service-items.manage',
+      order: 2,
+      description: 'Tenant quan ly service item cua minh',
+      path: '/service-items',
+      showInMenu: true,
+    },
+    {
+      name: 'Quan ly service category',
+      key: 'service-categories.manage',
+      order: 3,
+      description: 'Tenant quan ly service category cua minh',
+      path: '/service-categories',
+      showInMenu: true,
+    },
   ],
 }
 

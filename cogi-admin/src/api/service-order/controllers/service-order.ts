@@ -327,24 +327,28 @@ function normalizeStatusKey(value: unknown): string {
   return String(value || '').trim().replace(/[\s-]+/g, '_').toUpperCase();
 }
 
-function normalizeAndValidateOrderStatus(data: Record<string, unknown>, ctx: any): string | null {
-  if (!hasOwn(data, 'status')) return null;
+function readServiceOrderStatus(value: any): string {
+  return value?.serviceOrderStatus || value?.status || 'NEW';
+}
 
-  const normalized = normalizeStatusKey(data.status);
+function normalizeAndValidateOrderStatus(data: Record<string, unknown>, ctx: any): string | null {
+  if (!hasOwn(data, 'serviceOrderStatus') && !hasOwn(data, 'status')) return null;
+
+  const normalized = normalizeStatusKey(data.serviceOrderStatus ?? data.status);
   if (!normalized || !SERVICE_ORDER_STATUS_KEYS.has(normalized)) {
     ctx.throw(400, 'Invalid order status');
   }
 
-  data.status = normalized;
+  data.serviceOrderStatus = normalized;
   return normalized;
 }
 
 function isLockedOrderStatusOnlyUpdate(data: Record<string, unknown>): boolean {
   const keys = Object.keys(data).filter((key) => key !== 'tenant');
   if (keys.length === 0) return false;
-  if (!keys.includes('status')) return false;
+  if (!keys.includes('serviceOrderStatus') && !keys.includes('status')) return false;
 
-  const allowedKeys = new Set(['status', 'deliveredAt', 'note']);
+  const allowedKeys = new Set(['serviceOrderStatus', 'status', 'deliveredAt', 'note']);
   return keys.every((key) => allowedKeys.has(key));
 }
 
@@ -441,7 +445,8 @@ function normalizeOrderRow(row: any) {
     documentId: row.documentId,
     code: row.code,
     orderDate: row.orderDate,
-    status: row.status,
+    serviceOrderStatus: readServiceOrderStatus(row),
+    status: readServiceOrderStatus(row),
     paymentStatus,
     source: row.source,
     totalAmount,
@@ -506,7 +511,9 @@ export default factories.createCoreController(SERVICE_ORDER_UID, () => ({
     const departmentId = parseOptionalPositiveInt(ctx.query?.department);
     const assignedEmployeeId = parseOptionalPositiveInt(ctx.query?.assignedEmployee);
     const customerId = parseOptionalPositiveInt(ctx.query?.customer);
-    const status = typeof ctx.query?.status === 'string' ? ctx.query.status.trim() : '';
+    const status = typeof (ctx.query?.serviceOrderStatus ?? ctx.query?.status) === 'string'
+      ? String(ctx.query?.serviceOrderStatus ?? ctx.query?.status).trim()
+      : '';
     const paymentStatus = typeof ctx.query?.paymentStatus === 'string' ? ctx.query.paymentStatus.trim() : '';
     const source = typeof ctx.query?.source === 'string' ? ctx.query.source.trim() : '';
     const codeLike = typeof ctx.query?.code === 'string' ? ctx.query.code.trim() : '';
@@ -524,7 +531,7 @@ export default factories.createCoreController(SERVICE_ORDER_UID, () => ({
     if (departmentId) andWhere.push({ department: { id: departmentId } });
     if (assignedEmployeeId) andWhere.push({ assignedEmployee: { id: assignedEmployeeId } });
     if (customerId) andWhere.push({ customer: { id: customerId } });
-    if (status) andWhere.push({ status });
+    if (status) andWhere.push({ serviceOrderStatus: status });
     if (paymentStatus) andWhere.push({ paymentStatus });
     if (unpaidOnly && !paymentStatus) andWhere.push({ paymentStatus: { $ne: 'PAID' } });
     if (source) andWhere.push({ source });
@@ -733,7 +740,7 @@ export default factories.createCoreController(SERVICE_ORDER_UID, () => ({
     const requestedStatus = normalizeAndValidateOrderStatus(data, ctx);
 
     if (!isOrderEditableState(existing)) {
-      const currentStatus = normalizeStatusKey(existing?.status);
+      const currentStatus = normalizeStatusKey(existing?.serviceOrderStatus || existing?.status);
       const allowReadyToDelivered =
         currentStatus === 'READY'
         && requestedStatus === 'DELIVERED'

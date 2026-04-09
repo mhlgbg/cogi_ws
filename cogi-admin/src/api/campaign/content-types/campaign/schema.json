@@ -1,0 +1,80 @@
+{
+  "kind": "collectionType",
+  "collectionName": "campaigns",
+  "info": {
+    "singularName": "campaign",
+    "pluralName": "campaigns",
+    "displayName": "Campaign",
+    "description": "Tenant-scoped admission campaigns for enrollment management."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "code": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "year": {
+      "type": "integer",
+      "required": true
+    },
+    "grade": {
+      "type": "string",
+      "required": true
+    },
+    "startDate": {
+      "type": "date"
+    },
+    "endDate": {
+      "type": "date"
+    },
+    "campaignStatus": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "open",
+        "closed"
+      ],
+      "required": true,
+      "default": "draft"
+    },
+    "description": {
+      "type": "richtext"
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    },
+    "formTemplate": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::form-template.form-template",
+      "inversedBy": "campaigns",
+      "required": true
+    },
+    "formTemplateVersion": {
+      "type": "integer",
+      "required": true
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "campaigns",
+      "required": true
+    },
+    "admissionApplications": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::admission-application.admission-application",
+      "mappedBy": "campaign"
+    }
+  }
+}

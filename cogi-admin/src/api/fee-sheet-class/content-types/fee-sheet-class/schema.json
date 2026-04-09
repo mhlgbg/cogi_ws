@@ -1,0 +1,62 @@
+{
+  "kind": "collectionType",
+  "collectionName": "fee_sheet_classes",
+  "info": {
+    "singularName": "fee-sheet-class",
+    "pluralName": "fee-sheet-classes",
+    "displayName": "Fee Sheet Class",
+    "description": "Class-level fee sheet row with class and teacher snapshots."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "feeSheet": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::fee-sheet.fee-sheet",
+      "inversedBy": "feeSheetClasses",
+      "required": true
+    },
+    "class": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::class.class",
+      "inversedBy": "feeSheetClasses",
+      "required": true
+    },
+    "classNameSnapshot": {
+      "type": "string"
+    },
+    "teacher": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "teacherNameSnapshot": {
+      "type": "string"
+    },
+    "feeSheetClassStatus": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "submitted",
+        "approved"
+      ],
+      "default": "draft"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "feeItems": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::fee-item.fee-item",
+      "mappedBy": "feeSheetClass"
+    }
+  }
+}

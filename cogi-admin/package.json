@@ -10,6 +10,10 @@
     "dev": "strapi develop",
     "develop": "strapi develop",
     "admin:create-user": "node ./scripts/create-admin-user.js",
+    "migrate:classes": "node ./scripts/migrate-classes.js",
+    "migrate:enrollments": "node ./scripts/migrate-enrollments.js",
+    "migrate:learners": "node ./scripts/migrate-learners.js",
+    "migrate:test-connection": "node ./scripts/migrate-test-connection.js",
     "seed:example": "node ./scripts/seed.js",
     "seed:modules": "node ./scripts/seed-modules.js",
     "seed:survey": "node ./scripts/seed-survey-full.js",
@@ -20,17 +24,20 @@
     "upgrade:dry": "npx @strapi/upgrade latest --dry"
   },
   "dependencies": {
-    "@strapi/provider-email-nodemailer": "5.34.0",
     "@strapi/plugin-cloud": "5.34.0",
     "@strapi/plugin-users-permissions": "5.34.0",
+    "@strapi/provider-email-nodemailer": "5.34.0",
     "@strapi/strapi": "5.34.0",
     "fs-extra": "^10.0.0",
     "mime-types": "^2.1.27",
+    "mongodb": "^6.21.0",
     "pg": "8.8.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "react-router-dom": "^6.0.0",
-    "styled-components": "^6.0.0"
+    "styled-components": "^6.0.0",
+    "uuid": "^11.1.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^20",

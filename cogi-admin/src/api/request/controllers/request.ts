@@ -55,6 +55,14 @@ function getRelationId(value: any) {
 	return value.id ?? value.documentId ?? null;
 }
 
+function readRequestStatus(value: any) {
+	return value?.requestStatus || value?.request_status || value?.status || null;
+}
+
+function readRequestAssigneeStatus(value: any) {
+	return value?.requestAssigneeStatus || value?.request_assignee_status || null;
+}
+
 function toAttachmentIds(value: unknown): number[] {
 	if (!Array.isArray(value)) return [];
 
@@ -202,7 +210,9 @@ export default {
 		const toDateIso = toDateEndIso(typeof ctx.query?.toDate === 'string' ? ctx.query.toDate : undefined);
 		const keyword = typeof ctx.query?.keyword === 'string' ? ctx.query.keyword.trim() : '';
 		const requesterId = parsePositiveInt(ctx.query?.requesterId, 0);
-		const status = typeof ctx.query?.status === 'string' ? ctx.query.status.trim() : '';
+		const status = typeof (ctx.query?.requestStatus ?? ctx.query?.status) === 'string'
+			? String(ctx.query?.requestStatus ?? ctx.query?.status).trim()
+			: '';
 		const scopeInput = typeof ctx.query?.scope === 'string' ? ctx.query.scope.trim().toUpperCase() : 'RELEVANT';
 		const scope = ['MINE', 'ASSIGNED', 'WATCHING', 'RELEVANT', 'ALL'].includes(scopeInput) ? scopeInput : 'RELEVANT';
 		const canMonitorAll = await hasTenantPermission(userId, tenantId, ['request.monitor', 'request.admin', 'request.manage']);
@@ -252,7 +262,7 @@ export default {
 		if (toDateIso) andWhere.push({ createdAt: { $lte: toDateIso } });
 		if (keyword) andWhere.push({ title: { $containsi: keyword } });
 		if (requesterId > 0) andWhere.push({ requester: { id: requesterId } });
-		if (status) andWhere.push({ request_status: status });
+		if (status) andWhere.push({ requestStatus: status });
 
 		const where = andWhere.length > 1 ? { $and: andWhere } : andWhere[0];
 
@@ -298,7 +308,8 @@ export default {
 			data: requests.map((item: any) => ({
 				id: item.id,
 				title: item.title,
-				request_status: item.request_status,
+				requestStatus: readRequestStatus(item),
+				request_status: readRequestStatus(item),
 				updatedAt: item.updatedAt,
 				requester: normalizeUserBasic(item.requester),
 				category: item.request_category,
@@ -360,6 +371,8 @@ export default {
 		ctx.body = {
 			data: {
 				...request,
+				requestStatus: readRequestStatus(request),
+				request_status: readRequestStatus(request),
 				requester: normalizeUserBasic(request?.requester),
 				closedBy: normalizeUserBasic((request as any)?.closedBy),
 				category: request?.request_category,
@@ -370,7 +383,8 @@ export default {
 				request_assignees: assignees.map((item: any) => ({
 					id: item.id,
 					user: normalizeUserBasic(item.user),
-					request_assignee_status: item.request_assignee_status,
+					requestAssigneeStatus: readRequestAssigneeStatus(item),
+					request_assignee_status: readRequestAssigneeStatus(item),
 					progress: item.progress,
 					roleType: item.roleType,
 					assignedBy: normalizeUserBasic(item.assignedBy),
@@ -407,7 +421,7 @@ export default {
 		const data: Record<string, unknown> = {
 			title,
 			requester: Number(authUser.id),
-			request_status: 'OPEN',
+			requestStatus: 'OPEN',
 			tenant: tenantId,
 		};
 
@@ -445,7 +459,11 @@ export default {
 		});
 
 		ctx.body = {
-			data: created,
+			data: {
+				...created,
+				requestStatus: readRequestStatus(created),
+				request_status: readRequestStatus(created),
+			},
 		};
 	},
 
@@ -509,7 +527,11 @@ export default {
 		});
 
 		ctx.body = {
-			data: updated,
+			data: {
+				...updated,
+				requestStatus: readRequestStatus(updated),
+				request_status: readRequestStatus(updated),
+			},
 		};
 	},
 
@@ -523,9 +545,14 @@ export default {
 			return ctx.badRequest('Invalid request id');
 		}
 
-		const status = typeof ctx.request.body?.status === 'string' ? ctx.request.body.status.trim() : '';
+		const status = typeof (ctx.request.body?.requestStatus ?? ctx.request.body?.status) === 'string'
+			? String(ctx.request.body?.requestStatus ?? ctx.request.body?.status).trim()
+			: '';
+		const requestAttributes = strapi.getModel(REQUEST_UID)?.attributes as Record<string, any> | undefined;
 		const statusEnum: string[] =
-			(strapi.getModel(REQUEST_UID)?.attributes?.request_status?.enum as string[] | undefined) || [];
+			(requestAttributes?.requestStatus?.enum as string[] | undefined)
+			|| (requestAttributes?.request_status?.enum as string[] | undefined)
+			|| [];
 
 		if (!status || !statusEnum.includes(status)) {
 			return ctx.badRequest('Invalid status');
@@ -540,11 +567,11 @@ export default {
 		if (!access.request) return ctx.notFound('Request not found');
 		if (!access.allowed) return ctx.forbidden('Forbidden');
 
-		if (access.request?.request_status === 'CLOSED' && status !== 'CLOSED') {
+		if (readRequestStatus(access.request) === 'CLOSED' && status !== 'CLOSED') {
 			return ctx.badRequest('Request is CLOSED and cannot be reopened in V1');
 		}
 
-		const updateData: Record<string, unknown> = { request_status: status };
+		const updateData: Record<string, unknown> = { requestStatus: status };
 
 		if (status === 'CLOSED') {
 			updateData.closedBy = Number(authUser.id);
@@ -561,7 +588,8 @@ export default {
 		ctx.body = {
 			data: {
 				id: updated.id,
-				request_status: updated.request_status,
+				requestStatus: readRequestStatus(updated),
+				request_status: readRequestStatus(updated),
 				closedDecision: (updated as any).closedDecision,
 				closedBy: getRelationId((updated as any).closedBy),
 				closedAt: (updated as any).closedAt,

@@ -395,8 +395,8 @@ export default function SalesCounterOrderDetailPage() {
   const paymentMeta = getPaymentStatusMeta(order?.paymentStatus)
 
   return (
-    <CRow className="justify-content-center">
-      <CCol xs={12} style={{ maxWidth: 1500 }}>
+    <CRow className="g-0">
+      <CCol xs={12}>
         <CCard className="mb-4 ai-card">
           <CCardHeader className="d-flex justify-content-between align-items-center flex-wrap gap-2">
             <strong>Chi tiết đơn dịch vụ</strong>

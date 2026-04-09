@@ -26,6 +26,8 @@ type AuthUser = {
   email?: string | null;
 };
 
+type ResponseStatus = 'IN_PROGRESS' | 'SUBMITTED' | 'RESET';
+
 class SurveyError extends Error {
   status: number;
 
@@ -63,6 +65,15 @@ function getRelationId(value: any): number | null {
 
   const parsed = Number(value.id);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function getResponseStatus(value: any): ResponseStatus | null {
+  const normalized = toTrimmedString(value?.responseStatus || value?.status).toUpperCase();
+  if (normalized === 'IN_PROGRESS' || normalized === 'SUBMITTED' || normalized === 'RESET') {
+    return normalized;
+  }
+
+  return null;
 }
 
 function normalizeOption(option: any) {
@@ -142,8 +153,8 @@ function normalizeCampaign(campaign: any) {
 
 function normalizeAssignmentSummary(row: any) {
   const responses = Array.isArray(row?.survey_responses) ? row.survey_responses : [];
-  const hasSubmittedResponse = responses.some((item: any) => item?.status === 'SUBMITTED');
-  const hasInProgressResponse = responses.some((item: any) => item?.status === 'IN_PROGRESS');
+  const hasSubmittedResponse = responses.some((item: any) => getResponseStatus(item) === 'SUBMITTED');
+  const hasInProgressResponse = responses.some((item: any) => getResponseStatus(item) === 'IN_PROGRESS');
   const latestResponse = responses.length > 0
     ? [...responses].sort((left: any, right: any) => {
         const leftTime = new Date(left?.submittedAt || left?.updatedAt || left?.createdAt || 0).getTime();
@@ -162,7 +173,7 @@ function normalizeAssignmentSummary(row: any) {
     isCompleted: Boolean(row.isCompleted),
     hasInProgressResponse,
     hasSubmittedResponse,
-    latestResponseStatus: latestResponse?.status || null,
+    latestResponseStatus: getResponseStatus(latestResponse),
     campaign: row.survey_campaign ? {
       ...normalizeCampaign(row.survey_campaign),
       template: row.survey_campaign?.survey_template
@@ -179,7 +190,7 @@ function normalizeAssignmentSummary(row: any) {
 
 function normalizeAssignmentDetail(row: any) {
   const responses = Array.isArray(row?.survey_responses) ? row.survey_responses : [];
-  const draftResponse = responses.find((item: any) => item?.status === 'IN_PROGRESS') || null;
+  const draftResponse = responses.find((item: any) => getResponseStatus(item) === 'IN_PROGRESS') || null;
   const draftAnswers = Array.isArray(draftResponse?.survey_answers)
     ? draftResponse.survey_answers.map((answer: any) => ({
         id: answer.id,
@@ -207,7 +218,8 @@ function normalizeAssignmentDetail(row: any) {
     template: row.survey_campaign?.survey_template ? normalizeTemplate(row.survey_campaign.survey_template) : null,
     draftResponse: draftResponse ? {
       id: draftResponse.id,
-      status: draftResponse.status,
+      responseStatus: getResponseStatus(draftResponse),
+      status: getResponseStatus(draftResponse),
       submittedAt: draftResponse.submittedAt || null,
       answers: draftAnswers,
     } : null,
@@ -215,11 +227,13 @@ function normalizeAssignmentDetail(row: any) {
 }
 
 function normalizeSubmitResult(response: any, assignmentId: number, answersCount: number) {
+  const responseStatus = getResponseStatus(response) || 'SUBMITTED';
   return {
     assignmentId,
     responseId: response?.id || null,
     submittedAt: response?.submittedAt || null,
-    status: response?.status || 'SUBMITTED',
+    responseStatus,
+    status: responseStatus,
     answersCount,
   };
 }
@@ -252,7 +266,7 @@ async function findAssignmentById(assignmentId: number, tenantId?: TenantId) {
         select: ['id'],
       },
       survey_responses: {
-        select: ['id', 'status', 'submittedAt', 'createdAt', 'updatedAt'],
+        select: ['id', 'responseStatus', 'submittedAt', 'createdAt', 'updatedAt'],
         populate: {
           survey_answers: {
             populate: {
@@ -285,11 +299,23 @@ function assertNotCompleted(assignment: any) {
   }
 
   const hasSubmittedResponse = Array.isArray(assignment?.survey_responses)
-    && assignment.survey_responses.some((item: any) => item?.status === 'SUBMITTED');
+    && assignment.survey_responses.some((item: any) => getResponseStatus(item) === 'SUBMITTED');
 
   if (hasSubmittedResponse) {
     throw new SurveyError(409, 'Survey assignment already submitted');
   }
+}
+
+async function createInProgressResponse(assignment: any, tenantId: number | string, respondentSnapshot?: Record<string, unknown>, trx?: any) {
+  return strapi.db.query(SURVEY_RESPONSE_UID).create({
+    data: {
+      survey_assignment: assignment.id,
+      responseStatus: 'IN_PROGRESS',
+      tenant: tenantId,
+      respondentSnapshot,
+    },
+    ...(trx ? { transacting: trx } : {}),
+  } as any);
 }
 
 async function loadTemplateQuestions(templateId: number, tenantId?: TenantId) {
@@ -380,7 +406,7 @@ async function findInProgressResponse(assignmentId: number, tenantId: number | s
   return strapi.db.query(SURVEY_RESPONSE_UID).findOne({
     where: mergeTenantWhere({
       survey_assignment: assignmentId,
-      status: 'IN_PROGRESS',
+      responseStatus: 'IN_PROGRESS',
     }, tenantId),
     populate: {
       survey_answers: true,
@@ -501,11 +527,13 @@ async function buildValidatedSubmissionContext(userIdInput: unknown, payloadInpu
 }
 
 function normalizeDraftResult(response: any, assignmentId: number, answersCount: number) {
+  const responseStatus = getResponseStatus(response) || 'IN_PROGRESS';
   return {
     assignmentId,
     responseId: response?.id || null,
     savedAt: response?.updatedAt || response?.createdAt || null,
-    status: response?.status || 'IN_PROGRESS',
+    responseStatus,
+    status: responseStatus,
     answersCount,
   };
 }
@@ -528,7 +556,7 @@ export default {
           },
         },
         survey_responses: {
-          select: ['id', 'status', 'submittedAt', 'createdAt', 'updatedAt'],
+          select: ['id', 'responseStatus', 'submittedAt', 'createdAt', 'updatedAt'],
         },
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -556,6 +584,36 @@ export default {
 
     assertAssignmentOwner(assignment, userId);
     assertCampaignOpen(assignment);
+
+    const hasSubmittedResponse = Array.isArray(assignment?.survey_responses)
+      && assignment.survey_responses.some((item: any) => getResponseStatus(item) === 'SUBMITTED');
+
+    if (!assignment?.isCompleted && !hasSubmittedResponse) {
+      const existingDraft = Array.isArray(assignment?.survey_responses)
+        ? assignment.survey_responses.find((item: any) => getResponseStatus(item) === 'IN_PROGRESS')
+        : null;
+
+      if (!existingDraft?.id) {
+        const assignmentTenantId = getRelationId(assignment?.tenant);
+        if (!assignmentTenantId) {
+          throw new SurveyError(400, 'Survey assignment is missing tenant');
+        }
+
+        await createInProgressResponse(
+          assignment,
+          assignmentTenantId,
+          {
+            id: userId,
+            username: assignment?.respondent?.username || null,
+          },
+        );
+        const reloadedAssignment = await findAssignmentById(assignmentId, tenantId);
+        if (!reloadedAssignment) {
+          throw new SurveyError(404, 'Survey assignment not found');
+        }
+        return normalizeAssignmentDetail(reloadedAssignment);
+      }
+    }
 
     return normalizeAssignmentDetail(assignment);
   },
@@ -596,18 +654,15 @@ export default {
           } as any);
         }
 
-        const createdDraft = await strapi.db.query(SURVEY_RESPONSE_UID).create({
-          data: {
-            survey_assignment: assignment.id,
-            status: 'IN_PROGRESS',
-            tenant: assignmentTenantId,
-            respondentSnapshot: {
-              id: context.userId,
-              username: authUser?.username || assignment?.respondent?.username || null,
-            },
+        const createdDraft = await createInProgressResponse(
+          assignment,
+          assignmentTenantId,
+          {
+            id: context.userId,
+            username: authUser?.username || assignment?.respondent?.username || null,
           },
-          transacting: trx,
-        } as any);
+          trx,
+        );
 
         await replaceResponseAnswers(createdDraft.id, answersByQuestionId, questionMap, assignmentTenantId, trx);
 
@@ -658,7 +713,7 @@ export default {
           await strapi.db.query(SURVEY_RESPONSE_UID).update({
             where: { id: targetResponseId },
             data: {
-              status: 'SUBMITTED',
+              responseStatus: 'SUBMITTED',
               submittedAt,
               respondentSnapshot: {
                 id: userId,
@@ -671,7 +726,7 @@ export default {
           const createdResponse = await strapi.db.query(SURVEY_RESPONSE_UID).create({
             data: {
               survey_assignment: assignment.id,
-              status: 'SUBMITTED',
+              responseStatus: 'SUBMITTED',
               submittedAt,
               tenant: assignmentTenantId,
               respondentSnapshot: {

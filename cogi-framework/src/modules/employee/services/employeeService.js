@@ -38,6 +38,10 @@ function normalizeRelation(raw) {
   return normalizeEntity(raw)
 }
 
+function readEmployeeStatus(entity) {
+  return toText(entity?.employeeStatus || entity?.status) || 'active'
+}
+
 function normalizeEmployee(raw) {
   const entity = normalizeEntity(raw)
   if (!entity) return null
@@ -55,7 +59,8 @@ function normalizeEmployee(raw) {
     address: toText(entity.address),
     joinDate: entity.joinDate || '',
     officialDate: entity.officialDate || '',
-    status: toText(entity.status) || 'active',
+    employeeStatus: readEmployeeStatus(entity),
+    status: readEmployeeStatus(entity),
     note: toText(entity.note),
     avatar: normalizeRelation(entity.avatar),
     currentDepartment: normalizeRelation(entity.currentDepartment),
@@ -153,7 +158,11 @@ export async function getEmployeePage(params = {}, options = {}) {
 }
 
 export async function createEmployee(payload, options = {}) {
-  const response = await api.post('/employees', { data: payload }, {
+  const data = payload?.status && !payload?.employeeStatus
+    ? { ...payload, employeeStatus: payload.status }
+    : payload
+
+  const response = await api.post('/employees', { data }, {
     headers: options.headers,
   })
 
@@ -161,7 +170,11 @@ export async function createEmployee(payload, options = {}) {
 }
 
 export async function updateEmployee(id, payload, options = {}) {
-  const response = await api.put(`/employees/${id}`, { data: payload }, {
+  const data = payload?.status && !payload?.employeeStatus
+    ? { ...payload, employeeStatus: payload.status }
+    : payload
+
+  const response = await api.put(`/employees/${id}`, { data }, {
     headers: options.headers,
   })
 

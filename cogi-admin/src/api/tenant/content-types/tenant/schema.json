@@ -53,6 +53,9 @@
     "timezone": {
       "type": "string"
     },
+    "defaultFeatureCode": {
+      "type": "string"
+    },
     "settings": {
       "type": "json"
     },
@@ -87,6 +90,30 @@
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::department.department",
+      "mappedBy": "tenant"
+    },
+    "campaigns": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::campaign.campaign",
+      "mappedBy": "tenant"
+    },
+    "admissionApplications": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::admission-application.admission-application",
+      "mappedBy": "tenant"
+    },
+    "formTemplates": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::form-template.form-template",
+      "mappedBy": "tenant"
+    },
+    "notificationTemplates": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::notification-template.notification-template",
       "mappedBy": "tenant"
     }
   }

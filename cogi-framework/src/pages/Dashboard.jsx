@@ -27,17 +27,13 @@ export default function Dashboard() {
   return (
     <div
       style={{
-        minHeight: '100vh',
-        padding: '24px',
-        background: '#f5f6fa',
-        display: 'flex',
-        justifyContent: 'center',
+        width: '100%',
+        padding: '8px 0',
       }}
     >
       <div
         style={{
           width: '100%',
-          maxWidth: '760px',
           background: '#fff',
           borderRadius: '10px',
           padding: '24px',
@@ -61,7 +57,6 @@ export default function Dashboard() {
           <div>tenantCode: {currentTenant?.tenantCode || '-'}</div>
           <div>tenantId: {currentTenant?.tenantId || '-'}</div>
           <div>userTenantId: {currentTenant?.userTenantId || '-'}</div>
-
         </div>
 
         <div>
@@ -80,7 +75,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button
             type="button"
             onClick={handleChangePassword}

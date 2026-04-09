@@ -66,7 +66,7 @@ export function toPositiveNumber(value, fallback = 0) {
 }
 
 export function isOrderEditableState(order) {
-  const status = String(order?.status || '').trim().replace(/[\s-]+/g, '_').toUpperCase()
+  const status = String(order?.serviceOrderStatus || order?.status || '').trim().replace(/[\s-]+/g, '_').toUpperCase()
   if (!status) return true
   return !new Set(['READY', 'DELIVERED']).has(status)
 }

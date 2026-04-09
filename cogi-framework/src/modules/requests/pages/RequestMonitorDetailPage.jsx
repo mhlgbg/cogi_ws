@@ -8,7 +8,6 @@ import {
   CCardBody,
   CCardHeader,
   CCol,
-  CContainer,
   CFormInput,
   CFormLabel,
   CFormTextarea,
@@ -17,6 +16,7 @@ import {
 } from "@coreui/react"
 import axios from "../../../api/axios"
 import "./RequestDetail.css"
+import "./RequestWorkspace.css"
 
 function formatDateTime(value) {
   if (!value) return "-"
@@ -26,7 +26,7 @@ function formatDateTime(value) {
 }
 
 function getStatus(item) {
-  return item?.request_status || item?.status || "-"
+  return item?.requestStatus || item?.request_status || item?.status || "-"
 }
 
 function getStatusColor(status) {
@@ -148,9 +148,8 @@ export default function RequestMonitorDetailPage() {
   const requestStatus = getStatus(request)
 
   return (
-    <CContainer className="py-4">
-      <CRow className="g-4 justify-content-center">
-        <CCol xxl={10}>
+    <div className="request-workspace request-workspace-detail">
+      <div className="request-workspace-inner request-workspace-detail-inner">
           <CCard className="mb-4 ai-card">
             <CCardHeader className="d-flex justify-content-between align-items-center gap-2 flex-wrap">
               <strong>Chi tiết Request (Read-only)</strong>
@@ -326,8 +325,7 @@ export default function RequestMonitorDetailPage() {
               </CCol>
             </CRow>
           ) : null}
-        </CCol>
-      </CRow>
-    </CContainer>
+      </div>
+    </div>
   )
 }

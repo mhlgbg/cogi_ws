@@ -233,8 +233,8 @@ export default function RequestCategories() {
   }, [page, pageCount])
 
   return (
-    <CRow className="justify-content-center">
-      <CCol xs={12} style={{ maxWidth: 1200 }}>
+    <CRow className="g-0">
+      <CCol xs={12}>
         <CCard className="mb-4 ai-card">
           <CCardHeader>
             <strong>Bộ lọc</strong>

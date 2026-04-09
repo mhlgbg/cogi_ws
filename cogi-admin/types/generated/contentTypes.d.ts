@@ -534,6 +534,120 @@ export interface ApiActivationTokenActivationToken
   };
 }
 
+export interface ApiAdmissionApplicationFileAdmissionApplicationFile
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'admission_application_files';
+  info: {
+    description: 'Uploaded files attached to admission applications.';
+    displayName: 'AdmissionApplicationFile';
+    pluralName: 'admission-application-files';
+    singularName: 'admission-application-file';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    application: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::admission-application.admission-application'
+    > &
+      Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    fieldKey: Schema.Attribute.String & Schema.Attribute.Required;
+    file: Schema.Attribute.Media<'images' | 'files' | 'videos' | 'audios'> &
+      Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::admission-application-file.admission-application-file'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiAdmissionApplicationAdmissionApplication
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'admission_applications';
+  info: {
+    description: 'Tenant-scoped admission applications submitted by parents.';
+    displayName: 'AdmissionApplication';
+    pluralName: 'admission-applications';
+    singularName: 'admission-application';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    address: Schema.Attribute.Text;
+    admissionStatus: Schema.Attribute.Enumeration<
+      [
+        'draft',
+        'submitted',
+        'reviewing',
+        'approved',
+        'rejected',
+        'exam_scheduled',
+        'passed',
+        'failed',
+        'enrolled',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+    applicationCode: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    applicationFiles: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::admission-application-file.admission-application-file'
+    >;
+    campaign: Schema.Attribute.Relation<'manyToOne', 'api::campaign.campaign'> &
+      Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    currentSchool: Schema.Attribute.String;
+    dob: Schema.Attribute.Date & Schema.Attribute.Required;
+    formData: Schema.Attribute.JSON;
+    formTemplateVersion: Schema.Attribute.Integer;
+    gender: Schema.Attribute.Enumeration<['male', 'female', 'other']>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::admission-application.admission-application'
+    > &
+      Schema.Attribute.Private;
+    parent: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    > &
+      Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    reviewedAt: Schema.Attribute.DateTime;
+    reviewedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    reviewNote: Schema.Attribute.Text;
+    reviewStatus: Schema.Attribute.Enumeration<
+      ['submitted', 'returned', 'accepted']
+    >;
+    studentName: Schema.Attribute.String & Schema.Attribute.Required;
+    submittedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiArticleArticle extends Struct.CollectionTypeSchema {
   collectionName: 'articles';
   info: {
@@ -606,6 +720,59 @@ export interface ApiAuthorAuthor extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiCampaignCampaign extends Struct.CollectionTypeSchema {
+  collectionName: 'campaigns';
+  info: {
+    description: 'Tenant-scoped admission campaigns for enrollment management.';
+    displayName: 'Campaign';
+    pluralName: 'campaigns';
+    singularName: 'campaign';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    admissionApplications: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::admission-application.admission-application'
+    >;
+    campaignStatus: Schema.Attribute.Enumeration<['draft', 'open', 'closed']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+    code: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.RichText;
+    endDate: Schema.Attribute.Date;
+    formTemplate: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::form-template.form-template'
+    > &
+      Schema.Attribute.Required;
+    formTemplateVersion: Schema.Attribute.Integer & Schema.Attribute.Required;
+    grade: Schema.Attribute.String & Schema.Attribute.Required;
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::campaign.campaign'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    startDate: Schema.Attribute.Date;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    year: Schema.Attribute.Integer & Schema.Attribute.Required;
+  };
+}
+
 export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
   collectionName: 'categories';
   info: {
@@ -632,6 +799,51 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
     name: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
     slug: Schema.Attribute.UID;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiClassClass extends Struct.CollectionTypeSchema {
+  collectionName: 'classes';
+  info: {
+    description: 'Tenant-scoped classes managed by a main teacher.';
+    displayName: 'Class';
+    pluralName: 'classes';
+    singularName: 'class';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    classStatus: Schema.Attribute.Enumeration<['active', 'inactive']> &
+      Schema.Attribute.DefaultTo<'active'>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    enrollments: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::enrollment.enrollment'
+    >;
+    feeSheetClasses: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::fee-sheet-class.fee-sheet-class'
+    >;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<'oneToMany', 'api::class.class'> &
+      Schema.Attribute.Private;
+    mainTeacher: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    > &
+      Schema.Attribute.Required;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    subject: Schema.Attribute.String;
+    subjectCode: Schema.Attribute.String;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -870,6 +1082,19 @@ export interface ApiEmployeeEmployee extends Struct.CollectionTypeSchema {
     employeeCode: Schema.Attribute.String &
       Schema.Attribute.Required &
       Schema.Attribute.Unique;
+    employeeStatus: Schema.Attribute.Enumeration<
+      [
+        'draft',
+        'active',
+        'probation',
+        'official',
+        'maternity_leave',
+        'unpaid_leave',
+        'resigned',
+        'retired',
+      ]
+    > &
+      Schema.Attribute.DefaultTo<'active'>;
     fullName: Schema.Attribute.String & Schema.Attribute.Required;
     gender: Schema.Attribute.Enumeration<['male', 'female', 'other']>;
     identityIssueDate: Schema.Attribute.Date;
@@ -887,19 +1112,6 @@ export interface ApiEmployeeEmployee extends Struct.CollectionTypeSchema {
     personalEmail: Schema.Attribute.Email;
     phone: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
-    status: Schema.Attribute.Enumeration<
-      [
-        'draft',
-        'active',
-        'probation',
-        'official',
-        'maternity_leave',
-        'unpaid_leave',
-        'resigned',
-        'retired',
-      ]
-    > &
-      Schema.Attribute.DefaultTo<'active'>;
     tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
       Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
@@ -910,6 +1122,44 @@ export interface ApiEmployeeEmployee extends Struct.CollectionTypeSchema {
       'plugin::users-permissions.user'
     >;
     workEmail: Schema.Attribute.Email;
+  };
+}
+
+export interface ApiEnrollmentEnrollment extends Struct.CollectionTypeSchema {
+  collectionName: 'enrollments';
+  info: {
+    description: 'Learner enrollment in tenant-scoped classes.';
+    displayName: 'Enrollment';
+    pluralName: 'enrollments';
+    singularName: 'enrollment';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    class: Schema.Attribute.Relation<'manyToOne', 'api::class.class'> &
+      Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    enrollmentStatus: Schema.Attribute.Enumeration<['active', 'inactive']> &
+      Schema.Attribute.DefaultTo<'active'>;
+    joinDate: Schema.Attribute.Date;
+    learner: Schema.Attribute.Relation<'manyToOne', 'api::learner.learner'> &
+      Schema.Attribute.Required;
+    leaveDate: Schema.Attribute.Date;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::enrollment.enrollment'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
   };
 }
 
@@ -988,6 +1238,191 @@ export interface ApiFeatureFeature extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiFeeItemFeeItem extends Struct.CollectionTypeSchema {
+  collectionName: 'fee_items';
+  info: {
+    description: 'Learner-level fee line items under class fee sheets.';
+    displayName: 'Fee Item';
+    pluralName: 'fee-items';
+    singularName: 'fee-item';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    amount: Schema.Attribute.Decimal & Schema.Attribute.DefaultTo<0>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    discountAmount: Schema.Attribute.Decimal & Schema.Attribute.DefaultTo<0>;
+    discountPercent: Schema.Attribute.Decimal & Schema.Attribute.DefaultTo<0>;
+    feeItemPaymentStatus: Schema.Attribute.Enumeration<
+      ['unpaid', 'partial', 'paid']
+    > &
+      Schema.Attribute.DefaultTo<'unpaid'>;
+    feeSheetClass: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::fee-sheet-class.fee-sheet-class'
+    > &
+      Schema.Attribute.Required;
+    learner: Schema.Attribute.Relation<'manyToOne', 'api::learner.learner'> &
+      Schema.Attribute.Required;
+    learnerCodeSnapshot: Schema.Attribute.String;
+    learnerNameSnapshot: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::fee-item.fee-item'
+    > &
+      Schema.Attribute.Private;
+    note: Schema.Attribute.Text;
+    paidAmount: Schema.Attribute.Decimal & Schema.Attribute.DefaultTo<0>;
+    paymentAllocations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::payment-allocation.payment-allocation'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    sessions: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    unitPrice: Schema.Attribute.Decimal & Schema.Attribute.DefaultTo<0>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiFeeSheetClassFeeSheetClass
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'fee_sheet_classes';
+  info: {
+    description: 'Class-level fee sheet row with class and teacher snapshots.';
+    displayName: 'Fee Sheet Class';
+    pluralName: 'fee-sheet-classes';
+    singularName: 'fee-sheet-class';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    class: Schema.Attribute.Relation<'manyToOne', 'api::class.class'> &
+      Schema.Attribute.Required;
+    classNameSnapshot: Schema.Attribute.String;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    feeItems: Schema.Attribute.Relation<'oneToMany', 'api::fee-item.fee-item'>;
+    feeSheet: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::fee-sheet.fee-sheet'
+    > &
+      Schema.Attribute.Required;
+    feeSheetClassStatus: Schema.Attribute.Enumeration<
+      ['draft', 'submitted', 'approved']
+    > &
+      Schema.Attribute.DefaultTo<'draft'>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::fee-sheet-class.fee-sheet-class'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    teacher: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    teacherNameSnapshot: Schema.Attribute.String;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiFeeSheetFeeSheet extends Struct.CollectionTypeSchema {
+  collectionName: 'fee_sheets';
+  info: {
+    description: 'Tenant-scoped fee sheet periods for learner billing.';
+    displayName: 'Fee Sheet';
+    pluralName: 'fee-sheets';
+    singularName: 'fee-sheet';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    feeSheetClasses: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::fee-sheet-class.fee-sheet-class'
+    >;
+    feeSheetStatus: Schema.Attribute.Enumeration<
+      ['draft', 'open', 'closed', 'approved']
+    > &
+      Schema.Attribute.DefaultTo<'draft'>;
+    fromDate: Schema.Attribute.Date & Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::fee-sheet.fee-sheet'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    note: Schema.Attribute.Text;
+    publishedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    toDate: Schema.Attribute.Date & Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiFormTemplateFormTemplate
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'form_templates';
+  info: {
+    description: 'Tenant-scoped versioned dynamic form templates.';
+    displayName: 'FormTemplate';
+    pluralName: 'form-templates';
+    singularName: 'form-template';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    campaigns: Schema.Attribute.Relation<'oneToMany', 'api::campaign.campaign'>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    formTemplateStatus: Schema.Attribute.Enumeration<
+      ['draft', 'published', 'archived']
+    > &
+      Schema.Attribute.DefaultTo<'draft'>;
+    isLocked: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::form-template.form-template'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    schema: Schema.Attribute.JSON & Schema.Attribute.Required;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    version: Schema.Attribute.Integer & Schema.Attribute.Required;
+  };
+}
+
 export interface ApiGlobalGlobal extends Struct.SingleTypeSchema {
   collectionName: 'globals';
   info: {
@@ -1062,6 +1497,129 @@ export interface ApiLeadLead extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiLearnerLearner extends Struct.CollectionTypeSchema {
+  collectionName: 'learners';
+  info: {
+    description: 'Tenant-scoped learners linked to an optional parent account.';
+    displayName: 'Learner';
+    pluralName: 'learners';
+    singularName: 'learner';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    code: Schema.Attribute.String & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    dateOfBirth: Schema.Attribute.Date;
+    enrollments: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::enrollment.enrollment'
+    >;
+    feeItems: Schema.Attribute.Relation<'oneToMany', 'api::fee-item.fee-item'>;
+    fullName: Schema.Attribute.String & Schema.Attribute.Required;
+    learnerStatus: Schema.Attribute.Enumeration<['active', 'inactive']> &
+      Schema.Attribute.DefaultTo<'active'>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::learner.learner'
+    > &
+      Schema.Attribute.Private;
+    oldUserId: Schema.Attribute.String;
+    parentName: Schema.Attribute.String;
+    parentPhone: Schema.Attribute.String;
+    payments: Schema.Attribute.Relation<'oneToMany', 'api::payment.payment'>;
+    publishedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+  };
+}
+
+export interface ApiNotificationTemplateNotificationTemplate
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'notification_templates';
+  info: {
+    description: 'Tenant-scoped notification templates for admission invite, OTP, and result messages.';
+    displayName: 'NotificationTemplate';
+    pluralName: 'notification-templates';
+    singularName: 'notification-template';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    code: Schema.Attribute.String & Schema.Attribute.Required;
+    content: Schema.Attribute.RichText & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::notification-template.notification-template'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    subject: Schema.Attribute.String & Schema.Attribute.Required;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    type: Schema.Attribute.Enumeration<['email', 'sms', 'ui']> &
+      Schema.Attribute.DefaultTo<'email'>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    variables: Schema.Attribute.JSON;
+  };
+}
+
+export interface ApiPaymentAllocationPaymentAllocation
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'payment_allocations';
+  info: {
+    description: 'Allocation of learner payments to fee items.';
+    displayName: 'Payment Allocation';
+    pluralName: 'payment-allocations';
+    singularName: 'payment-allocation';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    amount: Schema.Attribute.Decimal & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    feeItem: Schema.Attribute.Relation<'manyToOne', 'api::fee-item.fee-item'> &
+      Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::payment-allocation.payment-allocation'
+    > &
+      Schema.Attribute.Private;
+    payment: Schema.Attribute.Relation<'manyToOne', 'api::payment.payment'> &
+      Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiPaymentTransactionPaymentTransaction
   extends Struct.CollectionTypeSchema {
   collectionName: 'payment_transactions';
@@ -1103,6 +1661,47 @@ export interface ApiPaymentTransactionPaymentTransaction
       'api::service-order.service-order'
     >;
     paidAt: Schema.Attribute.DateTime & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiPaymentPayment extends Struct.CollectionTypeSchema {
+  collectionName: 'payments';
+  info: {
+    description: 'Tenant-scoped learner payment records.';
+    displayName: 'Payment';
+    pluralName: 'payments';
+    singularName: 'payment';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    allocations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::payment-allocation.payment-allocation'
+    >;
+    amount: Schema.Attribute.Decimal & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    learner: Schema.Attribute.Relation<'manyToOne', 'api::learner.learner'> &
+      Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::payment.payment'
+    > &
+      Schema.Attribute.Private;
+    method: Schema.Attribute.Enumeration<['cash', 'transfer', 'other']> &
+      Schema.Attribute.DefaultTo<'cash'>;
+    note: Schema.Attribute.Text;
+    paymentDate: Schema.Attribute.DateTime & Schema.Attribute.Required;
     publishedAt: Schema.Attribute.DateTime;
     tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
       Schema.Attribute.Required;
@@ -1192,7 +1791,7 @@ export interface ApiRequestAssigneeRequestAssignee
     publishedAt: Schema.Attribute.DateTime;
     removedAt: Schema.Attribute.DateTime;
     request: Schema.Attribute.Relation<'manyToOne', 'api::request.request'>;
-    request_assignee_status: Schema.Attribute.Enumeration<
+    requestAssigneeStatus: Schema.Attribute.Enumeration<
       ['PENDING', 'ACCEPTED', 'IN_PROGRESS', 'DONE', 'BLOCKED', 'REJECTED']
     >;
     roleType: Schema.Attribute.Enumeration<['ASSIGNEE', 'OBSERVER']>;
@@ -1390,9 +1989,6 @@ export interface ApiRequestRequest extends Struct.CollectionTypeSchema {
       'oneToMany',
       'api::request-message.request-message'
     >;
-    request_status: Schema.Attribute.Enumeration<
-      ['OPEN', 'IN_PROGRESS', 'WAITING', 'DONE', 'CLOSED', 'CANCELLED']
-    >;
     request_tags: Schema.Attribute.Relation<
       'manyToMany',
       'api::request-tag.request-tag'
@@ -1400,6 +1996,9 @@ export interface ApiRequestRequest extends Struct.CollectionTypeSchema {
     requester: Schema.Attribute.Relation<
       'manyToOne',
       'plugin::users-permissions.user'
+    >;
+    requestStatus: Schema.Attribute.Enumeration<
+      ['OPEN', 'IN_PROGRESS', 'WAITING', 'DONE', 'CLOSED', 'CANCELLED']
     >;
     submittedAt: Schema.Attribute.DateTime;
     tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'>;
@@ -1635,14 +2234,14 @@ export interface ApiServiceOrderServiceOrder
     paymentStatus: Schema.Attribute.Enumeration<['UNPAID', 'PARTIAL', 'PAID']> &
       Schema.Attribute.DefaultTo<'UNPAID'>;
     publishedAt: Schema.Attribute.DateTime;
+    serviceOrderStatus: Schema.Attribute.Enumeration<
+      ['NEW', 'PROCESSING', 'READY', 'DELIVERED', 'CANCELLED']
+    > &
+      Schema.Attribute.DefaultTo<'NEW'>;
     source: Schema.Attribute.Enumeration<
       ['ZALO', 'DIRECT', 'PHONE', 'FACEBOOK', 'OTHER']
     > &
       Schema.Attribute.DefaultTo<'DIRECT'>;
-    status: Schema.Attribute.Enumeration<
-      ['NEW', 'PROCESSING', 'READY', 'DELIVERED', 'CANCELLED']
-    > &
-      Schema.Attribute.DefaultTo<'NEW'>;
     tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
       Schema.Attribute.Required;
     totalAmount: Schema.Attribute.Decimal & Schema.Attribute.DefaultTo<0>;
@@ -1978,7 +2577,9 @@ export interface ApiSurveyResponseSurveyResponse
       Schema.Attribute.Private;
     publishedAt: Schema.Attribute.DateTime;
     respondentSnapshot: Schema.Attribute.JSON;
-    status: Schema.Attribute.Enumeration<['IN_PROGRESS', 'SUBMITTED']> &
+    responseStatus: Schema.Attribute.Enumeration<
+      ['IN_PROGRESS', 'SUBMITTED', 'RESET']
+    > &
       Schema.Attribute.DefaultTo<'IN_PROGRESS'>;
     submittedAt: Schema.Attribute.DateTime;
     survey_answers: Schema.Attribute.Relation<
@@ -2213,12 +2814,18 @@ export interface ApiTenantTenant extends Struct.CollectionTypeSchema {
     draftAndPublish: false;
   };
   attributes: {
+    admissionApplications: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::admission-application.admission-application'
+    >;
+    campaigns: Schema.Attribute.Relation<'oneToMany', 'api::campaign.campaign'>;
     code: Schema.Attribute.UID<'name'> &
       Schema.Attribute.Required &
       Schema.Attribute.Unique;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    defaultFeatureCode: Schema.Attribute.String;
     defaultLocale: Schema.Attribute.String;
     departments: Schema.Attribute.Relation<
       'oneToMany',
@@ -2226,6 +2833,10 @@ export interface ApiTenantTenant extends Struct.CollectionTypeSchema {
     >;
     description: Schema.Attribute.Text;
     endDate: Schema.Attribute.Date;
+    formTemplates: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::form-template.form-template'
+    >;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -2235,6 +2846,10 @@ export interface ApiTenantTenant extends Struct.CollectionTypeSchema {
     logo: Schema.Attribute.Media<'images'>;
     name: Schema.Attribute.String & Schema.Attribute.Required;
     note: Schema.Attribute.Text;
+    notificationTemplates: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::notification-template.notification-template'
+    >;
     primaryColor: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
     settings: Schema.Attribute.JSON;
@@ -2919,6 +3534,7 @@ export interface PluginUsersPermissionsUser
       Schema.Attribute.SetMinMaxLength<{
         minLength: 6;
       }>;
+    phone: Schema.Attribute.String;
     provider: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
     request_assignees: Schema.Attribute.Relation<
@@ -2965,19 +3581,32 @@ declare module '@strapi/strapi' {
       'admin::user': AdminUser;
       'api::about.about': ApiAboutAbout;
       'api::activation-token.activation-token': ApiActivationTokenActivationToken;
+      'api::admission-application-file.admission-application-file': ApiAdmissionApplicationFileAdmissionApplicationFile;
+      'api::admission-application.admission-application': ApiAdmissionApplicationAdmissionApplication;
       'api::article.article': ApiArticleArticle;
       'api::author.author': ApiAuthorAuthor;
+      'api::campaign.campaign': ApiCampaignCampaign;
       'api::category.category': ApiCategoryCategory;
+      'api::class.class': ApiClassClass;
       'api::customer.customer': ApiCustomerCustomer;
       'api::department-membership.department-membership': ApiDepartmentMembershipDepartmentMembership;
       'api::department.department': ApiDepartmentDepartment;
       'api::employee-history.employee-history': ApiEmployeeHistoryEmployeeHistory;
       'api::employee.employee': ApiEmployeeEmployee;
+      'api::enrollment.enrollment': ApiEnrollmentEnrollment;
       'api::feature-group.feature-group': ApiFeatureGroupFeatureGroup;
       'api::feature.feature': ApiFeatureFeature;
+      'api::fee-item.fee-item': ApiFeeItemFeeItem;
+      'api::fee-sheet-class.fee-sheet-class': ApiFeeSheetClassFeeSheetClass;
+      'api::fee-sheet.fee-sheet': ApiFeeSheetFeeSheet;
+      'api::form-template.form-template': ApiFormTemplateFormTemplate;
       'api::global.global': ApiGlobalGlobal;
       'api::lead.lead': ApiLeadLead;
+      'api::learner.learner': ApiLearnerLearner;
+      'api::notification-template.notification-template': ApiNotificationTemplateNotificationTemplate;
+      'api::payment-allocation.payment-allocation': ApiPaymentAllocationPaymentAllocation;
       'api::payment-transaction.payment-transaction': ApiPaymentTransactionPaymentTransaction;
+      'api::payment.payment': ApiPaymentPayment;
       'api::position.position': ApiPositionPosition;
       'api::request-assignee.request-assignee': ApiRequestAssigneeRequestAssignee;
       'api::request-category.request-category': ApiRequestCategoryRequestCategory;

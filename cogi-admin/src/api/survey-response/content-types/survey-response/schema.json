@@ -15,11 +15,12 @@
     "submittedAt": {
       "type": "datetime"
     },
-    "status": {
+    "responseStatus": {
       "type": "enumeration",
       "enum": [
         "IN_PROGRESS",
-        "SUBMITTED"
+        "SUBMITTED",
+        "RESET"
       ],
       "default": "IN_PROGRESS"
     },

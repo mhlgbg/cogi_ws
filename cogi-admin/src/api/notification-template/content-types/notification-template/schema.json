@@ -1,0 +1,55 @@
+{
+  "kind": "collectionType",
+  "collectionName": "notification_templates",
+  "info": {
+    "singularName": "notification-template",
+    "pluralName": "notification-templates",
+    "displayName": "NotificationTemplate",
+    "description": "Tenant-scoped notification templates for admission invite, OTP, and result messages."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "notificationTemplates",
+      "required": true
+    },
+    "code": {
+      "type": "string",
+      "required": true
+    },
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "subject": {
+      "type": "string",
+      "required": true
+    },
+    "content": {
+      "type": "richtext",
+      "required": true
+    },
+    "variables": {
+      "type": "json"
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": [
+        "email",
+        "sms",
+        "ui"
+      ],
+      "default": "email"
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    }
+  }
+}

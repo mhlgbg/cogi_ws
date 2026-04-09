@@ -1,7 +1,156 @@
 import crypto from 'node:crypto';
 import { ensureUserHasAuthenticatedRole } from '../services/ensure-authenticated-role';
+import {
+  buildActivationLink,
+  checkUserTenantExists,
+  getRoleDisplayName,
+  inviteExistingUserToTenant,
+  inviteNewUser,
+  sendInviteNotification,
+  updateUserPhoneIfEmpty,
+  validateTenantRole,
+} from '../../admin/services/invite-user';
 
 const USER_TENANT_UID = 'api::user-tenant.user-tenant';
+const USER_TENANT_ROLE_UID = 'api::user-tenant-role.user-tenant-role';
+const TENANT_UID = 'api::tenant.tenant';
+const TENANT_ROLE_UID = 'api::tenant-role.tenant-role';
+const CAMPAIGN_UID = 'api::campaign.campaign';
+
+function normalizeText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+}
+
+function extractMediaUrl(media: any): string | null {
+  if (!media) return null;
+  if (typeof media.url === 'string' && media.url.trim()) return media.url.trim();
+  if (media?.data?.attributes?.url && typeof media.data.attributes.url === 'string') {
+    return media.data.attributes.url.trim();
+  }
+  if (media?.attributes?.url && typeof media.attributes.url === 'string') {
+    return media.attributes.url.trim();
+  }
+  return null;
+}
+
+async function findActiveTenantByCode(tenantCode: string) {
+  return strapi.db.query(TENANT_UID).findOne({
+    where: {
+      code: {
+        $eqi: tenantCode,
+      },
+      tenantStatus: 'active',
+    },
+    select: ['id', 'name', 'code', 'shortName'],
+    populate: {
+      logo: {
+        select: ['url'],
+      },
+    },
+  });
+}
+
+async function findApplicantRoleIdForTenant(tenantId: number) {
+  const tenantRole = await strapi.db.query(TENANT_ROLE_UID).findOne({
+    where: {
+      tenant: tenantId,
+      isActive: true,
+      role: {
+        $or: [
+          { type: { $eqi: 'applicant' } },
+          { name: { $eqi: 'applicant' } },
+        ],
+      },
+    },
+    populate: {
+      role: {
+        select: ['id', 'name', 'type'],
+      },
+    },
+  });
+
+  return Number(tenantRole?.role?.id || 0) || null;
+}
+
+async function findActiveCampaignByCode(campaignCode: string) {
+  return strapi.db.query(CAMPAIGN_UID).findOne({
+    where: {
+      code: {
+        $eqi: campaignCode,
+      },
+      isActive: true,
+      status: 'open',
+    },
+    select: ['id', 'name', 'code', 'description', 'status', 'isActive'],
+    populate: {
+      tenant: {
+        select: ['id', 'code', 'name'],
+      },
+    },
+  });
+}
+
+async function activateUserTenantIfNeeded(userTenantId: number) {
+  const membership = await strapi.db.query(USER_TENANT_UID).findOne({
+    where: { id: userTenantId },
+    select: ['id', 'userTenantStatus'],
+  });
+
+  if (!membership?.id || membership.userTenantStatus === 'active') {
+    return;
+  }
+
+  await strapi.db.query(USER_TENANT_UID).update({
+    where: { id: userTenantId },
+    data: {
+      userTenantStatus: 'active',
+      leftAt: null,
+    },
+  });
+}
+
+async function ensureApplicantRoleForMembership(userTenantId: number, roleId: number) {
+  const existingRole = await strapi.db.query(USER_TENANT_ROLE_UID).findOne({
+    where: {
+      userTenant: userTenantId,
+      role: roleId,
+    },
+    select: ['id', 'userTenantRoleStatus'],
+  });
+
+  if (existingRole?.id) {
+    if (existingRole.userTenantRoleStatus !== 'active') {
+      await strapi.db.query(USER_TENANT_ROLE_UID).update({
+        where: { id: existingRole.id },
+        data: {
+          userTenantRoleStatus: 'active',
+          revokedAt: null,
+        },
+      });
+    }
+
+    return { assigned: false };
+  }
+
+  const roleCount = await strapi.db.query(USER_TENANT_ROLE_UID).count({
+    where: {
+      userTenant: userTenantId,
+    },
+  });
+
+  await strapi.db.query(USER_TENANT_ROLE_UID).create({
+    data: {
+      userTenant: userTenantId,
+      role: roleId,
+      userTenantRoleStatus: 'active',
+      assignedAt: new Date(),
+      isPrimary: roleCount === 0,
+    },
+  });
+
+  return { assigned: true };
+}
 
 function normalizePotentialToken(input: unknown): string {
   const raw = typeof input === 'string' ? input.trim() : '';
@@ -13,6 +162,223 @@ function normalizePotentialToken(input: unknown): string {
 }
 
 export default {
+  async admissionCampaignByCode(ctx) {
+    try {
+      const campaignCode = normalizeText(ctx.params?.campaignCode).toLowerCase();
+      if (!campaignCode) {
+        return ctx.badRequest('campaignCode is required');
+      }
+
+      const campaign = await findActiveCampaignByCode(campaignCode);
+      if (!campaign?.id) {
+        return ctx.notFound('Admission campaign not found');
+      }
+
+      ctx.body = {
+        id: campaign.id,
+        code: normalizeText(campaign.code),
+        name: normalizeText(campaign.name),
+        description: normalizeText(campaign.description),
+        tenant: campaign.tenant
+          ? {
+              id: campaign.tenant.id,
+              code: normalizeText(campaign.tenant.code),
+              name: normalizeText(campaign.tenant.name),
+            }
+          : null,
+      };
+    } catch (error) {
+      strapi.log.error('[auth.admissionCampaignByCode] unexpected error', error);
+      return ctx.internalServerError('Failed to load admission campaign');
+    }
+  },
+
+  async tenantByCode(ctx) {
+    try {
+      const tenantCode = normalizeText(ctx.params?.tenantCode).toLowerCase();
+      if (!tenantCode) {
+        return ctx.badRequest('tenantCode is required');
+      }
+
+      const tenant = await findActiveTenantByCode(tenantCode);
+      if (!tenant) {
+        return ctx.notFound('Tenant not found');
+      }
+
+      ctx.body = {
+        id: tenant.id,
+        code: normalizeText(tenant.code),
+        name: normalizeText(tenant.name) || normalizeText(tenant.shortName) || normalizeText(tenant.code),
+        logo: tenant.logo || null,
+        logoUrl: extractMediaUrl(tenant.logo),
+      };
+    } catch (error) {
+      strapi.log.error('[auth.tenantByCode] unexpected error', error);
+      return ctx.internalServerError('Failed to load tenant');
+    }
+  },
+
+  async invite(ctx) {
+    try {
+      const body = ctx.request.body || {};
+      const tenantCode = normalizeText(body.tenantCode).toLowerCase();
+      const campaignCode = normalizeText(body.campaignCode).toLowerCase();
+      const fullName = normalizeText(body.fullName);
+      const email = normalizeText(body.email).toLowerCase();
+      const phone = normalizeText(body.phone);
+      const templateCode = normalizeText(body.templateCode) || 'admission_invite';
+
+      if (!tenantCode) {
+        return ctx.badRequest('tenantCode is required');
+      }
+
+      if (!campaignCode) {
+        return ctx.badRequest('campaignCode is required');
+      }
+
+      if (!fullName) {
+        return ctx.badRequest('fullName is required');
+      }
+
+      if (!email) {
+        return ctx.badRequest('email is required');
+      }
+
+      if (!phone) {
+        return ctx.badRequest('phone is required');
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return ctx.badRequest('email is invalid');
+      }
+
+      const tenant = await findActiveTenantByCode(tenantCode);
+      if (!tenant?.id) {
+        return ctx.notFound('Tenant not found');
+      }
+
+      const campaign = await findActiveCampaignByCode(campaignCode);
+      if (!campaign?.id) {
+        return ctx.notFound('Admission campaign not found');
+      }
+
+      if (Number(campaign?.tenant?.id || 0) !== Number(tenant.id)) {
+        return ctx.badRequest('Campaign does not belong to tenant');
+      }
+
+      const roleId = await findApplicantRoleIdForTenant(Number(tenant.id));
+      if (!roleId) {
+        return ctx.badRequest('Applicant role is not configured for this tenant');
+      }
+
+      const roleValidation = await validateTenantRole(Number(tenant.id), roleId);
+      if (!roleValidation.valid) {
+        return ctx.badRequest(roleValidation.error || 'Invalid role');
+      }
+
+      const existingUser = await strapi.db.query('plugin::users-permissions.user').findOne({
+        where: {
+          email: {
+            $eqi: email,
+          },
+        },
+        select: ['id', 'email'],
+      });
+
+      if (!existingUser) {
+        const password = crypto.randomBytes(24).toString('base64url');
+        const activationToken = crypto.randomBytes(48).toString('base64url');
+        const expiresAtDate = new Date(Date.now() + 48 * 60 * 60 * 1000);
+
+        const result = await inviteNewUser({
+          email,
+          fullName,
+          phone,
+          tenantId: Number(tenant.id),
+          roleId,
+          password,
+          activationToken,
+          expiresAt: expiresAtDate,
+        });
+
+        const roleName = await getRoleDisplayName(roleId);
+        const notificationResult = await sendInviteNotification({
+          email,
+          fullName,
+          tenantId: Number(tenant.id),
+          tenantName: normalizeText(tenant.name),
+          tenantCode: normalizeText(tenant.code),
+          roleName,
+          link: buildActivationLink(activationToken),
+          invitePurpose: 'admission',
+          templateCode,
+        });
+
+        ctx.body = {
+          ok: true,
+          caseType: 'NEW_USER',
+          userId: result.userId,
+          email: result.email,
+          userTenantId: result.userTenantId,
+          emailSent: notificationResult.emailSent,
+          ...(notificationResult.emailError ? { emailError: notificationResult.emailError } : {}),
+          notificationTemplateCode: notificationResult.templateCode,
+          notificationUsedFallback: notificationResult.usedFallback,
+          campaignCode,
+          message: 'Vui long kiem tra email de kich hoat tai khoan va tiep tuc dang ky tuyen sinh',
+        };
+        return;
+      }
+
+      await updateUserPhoneIfEmpty(Number(existingUser.id), phone);
+      await ensureUserHasAuthenticatedRole(strapi, Number(existingUser.id));
+
+      const existingMembership = await checkUserTenantExists(Number(existingUser.id), Number(tenant.id));
+      if (!existingMembership.exists) {
+        const result = await inviteExistingUserToTenant({
+          userId: Number(existingUser.id),
+          email: existingUser.email,
+          tenantId: Number(tenant.id),
+          roleId,
+        });
+
+        ctx.body = {
+          ok: true,
+          status: 'EXISTING_USER',
+          caseType: 'EXISTING_USER',
+          userId: existingUser.id,
+          email: existingUser.email,
+          userTenantId: result.userTenantId,
+          emailSent: false,
+          campaignCode,
+          requireLogin: true,
+          message: 'Email already exists. Your account has been linked to this admission. Please login to continue.',
+        };
+        return;
+      }
+
+      await activateUserTenantIfNeeded(Number(existingMembership.userTenant?.id || 0));
+      await ensureApplicantRoleForMembership(Number(existingMembership.userTenant?.id || 0), roleId);
+
+      ctx.body = {
+        ok: true,
+        status: 'EXISTING_USER',
+        caseType: 'EXISTING_USER',
+        userId: existingUser.id,
+        email: existingUser.email,
+        userTenantId: existingMembership.userTenant?.id,
+        emailSent: false,
+        campaignCode,
+        requireLogin: true,
+        message: 'You already have an account. Please login to continue.',
+      };
+    } catch (error) {
+      strapi.log.error('[auth.invite] unexpected error', error);
+      return ctx.internalServerError('Failed to process admission invite');
+    }
+  },
+
   async forgotPasswordSafe(ctx) {
     try {
       const rawEmail = ctx.request.body?.email;

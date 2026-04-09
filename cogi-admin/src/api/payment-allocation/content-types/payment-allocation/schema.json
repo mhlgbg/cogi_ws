@@ -1,0 +1,40 @@
+{
+  "kind": "collectionType",
+  "collectionName": "payment_allocations",
+  "info": {
+    "singularName": "payment-allocation",
+    "pluralName": "payment-allocations",
+    "displayName": "Payment Allocation",
+    "description": "Allocation of learner payments to fee items."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "payment": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::payment.payment",
+      "inversedBy": "allocations",
+      "required": true
+    },
+    "feeItem": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::fee-item.fee-item",
+      "inversedBy": "paymentAllocations",
+      "required": true
+    },
+    "amount": {
+      "type": "decimal",
+      "required": true
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

@@ -60,9 +60,9 @@ export default function ChangePassword() {
   }
 
   return (
-    <CContainer className="py-5">
-      <CRow className="justify-content-center">
-        <CCol md={6} style={{ maxWidth: 500, width: '100%' }}>
+    <CContainer fluid className="py-4 px-0">
+      <CRow className="g-0">
+        <CCol xs={12}>
           <CCard>
             <CCardHeader><b>Alpha Internal</b> - Đổi mật khẩu</CCardHeader>
             <CCardBody>

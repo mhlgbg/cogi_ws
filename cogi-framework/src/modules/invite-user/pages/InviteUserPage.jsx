@@ -149,7 +149,7 @@ export default function InviteUserPage() {
   }
 
   return (
-    <div style={{ maxWidth: '600px', margin: '0 auto', padding: '20px' }}>
+    <div style={{ width: '100%', padding: '20px 0' }}>
       <h1>Invite User</h1>
       <p style={{ color: '#666' }}>
         Invite a new user or add existing user to{' '}

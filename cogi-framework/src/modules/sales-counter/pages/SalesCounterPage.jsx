@@ -68,6 +68,7 @@ function writeStoredDepartmentId(departmentId) {
     localStorage.removeItem(ACTIVE_DEPARTMENT_STORAGE_KEY)
     return
   }
+
   localStorage.setItem(ACTIVE_DEPARTMENT_STORAGE_KEY, String(departmentId))
 }
 
@@ -764,7 +765,7 @@ export default function SalesCounterPage() {
   }
 
   return (
-    <CRow className="justify-content-center">
+    <CRow className="g-0">
       <CCol xs={12}>
         <CCard className="mb-4 ai-card">
           <CCardHeader>

@@ -388,8 +388,8 @@ export default function ServiceOrderListPage() {
 
   if (!canView) {
     return (
-      <CRow className='justify-content-center'>
-        <CCol xs={12} style={{ maxWidth: 1200 }}>
+      <CRow className='g-0'>
+        <CCol xs={12}>
           <CAlert color='warning' className='mb-0'>
             Tài khoản hiện tại không có quyền xem danh sách đơn hàng.
           </CAlert>
@@ -399,8 +399,8 @@ export default function ServiceOrderListPage() {
   }
 
   return (
-    <CRow className='justify-content-center'>
-      <CCol xs={12} style={{ maxWidth: 1500 }}>
+    <CRow className='g-0'>
+      <CCol xs={12}>
         <CCard className='mb-4 ai-card'>
           <CCardHeader><strong>Bộ lọc đơn dịch vụ</strong></CCardHeader>
           <CCardBody>
@@ -472,6 +472,12 @@ export default function ServiceOrderListPage() {
                 <CButton color='secondary' variant='outline' onClick={onReset} disabled={loading}>Làm mới</CButton>
                 <CButton color='success' variant='outline' onClick={exportToExcel} disabled={loading || exporting}>
                   {exporting ? 'Đang xuất...' : 'Xuất Excel'}
+                </CButton>
+                <CButton color='info' variant='outline' onClick={() => navigate('/service-items')}>
+                  Service Items
+                </CButton>
+                <CButton color='info' variant='outline' onClick={() => navigate('/service-categories')}>
+                  Service Categories
                 </CButton>
                 {canCreate ? (
                   <CButton color='success' onClick={() => navigate('/service-orders/new')}>

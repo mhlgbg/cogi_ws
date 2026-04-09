@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../api/axios'
 import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
@@ -67,12 +67,19 @@ function mapTenantForContext(item) {
     tenantLogoUrl: extractTenantLogoUrl(tenant),
     tenantId: tenant?.id,
     userTenantId: item?.userTenantId,
+    defaultFeatureCode: tenant?.defaultFeatureCode || '',
     roles: Array.isArray(item?.roles) ? item.roles : [],
   }
 }
 
+function resolveTenantLandingPath(tenantItem) {
+  const routePath = String(tenantItem?.defaultFeatureCode || '').trim()
+  return routePath.startsWith('/') ? routePath : '/dashboard'
+}
+
 export default function ChooseTenant() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const auth = useAuth()
   const tenantContext = useTenant()
 
@@ -80,6 +87,14 @@ export default function ChooseTenant() {
   const [error, setError] = useState('')
   const [tenants, setTenants] = useState([])
   const [resolvedUser, setResolvedUser] = useState(null)
+  const requestedTenantCode = useMemo(
+    () => String(searchParams.get('tenantCode') || '').trim().toLowerCase(),
+    [searchParams],
+  )
+  const redirectPath = useMemo(() => {
+    const rawRedirect = String(searchParams.get('redirect') || '').trim()
+    return rawRedirect.startsWith('/') ? rawRedirect : ''
+  }, [searchParams])
 
   useEffect(() => {
     const fetchTenantContext = async () => {
@@ -95,10 +110,21 @@ export default function ChooseTenant() {
         setResolvedUser(user)
         setTenants(tenantItems)
 
+        const matchedTenantItem = requestedTenantCode
+          ? tenantItems.find((item) => String(item?.tenant?.code || '').trim().toLowerCase() === requestedTenantCode)
+          : null
+
+        if (matchedTenantItem) {
+          const selected = mapTenantForContext(matchedTenantItem)
+          tenantContext?.selectTenant?.(selected)
+          navigate(redirectPath || resolveTenantLandingPath(selected), { replace: true })
+          return
+        }
+
         if (tenantItems.length === 1) {
           const selected = mapTenantForContext(tenantItems[0])
           tenantContext?.selectTenant?.(selected)
-          navigate('/', { replace: true })
+          navigate(redirectPath || resolveTenantLandingPath(selected), { replace: true })
         }
       } catch (requestError) {
         const apiMessage = requestError?.response?.data?.error?.message
@@ -109,12 +135,12 @@ export default function ChooseTenant() {
     }
 
     fetchTenantContext()
-  }, [auth?.token, navigate, tenantContext])
+  }, [auth?.token, navigate, redirectPath, requestedTenantCode, tenantContext])
 
   const handleSelectTenant = (item) => {
     const selected = mapTenantForContext(item)
     tenantContext?.selectTenant?.(selected)
-    navigate('/', { replace: true })
+    navigate(redirectPath || resolveTenantLandingPath(selected), { replace: true })
   }
 
   const displayUserName = resolvedUser?.username || resolvedUser?.email || auth?.user?.username || auth?.user?.email || 'bạn'

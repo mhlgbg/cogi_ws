@@ -20,6 +20,13 @@ import * as serviceOrders from './service-orders'
 import * as inviteUser from './invite-user'
 import * as userManagement from './user-management'
 import * as requests from './requests'
+import * as survey from './survey'
+import * as surveyCampaign from './survey-campaign'
+import * as surveyQuestionManagement from './survey-question-management'
+import * as classManagement from './class-management'
+import * as learnerManagement from './learner-management'
+import * as feeSheetManagement from './fee-sheet-management'
+import * as admissionManagement from './admission-management'
 // import * as inventory from "./inventory";
 
 export const allModules = [
@@ -33,6 +40,13 @@ export const allModules = [
   inviteUser,
   userManagement,
   requests,
+  survey,
+  surveyCampaign,
+  surveyQuestionManagement,
+  classManagement,
+  learnerManagement,
+  feeSheetManagement,
+  admissionManagement,
   // inventory,
 ];
 
@@ -41,6 +55,18 @@ export const allModules = [
  * Each entry: { path, featureKey, component }
  */
 export const allModuleRoutes = allModules.flatMap((m) => m.moduleRoutes || []);
+
+export function resolvePathByFeatureKey(featureKey) {
+  const normalizedFeatureKey = String(featureKey || '').trim()
+  if (!normalizedFeatureKey) return null
+
+  if (normalizedFeatureKey === 'dashboard.view') {
+    return '/dashboard'
+  }
+
+  const matchedRoute = allModuleRoutes.find((route) => String(route?.featureKey || '').trim() === normalizedFeatureKey)
+  return matchedRoute?.path || null
+}
 
 /**
  * Array of moduleFeatures objects, one per registered module.

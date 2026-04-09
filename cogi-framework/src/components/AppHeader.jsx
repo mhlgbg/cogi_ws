@@ -31,6 +31,9 @@ export default function AppHeader({ onToggleSidebar }) {
     : ''
 
   const tenantLogoUrl = tenant?.currentTenant?.tenantLogoUrl || ''
+  const userDisplayName = auth?.user?.fullName
+    ? `${auth.user.fullName} (${auth?.user?.username || auth?.user?.email || 'Unknown user'})`
+    : auth?.user?.username || auth?.user?.email || 'Unknown user'
 
   const handleSwitchTenant = () => {
     tenant?.clearTenant?.()
@@ -48,21 +51,21 @@ export default function AppHeader({ onToggleSidebar }) {
         <button type="button" className="tenant-header-sidebar-toggle" onClick={onToggleSidebar}>
           ☰
         </button>
-
+        {/*
         {tenantLogoUrl ? (
           <img src={tenantLogoUrl} alt={tenantName} className="tenant-header-logo" />
         ) : (
           <div className="tenant-header-logo tenant-header-logo-fallback">{toInitials(tenantName)}</div>
         )}
-
+        */}
         <div className="tenant-header-meta">
           <div className="tenant-header-user">
-          {auth?.user?.username || auth?.user?.email || 'Unknown user'}
+            Xin chào: {userDisplayName}
           </div>
           <div className="tenant-header-tenant">
-            Tenant: {tenantName} {tenantCode}
+            Đang ở không gian số của: {tenantName} {tenantCode}
           </div>
-          <div className="tenant-header-roles">Roles: {roleText || '-'}</div>
+          <div className="tenant-header-roles">(Các) Vai trò: {roleText || '-'}</div>
         </div>
       </div>
 

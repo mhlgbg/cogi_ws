@@ -6,13 +6,22 @@ import {
   inviteNewUser,
   inviteExistingUserToTenant,
   ensureDepartmentMembership,
+  buildActivationLink,
+  getRoleDisplayName,
+  sendInviteNotification,
 } from '../services/invite-user';
 import {
   getTenantEnabledRoles,
   listTenantUsers,
   updateTenantUserRoles,
 } from '../services/manage-tenant-users';
-import { importTenantUsersFromFile } from '../services/import-tenant-users';
+import { readTenantUsersImportFile } from '../services/import-tenant-users';
+import {
+  cancelImportTenantUsersJob,
+  createImportTenantUsersJob,
+  getImportTenantUsersJob,
+} from '../services/import-tenant-user-jobs';
+import { importUpdateTenantUserRole } from '../services/import-update-user-role';
 
 function isValidationError(error: unknown) {
   if (!error || typeof error !== 'object') return false;
@@ -129,6 +138,10 @@ export default {
         fullName = normalizedFullName || null;
       }
 
+      const rawInvitePurpose = typeof body.invitePurpose === 'string' ? body.invitePurpose.trim().toLowerCase() : '';
+      const invitePurpose = rawInvitePurpose === 'admission' ? 'admission' : 'tenant';
+      const templateCode = typeof body.templateCode === 'string' ? body.templateCode.trim() : '';
+
       // Validate departmentId (optional but if provided must be in this tenant)
       let departmentId: number | null = null;
       if (body.departmentId !== undefined && body.departmentId !== null) {
@@ -174,42 +187,19 @@ export default {
           expiresAt: expiresAtDate,
         });
 
-        // Send invitation email
-        const frontendUrl = process.env.FRONTEND_URL?.trim() || 'http://localhost:5173';
-        const activationLink = `${frontendUrl}/activate?token=${encodeURIComponent(activationToken)}`;
-        const recipientName = fullName || email;
-        const tenantName =
-          ctx.state?.tenant?.name || ctx.state?.tenantCode || 'the system';
-
-        let emailSent = true;
-        let emailError: string | undefined;
-
-        try {
-          await strapi.plugin('email').service('email').send({
-            to: email,
-            subject: `Bạn được mời tham gia ${tenantName}`,
-            text: `Xin chào ${recipientName},\n\nBạn được mời tham gia ${tenantName}. Vui lòng kích hoạt tài khoản qua link sau:\n${activationLink}\n\nLưu ý: link này sẽ hết hạn sau 48 giờ.`,
-            html: `
-              <p>Xin chào <strong>${recipientName}</strong>,</p>
-              <p>Bạn được mời tham gia <strong>${tenantName}</strong>.</p>
-              <p>
-                <a href="${activationLink}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">
-                  Kích hoạt tài khoản
-                </a>
-              </p>
-              <p>Nếu nút không hoạt động, dùng link sau:</p>
-              <p><a href="${activationLink}">${activationLink}</a></p>
-              <p>Link kích hoạt sẽ hết hạn sau <strong>48 giờ</strong>.</p>
-            `,
-          });
-        } catch (error) {
-          emailSent = false;
-          const rawMessage =
-            (error as { message?: string; response?: { body?: { message?: string } } })?.response?.body
-              ?.message || (error as { message?: string })?.message;
-          emailError = rawMessage ? String(rawMessage).slice(0, 120) : 'Email sending failed';
-          console.error('[inviteUser] Failed to send invite email:', emailError);
-        }
+        const activationLink = buildActivationLink(activationToken);
+        const roleName = await getRoleDisplayName(roleId);
+        const notificationResult = await sendInviteNotification({
+          email,
+          fullName,
+          tenantId,
+          tenantName: ctx.state?.tenant?.name || null,
+          tenantCode: ctx.state?.tenant?.code || ctx.state?.tenantCode || null,
+          roleName,
+          link: activationLink,
+          invitePurpose,
+          templateCode: templateCode || null,
+        });
 
         return (ctx.body = {
           ok: true,
@@ -218,8 +208,10 @@ export default {
           email: result.email,
           userTenantId: result.userTenantId,
           expiresAt: result.expiresAt,
-          emailSent,
-          ...(emailError ? { emailError } : {}),
+          emailSent: notificationResult.emailSent,
+          ...(notificationResult.emailError ? { emailError: notificationResult.emailError } : {}),
+          notificationTemplateCode: notificationResult.templateCode,
+          notificationUsedFallback: notificationResult.usedFallback,
         });
       }
 
@@ -398,9 +390,106 @@ export default {
         return ctx.badRequest('file is required');
       }
 
-      const result = await importTenantUsersFromFile({
+      const buffer = await readTenantUsersImportFile(uploadFile);
+      const job = createImportTenantUsersJob({
         tenantId: Number(tenantId),
         roleId,
+        fileName: uploadFile?.name || null,
+        buffer,
+      });
+
+      ctx.body = {
+        ok: true,
+        data: job,
+      };
+    } catch (error: any) {
+      console.error('[importUsers] Unexpected error:', error);
+
+      const message = typeof error?.message === 'string' ? error.message : 'Failed to import users';
+      return ctx.badRequest(message);
+    }
+  },
+
+  async getImportUsersJob(ctx) {
+    try {
+      const tenantId = ctx.state?.tenantId ?? ctx.state?.tenant?.id;
+      if (!tenantId) {
+        return ctx.badRequest('Tenant context is required');
+      }
+
+      const jobId = String(ctx.params?.jobId || '').trim();
+      if (!jobId) {
+        return ctx.badRequest('jobId is required');
+      }
+
+      const job = getImportTenantUsersJob(jobId, Number(tenantId));
+      if (!job) {
+        return ctx.notFound('Import job not found');
+      }
+
+      ctx.body = {
+        ok: true,
+        data: job,
+      };
+    } catch (error: any) {
+      console.error('[getImportUsersJob] Unexpected error:', error);
+      return ctx.internalServerError('Failed to load import job');
+    }
+  },
+
+  async cancelImportUsersJob(ctx) {
+    try {
+      const tenantId = ctx.state?.tenantId ?? ctx.state?.tenant?.id;
+      if (!tenantId) {
+        return ctx.badRequest('Tenant context is required');
+      }
+
+      const jobId = String(ctx.params?.jobId || '').trim();
+      if (!jobId) {
+        return ctx.badRequest('jobId is required');
+      }
+
+      const job = cancelImportTenantUsersJob(jobId, Number(tenantId));
+      if (!job) {
+        return ctx.notFound('Import job not found');
+      }
+
+      ctx.body = {
+        ok: true,
+        data: job,
+      };
+    } catch (error: any) {
+      console.error('[cancelImportUsersJob] Unexpected error:', error);
+      return ctx.internalServerError('Failed to cancel import job');
+    }
+  },
+
+  async importUpdateRole(ctx) {
+    try {
+      const tenantId = ctx.state?.tenantId ?? ctx.state?.tenant?.id;
+      if (!tenantId) {
+        return ctx.badRequest('Tenant context is required');
+      }
+
+      const oldRoleId = Number(ctx.request?.body?.oldRoleId);
+      const newRoleId = Number(ctx.request?.body?.newRoleId);
+      if (!Number.isInteger(oldRoleId) || oldRoleId <= 0) {
+        return ctx.badRequest('oldRoleId is required and must be a positive integer');
+      }
+      if (!Number.isInteger(newRoleId) || newRoleId <= 0) {
+        return ctx.badRequest('newRoleId is required and must be a positive integer');
+      }
+
+      const files = ctx.request?.files || {};
+      const uploadFile = Array.isArray(files.file) ? files.file[0] : files.file;
+      if (!uploadFile) {
+        return ctx.badRequest('file is required');
+      }
+
+      const result = await importUpdateTenantUserRole({
+        tenantId: Number(tenantId),
+        oldRoleId,
+        newRoleId,
         file: uploadFile,
       });
 
@@ -409,9 +498,9 @@ export default {
         data: result,
       };
     } catch (error: any) {
-      console.error('[importUsers] Unexpected error:', error);
+      console.error('[importUpdateRole] Unexpected error:', error);
 
-      const message = typeof error?.message === 'string' ? error.message : 'Failed to import users';
+      const message = typeof error?.message === 'string' ? error.message : 'Failed to import update role';
       return ctx.badRequest(message);
     }
   },

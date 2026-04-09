@@ -1,0 +1,84 @@
+{
+  "kind": "collectionType",
+  "collectionName": "fee_items",
+  "info": {
+    "singularName": "fee-item",
+    "pluralName": "fee-items",
+    "displayName": "Fee Item",
+    "description": "Learner-level fee line items under class fee sheets."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "feeSheetClass": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::fee-sheet-class.fee-sheet-class",
+      "inversedBy": "feeItems",
+      "required": true
+    },
+    "learner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::learner.learner",
+      "inversedBy": "feeItems",
+      "required": true
+    },
+    "learnerCodeSnapshot": {
+      "type": "string"
+    },
+    "learnerNameSnapshot": {
+      "type": "string"
+    },
+    "sessions": {
+      "type": "integer",
+      "default": 0
+    },
+    "unitPrice": {
+      "type": "decimal",
+      "default": 0
+    },
+    "discountPercent": {
+      "type": "decimal",
+      "default": 0
+    },
+    "discountAmount": {
+      "type": "decimal",
+      "default": 0
+    },
+    "amount": {
+      "type": "decimal",
+      "default": 0
+    },
+    "paidAmount": {
+      "type": "decimal",
+      "default": 0
+    },
+    "feeItemPaymentStatus": {
+      "type": "enumeration",
+      "enum": [
+        "unpaid",
+        "partial",
+        "paid"
+      ],
+      "default": "unpaid"
+    },
+    "note": {
+      "type": "text"
+    },
+    "paymentAllocations": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::payment-allocation.payment-allocation",
+      "mappedBy": "feeItem"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

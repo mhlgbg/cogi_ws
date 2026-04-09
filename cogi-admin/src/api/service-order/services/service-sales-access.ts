@@ -44,7 +44,7 @@ function normalizeOrderStateKey(value: unknown): string {
 }
 
 export function isOrderEditableState(order: any): boolean {
-  const statusKey = normalizeOrderStateKey(order?.status);
+  const statusKey = normalizeOrderStateKey(order?.serviceOrderStatus || order?.status);
   if (!statusKey) return true;
   return !NON_EDITABLE_ORDER_STATUS_KEYS.has(statusKey);
 }

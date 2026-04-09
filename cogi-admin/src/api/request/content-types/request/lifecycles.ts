@@ -102,7 +102,7 @@ export default {
 
     if (!existing) return;
 
-    const currentStatus = existing.request_status as string | undefined;
+    const currentStatus = (existing.requestStatus || existing.request_status) as string | undefined;
 
     // Once terminal, lock business fields.
     if (currentStatus && TERMINAL_STATUSES.has(currentStatus)) {
@@ -112,13 +112,13 @@ export default {
       }
 
       // V1: CLOSED cannot be reopened.
-      if (currentStatus === 'CLOSED' && hasOwn(data, 'request_status') && data.request_status !== 'CLOSED') {
+      if (currentStatus === 'CLOSED' && (hasOwn(data, 'requestStatus') || hasOwn(data, 'request_status')) && (data.requestStatus ?? data.request_status) !== 'CLOSED') {
         throw new errors.ApplicationError('Request is CLOSED and cannot be reopened in V1');
       }
     }
 
-    const hasStatusUpdate = hasOwn(data, 'request_status');
-    const nextStatus = hasStatusUpdate ? String(data.request_status || '') : currentStatus;
+    const hasStatusUpdate = hasOwn(data, 'requestStatus') || hasOwn(data, 'request_status');
+    const nextStatus = hasStatusUpdate ? String((data.requestStatus ?? data.request_status) || '') : currentStatus;
 
     // Validate transition to CLOSED.
     if (nextStatus === 'CLOSED' && currentStatus !== 'CLOSED') {

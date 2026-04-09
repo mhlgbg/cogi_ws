@@ -1,0 +1,73 @@
+{
+  "kind": "collectionType",
+  "collectionName": "learners",
+  "info": {
+    "singularName": "learner",
+    "pluralName": "learners",
+    "displayName": "Learner",
+    "description": "Tenant-scoped learners linked to an optional parent account."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true
+    },
+    "oldUserId": {
+      "type": "string"
+    },
+    "fullName": {
+      "type": "string",
+      "required": true
+    },
+    "dateOfBirth": {
+      "type": "date"
+    },
+    "parentName": {
+      "type": "string"
+    },
+    "parentPhone": {
+      "type": "string"
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "learnerStatus": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "inactive"
+      ],
+      "default": "active"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "enrollments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::enrollment.enrollment",
+      "mappedBy": "learner"
+    },
+    "feeItems": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::fee-item.fee-item",
+      "mappedBy": "learner"
+    },
+    "payments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::payment.payment",
+      "mappedBy": "learner"
+    }
+  }
+}

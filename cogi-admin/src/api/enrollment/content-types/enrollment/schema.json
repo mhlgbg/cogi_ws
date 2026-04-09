@@ -1,0 +1,50 @@
+{
+  "kind": "collectionType",
+  "collectionName": "enrollments",
+  "info": {
+    "singularName": "enrollment",
+    "pluralName": "enrollments",
+    "displayName": "Enrollment",
+    "description": "Learner enrollment in tenant-scoped classes."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "learner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::learner.learner",
+      "inversedBy": "enrollments",
+      "required": true
+    },
+    "class": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::class.class",
+      "inversedBy": "enrollments",
+      "required": true
+    },
+    "joinDate": {
+      "type": "date"
+    },
+    "leaveDate": {
+      "type": "date"
+    },
+    "enrollmentStatus": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "inactive"
+      ],
+      "default": "active"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

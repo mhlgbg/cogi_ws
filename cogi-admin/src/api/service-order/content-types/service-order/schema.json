@@ -31,7 +31,7 @@
       "type": "datetime",
       "required": true
     },
-    "status": {
+    "serviceOrderStatus": {
       "type": "enumeration",
       "enum": [
         "NEW",

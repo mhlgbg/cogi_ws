@@ -1,17 +1,23 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import api from '../api/axios'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function Login() {
   const navigate = useNavigate()
+  const { tenantCode } = useParams()
+  const [searchParams] = useSearchParams()
   const auth = useAuth()
 
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const redirectPath = useMemo(() => {
+    const rawRedirect = String(searchParams.get('redirect') || '').trim()
+    return rawRedirect.startsWith('/') ? rawRedirect : ''
+  }, [searchParams])
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -45,7 +51,16 @@ export default function Login() {
         localStorage.setItem('authUser', JSON.stringify(user))
       }
 
-      navigate('/choose-tenant')
+      const nextTenantCode = String(tenantCode || '').trim()
+      const nextSearchParams = new URLSearchParams()
+      if (nextTenantCode) nextSearchParams.set('tenantCode', nextTenantCode)
+      if (redirectPath) nextSearchParams.set('redirect', redirectPath)
+
+      const nextChooseTenantPath = nextSearchParams.toString()
+        ? `/choose-tenant?${nextSearchParams.toString()}`
+        : '/choose-tenant'
+
+      navigate(nextChooseTenantPath)
     } catch (requestError) {
       const apiMessage = requestError?.response?.data?.error?.message
       setError(apiMessage || 'Đăng nhập thất bại. Vui lòng thử lại.')

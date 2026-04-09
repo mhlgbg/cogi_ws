@@ -42,7 +42,7 @@
         "PRIVATE"
       ]
     },
-    "request_status": {
+    "requestStatus": {
       "type": "enumeration",
       "enum": [
         "OPEN",

@@ -1,0 +1,38 @@
+{
+  "kind": "collectionType",
+  "collectionName": "admission_application_files",
+  "info": {
+    "singularName": "admission-application-file",
+    "pluralName": "admission-application-files",
+    "displayName": "AdmissionApplicationFile",
+    "description": "Uploaded files attached to admission applications."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "application": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::admission-application.admission-application",
+      "inversedBy": "applicationFiles",
+      "required": true
+    },
+    "fieldKey": {
+      "type": "string",
+      "required": true
+    },
+    "file": {
+      "type": "media",
+      "multiple": false,
+      "required": true,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    }
+  }
+}

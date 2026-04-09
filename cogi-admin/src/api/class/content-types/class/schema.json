@@ -1,0 +1,58 @@
+{
+  "kind": "collectionType",
+  "collectionName": "classes",
+  "info": {
+    "singularName": "class",
+    "pluralName": "classes",
+    "displayName": "Class",
+    "description": "Tenant-scoped classes managed by a main teacher."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "subjectCode": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "mainTeacher": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "classStatus": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "inactive"
+      ],
+      "default": "active"
+    },
+    "enrollments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::enrollment.enrollment",
+      "mappedBy": "class"
+    },
+    "feeSheetClasses": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::fee-sheet-class.fee-sheet-class",
+      "mappedBy": "class"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

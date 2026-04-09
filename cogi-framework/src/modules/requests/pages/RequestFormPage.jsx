@@ -73,10 +73,14 @@ function getAttachmentUrl(file) {
   }
 }
 
+function getRequestStatus(request) {
+  return request?.requestStatus || request?.request_status || request?.status || ""
+}
+
 export default function RequestFormPage() {
   const navigate = useNavigate()
   const { id } = useParams()
-  const { me } = useAuth()
+  const { user } = useAuth()
 
   const isEditMode = useMemo(() => Boolean(id), [id])
 
@@ -96,7 +100,15 @@ export default function RequestFormPage() {
   const [errorMessage, setErrorMessage] = useState("")
 
   const isTerminalStatus = requestStatus === "CLOSED" || requestStatus === "CANCELLED"
-  const currentUserId = Number(me?.id)
+  const fallbackUser = (() => {
+    try {
+      const raw = localStorage.getItem('authUser')
+      return raw ? JSON.parse(raw) : null
+    } catch {
+      return null
+    }
+  })()
+  const currentUserId = Number(user?.id || fallbackUser?.id)
   const isRequester = Number.isInteger(currentUserId) && Number(requesterId) === currentUserId
   const canRemoveAttachments = isEditMode && isRequester && !isTerminalStatus
 
@@ -120,7 +132,7 @@ export default function RequestFormPage() {
         setTitle(requestData?.title || "")
         setDescription(requestData?.description || "")
         setCategoryId(selectedCategoryId ? String(selectedCategoryId) : "")
-        setRequestStatus(requestData?.request_status || "")
+        setRequestStatus(getRequestStatus(requestData))
         setRequesterId(requestData?.requester?.id || requestData?.requester || null)
         setExistingAttachments(normalizeAttachments(requestData?.attachments))
         setRemovedAttachmentIds([])
@@ -237,9 +249,9 @@ export default function RequestFormPage() {
   }
 
   return (
-    <CContainer className="py-4">
-      <CRow className="justify-content-center">
-        <CCol md={10} style={{ maxWidth: 920 }}>
+    <CContainer fluid className="py-4 px-0">
+      <CRow className="g-0">
+        <CCol xs={12}>
           <CCard>
             <CCardHeader>
               <strong>{isEditMode ? "Cập nhật yêu cầu" : "Tạo yêu cầu"}</strong>

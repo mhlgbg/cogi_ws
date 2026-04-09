@@ -265,6 +265,7 @@ function pickAllowedEmployeeData(input: GenericRecord): GenericRecord {
 		'address',
 		'joinDate',
 		'officialDate',
+		'employeeStatus',
 		'status',
 		'avatar',
 		'identityNumber',
@@ -284,7 +285,21 @@ function pickAllowedEmployeeData(input: GenericRecord): GenericRecord {
 		}
 	}
 
+	if (!hasOwn(payload, 'employeeStatus') && hasOwn(payload, 'status')) {
+		payload.employeeStatus = payload.status;
+	}
+
+	delete payload.status;
+
 	return payload;
+}
+
+function withEmployeeStatusAlias(row: any) {
+	if (!row || typeof row !== 'object') return row;
+	return {
+		...row,
+		status: row.employeeStatus || row.status || 'active',
+	};
 }
 
 export default factories.createCoreController(EMPLOYEE_UID, () => ({
@@ -313,7 +328,7 @@ export default factories.createCoreController(EMPLOYEE_UID, () => ({
 
 		const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
-		return this.transformResponse(rows, {
+		return this.transformResponse((rows || []).map(withEmployeeStatusAlias), {
 			pagination: {
 				page,
 				pageSize,
@@ -326,7 +341,11 @@ export default factories.createCoreController(EMPLOYEE_UID, () => ({
 	async findOne(ctx) {
 		const tenantId = resolveCurrentTenantId(ctx);
 		await assertEmployeeInCurrentTenant(ctx, tenantId);
-		return await super.findOne(ctx);
+		const response = await super.findOne(ctx);
+		if (response?.data) {
+			response.data = withEmployeeStatusAlias(response.data);
+		}
+		return response;
 	},
 
 	async create(ctx) {
@@ -345,7 +364,7 @@ export default factories.createCoreController(EMPLOYEE_UID, () => ({
 			populate: normalizePopulateInput(ctx.query?.populate),
 		});
 
-		return this.transformResponse(populatedCreated ?? created);
+		return this.transformResponse(withEmployeeStatusAlias(populatedCreated ?? created));
 	},
 
 	async update(ctx) {
@@ -367,7 +386,7 @@ export default factories.createCoreController(EMPLOYEE_UID, () => ({
 			populate: normalizePopulateInput(ctx.query?.populate),
 		});
 
-		return this.transformResponse(populatedUpdated ?? updated);
+		return this.transformResponse(withEmployeeStatusAlias(populatedUpdated ?? updated));
 	},
 
 	async delete(ctx) {

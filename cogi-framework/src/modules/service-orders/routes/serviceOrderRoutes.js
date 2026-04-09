@@ -1,6 +1,8 @@
 import ServiceOrderListPage from '../pages/ServiceOrderListPage'
 import ServiceOrderDetailPage from '../pages/ServiceOrderDetailPage'
 import ServiceOrderFormPage from '../pages/ServiceOrderFormPage'
+import ServiceItemManagementPage from '../pages/ServiceItemManagementPage'
+import ServiceCategoryManagementPage from '../pages/ServiceCategoryManagementPage'
 
 const serviceOrderRoutes = [
   {
@@ -22,6 +24,16 @@ const serviceOrderRoutes = [
     path: '/service-orders/:id/edit',
     featureKey: 'service-orders',
     component: ServiceOrderFormPage,
+  },
+  {
+    path: '/service-items',
+    featureKey: 'service-items.manage',
+    component: ServiceItemManagementPage,
+  },
+  {
+    path: '/service-categories',
+    featureKey: 'service-categories.manage',
+    component: ServiceCategoryManagementPage,
   },
 ]
 

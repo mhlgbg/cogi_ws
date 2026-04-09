@@ -50,6 +50,7 @@ function readTenantFromStorage() {
   const tenantLogoRaw = localStorage.getItem('tenantLogo')
   const tenantIdRaw = localStorage.getItem('tenantId')
   const userTenantIdRaw = localStorage.getItem('userTenantId')
+  const defaultFeatureCode = localStorage.getItem('defaultFeatureCode')
   const tenantRolesRaw = localStorage.getItem('tenantRoles')
 
   if (!tenantCode || !tenantName || !tenantIdRaw || !userTenantIdRaw) {
@@ -91,6 +92,7 @@ function readTenantFromStorage() {
     tenantLogoUrl: normalizedTenantLogoUrl,
     tenantId,
     userTenantId,
+    defaultFeatureCode: defaultFeatureCode || '',
     roles,
   }
 }
@@ -112,6 +114,7 @@ export default function TenantContextProvider({ children }) {
       tenantLogoUrl: String(tenantContextItem?.tenantLogoUrl || '').trim() || extractTenantLogoUrlFromMedia(tenantContextItem?.tenantLogo),
       tenantId: Number(tenantContextItem?.tenantId),
       userTenantId: Number(tenantContextItem?.userTenantId),
+      defaultFeatureCode: String(tenantContextItem?.defaultFeatureCode || '').trim(),
       roles: Array.isArray(tenantContextItem?.roles) ? tenantContextItem.roles : [],
     }
 
@@ -131,6 +134,7 @@ export default function TenantContextProvider({ children }) {
     localStorage.setItem('tenantLogo', JSON.stringify(nextTenant.tenantLogo || null))
     localStorage.setItem('tenantId', String(nextTenant.tenantId))
     localStorage.setItem('userTenantId', String(nextTenant.userTenantId))
+    localStorage.setItem('defaultFeatureCode', nextTenant.defaultFeatureCode)
     localStorage.setItem('tenantRoles', JSON.stringify(nextTenant.roles))
 
     setCurrentTenant(nextTenant)
@@ -144,6 +148,7 @@ export default function TenantContextProvider({ children }) {
     localStorage.removeItem('tenantLogo')
     localStorage.removeItem('tenantId')
     localStorage.removeItem('userTenantId')
+    localStorage.removeItem('defaultFeatureCode')
     localStorage.removeItem('tenantRoles')
     localStorage.removeItem('featureContext')
     setCurrentTenant(null)

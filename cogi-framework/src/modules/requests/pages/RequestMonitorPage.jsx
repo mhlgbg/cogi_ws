@@ -23,6 +23,7 @@ import {
   CPaginationItem,
 } from "@coreui/react"
 import axios from "../../../api/axios"
+import "./RequestWorkspace.css"
 
 const STATUS_OPTIONS = [
   { value: "", label: "Tất cả" },
@@ -42,7 +43,7 @@ function formatDate(value) {
 }
 
 function getStatus(raw) {
-  return raw?.request_status || raw?.status || "-"
+  return raw?.requestStatus || raw?.request_status || raw?.status || "-"
 }
 
 function getStatusColor(status) {
@@ -167,6 +168,7 @@ export default function RequestMonitorPage() {
       }
 
       if (requestStatus) {
+        params["filters[requestStatus][$eq]"] = requestStatus
         params["filters[request_status][$eq]"] = requestStatus
       }
 
@@ -177,6 +179,7 @@ export default function RequestMonitorPage() {
         if (!requestStatus) throw firstError
 
         const fallbackParams = { ...params }
+        delete fallbackParams["filters[requestStatus][$eq]"]
         delete fallbackParams["filters[request_status][$eq]"]
         fallbackParams["filters[status][$eq]"] = requestStatus
         response = await axios.get("/requests", { params: fallbackParams })
@@ -234,8 +237,8 @@ export default function RequestMonitorPage() {
   }, [pageCount])
 
   return (
-    <CRow className="justify-content-center">
-      <CCol xs={12} style={{ maxWidth: 1500 }}>
+    <div className="request-workspace">
+      <div className="request-workspace-inner">
         <CCard className="mb-4 ai-card">
           <CCardHeader>
             <strong>Theo dõi Requests</strong>
@@ -401,7 +404,7 @@ export default function RequestMonitorPage() {
             )}
           </CCardBody>
         </CCard>
-      </CCol>
-    </CRow>
+      </div>
+    </div>
   )
 }

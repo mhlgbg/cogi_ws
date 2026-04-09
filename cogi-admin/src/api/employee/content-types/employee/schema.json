@@ -49,7 +49,7 @@
     "officialDate": {
       "type": "date"
     },
-    "status": {
+    "employeeStatus": {
       "type": "enumeration",
       "enum": [
         "draft",

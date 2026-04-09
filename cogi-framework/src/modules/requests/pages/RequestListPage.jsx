@@ -24,6 +24,7 @@ import {
 } from "@coreui/react"
 import axios from "../../../api/axios"
 import { useFeature } from "../../../contexts/FeatureContext"
+import "./RequestWorkspace.css"
 
 const STATUS_OPTIONS = [
   { value: "", label: "Tất cả" },
@@ -76,6 +77,10 @@ function formatDate(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ""
   return date.toLocaleString()
+}
+
+function getRequestStatus(item) {
+  return item?.requestStatus || item?.request_status || item?.status || ""
 }
 
 function getStatusLabel(status) {
@@ -163,6 +168,7 @@ export default function RequestListPage() {
         "filters[to]": filters.toDate || undefined,
         "filters[keyword]": filters.keyword || undefined,
         "filters[requester]": filters.requester || undefined,
+        "filters[requestStatus]": filters.requestStatus || undefined,
         "filters[request_status]": filters.requestStatus || undefined,
         page,
         pageSize,
@@ -170,6 +176,7 @@ export default function RequestListPage() {
         toDate: filters.toDate || undefined,
         keyword: filters.keyword || undefined,
         requesterId: Number.isInteger(requesterId) && requesterId > 0 ? requesterId : undefined,
+        requestStatus: filters.requestStatus || undefined,
         request_status: filters.requestStatus || undefined,
         status: filters.requestStatus || undefined,
         scope: filters.scope || undefined,
@@ -278,8 +285,8 @@ export default function RequestListPage() {
   }
 
   return (
-    <CRow className="justify-content-center">
-      <CCol xs={12} style={{ maxWidth: 1200 }}>
+    <div className="request-workspace">
+      <div className="request-workspace-inner">
         <CCard className="mb-4 ai-card">
           <CCardHeader>
             <strong>Bộ lọc</strong>
@@ -391,14 +398,14 @@ export default function RequestListPage() {
                             )}
                           </CTableDataCell>
                           <CTableDataCell>
-                            <CBadge color={getStatusColor(item?.request_status)} className={`ai-status-badge ${getStatusClass(item?.request_status)}`}>
-                              {getStatusLabel(item?.request_status)}
+                            <CBadge color={getStatusColor(getRequestStatus(item))} className={`ai-status-badge ${getStatusClass(getRequestStatus(item))}`}>
+                              {getStatusLabel(getRequestStatus(item))}
                             </CBadge>
                           </CTableDataCell>
                           <CTableDataCell>{item?.requester?.username || "-"}</CTableDataCell>
                           <CTableDataCell>{item?.request_category?.name || item?.category?.name || "-"}</CTableDataCell>
                           <CTableDataCell>
-                            {item?.request_status === "CLOSED" && decisionBadge ? (
+                            {getRequestStatus(item) === "CLOSED" && decisionBadge ? (
                               <CBadge color={decisionBadge.color} className={`ai-status-badge ${getDecisionClass(item?.closedDecision)}`}>
                                 {decisionBadge.label}
                               </CBadge>
@@ -458,7 +465,7 @@ export default function RequestListPage() {
             )}
           </CCardBody>
         </CCard>
-      </CCol>
-    </CRow>
+      </div>
+    </div>
   )
 }

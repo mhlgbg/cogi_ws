@@ -31,6 +31,10 @@
       "required": false,
       "maxLength": 150
     },
+    "phone": {
+      "type": "string",
+      "required": false
+    },
     "provider": {
       "type": "string",
       "configurable": false

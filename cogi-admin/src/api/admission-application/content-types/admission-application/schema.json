@@ -1,0 +1,113 @@
+{
+  "kind": "collectionType",
+  "collectionName": "admission_applications",
+  "info": {
+    "singularName": "admission-application",
+    "pluralName": "admission-applications",
+    "displayName": "AdmissionApplication",
+    "description": "Tenant-scoped admission applications submitted by parents."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "admissionApplications",
+      "required": true
+    },
+    "campaign": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::campaign.campaign",
+      "inversedBy": "admissionApplications",
+      "required": true
+    },
+    "parent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "applicationCode": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "admissionStatus": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "submitted",
+        "reviewing",
+        "approved",
+        "rejected",
+        "exam_scheduled",
+        "passed",
+        "failed",
+        "enrolled"
+      ],
+      "required": true,
+      "default": "draft"
+    },
+    "studentName": {
+      "type": "string",
+      "required": true
+    },
+    "dob": {
+      "type": "date",
+      "required": true
+    },
+    "gender": {
+      "type": "enumeration",
+      "enum": [
+        "male",
+        "female",
+        "other"
+      ]
+    },
+    "currentSchool": {
+      "type": "string"
+    },
+    "address": {
+      "type": "text"
+    },
+    "formData": {
+      "type": "json"
+    },
+    "formTemplateVersion": {
+      "type": "integer"
+    },
+    "submittedAt": {
+      "type": "datetime"
+    },
+    "reviewStatus": {
+      "type": "enumeration",
+      "enum": [
+        "submitted",
+        "returned",
+        "accepted"
+      ]
+    },
+    "reviewedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "reviewedAt": {
+      "type": "datetime"
+    },
+    "reviewNote": {
+      "type": "text"
+    },
+    "applicationFiles": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::admission-application-file.admission-application-file",
+      "mappedBy": "application"
+    }
+  }
+}

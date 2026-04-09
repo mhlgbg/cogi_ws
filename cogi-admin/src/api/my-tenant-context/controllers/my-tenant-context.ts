@@ -153,7 +153,7 @@ export default {
         select: ['id', 'label'],
         populate: {
           tenant: {
-            select: ['id', 'name', 'code', 'shortName', 'tenantStatus'],
+            select: ['id', 'name', 'code', 'shortName', 'tenantStatus', 'defaultFeatureCode'],
             populate: {
               logo: true,
             },
@@ -223,6 +223,7 @@ export default {
               name: tenantName || tenantCode,
               code: tenantCode || null,
               shortName: tenantShortName || null,
+              defaultFeatureCode: normalizeText((tenant as any).defaultFeatureCode) || null,
               logo: tenant.logo || null,
               logoUrl: tenantLogoUrl || null,
               label: tenantName || tenantCode || `Tenant #${tenantId}`,

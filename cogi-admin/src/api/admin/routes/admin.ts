@@ -80,5 +80,53 @@ export default {
         ],
       },
     },
+    {
+      method: 'POST',
+      path: '/users/import-update-role',
+      handler: 'admin.importUpdateRole',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'user.manage',
+            },
+          },
+        ],
+      },
+    },
+    {
+      method: 'GET',
+      path: '/users/import/:jobId',
+      handler: 'admin.getImportUsersJob',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'user.manage',
+            },
+          },
+        ],
+      },
+    },
+    {
+      method: 'POST',
+      path: '/users/import/:jobId/cancel',
+      handler: 'admin.cancelImportUsersJob',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'user.manage',
+            },
+          },
+        ],
+      },
+    },
   ],
 };
