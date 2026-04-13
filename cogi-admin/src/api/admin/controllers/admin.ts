@@ -187,7 +187,7 @@ export default {
           expiresAt: expiresAtDate,
         });
 
-        const activationLink = buildActivationLink(activationToken);
+        const activationLink = await buildActivationLink(ctx, activationToken, { tenantId });
         const roleName = await getRoleDisplayName(roleId);
         const notificationResult = await sendInviteNotification({
           email,

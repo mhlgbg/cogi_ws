@@ -53,9 +53,9 @@ export default function AppRouter() {
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/activate" element={<Activate />} />
       <Route path="/set-password" element={<SetPassword />} />
-      <Route path="/t/:tenantCode" element={<Navigate to="dang-ky-xet-tuyen" replace />} />
-      <Route path="/t/:tenantCode/dang-ky-xet-tuyen" element={<AdmissionLanding />} />
-      <Route path="/t/:tenantCode/dang-ky-xet-tuyen/:campaignCode" element={<AdmissionLanding />} />
+      <Route path="/t/:tenantCode" element={<Navigate to="dang-ky-tuyen-sinh" replace />} />
+      <Route path="/t/:tenantCode/dang-ky-tuyen-sinh" element={<AdmissionLanding />} />
+      <Route path="/t/:tenantCode/dang-ky-tuyen-sinh/:campaignCode" element={<AdmissionLanding />} />
 
       <Route
         path="/choose-tenant"

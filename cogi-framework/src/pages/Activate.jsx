@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../api/axios'
+import { applyTenantBranding, fetchTenantBranding } from '../utils/tenantBranding'
 
 export default function Activate() {
   const [searchParams] = useSearchParams()
@@ -10,6 +11,29 @@ export default function Activate() {
 
   const [status, setStatus] = useState('loading')
   const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    let isCancelled = false
+
+    async function loadTenantBranding() {
+      try {
+        const branding = await fetchTenantBranding()
+        if (!isCancelled) {
+          applyTenantBranding(branding, 'Kích hoạt tài khoản')
+        }
+      } catch {
+        if (!isCancelled) {
+          document.title = 'Kích hoạt tài khoản'
+        }
+      }
+    }
+
+    loadTenantBranding()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let isCancelled = false

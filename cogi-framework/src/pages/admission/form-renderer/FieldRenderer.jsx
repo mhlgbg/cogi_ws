@@ -8,7 +8,7 @@ import {
   CLink,
 } from '@coreui/react'
 import TableFieldRenderer from './TableFieldRenderer'
-import { getFileValueMeta } from './schema'
+import { getFileValueMetaList } from './schema'
 
 export default function FieldRenderer({
   field,
@@ -23,7 +23,7 @@ export default function FieldRenderer({
   const isTextarea = field.type === 'textarea'
   const isFileField = field.type === 'file' || field.type === 'image'
   const isTableField = field.type === 'table'
-  const fileMeta = getFileValueMeta(value)
+  const fileMetaList = getFileValueMetaList(value)
 
   return (
     <CCol md={isTextarea || isTableField ? 12 : 6} key={field.key}>
@@ -115,27 +115,33 @@ export default function FieldRenderer({
       {isFileField ? (
         isReadOnly ? (
           <div className='border rounded-3 p-3 bg-light'>
-            {fileMeta?.isImage && fileMeta.dataUrl ? (
-              <div className='mb-3'>
-                <img
-                  src={fileMeta.dataUrl}
-                  alt={fileMeta.name}
-                  style={{ maxWidth: '100%', maxHeight: '320px', objectFit: 'contain', display: 'block' }}
-                />
-              </div>
-            ) : null}
+            {fileMetaList.length > 0 ? (
+              <div className='d-flex flex-column gap-3'>
+                {fileMetaList.map((fileMeta, index) => (
+                  <div key={`${fileMeta.name}-${index}`} className='border rounded-3 bg-white p-3'>
+                    {fileMeta.isImage && fileMeta.dataUrl ? (
+                      <div className='mb-3'>
+                        <img
+                          src={fileMeta.dataUrl}
+                          alt={fileMeta.name}
+                          style={{ maxWidth: '100%', maxHeight: '320px', objectFit: 'contain', display: 'block' }}
+                        />
+                      </div>
+                    ) : null}
 
-            {fileMeta?.dataUrl ? (
-              <div className='d-flex flex-column gap-2'>
-                <div className='small text-body-secondary'>{fileMeta.name}</div>
-                <div className='d-flex gap-3 flex-wrap'>
-                  <CLink href={fileMeta.dataUrl} target='_blank' rel='noreferrer'>
-                    {fileMeta.isPdf ? 'Mở PDF' : 'Mở tệp'}
-                  </CLink>
-                  <CLink href={fileMeta.dataUrl} download={fileMeta.name}>
-                    Tải xuống
-                  </CLink>
-                </div>
+                    <div className='d-flex flex-column gap-2'>
+                      <div className='small text-body-secondary'>{fileMeta.name}</div>
+                      <div className='d-flex gap-3 flex-wrap'>
+                        <CLink href={fileMeta.dataUrl} target='_blank' rel='noreferrer'>
+                          {fileMeta.isPdf ? 'Mở PDF' : 'Mở tệp'}
+                        </CLink>
+                        <CLink href={fileMeta.dataUrl} download={fileMeta.name}>
+                          Tải xuống
+                        </CLink>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className='text-body-secondary'>Chưa có tệp đính kèm</div>
@@ -145,12 +151,17 @@ export default function FieldRenderer({
           <>
             <CFormInput
               type='file'
-              accept={field.type === 'image' ? 'image/*' : undefined}
+              accept={field.type === 'image' ? 'image/*' : field.accept?.join(',') || undefined}
+              multiple={field.multiple === true}
               onChange={(event) => onFileChange(field, event)}
               invalid={Boolean(error)}
               disabled={submitting}
             />
-            {value?.name ? <div className='text-body-secondary small mt-1'>Đã chọn: {value.name}</div> : null}
+            {fileMetaList.length > 0 ? (
+              <div className='text-body-secondary small mt-1'>
+                Đã chọn: {fileMetaList.map((fileMeta) => fileMeta.name).join(', ')}
+              </div>
+            ) : null}
             {error ? <div className='text-danger small mt-1'>{error}</div> : null}
           </>
         )

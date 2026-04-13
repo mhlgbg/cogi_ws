@@ -24,10 +24,6 @@ function unwrapRows(payload) {
   return []
 }
 
-function hasHtmlContent(value) {
-  return /<[^>]+>/.test(String(value || ''))
-}
-
 function toSerializableFile(file) {
   return new Promise((resolve, reject) => {
     if (!(file instanceof File)) {
@@ -47,6 +43,17 @@ function toSerializableFile(file) {
     reader.onerror = () => reject(new Error('Không thể đọc file tải lên'))
     reader.readAsDataURL(file)
   })
+}
+
+async function toSerializableFiles(fileList, multiple) {
+  const files = Array.from(fileList || []).filter((file) => file instanceof File)
+  if (files.length === 0) {
+    return multiple ? [] : null
+  }
+
+  const serializedFiles = await Promise.all(files.map((file) => toSerializableFile(file)))
+  const normalizedFiles = serializedFiles.filter(Boolean)
+  return multiple ? normalizedFiles : normalizedFiles[0] || null
 }
 
 function readStringValue(formData, key) {
@@ -184,13 +191,13 @@ export default function AdmissionApplicationForm() {
   async function handleFileChange(field, event) {
     if (isReadOnly) return
 
-    const file = event.target.files?.[0] || null
-
     try {
-      const serializedFile = await toSerializableFile(file)
+      const serializedFile = await toSerializableFiles(event.target.files, field.multiple === true)
       updateFormValue(field.key, serializedFile)
     } catch (error) {
       setErrorMessage(error?.message || 'Không thể đọc file tải lên')
+    } finally {
+      event.target.value = ''
     }
   }
 
@@ -274,7 +281,7 @@ export default function AdmissionApplicationForm() {
       <CCard className='border-0 shadow-sm'>
         <CCardHeader className='bg-white border-0 py-3'>
           <div className='fw-semibold fs-5'>
-            {isReadOnly ? 'Xem hồ sơ tuyển sinh' : isEditMode ? 'Cập nhật hồ sơ tuyển sinh' : 'Khai hồ sơ tuyển sinh'}
+            {isReadOnly ? 'Xem hồ sơ dự tuyển' : isEditMode ? 'Cập nhật hồ sơ dự tuyển' : 'Đang ký dự tuyển'}
           </div>
         </CCardHeader>
         <CCardBody>
@@ -293,11 +300,6 @@ export default function AdmissionApplicationForm() {
                   <div className='text-body-secondary small mb-2'>Mã kỳ: {campaign.code || '-'}</div>
                   {applicationDetail?.applicationCode ? (
                     <div className='text-body-secondary small mb-2'>Mã hồ sơ: {applicationDetail.applicationCode}</div>
-                  ) : null}
-                  {campaign.description ? (
-                    hasHtmlContent(campaign.description)
-                      ? <div className='text-body-secondary' dangerouslySetInnerHTML={{ __html: campaign.description }} />
-                      : <div className='text-body-secondary'>{campaign.description}</div>
                   ) : null}
                 </div>
               ) : null}

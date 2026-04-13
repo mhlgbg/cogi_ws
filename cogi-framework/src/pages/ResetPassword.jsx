@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   CButton,
@@ -13,6 +13,7 @@ import {
   CRow,
 } from '@coreui/react'
 import api from '../api/axios'
+import { applyTenantBranding, fetchTenantBranding } from '../utils/tenantBranding'
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams()
@@ -23,6 +24,29 @@ export default function ResetPassword() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+
+  useEffect(() => {
+    let isCancelled = false
+
+    async function loadTenantBranding() {
+      try {
+        const branding = await fetchTenantBranding()
+        if (!isCancelled) {
+          applyTenantBranding(branding, 'Đặt lại mật khẩu')
+        }
+      } catch {
+        if (!isCancelled) {
+          document.title = 'Đặt lại mật khẩu'
+        }
+      }
+    }
+
+    loadTenantBranding()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [])
 
   async function onSubmit(event) {
     event.preventDefault()
@@ -68,7 +92,7 @@ export default function ResetPassword() {
       <CRow className="justify-content-center">
         <CCol md={6} style={{ maxWidth: 500, width: '100%' }}>
           <CCard>
-            <CCardHeader><b>Alpha Internal</b> - Đặt lại mật khẩu</CCardHeader>
+            <CCardHeader><b>Đặt lại mật khẩu</b></CCardHeader>
             <CCardBody>
               {success ? (
                 <div className="d-flex flex-column align-items-start">

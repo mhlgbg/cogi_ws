@@ -12,6 +12,8 @@ const DEPARTMENT_UID = 'api::department.department';
 const DEPARTMENT_MEMBERSHIP_UID = 'api::department-membership.department-membership';
 const NOTIFICATION_SERVICE_UID = 'api::notification.notification';
 
+export { buildActivationLink, buildResetPasswordLink, buildVerifyEmailLink, getBaseUrl } from '../../../utils/tenant-base-url';
+
 export type InvitePurpose = 'tenant' | 'admission';
 
 interface ValidationError {
@@ -31,10 +33,6 @@ function escapeHtml(value: unknown): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
-}
-
-function getFrontendBaseUrl(): string {
-  return (process.env.FRONTEND_URL?.trim() || 'http://localhost:5173').replace(/\/+$/, '');
 }
 
 function resolveInviteTemplateCode(invitePurpose?: InvitePurpose, templateCode?: string | null): string {
@@ -144,7 +142,7 @@ export async function sendInviteNotification(options: {
     code: normalizeText(options.tenantCode) || tenantSummary.code,
   };
   const recipientName = normalizeText(options.fullName) || recipientEmail;
-  const roleName = normalizeText(options.roleName) || (options.invitePurpose === 'admission' ? 'Applicant' : '');
+  const roleName = normalizeText(options.roleName) || (options.invitePurpose === 'admission' ? 'Aplicant' : '');
   const payload = {
     email: recipientEmail,
     fullName: recipientName,
@@ -216,10 +214,6 @@ export async function sendInviteNotification(options: {
       };
     }
   }
-}
-
-export function buildActivationLink(activationToken: string): string {
-  return `${getFrontendBaseUrl()}/activate?token=${encodeURIComponent(activationToken)}`;
 }
 
 /**

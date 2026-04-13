@@ -9,6 +9,7 @@ const CONTEXT_HEADER_EXCLUDED_PATHS = new Set([
 	'/api/auth/set-password',
 	'/api/auth/forgot-password-safe',
 	'/api/auth/reset-password',
+	'/api/tenant/me',
 	'/api/auth/forgot-password',
 	'/api/tenants/by-code',
 	'/api/admission-campaigns/by-code',
@@ -19,6 +20,8 @@ const CONTEXT_HEADER_EXCLUDED_PREFIXES = [
 	'/tenants/by-code/',
 	'/api/admission-campaigns/by-code/',
 	'/admission-campaigns/by-code/',
+	'/api/tenant/me',
+	'/tenant/me',
 ]
 
 function readStoredToken() {

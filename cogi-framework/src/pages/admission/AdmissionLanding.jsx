@@ -1,20 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-  CAlert,
-  CButton,
-  CCard,
-  CCardBody,
-  CCardHeader,
   CCol,
   CContainer,
-  CForm,
-  CFormInput,
-  CFormLabel,
   CRow,
-  CSpinner,
 } from '@coreui/react'
 import api from '../../api/axios'
+import './AdmissionLanding.css'
+import {
+  AdmissionForm,
+  AdmissionInfoPanel,
+  AdmissionTopHeader,
+} from './AdmissionLandingSections'
 
 function toAbsoluteUrl(url) {
   const rawUrl = String(url || '').trim()
@@ -200,108 +197,45 @@ export default function AdmissionLanding() {
   }
 
   return (
-    <CContainer className="py-5">
-      <CRow className="justify-content-center">
-        <CCol md={7} lg={5}>
-          <CCard className="shadow-sm border-0">
-            <CCardHeader className="bg-white text-center border-0 pt-4 pb-0">
-              {tenant.logo ? (
-                <div className="mb-3">
-                  <img
-                    src={tenant.logo}
-                    alt={tenant.name || 'Tenant logo'}
-                    style={{ maxHeight: 72, maxWidth: '100%', objectFit: 'contain' }}
-                  />
-                </div>
-              ) : null}
-              <div className="fs-4 fw-semibold">{tenant.name || 'Đăng ký tuyển sinh'}</div>
-              {campaign.name ? <div className="fw-bold mt-3">{campaign.name}</div> : null}
-              {resolvedCampaignDescription ? (
-                hasHtmlContent(resolvedCampaignDescription)
-                  ? (
-                    <div
-                      className="text-body-secondary small mt-2 text-start"
-                      dangerouslySetInnerHTML={{ __html: resolvedCampaignDescription }}
-                    />
-                  )
-                  : <div className="text-body-secondary small mt-2 text-start">{resolvedCampaignDescription}</div>
-              ) : null}
-              <div className="text-body-secondary mt-1">Đăng ký tuyển sinh</div>
-            </CCardHeader>
+    <div className='admission-landing-shell py-4 py-lg-5'>
+      <CContainer fluid className='admission-landing-content px-3 px-lg-4'>
+        <div className='mb-4 mb-lg-5'>
+          <AdmissionTopHeader
+            tenant={tenant}
+            campaign={campaign}
+            title='Tuyển sinh lớp 6 năm học 2026–2027'
+          />
+        </div>
 
-            <CCardBody className="p-4 p-lg-5">
-              {loading ? (
-                <div className="text-center py-4">
-                  <CSpinner />
-                </div>
-              ) : (
-                <>
-                  {successMessage ? <CAlert color="success">{successMessage}</CAlert> : null}
-                  {existingUserMessage ? <CAlert color="info">{existingUserMessage}</CAlert> : null}
-                  {errorMessage ? <CAlert color="danger">{errorMessage}</CAlert> : null}
+        <CRow className='g-4 align-items-start'>
+          <CCol xs={12} lg={5} xl={4}>
+            <div className='admission-sticky-column'>
+              <AdmissionInfoPanel
+                tenant={tenant}
+                campaign={campaign}
+                title='Tuyển sinh lớp 6 năm học 2026–2027'
+                description={resolvedCampaignDescription}
+                hasHtmlContent={hasHtmlContent}
+              />
+            </div>
+          </CCol>
 
-                  <CForm onSubmit={handleSubmit}>
-                    <div className="mb-3">
-                      <CFormLabel htmlFor="admission-fullName">Họ và tên</CFormLabel>
-                      <CFormInput
-                        id="admission-fullName"
-                        name="fullName"
-                        value={form.fullName}
-                        onChange={handleChange}
-                        placeholder="Nhập họ và tên phụ huynh"
-                        required
-                        disabled={submitting}
-                      />
-                    </div>
-
-                    <div className="mb-3">
-                      <CFormLabel htmlFor="admission-email">Email</CFormLabel>
-                      <CFormInput
-                        id="admission-email"
-                        type="email"
-                        name="email"
-                        value={form.email}
-                        onChange={handleChange}
-                        placeholder="Nhập email nhận thư mời"
-                        required
-                        disabled={submitting}
-                      />
-                    </div>
-
-                    <div className="mb-4">
-                      <CFormLabel htmlFor="admission-phone">Số điện thoại</CFormLabel>
-                      <CFormInput
-                        id="admission-phone"
-                        name="phone"
-                        value={form.phone}
-                        onChange={handleChange}
-                        placeholder="Nhập số điện thoại liên hệ"
-                        required
-                        disabled={submitting}
-                      />
-                    </div>
-
-                    {existingUserMessage ? (
-                      <div className="d-grid gap-2">
-                        <CButton type="button" color="primary" onClick={handleLoginRedirect} disabled={submitting || loading}>
-                          Đăng nhập
-                        </CButton>
-                      </div>
-                    ) : (
-                      <div className="d-grid">
-                        <CButton type="submit" color="primary" disabled={submitting || loading || !campaignCode || !campaign.name}>
-                          {submitting ? <CSpinner size="sm" className="me-2" /> : null}
-                          Đăng ký ngay
-                        </CButton>
-                      </div>
-                    )}
-                  </CForm>
-                </>
-              )}
-            </CCardBody>
-          </CCard>
-        </CCol>
-      </CRow>
-    </CContainer>
+          <CCol xs={12} lg={7} xl={8}>
+            <AdmissionForm
+              form={form}
+              loading={loading}
+              submitting={submitting}
+              successMessage={successMessage}
+              existingUserMessage={existingUserMessage}
+              errorMessage={errorMessage}
+              campaign={campaign}
+              handleChange={handleChange}
+              handleSubmit={handleSubmit}
+              handleLoginRedirect={handleLoginRedirect}
+            />
+          </CCol>
+        </CRow>
+      </CContainer>
+    </div>
   )
 }

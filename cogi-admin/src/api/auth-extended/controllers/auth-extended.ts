@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { ensureUserHasAuthenticatedRole } from '../services/ensure-authenticated-role';
 import {
   buildActivationLink,
+  buildResetPasswordLink,
   checkUserTenantExists,
   getRoleDisplayName,
   inviteExistingUserToTenant,
@@ -51,15 +52,15 @@ async function findActiveTenantByCode(tenantCode: string) {
   });
 }
 
-async function findApplicantRoleIdForTenant(tenantId: number) {
+async function findAplicantRoleIdForTenant(tenantId: number) {
   const tenantRole = await strapi.db.query(TENANT_ROLE_UID).findOne({
     where: {
       tenant: tenantId,
       isActive: true,
       role: {
         $or: [
-          { type: { $eqi: 'applicant' } },
-          { name: { $eqi: 'applicant' } },
+          { type: { $eqi: 'aplicant' } },
+          { name: { $eqi: 'aplicant' } },
         ],
       },
     },
@@ -80,9 +81,9 @@ async function findActiveCampaignByCode(campaignCode: string) {
         $eqi: campaignCode,
       },
       isActive: true,
-      status: 'open',
+      campaignStatus: 'open',
     },
-    select: ['id', 'name', 'code', 'description', 'status', 'isActive'],
+    select: ['id', 'name', 'code', 'description', 'campaignStatus', 'isActive'],
     populate: {
       tenant: {
         select: ['id', 'code', 'name'],
@@ -110,7 +111,7 @@ async function activateUserTenantIfNeeded(userTenantId: number) {
   });
 }
 
-async function ensureApplicantRoleForMembership(userTenantId: number, roleId: number) {
+async function ensureAplicantRoleForMembership(userTenantId: number, roleId: number) {
   const existingRole = await strapi.db.query(USER_TENANT_ROLE_UID).findOne({
     where: {
       userTenant: userTenantId,
@@ -267,9 +268,9 @@ export default {
         return ctx.badRequest('Campaign does not belong to tenant');
       }
 
-      const roleId = await findApplicantRoleIdForTenant(Number(tenant.id));
+      const roleId = await findAplicantRoleIdForTenant(Number(tenant.id));
       if (!roleId) {
-        return ctx.badRequest('Applicant role is not configured for this tenant');
+        return ctx.badRequest('Aplicant role is not configured for this tenant');
       }
 
       const roleValidation = await validateTenantRole(Number(tenant.id), roleId);
@@ -310,7 +311,7 @@ export default {
           tenantName: normalizeText(tenant.name),
           tenantCode: normalizeText(tenant.code),
           roleName,
-          link: buildActivationLink(activationToken),
+          link: await buildActivationLink(ctx, activationToken, { tenantId: Number(tenant.id) }),
           invitePurpose: 'admission',
           templateCode,
         });
@@ -359,7 +360,7 @@ export default {
       }
 
       await activateUserTenantIfNeeded(Number(existingMembership.userTenant?.id || 0));
-      await ensureApplicantRoleForMembership(Number(existingMembership.userTenant?.id || 0), roleId);
+      await ensureAplicantRoleForMembership(Number(existingMembership.userTenant?.id || 0), roleId);
 
       ctx.body = {
         ok: true,
@@ -423,8 +424,7 @@ export default {
         data: updateData,
       });
 
-      const frontendUrl = (process.env.FRONTEND_URL?.trim() || 'http://localhost:5173').replace(/\/+$/, '');
-      const resetLink = `${frontendUrl}/reset-password?code=${encodeURIComponent(resetPasswordToken)}`;
+      const resetLink = await buildResetPasswordLink(ctx, resetPasswordToken);
 
       try {
         const emailService = strapi.plugin('email')?.service('email');

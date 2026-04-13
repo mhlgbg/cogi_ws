@@ -48,7 +48,9 @@ function normalizeField(field, index) {
     label: String(field.label || key || `field_${index + 1}`).trim(),
     type: String(field.type || 'text').trim().toLowerCase(),
     required: field.required === true,
+    multiple: field.multiple === true,
     placeholder: String(field.placeholder || '').trim(),
+    accept: Array.isArray(field.accept) ? field.accept.filter(Boolean) : [],
     options: Array.isArray(field.options) ? field.options.map(normalizeOption).filter(Boolean) : [],
     columns: Array.isArray(field.columns) ? field.columns.map(normalizeTableColumn).filter(Boolean) : [],
     rows: Array.isArray(field.rows) ? field.rows.map(normalizeTableRow) : [],
@@ -170,7 +172,7 @@ export function validateFormData(formData, fields) {
     }
 
     const isEmpty = isFileField
-      ? !(value && typeof value === 'object' && String(value.name || '').trim())
+      ? !getFileValueMetaList(value).length
       : String(value ?? '').trim() === ''
 
     if (isEmpty) {
@@ -181,7 +183,7 @@ export function validateFormData(formData, fields) {
   return nextErrors
 }
 
-export function getFileValueMeta(value) {
+function getSingleFileValueMeta(value) {
   if (!value || typeof value !== 'object') return null
 
   const name = String(value.name || '').trim()
@@ -197,4 +199,17 @@ export function getFileValueMeta(value) {
     isImage: type.startsWith('image/'),
     isPdf: type === 'application/pdf' || dataUrl.startsWith('data:application/pdf'),
   }
+}
+
+export function getFileValueMetaList(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => getSingleFileValueMeta(item)).filter(Boolean)
+  }
+
+  const single = getSingleFileValueMeta(value)
+  return single ? [single] : []
+}
+
+export function getFileValueMeta(value) {
+  return getFileValueMetaList(value)[0] || null
 }

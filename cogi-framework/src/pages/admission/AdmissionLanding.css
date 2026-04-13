@@ -1,0 +1,156 @@
+.admission-landing-shell {
+  background:
+    radial-gradient(circle at top left, rgba(13, 110, 253, 0.12), transparent 36%),
+    linear-gradient(180deg, #f4f8ff 0%, #f8fbff 46%, #ffffff 100%);
+  min-height: 100vh;
+}
+
+.admission-landing-content {
+  max-width: 1240px;
+}
+
+.admission-header-card,
+.admission-info-card,
+.admission-form-card {
+  border-radius: 20px;
+}
+
+.admission-header-card,
+.admission-info-card {
+  background: linear-gradient(135deg, #ffffff 0%, #eef5ff 100%);
+}
+
+.admission-hero-logo-wrap {
+  width: 88px;
+  height: 88px;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(13, 110, 253, 0.14);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  flex-shrink: 0;
+}
+
+.admission-hero-logo {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.admission-school-name {
+  color: #1f4aa8;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.admission-page-title {
+  color: #0b1f44;
+  font-size: clamp(2rem, 3vw, 2.5rem);
+  line-height: 1.15;
+  font-weight: 800;
+}
+
+.admission-form-intro,
+.admission-description,
+.admission-campaign-code {
+  color: #52627a;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.admission-campaign-name {
+  color: #12336d;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.5;
+  margin-bottom: 0.25rem;
+}
+
+.admission-section-title {
+  color: #0b1f44;
+  font-size: clamp(1.35rem, 2vw, 1.65rem);
+  font-weight: 750;
+  line-height: 1.3;
+}
+.admission-form-group-title {
+  color: #102a5b;
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.admission-note-box,
+.admission-form-highlight {
+  border: 1px solid rgba(13, 110, 253, 0.12);
+  background: #f7faff;
+  border-radius: 14px;
+}
+
+.admission-note-box {
+  padding: 0.95rem 1rem;
+  color: #20417f;
+  font-weight: 500;
+  line-height: 1.7;
+}
+
+.admission-form-layout {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.admission-form-group {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid #edf2fb;
+}
+
+.admission-primary-button {
+  min-height: 52px;
+  padding-inline: 1.5rem;
+  border-radius: 14px;
+  font-weight: 700;
+}
+
+.admission-sticky-column {
+  display: grid;
+  gap: 1.25rem;
+}
+
+@media (min-width: 992px) {
+  .admission-sticky-column {
+    position: sticky;
+    top: 24px;
+  }
+
+  .admission-primary-button {
+    min-width: 260px;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .admission-landing-shell {
+    padding-inline: 0;
+  }
+
+  .admission-hero-logo-wrap {
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+  }
+
+  .admission-form-group {
+    padding: 0.95rem;
+  }
+
+  .admission-primary-button {
+    width: 100%;
+  }
+}
