@@ -28,8 +28,16 @@ function readStoredToken() {
 	return localStorage.getItem('authJwt') || ''
 }
 
+function readTenantCodeFromPath() {
+	if (typeof window === 'undefined') return ''
+
+	const pathname = String(window.location.pathname || '').trim()
+	const match = pathname.match(/^\/t\/([^/]+)/i)
+	return match?.[1] ? decodeURIComponent(match[1]).trim() : ''
+}
+
 function readStoredTenantCode() {
-	return String(localStorage.getItem('tenantCode') || '').trim()
+	return String(localStorage.getItem('tenantCode') || '').trim() || readTenantCodeFromPath()
 }
 
 function shouldSkipContextHeaders(url) {

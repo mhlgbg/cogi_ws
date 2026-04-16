@@ -15,12 +15,18 @@ function normalizeTableColumn(column, index) {
   const key = String(column.key || '').trim()
   if (!key) return null
 
+  const hasExplicitType = Object.prototype.hasOwnProperty.call(column, 'type')
+
   return {
     key,
     label: String(column.label || key || `column_${index + 1}`).trim(),
     type: String(column.type || 'text').trim().toLowerCase(),
+    hasExplicitType,
     required: column.required === true,
     placeholder: String(column.placeholder || '').trim(),
+    min: typeof column.min === 'number' ? column.min : null,
+    max: typeof column.max === 'number' ? column.max : null,
+    step: typeof column.step === 'number' ? column.step : null,
     options: Array.isArray(column.options) ? column.options.map(normalizeOption).filter(Boolean) : [],
   }
 }
@@ -45,12 +51,16 @@ function normalizeField(field, index) {
 
   return {
     key,
-    label: String(field.label || key || `field_${index + 1}`).trim(),
+    label: String(field.label || field.title || key || `field_${index + 1}`).trim(),
     type: String(field.type || 'text').trim().toLowerCase(),
     required: field.required === true,
     multiple: field.multiple === true,
+    description: String(field.description || '').trim(),
     placeholder: String(field.placeholder || '').trim(),
     accept: Array.isArray(field.accept) ? field.accept.filter(Boolean) : [],
+    min: typeof field.min === 'number' ? field.min : null,
+    max: typeof field.max === 'number' ? field.max : null,
+    step: typeof field.step === 'number' ? field.step : null,
     options: Array.isArray(field.options) ? field.options.map(normalizeOption).filter(Boolean) : [],
     columns: Array.isArray(field.columns) ? field.columns.map(normalizeTableColumn).filter(Boolean) : [],
     rows: Array.isArray(field.rows) ? field.rows.map(normalizeTableRow) : [],

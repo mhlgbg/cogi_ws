@@ -1,7 +1,41 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import api from '../api/axios'
 import { useAuth } from './AuthContext'
+import { buildTenantUrl, isBrowserOnMainDomain } from '../utils/tenantRouting'
 
 const TenantContext = createContext(null)
+
+function normalizePath(path) {
+  const rawPath = String(path || '').trim()
+  if (!rawPath) return ''
+  if (/^https?:\/\//i.test(rawPath)) {
+    try {
+      return new URL(rawPath).pathname || '/'
+    } catch {
+      return rawPath
+    }
+  }
+
+  return rawPath.startsWith('/') ? rawPath : `/${rawPath}`
+}
+
+function isPublicOrAuthPath(path) {
+  const normalizedPath = normalizePath(path)
+  if (!normalizedPath) return false
+
+  if (
+    normalizedPath === '/'
+    || normalizedPath === '/login'
+    || normalizedPath === '/forgot-password'
+    || normalizedPath === '/reset-password'
+    || normalizedPath === '/activate'
+    || normalizedPath === '/set-password'
+  ) {
+    return true
+  }
+
+  return normalizedPath === '/dang-ky-tuyen-sinh' || normalizedPath.startsWith('/dang-ky-tuyen-sinh/')
+}
 
 function resolveApiOrigin() {
   const explicitBase = String(import.meta.env.VITE_API_BASE_URL || '').trim()
@@ -51,6 +85,9 @@ function readTenantFromStorage() {
   const tenantIdRaw = localStorage.getItem('tenantId')
   const userTenantIdRaw = localStorage.getItem('userTenantId')
   const defaultFeatureCode = localStorage.getItem('defaultFeatureCode')
+  const defaultPublicRoute = localStorage.getItem('defaultPublicRoute')
+  const defaultProtectedRoute = localStorage.getItem('defaultProtectedRoute')
+  const isMainDomainRaw = localStorage.getItem('isMainDomain')
   const tenantRolesRaw = localStorage.getItem('tenantRoles')
 
   if (!tenantCode || !tenantName || !tenantIdRaw || !userTenantIdRaw) {
@@ -82,7 +119,7 @@ function readTenantFromStorage() {
     }
   }
 
-  const normalizedTenantLogoUrl = String(tenantLogoUrl || '').trim() || extractTenantLogoUrlFromMedia(tenantLogo)
+  const normalizedTenantLogoUrl = toAbsoluteUrl(tenantLogoUrl) || extractTenantLogoUrlFromMedia(tenantLogo)
 
   return {
     tenantCode,
@@ -93,7 +130,41 @@ function readTenantFromStorage() {
     tenantId,
     userTenantId,
     defaultFeatureCode: defaultFeatureCode || '',
+    defaultPublicRoute: defaultPublicRoute || '',
+    defaultProtectedRoute: defaultProtectedRoute || '',
+    isMainDomain: isMainDomainRaw === 'true' || isBrowserOnMainDomain(),
     roles,
+  }
+}
+
+function normalizeTenantContextPayload(payload) {
+  return {
+    tenantCode: String(payload?.code || '').trim(),
+    tenantName: String(payload?.name || payload?.displayName || '').trim(),
+    tenantLogoUrl: toAbsoluteUrl(payload?.logo || ''),
+    defaultPublicRoute: String(payload?.defaultPublicRoute || '').trim(),
+    defaultProtectedRoute: String(payload?.defaultProtectedRoute || '').trim(),
+    isMainDomain: isBrowserOnMainDomain(),
+  }
+}
+
+function mergeTenantState(baseTenant, resolvedTenant) {
+  const base = baseTenant && typeof baseTenant === 'object' ? baseTenant : {}
+  const resolved = resolvedTenant && typeof resolvedTenant === 'object' ? resolvedTenant : {}
+
+  return {
+    tenantCode: String(resolved.tenantCode || base.tenantCode || '').trim(),
+    tenantName: String(resolved.tenantName || base.tenantName || '').trim(),
+    tenantShortName: String(base.tenantShortName || '').trim(),
+    tenantLogo: base.tenantLogo || null,
+    tenantLogoUrl: toAbsoluteUrl(resolved.tenantLogoUrl || base.tenantLogoUrl || ''),
+    tenantId: Number(base.tenantId),
+    userTenantId: Number(base.userTenantId),
+    defaultFeatureCode: String(base.defaultFeatureCode || '').trim(),
+    defaultPublicRoute: String(resolved.defaultPublicRoute || base.defaultPublicRoute || '').trim(),
+    defaultProtectedRoute: String(resolved.defaultProtectedRoute || base.defaultProtectedRoute || '').trim(),
+    isMainDomain: typeof resolved.isMainDomain === 'boolean' ? resolved.isMainDomain : Boolean(base.isMainDomain),
+    roles: Array.isArray(base.roles) ? base.roles : [],
   }
 }
 
@@ -104,6 +175,9 @@ export function useTenant() {
 export default function TenantContextProvider({ children }) {
   const auth = useAuth()
   const [currentTenant, setCurrentTenant] = useState(() => readTenantFromStorage())
+  const [resolvedTenant, setResolvedTenant] = useState(() => readTenantFromStorage())
+  const [isResolvingTenant, setIsResolvingTenant] = useState(false)
+  const [isMainDomain, setIsMainDomain] = useState(() => readTenantFromStorage()?.isMainDomain ?? isBrowserOnMainDomain())
 
   const selectTenant = (tenantContextItem) => {
     const nextTenant = {
@@ -111,10 +185,13 @@ export default function TenantContextProvider({ children }) {
       tenantName: String(tenantContextItem?.tenantName || '').trim(),
       tenantShortName: String(tenantContextItem?.tenantShortName || '').trim(),
       tenantLogo: tenantContextItem?.tenantLogo || null,
-      tenantLogoUrl: String(tenantContextItem?.tenantLogoUrl || '').trim() || extractTenantLogoUrlFromMedia(tenantContextItem?.tenantLogo),
+      tenantLogoUrl: toAbsoluteUrl(tenantContextItem?.tenantLogoUrl || '') || extractTenantLogoUrlFromMedia(tenantContextItem?.tenantLogo),
       tenantId: Number(tenantContextItem?.tenantId),
       userTenantId: Number(tenantContextItem?.userTenantId),
       defaultFeatureCode: String(tenantContextItem?.defaultFeatureCode || '').trim(),
+      defaultPublicRoute: String(tenantContextItem?.defaultPublicRoute || '').trim(),
+      defaultProtectedRoute: String(tenantContextItem?.defaultProtectedRoute || '').trim(),
+      isMainDomain: isBrowserOnMainDomain(),
       roles: Array.isArray(tenantContextItem?.roles) ? tenantContextItem.roles : [],
     }
 
@@ -135,9 +212,14 @@ export default function TenantContextProvider({ children }) {
     localStorage.setItem('tenantId', String(nextTenant.tenantId))
     localStorage.setItem('userTenantId', String(nextTenant.userTenantId))
     localStorage.setItem('defaultFeatureCode', nextTenant.defaultFeatureCode)
+    localStorage.setItem('defaultPublicRoute', nextTenant.defaultPublicRoute)
+    localStorage.setItem('defaultProtectedRoute', nextTenant.defaultProtectedRoute)
+    localStorage.setItem('isMainDomain', String(nextTenant.isMainDomain))
     localStorage.setItem('tenantRoles', JSON.stringify(nextTenant.roles))
 
     setCurrentTenant(nextTenant)
+    setResolvedTenant((previous) => mergeTenantState(nextTenant, previous))
+    setIsMainDomain(nextTenant.isMainDomain)
   }
 
   const clearTenant = () => {
@@ -149,9 +231,97 @@ export default function TenantContextProvider({ children }) {
     localStorage.removeItem('tenantId')
     localStorage.removeItem('userTenantId')
     localStorage.removeItem('defaultFeatureCode')
+    localStorage.removeItem('defaultPublicRoute')
+    localStorage.removeItem('defaultProtectedRoute')
+    localStorage.removeItem('isMainDomain')
     localStorage.removeItem('tenantRoles')
     localStorage.removeItem('featureContext')
     setCurrentTenant(null)
+    setResolvedTenant(null)
+    setIsMainDomain(isBrowserOnMainDomain())
+  }
+
+  async function resolveTenantAccess(options = {}) {
+    setIsResolvingTenant(true)
+
+    try {
+      const requestedTenantCode = String(options?.tenantCode || '').trim()
+      const requestConfig = requestedTenantCode
+        ? {
+          headers: {
+            'x-tenant-code': requestedTenantCode,
+          },
+        }
+        : undefined
+
+      const response = await api.get('/tenant-context', requestConfig)
+      const resolved = normalizeTenantContextPayload(response?.data)
+      if (!resolved.tenantCode) {
+        setResolvedTenant((previous) => previous || null)
+        return null
+      }
+
+      setIsMainDomain(isBrowserOnMainDomain())
+
+      setResolvedTenant((previous) => mergeTenantState(currentTenant || previous, resolved))
+
+      setCurrentTenant((previous) => {
+        if (!previous) return previous
+        if (String(previous.tenantCode || '').trim().toLowerCase() !== resolved.tenantCode.toLowerCase()) {
+          return previous
+        }
+
+        const nextTenant = mergeTenantState(previous, resolved)
+        localStorage.setItem('tenantName', nextTenant.tenantName)
+        localStorage.setItem('tenantLogoUrl', nextTenant.tenantLogoUrl)
+        localStorage.setItem('defaultPublicRoute', nextTenant.defaultPublicRoute)
+        localStorage.setItem('defaultProtectedRoute', nextTenant.defaultProtectedRoute)
+        localStorage.setItem('isMainDomain', String(nextTenant.isMainDomain))
+        return nextTenant
+      })
+
+      return resolved
+    } catch {
+      setResolvedTenant((previous) => previous || currentTenant || null)
+      return null
+    } finally {
+      setIsResolvingTenant(false)
+    }
+  }
+
+  function resolvePublicRoutePath(options = {}) {
+    const sourceTenant = resolvedTenant || currentTenant || {}
+    const tenantCode = String(options?.tenantCode || sourceTenant?.tenantCode || '').trim()
+    const fallbackToLogin = Boolean(options?.fallbackToLogin)
+    const configuredPath = String(sourceTenant?.defaultPublicRoute || '').trim()
+    const nextIsMainDomain = typeof options?.isMainDomain === 'boolean' ? options.isMainDomain : isMainDomain
+
+    if (configuredPath) {
+      return buildTenantUrl(configuredPath, { tenantCode, isMainDomain: nextIsMainDomain })
+    }
+
+    if (fallbackToLogin) {
+      return buildTenantUrl('/login', { tenantCode, isMainDomain: nextIsMainDomain })
+    }
+
+    return buildTenantUrl('/', { tenantCode, isMainDomain: nextIsMainDomain })
+  }
+
+  function resolveProtectedRoutePath(options = {}) {
+    const sourceTenant = currentTenant || resolvedTenant || {}
+    const tenantCode = String(options?.tenantCode || sourceTenant?.tenantCode || '').trim()
+    const nextIsMainDomain = typeof options?.isMainDomain === 'boolean' ? options.isMainDomain : isMainDomain
+    const configuredProtectedPath = String(sourceTenant?.defaultProtectedRoute || '').trim()
+    const configuredFeaturePath = String(sourceTenant?.defaultFeatureCode || '').trim()
+    const nextPath = !isPublicOrAuthPath(configuredProtectedPath) && configuredProtectedPath
+      ? configuredProtectedPath
+      : configuredFeaturePath || '/dashboard'
+    const shouldForceTenantPath = Boolean(options?.forceTenantPath)
+
+    return buildTenantUrl(nextPath, {
+      tenantCode,
+      isMainDomain: shouldForceTenantPath ? nextIsMainDomain : false,
+    })
   }
 
   useEffect(() => {
@@ -160,14 +330,87 @@ export default function TenantContextProvider({ children }) {
     }
   }, [auth?.isAuthenticated])
 
+  useEffect(() => {
+    let cancelled = false
+
+    async function hydrateTenantContext() {
+      if (!currentTenant?.tenantCode) {
+        return
+      }
+
+      try {
+        setIsResolvingTenant(true)
+        const response = await api.get('/tenant-context', {
+          headers: currentTenant?.tenantCode
+            ? {
+              'x-tenant-code': currentTenant.tenantCode,
+            }
+            : undefined,
+        })
+        if (cancelled) return
+
+        const resolved = normalizeTenantContextPayload(response?.data)
+        if (!resolved.tenantCode) {
+          return
+        }
+
+        setIsMainDomain(isBrowserOnMainDomain())
+
+        setResolvedTenant((previous) => mergeTenantState(currentTenant || previous, resolved))
+
+        setCurrentTenant((previous) => {
+          if (!previous) return previous
+          if (String(previous.tenantCode || '').trim().toLowerCase() !== resolved.tenantCode.toLowerCase()) {
+            return previous
+          }
+
+          const nextTenant = {
+            ...previous,
+            tenantName: resolved.tenantName || previous.tenantName,
+            tenantLogoUrl: resolved.tenantLogoUrl || previous.tenantLogoUrl,
+            defaultPublicRoute: resolved.defaultPublicRoute || previous.defaultPublicRoute,
+            defaultProtectedRoute: resolved.defaultProtectedRoute || previous.defaultProtectedRoute,
+          }
+
+          localStorage.setItem('tenantName', nextTenant.tenantName)
+          localStorage.setItem('tenantLogoUrl', nextTenant.tenantLogoUrl)
+          localStorage.setItem('defaultPublicRoute', nextTenant.defaultPublicRoute)
+          localStorage.setItem('defaultProtectedRoute', nextTenant.defaultProtectedRoute)
+          localStorage.setItem('isMainDomain', String(nextTenant.isMainDomain))
+
+          return nextTenant
+        })
+      } catch {
+        // Keep existing selected tenant state if tenant-context hydration fails.
+      } finally {
+        if (!cancelled) {
+          setIsResolvingTenant(false)
+        }
+      }
+    }
+
+    hydrateTenantContext()
+
+    return () => {
+      cancelled = true
+    }
+  }, [currentTenant?.tenantCode])
+
   const value = useMemo(
     () => ({
       currentTenant,
+      resolvedTenant,
       hasTenant: Boolean(currentTenant?.tenantCode),
+      hasResolvedTenant: Boolean(resolvedTenant?.tenantCode || currentTenant?.tenantCode),
+      isResolvingTenant,
+      isMainDomain,
+      resolveTenantAccess,
+      resolvePublicRoutePath,
+      resolveProtectedRoutePath,
       selectTenant,
       clearTenant,
     }),
-    [currentTenant],
+    [currentTenant, resolvedTenant, isResolvingTenant, isMainDomain],
   )
 
   return <TenantContext.Provider value={value}>{children}</TenantContext.Provider>

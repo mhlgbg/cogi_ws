@@ -4,6 +4,8 @@ type TenantLite = {
   tenantStatus: 'draft' | 'active' | 'inactive' | 'suspended';
 };
 
+import { isMainDomainHost } from '../utils/main-domain';
+
 const TENANT_UID = 'api::tenant.tenant';
 const TENANT_DOMAIN_UID = 'api::tenant-domain.tenant-domain';
 
@@ -26,7 +28,11 @@ const ACTIVE_STATUS = 'active';
 export function normalizeHost(host?: string | null): string {
   if (!host) return '';
 
-  const firstHost = host.split(',')[0]?.trim().toLowerCase() || '';
+  const trimmedHost = String(host).trim().toLowerCase();
+  if (!trimmedHost) return '';
+
+  const withoutProtocol = trimmedHost.replace(/^https?:\/\//, '');
+  const firstHost = withoutProtocol.split('/')[0]?.split(',')[0]?.trim() || '';
   if (!firstHost) return '';
 
   if (firstHost.startsWith('[')) {
@@ -47,6 +53,19 @@ export function getFirstPathSegment(path?: string | null): string {
 
   const [segment = ''] = trimmed.split('/');
   return segment.toLowerCase();
+}
+
+export function getTenantCodeFromTenantPath(path?: string | null): string {
+  if (!path) return '';
+
+  const pathname = path.split('?')[0] || '';
+  const trimmed = pathname.replace(/^\/+|\/+$/g, '');
+  if (!trimmed) return '';
+
+  const [firstSegment = '', secondSegment = ''] = trimmed.split('/');
+  if (firstSegment.toLowerCase() !== 't') return '';
+
+  return secondSegment.trim().toLowerCase();
 }
 
 export function isSystemHost(host: string): boolean {
@@ -74,6 +93,16 @@ function getRequestHost(ctx: any): string {
   }
 
   return normalizeHost(ctx.request?.host || ctx.host || '');
+}
+
+function getOriginHost(ctx: any): string {
+  const requestOrigin = ctx.request?.header?.origin || ctx.request?.header?.referer || '';
+  return normalizeHost(String(requestOrigin || ''));
+}
+
+function getDomainLookupHosts(ctx: any): string[] {
+  const hosts = [getRequestHost(ctx), getOriginHost(ctx)].filter(Boolean);
+  return [...new Set(hosts)];
 }
 
 function getTenantCodeHeader(ctx: any): string {
@@ -138,35 +167,86 @@ async function findActiveTenantByHost(strapi: any, host: string): Promise<Tenant
   return tenant;
 }
 
+async function findActiveTenantByHosts(strapi: any, hosts: string[]): Promise<TenantLite | null> {
+  for (const host of hosts) {
+    const tenant = await findActiveTenantByHost(strapi, host);
+    if (tenant) return tenant;
+  }
+
+  return null;
+}
+
+function shouldDebugTenantResolve(): boolean {
+  return process.env.NODE_ENV === 'development';
+}
+
+function debugTenantResolve(payload: Record<string, unknown>) {
+  if (!shouldDebugTenantResolve()) return;
+  strapi.log.info(`[tenant-resolver] ${JSON.stringify(payload)}`);
+}
+
 export default (_config: unknown, { strapi }: { strapi: any }) => {
   return async (ctx: any, next: () => Promise<void>) => {
     const host = getRequestHost(ctx);
+    const originHost = getOriginHost(ctx);
+    const requestOrigin = String(ctx.request?.header?.origin || ctx.request?.header?.referer || '');
+    const domainLookupHosts = getDomainLookupHosts(ctx);
     const path = ctx.request?.path || ctx.path || '/';
     const firstSegment = getFirstPathSegment(path);
+    const pathTenantCode = getTenantCodeFromTenantPath(path);
     const tenantCodeHeader = getTenantCodeHeader(ctx);
     const hasTenantCodeHeader = Boolean(tenantCodeHeader);
+    const hasPathTenantCode = Boolean(pathTenantCode);
     const systemHost = isSystemHost(host);
     const systemRoute = isSystemRoute(path);
+    const isMainDomain = isMainDomainHost(host) || isMainDomainHost(requestOrigin);
 
     ctx.state.tenant = null;
     ctx.state.tenantId = null;
     ctx.state.tenantCode = null;
     ctx.state.tenantSource = null;
     ctx.state.isSystemRequest = Boolean(systemRoute);
+    ctx.state.isMainDomain = isMainDomain;
     ctx.state.tenantConflict = false;
 
     // Skip Strapi internal/system routes to avoid affecting admin panel.
     // Exception: if x-tenant-code header is explicitly sent, still resolve tenant.
-    if (systemRoute && !hasTenantCodeHeader) {
+    if (systemRoute && !hasTenantCodeHeader && !hasPathTenantCode) {
       await next();
       return;
     }
 
+    const priorityTenantFromPath = hasPathTenantCode
+      ? await findActiveTenantByCode(strapi, pathTenantCode)
+      : null;
+    const priorityTenantFromDomain = systemHost
+      ? await findActiveTenantByHosts(strapi, domainLookupHosts.filter((candidate) => candidate !== host))
+      : await findActiveTenantByHosts(strapi, domainLookupHosts);
+
     const tenantFromHeader = hasTenantCodeHeader
       ? await findActiveTenantByCode(strapi, tenantCodeHeader)
       : null;
-    const tenantFromPath = hasTenantCodeHeader ? null : await findActiveTenantByCode(strapi, firstSegment);
-    const tenantFromHost = hasTenantCodeHeader || systemHost ? null : await findActiveTenantByHost(strapi, host);
+    const tenantFromPath = hasTenantCodeHeader || hasPathTenantCode
+      ? null
+      : await findActiveTenantByCode(strapi, firstSegment);
+    const tenantFromHost = hasTenantCodeHeader || priorityTenantFromDomain
+      ? null
+      : await findActiveTenantByHosts(strapi, domainLookupHosts);
+
+    const priorityConflictPathDomain =
+      priorityTenantFromPath && priorityTenantFromDomain && priorityTenantFromPath.id !== priorityTenantFromDomain.id;
+    const conflictPriorityPathHeader =
+      priorityTenantFromPath && tenantFromHeader && priorityTenantFromPath.id !== tenantFromHeader.id;
+    const conflictPriorityPathLegacyPath =
+      priorityTenantFromPath && tenantFromPath && priorityTenantFromPath.id !== tenantFromPath.id;
+    const conflictPriorityPathLegacyHost =
+      priorityTenantFromPath && tenantFromHost && priorityTenantFromPath.id !== tenantFromHost.id;
+    const conflictPriorityDomainHeader =
+      priorityTenantFromDomain && tenantFromHeader && priorityTenantFromDomain.id !== tenantFromHeader.id;
+    const conflictPriorityDomainLegacyPath =
+      priorityTenantFromDomain && tenantFromPath && priorityTenantFromDomain.id !== tenantFromPath.id;
+    const conflictPriorityDomainLegacyHost =
+      priorityTenantFromDomain && tenantFromHost && priorityTenantFromDomain.id !== tenantFromHost.id;
 
     const conflictHeaderPath =
       tenantFromHeader && tenantFromPath && tenantFromHeader.id !== tenantFromPath.id;
@@ -174,13 +254,33 @@ export default (_config: unknown, { strapi }: { strapi: any }) => {
       tenantFromHeader && tenantFromHost && tenantFromHeader.id !== tenantFromHost.id;
     const conflictPathHost = tenantFromPath && tenantFromHost && tenantFromPath.id !== tenantFromHost.id;
 
-    ctx.state.tenantConflict = Boolean(conflictHeaderPath || conflictHeaderHost || conflictPathHost);
+    ctx.state.tenantConflict = Boolean(
+      priorityConflictPathDomain ||
+      conflictPriorityPathHeader ||
+      conflictPriorityPathLegacyPath ||
+      conflictPriorityPathLegacyHost ||
+      conflictPriorityDomainHeader ||
+      conflictPriorityDomainLegacyPath ||
+      conflictPriorityDomainLegacyHost ||
+      conflictHeaderPath ||
+      conflictHeaderHost ||
+      conflictPathHost,
+    );
 
-    const resolvedTenant = tenantFromHeader || tenantFromPath || tenantFromHost;
-    const resolvedSource = tenantFromHeader
+    const resolvedTenant =
+      priorityTenantFromPath ||
+      priorityTenantFromDomain ||
+      tenantFromHeader ||
+      tenantFromPath ||
+      tenantFromHost;
+    const resolvedSource = priorityTenantFromPath
+      ? 'priority-path'
+      : priorityTenantFromDomain
+        ? 'domain'
+        : tenantFromHeader
       ? 'header'
       : tenantFromPath
-        ? 'path'
+        ? 'legacy-path'
         : tenantFromHost
           ? 'host'
           : null;
@@ -191,8 +291,55 @@ export default (_config: unknown, { strapi }: { strapi: any }) => {
       ctx.state.tenantCode = resolvedTenant.code;
       ctx.state.tenantSource = resolvedSource;
       ctx.state.isSystemRequest = false;
+      debugTenantResolve({
+        path,
+        host,
+        originHost,
+        domainLookupHosts,
+        requestOrigin,
+        tenantCodeHeader,
+        pathTenantCode,
+        firstSegment,
+        resolvedSource,
+        tenantCode: resolvedTenant.code,
+        tenantId: resolvedTenant.id,
+        isMainDomain,
+        tenantConflict: ctx.state.tenantConflict,
+      });
     } else if (systemHost) {
       ctx.state.isSystemRequest = true;
+      debugTenantResolve({
+        path,
+        host,
+        originHost,
+        domainLookupHosts,
+        requestOrigin,
+        tenantCodeHeader,
+        pathTenantCode,
+        firstSegment,
+        resolvedSource: null,
+        tenantCode: null,
+        tenantId: null,
+        isMainDomain,
+        tenantConflict: ctx.state.tenantConflict,
+        isSystemRequest: true,
+      });
+    } else {
+      debugTenantResolve({
+        path,
+        host,
+        originHost,
+        domainLookupHosts,
+        requestOrigin,
+        tenantCodeHeader,
+        pathTenantCode,
+        firstSegment,
+        resolvedSource: null,
+        tenantCode: null,
+        tenantId: null,
+        isMainDomain,
+        tenantConflict: ctx.state.tenantConflict,
+      });
     }
 
     await next();

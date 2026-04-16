@@ -24,14 +24,18 @@ export default function FieldRenderer({
   const isFileField = field.type === 'file' || field.type === 'image'
   const isTableField = field.type === 'table'
   const fileMetaList = getFileValueMetaList(value)
+  const inputType = field.type === 'number' ? 'number' : field.type === 'password' ? 'password' : 'text'
 
   return (
     <CCol md={isTextarea || isTableField ? 12 : 6} key={field.key}>
       {!isTableField ? (
-        <CFormLabel>
-          {field.label}
-          {field.required ? ' *' : ''}
-        </CFormLabel>
+        <>
+          <CFormLabel>
+            {field.label}
+            {field.required ? ' *' : ''}
+          </CFormLabel>
+          {field.description ? <div className='text-body-secondary small mb-2'>{field.description}</div> : null}
+        </>
       ) : null}
 
       {field.type === 'textarea' ? (
@@ -170,10 +174,13 @@ export default function FieldRenderer({
       {!['textarea', 'date', 'select', 'radio', 'file', 'image', 'table'].includes(field.type) ? (
         <>
           <CFormInput
-            type={field.type === 'number' ? 'number' : 'text'}
+            type={inputType}
             value={String(value ?? '')}
             onChange={(event) => onValueChange(field.key, event.target.value)}
             placeholder={field.placeholder || undefined}
+            min={field.type === 'number' && field.min !== null ? field.min : undefined}
+            max={field.type === 'number' && field.max !== null ? field.max : undefined}
+            step={field.type === 'number' && field.step !== null ? field.step : undefined}
             invalid={Boolean(error)}
             disabled={submitting || isReadOnly}
             readOnly={isReadOnly}

@@ -68,13 +68,51 @@ function mapTenantForContext(item) {
     tenantId: tenant?.id,
     userTenantId: item?.userTenantId,
     defaultFeatureCode: tenant?.defaultFeatureCode || '',
+    defaultPublicRoute: tenant?.defaultPublicRoute || '',
+    defaultProtectedRoute: tenant?.defaultProtectedRoute || '',
+    isMainDomain: item?.isMainDomain,
     roles: Array.isArray(item?.roles) ? item.roles : [],
   }
 }
 
 function resolveTenantLandingPath(tenantItem) {
+  const defaultProtectedRoute = String(tenantItem?.defaultProtectedRoute || '').trim()
+  if (defaultProtectedRoute.startsWith('/')) return defaultProtectedRoute
+
   const routePath = String(tenantItem?.defaultFeatureCode || '').trim()
   return routePath.startsWith('/') ? routePath : '/dashboard'
+}
+
+function normalizePath(path) {
+  const rawPath = String(path || '').trim()
+  if (!rawPath) return ''
+  if (/^https?:\/\//i.test(rawPath)) {
+    try {
+      return new URL(rawPath).pathname || '/'
+    } catch {
+      return rawPath
+    }
+  }
+
+  return rawPath.startsWith('/') ? rawPath : `/${rawPath}`
+}
+
+function isPublicOrAuthPath(path) {
+  const normalizedPath = normalizePath(path)
+  if (!normalizedPath) return false
+
+  if (
+    normalizedPath === '/'
+    || normalizedPath === '/login'
+    || normalizedPath === '/forgot-password'
+    || normalizedPath === '/reset-password'
+    || normalizedPath === '/activate'
+    || normalizedPath === '/set-password'
+  ) {
+    return true
+  }
+
+  return normalizedPath === '/dang-ky-tuyen-sinh' || normalizedPath.startsWith('/dang-ky-tuyen-sinh/')
 }
 
 export default function ChooseTenant() {
@@ -95,6 +133,13 @@ export default function ChooseTenant() {
     const rawRedirect = String(searchParams.get('redirect') || '').trim()
     return rawRedirect.startsWith('/') ? rawRedirect : ''
   }, [searchParams])
+  function resolvePostSelectionPath(selectedTenant) {
+    if (redirectPath && !isPublicOrAuthPath(redirectPath)) return redirectPath
+    return tenantContext?.resolveProtectedRoutePath?.({
+      tenantCode: selectedTenant?.tenantCode,
+      isMainDomain: tenantContext?.isMainDomain,
+    }) || resolveTenantLandingPath(selectedTenant)
+  }
 
   useEffect(() => {
     const fetchTenantContext = async () => {
@@ -117,14 +162,14 @@ export default function ChooseTenant() {
         if (matchedTenantItem) {
           const selected = mapTenantForContext(matchedTenantItem)
           tenantContext?.selectTenant?.(selected)
-          navigate(redirectPath || resolveTenantLandingPath(selected), { replace: true })
+          navigate(resolvePostSelectionPath(selected), { replace: true })
           return
         }
 
         if (tenantItems.length === 1) {
           const selected = mapTenantForContext(tenantItems[0])
           tenantContext?.selectTenant?.(selected)
-          navigate(redirectPath || resolveTenantLandingPath(selected), { replace: true })
+          navigate(resolvePostSelectionPath(selected), { replace: true })
         }
       } catch (requestError) {
         const apiMessage = requestError?.response?.data?.error?.message
@@ -140,7 +185,7 @@ export default function ChooseTenant() {
   const handleSelectTenant = (item) => {
     const selected = mapTenantForContext(item)
     tenantContext?.selectTenant?.(selected)
-    navigate(redirectPath || resolveTenantLandingPath(selected), { replace: true })
+    navigate(resolvePostSelectionPath(selected), { replace: true })
   }
 
   const displayUserName = resolvedUser?.username || resolvedUser?.email || auth?.user?.username || auth?.user?.email || 'bạn'

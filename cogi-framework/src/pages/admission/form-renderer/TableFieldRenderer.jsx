@@ -24,7 +24,21 @@ function getRowLabel(row, index) {
   return String(label || `Hàng ${index + 1}`)
 }
 
+function hasStaticRowValue(rowValue, columnKey) {
+  const value = rowValue?.[columnKey]
+  if (value === null || value === undefined) return false
+  return String(value).trim() !== ''
+}
+
+function isDisplayOnlyColumn(column, rowValue) {
+  return column?.hasExplicitType !== true && hasStaticRowValue(rowValue, column?.key)
+}
+
 function renderCellInput({ field, column, rowIndex, rowValue, onChangeCell, disabled }) {
+  if (isDisplayOnlyColumn(column, rowValue)) {
+    return <span className='fw-semibold'>{String(rowValue?.[column.key] ?? '')}</span>
+  }
+
   const value = rowValue?.[column.key]
   const inputName = `${field.key}.${rowIndex}.${column.key}`
 
@@ -64,6 +78,9 @@ function renderCellInput({ field, column, rowIndex, rowValue, onChangeCell, disa
       name={inputName}
       value={String(value ?? '')}
       placeholder={column.placeholder || undefined}
+      min={column.type === 'number' && column.min !== null ? column.min : undefined}
+      max={column.type === 'number' && column.max !== null ? column.max : undefined}
+      step={column.type === 'number' && column.step !== null ? column.step : undefined}
       onChange={(event) => onChangeCell(rowIndex, column.key, event.target.value)}
       disabled={disabled}
       readOnly={disabled}
@@ -74,17 +91,21 @@ function renderCellInput({ field, column, rowIndex, rowValue, onChangeCell, disa
 export default function TableFieldRenderer({ field, value, onChangeCell, disabled }) {
   const rows = getTableRows(field, value)
   const columns = Array.isArray(field?.columns) ? field.columns : []
+  const sampleRow = rows[0] || null
+  const hasStaticLabelColumn = columns.some((column) => isDisplayOnlyColumn(column, sampleRow))
+  const tableLabel = field.label || field.title || ''
+  const totalColumnCount = columns.length + (hasStaticLabelColumn ? 0 : 1)
 
   return (
     <div className='border rounded-3 p-3 bg-light'>
       <div className='d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2'>
-        <CFormLabel className='mb-0'>{field.label}</CFormLabel>
+        <CFormLabel className='mb-0'>{tableLabel}</CFormLabel>
       </div>
 
       <CTable bordered responsive small className='mb-0 bg-white'>
         <CTableHead>
           <CTableRow>
-            <CTableHeaderCell style={{ minWidth: 140 }}>Dòng</CTableHeaderCell>
+            {!hasStaticLabelColumn ? <CTableHeaderCell style={{ minWidth: 140 }}>Dòng</CTableHeaderCell> : null}
             {columns.map((column) => (
               <CTableHeaderCell key={column.key} style={{ minWidth: 180 }}>
                 {column.label}
@@ -95,15 +116,17 @@ export default function TableFieldRenderer({ field, value, onChangeCell, disable
         <CTableBody>
           {rows.length === 0 || columns.length === 0 ? (
             <CTableRow>
-              <CTableDataCell colSpan={Math.max(columns.length + 1, 2)} className='text-center text-body-secondary'>
+              <CTableDataCell colSpan={Math.max(totalColumnCount, 1)} className='text-center text-body-secondary'>
                 Chưa có dữ liệu bảng
               </CTableDataCell>
             </CTableRow>
           ) : rows.map((row, rowIndex) => (
             <CTableRow key={row.id || row.key || row.label || rowIndex}>
-              <CTableDataCell>
-                <strong>{getRowLabel(row, rowIndex)}</strong>
-              </CTableDataCell>
+              {!hasStaticLabelColumn ? (
+                <CTableDataCell>
+                  <strong>{getRowLabel(row, rowIndex)}</strong>
+                </CTableDataCell>
+              ) : null}
               {columns.map((column) => (
                 <CTableDataCell key={column.key}>
                   {renderCellInput({

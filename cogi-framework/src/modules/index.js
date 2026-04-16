@@ -27,6 +27,8 @@ import * as classManagement from './class-management'
 import * as learnerManagement from './learner-management'
 import * as feeSheetManagement from './fee-sheet-management'
 import * as admissionManagement from './admission-management'
+import * as contentManagement from './content-management'
+import * as slider from './slider'
 // import * as inventory from "./inventory";
 
 export const allModules = [
@@ -47,6 +49,8 @@ export const allModules = [
   learnerManagement,
   feeSheetManagement,
   admissionManagement,
+  contentManagement,
+  slider,
   // inventory,
 ];
 

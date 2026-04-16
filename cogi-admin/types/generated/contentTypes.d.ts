@@ -679,8 +679,11 @@ export interface ApiArticleArticle extends Struct.CollectionTypeSchema {
       'api::article.article'
     > &
       Schema.Attribute.Private;
+    publicAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;
     slug: Schema.Attribute.UID<'title'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
     title: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -714,6 +717,8 @@ export interface ApiAuthorAuthor extends Struct.CollectionTypeSchema {
       Schema.Attribute.Private;
     name: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -799,6 +804,8 @@ export interface ApiCategoryCategory extends Struct.CollectionTypeSchema {
     name: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
     slug: Schema.Attribute.UID;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -2307,6 +2314,91 @@ export interface ApiSettingSetting extends Struct.SingleTypeSchema {
   };
 }
 
+export interface ApiSliderItemSliderItem extends Struct.CollectionTypeSchema {
+  collectionName: 'slider_items';
+  info: {
+    description: 'Items belonging to a tenant slider';
+    displayName: 'SliderItem';
+    pluralName: 'slider-items';
+    singularName: 'slider-item';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
+    image: Schema.Attribute.Media<'images'>;
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    link: Schema.Attribute.String;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::slider-item.slider-item'
+    > &
+      Schema.Attribute.Private;
+    openInNewTab: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    order: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    publishedAt: Schema.Attribute.DateTime;
+    showDescription: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<true>;
+    showTitle: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    slider: Schema.Attribute.Relation<'manyToOne', 'api::slider.slider'> &
+      Schema.Attribute.Required;
+    title: Schema.Attribute.String;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiSliderSlider extends Struct.CollectionTypeSchema {
+  collectionName: 'sliders';
+  info: {
+    description: 'Tenant-scoped slider configuration';
+    displayName: 'Slider';
+    pluralName: 'sliders';
+    singularName: 'slider';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    code: Schema.Attribute.String & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.String;
+    interval: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      >;
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    items: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::slider-item.slider-item'
+    >;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::slider.slider'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiSurveyAnswerSurveyAnswer
   extends Struct.CollectionTypeSchema {
   collectionName: 'survey_answers';
@@ -2690,6 +2782,40 @@ export interface ApiSurveyTemplateSurveyTemplate
   };
 }
 
+export interface ApiTenantConfigTenantConfig
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'tenant_configs';
+  info: {
+    description: 'Tenant-scoped JSON configuration entries';
+    displayName: 'TenantConfig';
+    pluralName: 'tenant-configs';
+    singularName: 'tenant-config';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
+    jsonContent: Schema.Attribute.JSON & Schema.Attribute.Required;
+    key: Schema.Attribute.String & Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::tenant-config.tenant-config'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiTenantDomainTenantDomain
   extends Struct.CollectionTypeSchema {
   collectionName: 'tenant_domains';
@@ -2827,6 +2953,8 @@ export interface ApiTenantTenant extends Struct.CollectionTypeSchema {
       Schema.Attribute.Private;
     defaultFeatureCode: Schema.Attribute.String;
     defaultLocale: Schema.Attribute.String;
+    defaultProtectedRoute: Schema.Attribute.String;
+    defaultPublicRoute: Schema.Attribute.String;
     departments: Schema.Attribute.Relation<
       'oneToMany',
       'api::department.department'
@@ -3619,6 +3747,8 @@ declare module '@strapi/strapi' {
       'api::service-order-item.service-order-item': ApiServiceOrderItemServiceOrderItem;
       'api::service-order.service-order': ApiServiceOrderServiceOrder;
       'api::setting.setting': ApiSettingSetting;
+      'api::slider-item.slider-item': ApiSliderItemSliderItem;
+      'api::slider.slider': ApiSliderSlider;
       'api::survey-answer.survey-answer': ApiSurveyAnswerSurveyAnswer;
       'api::survey-assignment.survey-assignment': ApiSurveyAssignmentSurveyAssignment;
       'api::survey-campaign.survey-campaign': ApiSurveyCampaignSurveyCampaign;
@@ -3627,6 +3757,7 @@ declare module '@strapi/strapi' {
       'api::survey-response.survey-response': ApiSurveyResponseSurveyResponse;
       'api::survey-section.survey-section': ApiSurveySectionSurveySection;
       'api::survey-template.survey-template': ApiSurveyTemplateSurveyTemplate;
+      'api::tenant-config.tenant-config': ApiTenantConfigTenantConfig;
       'api::tenant-domain.tenant-domain': ApiTenantDomainTenantDomain;
       'api::tenant-feature.tenant-feature': ApiTenantFeatureTenantFeature;
       'api::tenant-role.tenant-role': ApiTenantRoleTenantRole;

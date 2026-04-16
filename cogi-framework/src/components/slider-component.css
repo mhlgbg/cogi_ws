@@ -1,0 +1,121 @@
+.slider-component {
+  display: grid;
+  gap: 1rem;
+}
+
+.slider-component-stage {
+  position: relative;
+  min-height: clamp(280px, 46vw, 520px);
+  width: 100%;
+  border: 0;
+  border-radius: 28px;
+  overflow: hidden;
+  padding: 0;
+  background-color: #d7dce7;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  text-align: left;
+  cursor: default;
+}
+
+.slider-component-stage.is-clickable {
+  cursor: pointer;
+}
+
+.slider-component-stage:disabled {
+  opacity: 1;
+}
+
+.slider-component-stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(10, 18, 32, 0.82) 0%, rgba(10, 18, 32, 0.44) 48%, rgba(10, 18, 32, 0.16) 100%),
+    linear-gradient(180deg, rgba(10, 18, 32, 0.12) 0%, rgba(10, 18, 32, 0.5) 100%);
+}
+
+.slider-component-overlay {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: end;
+  min-height: inherit;
+  padding: clamp(1.5rem, 4vw, 3rem);
+}
+
+.slider-component-copy {
+  width: min(640px, 100%);
+  color: #fff7ed;
+}
+
+.slider-component-title {
+  margin: 0;
+  font-size: clamp(1.9rem, 4vw, 3.8rem);
+  line-height: 0.96;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.slider-component-description {
+  margin: 0.9rem 0 0;
+  max-width: 52ch;
+  font-size: clamp(0.98rem, 1.8vw, 1.15rem);
+  line-height: 1.6;
+  color: rgba(255, 247, 237, 0.92);
+}
+
+.slider-component-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.slider-component-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(15, 23, 42, 0.18);
+  transition: transform 0.2s ease, background-color 0.2s ease, width 0.2s ease;
+}
+
+.slider-component-dot.active {
+  width: 34px;
+  background: #0f172a;
+}
+
+.slider-component-loading {
+  min-height: 220px;
+  border-radius: 24px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #e2e8f0, #f8fafc);
+  color: #475569;
+}
+
+@media (max-width: 767.98px) {
+  .slider-component-stage {
+    min-height: 340px;
+    border-radius: 22px;
+  }
+
+  .slider-component-stage::before {
+    background:
+      linear-gradient(180deg, rgba(10, 18, 32, 0.18) 0%, rgba(10, 18, 32, 0.82) 100%),
+      linear-gradient(90deg, rgba(10, 18, 32, 0.2) 0%, rgba(10, 18, 32, 0.12) 100%);
+  }
+
+  .slider-component-overlay {
+    align-items: end;
+    padding: 1.25rem;
+  }
+
+  .slider-component-description {
+    margin-top: 0.75rem;
+  }
+}

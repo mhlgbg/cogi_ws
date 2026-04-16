@@ -1,0 +1,46 @@
+module.exports = {
+  group: {
+    name: 'Content',
+    code: 'content',
+    order: 12,
+    icon: 'cilDescription',
+  },
+  features: [
+    {
+      name: 'Article Manage',
+      key: 'article.manage',
+      order: 1,
+      description: 'Manage articles in current tenant',
+      path: '/articles',
+      icon: 'cilDescription',
+      showInMenu: true,
+    },
+    {
+      name: 'Category Manage',
+      key: 'category.manage',
+      order: 2,
+      description: 'Manage article categories in current tenant',
+      path: '/categories',
+      icon: 'cilDescription',
+      showInMenu: true,
+    },
+    {
+      name: 'Author Manage',
+      key: 'author.manage',
+      order: 3,
+      description: 'Manage article authors in current tenant',
+      path: '/authors',
+      icon: 'cilUser',
+      showInMenu: true,
+    },
+    {
+      name: 'Tenant Config Manage',
+      key: 'tenant-config.manage',
+      order: 4,
+      description: 'Manage tenant configuration entries in current tenant',
+      path: '/tenant-configs',
+      icon: 'cilSettings',
+      showInMenu: true,
+    },
+  ],
+}

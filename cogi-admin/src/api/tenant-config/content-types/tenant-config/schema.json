@@ -1,0 +1,34 @@
+{
+  "kind": "collectionType",
+  "collectionName": "tenant_configs",
+  "info": {
+    "singularName": "tenant-config",
+    "pluralName": "tenant-configs",
+    "displayName": "TenantConfig",
+    "description": "Tenant-scoped JSON configuration entries"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "key": {
+      "type": "string",
+      "required": true
+    },
+    "jsonContent": {
+      "type": "json",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true,
+      "index": true
+    }
+  }
+}

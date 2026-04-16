@@ -14,6 +14,11 @@ import ForgotPassword from '../pages/ForgotPassword'
 import ResetPassword from '../pages/ResetPassword'
 import ChangePassword from '../pages/ChangePassword'
 import AdmissionLanding from '../pages/admission/AdmissionLanding.jsx'
+import TenantEntryRedirect from '../components/TenantEntryRedirect'
+import PublicLayout from '../layouts/PublicLayout'
+import JournalHomePage from '../pages/journal/JournalHomePage'
+import ArticleDetailPage from '../pages/journal/ArticleDetailPage'
+import CategoryPage from '../pages/journal/CategoryPage'
 import { allModuleRoutes } from '../modules'
 
 /**
@@ -43,24 +48,74 @@ function renderModuleRoute({ path, featureKey, component: Component }) {
   return <Route key={nestedPath} path={nestedPath} element={element} />
 }
 
+function renderAppShellRoutes(keyPrefix = 'root', options = {}) {
+  const includeIndex = options.includeIndex !== false
+
+  return (
+    <>
+      {includeIndex ? (
+        <Route
+          index
+          element={<Navigate to="dashboard" replace />}
+        />
+      ) : null}
+      <Route
+        path="dashboard"
+        element={(
+          <FeatureRoute featureKey="dashboard.view">
+            <Dashboard />
+          </FeatureRoute>
+        )}
+      />
+
+      {allModuleRoutes.map((route) => renderModuleRoute({ ...route, key: `${keyPrefix}:${route.path}` }))}
+
+      <Route path="change-password" element={<ChangePassword />} />
+      <Route path="forbidden" element={<Forbidden />} />
+      <Route path="*" element={<NotFound />} />
+    </>
+  )
+}
+
 export default function AppRouter() {
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/:tenantCode/login" element={<Login />} />
-      <Route path="/t/:tenantCode/login" element={<Login />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/activate" element={<Activate />} />
-      <Route path="/set-password" element={<SetPassword />} />
-      <Route path="/t/:tenantCode" element={<Navigate to="dang-ky-tuyen-sinh" replace />} />
-      <Route path="/t/:tenantCode/dang-ky-tuyen-sinh" element={<AdmissionLanding />} />
-      <Route path="/t/:tenantCode/dang-ky-tuyen-sinh/:campaignCode" element={<AdmissionLanding />} />
+      <Route path="/" element={<TenantEntryRedirect />} />
+      <Route path="/login" element={<TenantRoute requireAuth={false}><Login /></TenantRoute>} />
+      <Route path="/:tenantCode/login" element={<TenantRoute requireAuth={false}><Login /></TenantRoute>} />
+      <Route path="/t/:tenantCode/login" element={<TenantRoute requireAuth={false}><Login /></TenantRoute>} />
+      <Route path="/forgot-password" element={<TenantRoute requireAuth={false}><ForgotPassword /></TenantRoute>} />
+      <Route path="/t/:tenantCode/forgot-password" element={<TenantRoute requireAuth={false}><ForgotPassword /></TenantRoute>} />
+      <Route path="/reset-password" element={<TenantRoute requireAuth={false}><ResetPassword /></TenantRoute>} />
+      <Route path="/t/:tenantCode/reset-password" element={<TenantRoute requireAuth={false}><ResetPassword /></TenantRoute>} />
+      <Route path="/activate" element={<TenantRoute requireAuth={false}><Activate /></TenantRoute>} />
+      <Route path="/t/:tenantCode/activate" element={<TenantRoute requireAuth={false}><Activate /></TenantRoute>} />
+      <Route path="/set-password" element={<TenantRoute requireAuth={false}><SetPassword /></TenantRoute>} />
+      <Route path="/t/:tenantCode/set-password" element={<TenantRoute requireAuth={false}><SetPassword /></TenantRoute>} />
+      <Route path="/dang-ky-tuyen-sinh" element={<TenantRoute requireAuth={false}><AdmissionLanding /></TenantRoute>} />
+      <Route path="/dang-ky-tuyen-sinh/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionLanding /></TenantRoute>} />
+      <Route path="/t/:tenantCode/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionLanding /></TenantRoute>} />
+      <Route path="/t/:tenantCode/dang-ky-tuyen-sinh" element={<TenantRoute requireAuth={false}><AdmissionLanding /></TenantRoute>} />
+      <Route path="/t/:tenantCode/dang-ky-tuyen-sinh/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionLanding /></TenantRoute>} />
+
+      <Route
+        path="/t/:tenantCode"
+        element={(
+          <TenantRoute requireAuth={false}>
+            <PublicLayout />
+          </TenantRoute>
+        )}
+      >
+        <Route index element={<JournalHomePage />} />
+        <Route path="journal" element={<JournalHomePage />} />
+        <Route path="article/:slug" element={<ArticleDetailPage />} />
+        <Route path="category/:slug" element={<CategoryPage />} />
+      </Route>
 
       <Route
         path="/choose-tenant"
         element={(
-          <ProtectedRoute>
+          <ProtectedRoute requireTenant={false}>
             <ChooseTenant />
           </ProtectedRoute>
         )}
@@ -74,30 +129,18 @@ export default function AppRouter() {
           </TenantRoute>
         )}
       >
-        {/* Dashboard — always present as index route */}
-        <Route
-          index
-          element={(
-            <FeatureRoute featureKey="dashboard.view">
-              <Dashboard />
-            </FeatureRoute>
-          )}
-        />
-        <Route
-          path="dashboard"
-          element={(
-            <FeatureRoute featureKey="dashboard.view">
-              <Dashboard />
-            </FeatureRoute>
-          )}
-        />
+        {renderAppShellRoutes('root')}
+      </Route>
 
-        {/* Module routes — driven by registry */}
-        {allModuleRoutes.map(renderModuleRoute)}
-
-        <Route path="change-password" element={<ChangePassword />} />
-        <Route path="forbidden" element={<Forbidden />} />
-        <Route path="*" element={<NotFound />} />
+      <Route
+        path="/t/:tenantCode"
+        element={(
+          <TenantRoute>
+            <MainLayout />
+          </TenantRoute>
+        )}
+      >
+        {renderAppShellRoutes('tenant-path', { includeIndex: false })}
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

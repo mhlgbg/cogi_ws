@@ -153,7 +153,7 @@ export default {
         select: ['id', 'label'],
         populate: {
           tenant: {
-            select: ['id', 'name', 'code', 'shortName', 'tenantStatus', 'defaultFeatureCode'],
+            select: ['id', 'name', 'code', 'shortName', 'tenantStatus', 'defaultFeatureCode', 'defaultPublicRoute', 'defaultProtectedRoute'],
             populate: {
               logo: true,
             },
@@ -224,6 +224,8 @@ export default {
               code: tenantCode || null,
               shortName: tenantShortName || null,
               defaultFeatureCode: normalizeText((tenant as any).defaultFeatureCode) || null,
+              defaultPublicRoute: normalizeText((tenant as any).defaultPublicRoute) || null,
+              defaultProtectedRoute: normalizeText((tenant as any).defaultProtectedRoute) || null,
               logo: tenant.logo || null,
               logoUrl: tenantLogoUrl || null,
               label: tenantName || tenantCode || `Tenant #${tenantId}`,

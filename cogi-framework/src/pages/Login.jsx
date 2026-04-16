@@ -1,14 +1,59 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import api from '../api/axios'
 import { useAuth } from '../contexts/AuthContext'
+import { useTenant } from '../contexts/TenantContext'
+
+function normalizePath(path) {
+  const rawPath = String(path || '').trim()
+  if (!rawPath) return ''
+  if (/^https?:\/\//i.test(rawPath)) {
+    try {
+      return new URL(rawPath).pathname || '/'
+    } catch {
+      return rawPath
+    }
+  }
+
+  return rawPath.startsWith('/') ? rawPath : `/${rawPath}`
+}
+
+function isPublicOrAuthPath(path) {
+  const normalizedPath = normalizePath(path)
+  if (!normalizedPath) return false
+
+  if (
+    normalizedPath === '/'
+    || normalizedPath === '/login'
+    || normalizedPath === '/forgot-password'
+    || normalizedPath === '/reset-password'
+    || normalizedPath === '/activate'
+    || normalizedPath === '/set-password'
+  ) {
+    return true
+  }
+
+  return normalizedPath === '/dang-ky-tuyen-sinh' || normalizedPath.startsWith('/dang-ky-tuyen-sinh/')
+}
+
+function buildChooseTenantPath(tenantCode, redirectPath) {
+  const nextSearchParams = new URLSearchParams()
+  const nextTenantCode = String(tenantCode || '').trim()
+  if (nextTenantCode) nextSearchParams.set('tenantCode', nextTenantCode)
+  if (redirectPath && !isPublicOrAuthPath(redirectPath)) nextSearchParams.set('redirect', redirectPath)
+
+  return nextSearchParams.toString()
+    ? `/choose-tenant?${nextSearchParams.toString()}`
+    : '/choose-tenant'
+}
 
 export default function Login() {
   const navigate = useNavigate()
   const { tenantCode } = useParams()
   const [searchParams] = useSearchParams()
   const auth = useAuth()
+  const tenant = useTenant()
 
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
@@ -18,6 +63,28 @@ export default function Login() {
     const rawRedirect = String(searchParams.get('redirect') || '').trim()
     return rawRedirect.startsWith('/') ? rawRedirect : ''
   }, [searchParams])
+  const resolvedTenantCode = String(
+    tenantCode || tenant?.resolvedTenant?.tenantCode || tenant?.currentTenant?.tenantCode || '',
+  ).trim()
+
+  if (auth?.isAuthenticated) {
+    if (tenant?.isResolvingTenant) {
+      return <div>Đang xác định tenant...</div>
+    }
+
+    if (tenant?.hasTenant) {
+      const authenticatedTarget = redirectPath && !isPublicOrAuthPath(redirectPath)
+        ? redirectPath
+        : tenant?.resolveProtectedRoutePath?.({
+          tenantCode: resolvedTenantCode,
+          isMainDomain: tenant?.isMainDomain,
+        }) || '/dashboard'
+
+      return <Navigate to={authenticatedTarget} replace />
+    }
+
+    return <Navigate to={buildChooseTenantPath(resolvedTenantCode, redirectPath)} replace />
+  }
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -51,14 +118,7 @@ export default function Login() {
         localStorage.setItem('authUser', JSON.stringify(user))
       }
 
-      const nextTenantCode = String(tenantCode || '').trim()
-      const nextSearchParams = new URLSearchParams()
-      if (nextTenantCode) nextSearchParams.set('tenantCode', nextTenantCode)
-      if (redirectPath) nextSearchParams.set('redirect', redirectPath)
-
-      const nextChooseTenantPath = nextSearchParams.toString()
-        ? `/choose-tenant?${nextSearchParams.toString()}`
-        : '/choose-tenant'
+      const nextChooseTenantPath = buildChooseTenantPath(resolvedTenantCode, redirectPath)
 
       navigate(nextChooseTenantPath)
     } catch (requestError) {

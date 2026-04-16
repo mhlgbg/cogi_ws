@@ -127,7 +127,7 @@ async function loadTenantBrandingById(strapi, tenantId) {
 
 	const tenant = await strapi.db.query(TENANT_UID).findOne({
 		where: { id: tenantId },
-		select: ['id', 'shortName'],
+		select: ['id', 'shortName', 'defaultFeatureCode', 'defaultPublicRoute', 'defaultProtectedRoute'],
 		populate: {
 			logo: true,
 		},
@@ -170,7 +170,7 @@ module.exports = (plugin) => {
 				select: ['id', 'label'],
 				populate: {
 					tenant: {
-						select: ['id', 'name', 'code', 'shortName', 'tenantStatus'],
+						select: ['id', 'name', 'code', 'shortName', 'tenantStatus', 'defaultFeatureCode', 'defaultPublicRoute', 'defaultProtectedRoute'],
 						populate: {
 							logo: {
 								select: ['url'],
@@ -250,6 +250,9 @@ module.exports = (plugin) => {
 							name: tenantName || tenantCode,
 							code: tenantCode || null,
 							shortName: tenantShortName || null,
+							defaultFeatureCode: normalizeText(brandingTenant?.defaultFeatureCode || tenant.defaultFeatureCode) || null,
+							defaultPublicRoute: normalizeText(brandingTenant?.defaultPublicRoute || tenant.defaultPublicRoute) || null,
+							defaultProtectedRoute: normalizeText(brandingTenant?.defaultProtectedRoute || tenant.defaultProtectedRoute) || null,
 							logo: brandingTenant?.logo || tenant.logo || null,
 							logoUrl: tenantLogoUrl || null,
 							label: tenantName || tenantCode || `Tenant #${tenantId}`,

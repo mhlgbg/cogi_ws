@@ -41,11 +41,11 @@ export function AdmissionInfoPanel({ tenant, campaign, title, description, hasHt
       <CCardBody className='p-4 p-lg-5'>
         <div className='d-flex flex-column gap-4'>
           <div className='admission-note-box'>
-            Dùng email và số điện thoại đang hoạt động để nhận thư mời, thông báo duyệt hồ sơ và hướng dẫn tiếp theo của nhà trường (Có thể thư sẽ được gửi vào hộp thư spam).
+            Vui lòng sử dụng email đang hoạt động để nhận link kích hoạt, thông tin tuyển sinh và các hướng dẫn tiếp theo của nhà trường (lưu ý kiểm tra cả hộp thư Spam).
           </div>
 
           <div>
-            <div className='admission-section-title mb-3'>Mô tả tuyển sinh</div>
+            <div className='admission-section-title mb-3'>Hướng dẫn đăng ký dự tuyển</div>
             {description ? (
               hasHtmlContent(description)
                 ? <div className='admission-description' dangerouslySetInnerHTML={{ __html: description }} />

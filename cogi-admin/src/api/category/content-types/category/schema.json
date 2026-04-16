@@ -24,6 +24,13 @@
       "target": "api::article.article",
       "mappedBy": "category"
     },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true,
+      "index": true
+    },
     "description": {
       "type": "text"
     }

@@ -1,0 +1,59 @@
+{
+  "kind": "collectionType",
+  "collectionName": "slider_items",
+  "info": {
+    "singularName": "slider-item",
+    "pluralName": "slider-items",
+    "displayName": "SliderItem",
+    "description": "Items belonging to a tenant slider"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "slider": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::slider.slider",
+      "inversedBy": "items",
+      "required": true
+    },
+    "image": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "text"
+    },
+    "showTitle": {
+      "type": "boolean",
+      "default": true
+    },
+    "showDescription": {
+      "type": "boolean",
+      "default": true
+    },
+    "link": {
+      "type": "string"
+    },
+    "openInNewTab": {
+      "type": "boolean",
+      "default": false
+    },
+    "order": {
+      "type": "integer",
+      "default": 0
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    }
+  }
+}

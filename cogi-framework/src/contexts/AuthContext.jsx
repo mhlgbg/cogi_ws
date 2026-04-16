@@ -1,7 +1,21 @@
 import { createContext, useContext, useMemo, useState } from 'react'
 
 const AuthContext = createContext(null)
-const TENANT_STORAGE_KEYS = ['tenantCode', 'tenantName', 'tenantShortName', 'tenantLogoUrl', 'tenantLogo', 'tenantId', 'userTenantId', 'tenantRoles', 'featureContext']
+const TENANT_STORAGE_KEYS = [
+  'tenantCode',
+  'tenantName',
+  'tenantShortName',
+  'tenantLogoUrl',
+  'tenantLogo',
+  'tenantId',
+  'userTenantId',
+  'tenantRoles',
+  'defaultFeatureCode',
+  'defaultPublicRoute',
+  'defaultProtectedRoute',
+  'isMainDomain',
+  'featureContext',
+]
 
 function readAuthFromStorage() {
   const token = localStorage.getItem('authJwt')

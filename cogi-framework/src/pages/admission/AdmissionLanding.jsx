@@ -6,12 +6,14 @@ import {
   CRow,
 } from '@coreui/react'
 import api from '../../api/axios'
+import { useTenant } from '../../contexts/TenantContext'
 import './AdmissionLanding.css'
 import {
   AdmissionForm,
   AdmissionInfoPanel,
   AdmissionTopHeader,
 } from './AdmissionLandingSections'
+import { buildTenantUrl, isBrowserOnMainDomain } from '../../utils/tenantRouting'
 
 function toAbsoluteUrl(url) {
   const rawUrl = String(url || '').trim()
@@ -48,7 +50,14 @@ const INITIAL_FORM = {
 
 export default function AdmissionLanding() {
   const navigate = useNavigate()
+  const tenantContext = useTenant()
   const { tenantCode, campaignCode } = useParams()
+  const resolvedTenantCode = String(
+    tenantCode
+    || tenantContext?.resolvedTenant?.tenantCode
+    || tenantContext?.currentTenant?.tenantCode
+    || '',
+  ).trim()
   const [tenant, setTenant] = useState({ name: '', logo: '', code: '' })
   const [campaign, setCampaign] = useState({ name: '', description: '', code: '' })
   const [form, setForm] = useState(INITIAL_FORM)
@@ -63,9 +72,12 @@ export default function AdmissionLanding() {
     [campaignCode],
   )
   const loginPath = useMemo(() => {
-    const normalizedTenantCode = encodeURIComponent(String(tenantCode || '').trim())
-    return `/${normalizedTenantCode}/login?redirect=${encodeURIComponent(admissionRedirectPath)}`
-  }, [admissionRedirectPath, tenantCode])
+    const tenantLoginPath = buildTenantUrl('/login', {
+      tenantCode: resolvedTenantCode,
+      isMainDomain: isBrowserOnMainDomain(),
+    }) || '/login'
+    return `${tenantLoginPath}?redirect=${encodeURIComponent(admissionRedirectPath)}`
+  }, [admissionRedirectPath, resolvedTenantCode])
 
   useEffect(() => {
     let isCancelled = false
@@ -76,7 +88,7 @@ export default function AdmissionLanding() {
 
       try {
         const [tenantResponse, campaignResponse] = await Promise.all([
-          api.get(`/tenants/by-code/${encodeURIComponent(String(tenantCode || '').trim())}`),
+          api.get(`/tenants/by-code/${encodeURIComponent(resolvedTenantCode)}`),
           api.get(`/admission-campaigns/by-code/${encodeURIComponent(String(campaignCode || '').trim())}`),
         ])
         if (isCancelled) return
@@ -115,7 +127,7 @@ export default function AdmissionLanding() {
       }
     }
 
-    if (tenantCode && campaignCode) {
+    if (resolvedTenantCode && campaignCode) {
       loadTenant()
     } else {
       setLoading(false)
@@ -125,7 +137,7 @@ export default function AdmissionLanding() {
     return () => {
       isCancelled = true
     }
-  }, [tenantCode, campaignCode])
+  }, [resolvedTenantCode, campaignCode])
 
   function handleChange(event) {
     const { name, value } = event.target
@@ -165,7 +177,7 @@ export default function AdmissionLanding() {
         fullName,
         email,
         phone,
-        tenantCode,
+        tenantCode: resolvedTenantCode,
         campaignCode,
         templateCode: 'admission_invite',
       })
