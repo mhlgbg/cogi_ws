@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CBadge, CButton, CCard, CCardBody, CCardHeader, CSpinner } from '@coreui/react'
+import {
+  CBadge,
+  CButton,
+  CCard,
+  CCardBody,
+  CCardHeader,
+  CSpinner,
+} from '@coreui/react'
 import ImportAssignmentModal from '../components/ImportAssignmentModal'
 import { getSurveyCampaigns, updateSurveyCampaign } from '../services/surveyCampaignService'
 

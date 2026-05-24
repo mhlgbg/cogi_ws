@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 import api from '../api/axios'
 import { useTenant } from '../contexts/TenantContext'
+import { resolveMediaUrl } from '../utils/mediaUrl'
 import { buildTenantUrl } from '../utils/tenantRouting'
 
 function normalizeRelation(value) {
@@ -29,17 +30,7 @@ function normalizeRelation(value) {
 }
 
 function toAbsoluteUrl(url) {
-  const raw = String(url || '').trim()
-  if (!raw) return ''
-  if (/^https?:\/\//i.test(raw)) return raw
-
-  try {
-    const apiBase = String(api.defaults.baseURL || window.location.origin)
-    const origin = new URL(apiBase, window.location.origin).origin
-    return new URL(raw, origin).toString()
-  } catch {
-    return raw
-  }
+  return resolveMediaUrl(url)
 }
 
 function normalizeMedia(value) {

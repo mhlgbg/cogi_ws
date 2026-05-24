@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   CAlert,
+  CButton,
   CCard,
   CCardBody,
   CCardHeader,
@@ -10,12 +11,15 @@ import {
 } from '@coreui/react'
 import { Link, useParams } from 'react-router-dom'
 import api from '../../api/axios'
+import JournalIssueCard from '../../components/JournalIssueCard'
 import SliderComponent from '../../components/SliderComponent'
 import UsefulLinks from '../../components/UsefulLinks'
 import { useTenant } from '../../contexts/TenantContext'
 import { getTenantConfigByKey } from '../../modules/content-management/services/tenantConfigService'
 import { getSliderByCode } from '../../modules/content-management/services/sliderService'
+import { resolveMediaUrl } from '../../utils/mediaUrl'
 import { buildTenantUrl } from '../../utils/tenantRouting'
+import { normalizeJournalCategoryList, normalizeJournalIssueList } from './journalPublicUtils'
 
 const PAGE_SIZE = 3
 
@@ -73,17 +77,7 @@ function normalizeHomepageLayout(payload) {
 }
 
 function toAbsoluteUrl(url) {
-  const raw = String(url || '').trim()
-  if (!raw) return ''
-  if (/^https?:\/\//i.test(raw)) return raw
-
-  try {
-    const apiBase = String(api.defaults.baseURL || window.location.origin)
-    const origin = new URL(apiBase, window.location.origin).origin
-    return new URL(raw, origin).toString()
-  } catch {
-    return raw
-  }
+  return resolveMediaUrl(url)
 }
 
 function sanitizeHtml(html) {
@@ -199,6 +193,8 @@ export default function JournalHomePage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [articles, setArticles] = useState([])
+  const [journalCategories, setJournalCategories] = useState([])
+  const [journalIssues, setJournalIssues] = useState([])
   const [homepageSliderCode, setHomepageSliderCode] = useState('')
   const [homepageSloganHtml, setHomepageSloganHtml] = useState('')
   const [mainSectionCategorySlug, setMainSectionCategorySlug] = useState('')
@@ -222,7 +218,8 @@ export default function JournalHomePage() {
         if (cancelled) return
         const homepageLayout = normalizeHomepageLayout(homepageLayoutConfig?.jsonContent)
         const articleParams = {
-          sort: 'publicAt:desc,publishedAt:desc',
+          'sort[0]': 'publicAt:desc',
+          'sort[1]': 'publishedAt:desc',
           'populate[0]': 'cover',
           'populate[1]': 'category',
           'pagination[page]': 1,
@@ -233,9 +230,25 @@ export default function JournalHomePage() {
           articleParams['filters[category][slug][$eq]'] = homepageLayout.mainSectionCategorySlug
         }
 
-        const [response, usefulLinksRows] = await Promise.all([
+        const [response, journalCategoryResponse, journalIssueResponse, usefulLinksRows] = await Promise.all([
           api.get('/articles', {
             params: articleParams,
+          }),
+          api.get('/journal-categories', {
+            params: {
+              'pagination[page]': 1,
+              'pagination[pageSize]': 8,
+              'sort[0]': 'title:asc',
+            },
+          }),
+          api.get('/journal-issues', {
+            params: {
+              'sort[0]': 'publicAt:desc',
+              'sort[1]': 'year:desc',
+              'sort[2]': 'updatedAt:desc',
+              'pagination[page]': 1,
+              'pagination[pageSize]': PAGE_SIZE,
+            },
           }),
           homepageLayout.usefulLinks.code
             ? getSliderByCode(homepageLayout.usefulLinks.code)
@@ -244,6 +257,8 @@ export default function JournalHomePage() {
 
         if (cancelled) return
         setArticles(normalizeArticleList(response.data))
+        setJournalCategories(normalizeJournalCategoryList(journalCategoryResponse.data))
+        setJournalIssues(normalizeJournalIssueList(journalIssueResponse.data))
         setHomepageSliderCode(homepageLayout.sliderCode)
         setHomepageSloganHtml(sanitizeHtml(homepageLayout.sloganHtml))
         setMainSectionCategorySlug(homepageLayout.mainSectionCategorySlug)
@@ -256,6 +271,8 @@ export default function JournalHomePage() {
       } catch (requestError) {
         if (cancelled) return
         setArticles([])
+        setJournalCategories([])
+        setJournalIssues([])
         setHomepageSliderCode('')
         setHomepageSloganHtml('')
         setMainSectionCategorySlug('')
@@ -280,6 +297,11 @@ export default function JournalHomePage() {
   const rows = useMemo(
     () => articles.slice(0, PAGE_SIZE),
     [articles],
+  )
+
+  const issueRows = useMemo(
+    () => journalIssues.filter((item) => item?.slug).slice(0, PAGE_SIZE),
+    [journalIssues],
   )
 
   const bannerAlt = String(sideBanner?.alt || '').trim() || 'Banner'
@@ -314,89 +336,146 @@ export default function JournalHomePage() {
                 <span>Đang tải bài viết...</span>
               </div>
             ) : (
-              <div className='public-homepage-main-section'>
-                <div className='public-homepage-main-column'>
-                  {/*mainSectionCategorySlug ? (
-                    <div className='public-homepage-section-heading'>Chuyên mục: {mainSectionCategorySlug}</div>
-                  ) : null*/}
+              <div className='d-flex flex-column gap-4'>
+                <div className='public-homepage-main-section'>
+                  <div className='public-homepage-main-column'>
+                    {/*mainSectionCategorySlug ? (
+                      <div className='public-homepage-section-heading'>Chuyên mục: {mainSectionCategorySlug}</div>
+                    ) : null*/}
 
-                  {rows.length === 0 ? (
-                    <div className='text-center text-body-secondary py-4'>Chưa có bài viết để hiển thị</div>
-                  ) : (
-                    <CRow className='g-3'>
-                      {rows.map((article) => {
-                        const articlePath = buildTenantUrl(`/article/${encodeURIComponent(article.slug)}`, { tenantCode, isMainDomain }) || `/article/${encodeURIComponent(article.slug)}`
-                        const hasArticleLink = Boolean(String(article?.slug || '').trim())
-                        const coverUrl = String(article?.cover?.url || '').trim()
-                        const displayDate = article?.publicAt || article?.publishedAt || ''
+                    {rows.length === 0 ? (
+                      <div className='text-center text-body-secondary py-4'>Chưa có bài viết để hiển thị</div>
+                    ) : (
+                      <CRow className='g-3'>
+                        {rows.map((article) => {
+                          const articlePath = buildTenantUrl(`/article/${encodeURIComponent(article.slug)}`, { tenantCode, isMainDomain }) || `/article/${encodeURIComponent(article.slug)}`
+                          const hasArticleLink = Boolean(String(article?.slug || '').trim())
+                          const coverUrl = String(article?.cover?.url || '').trim()
+                          const displayDate = article?.publicAt || article?.publishedAt || ''
 
-                        return (
-                          <CCol key={article.id || article.slug} xs={12} md={4}>
-                            {hasArticleLink ? (
-                              <Link to={articlePath} className='public-homepage-article-card text-decoration-none'>
-                                <div className='public-homepage-article-media'>
-                                  {coverUrl ? (
-                                    <img src={coverUrl} alt={article.title || article.slug || 'Article cover'} className='public-homepage-article-image' />
-                                  ) : (
-                                    <div className='public-homepage-article-image-fallback'>Không có ảnh</div>
-                                  )}
+                          return (
+                            <CCol key={article.id || article.slug} xs={12} md={4}>
+                              {hasArticleLink ? (
+                                <Link to={articlePath} className='public-homepage-article-card text-decoration-none'>
+                                  <div className='public-homepage-article-media'>
+                                    {coverUrl ? (
+                                      <img src={coverUrl} alt={article.title || article.slug || 'Article cover'} className='public-homepage-article-image' />
+                                    ) : (
+                                      <div className='public-homepage-article-image-fallback'>Không có ảnh</div>
+                                    )}
+                                  </div>
+                                  <div className='public-homepage-article-body'>
+                                    <div className='public-homepage-article-title'>{article.title || article.slug || `Bài viết #${article.id}`}</div>
+                                    <div className='public-homepage-article-date'>{formatPublishedDate(displayDate)}</div>
+                                  </div>
+                                </Link>
+                              ) : (
+                                <div className='public-homepage-article-card'>
+                                  <div className='public-homepage-article-media'>
+                                    {coverUrl ? (
+                                      <img src={coverUrl} alt={article.title || article.slug || 'Article cover'} className='public-homepage-article-image' />
+                                    ) : (
+                                      <div className='public-homepage-article-image-fallback'>Không có ảnh</div>
+                                    )}
+                                  </div>
+                                  <div className='public-homepage-article-body'>
+                                    <div className='public-homepage-article-title'>{article.title || article.slug || `Bài viết #${article.id}`}</div>
+                                    <div className='public-homepage-article-date'>{formatPublishedDate(displayDate)}</div>
+                                  </div>
                                 </div>
-                                <div className='public-homepage-article-body'>
-                                  <div className='public-homepage-article-title'>{article.title || article.slug || `Bài viết #${article.id}`}</div>
-                                  <div className='public-homepage-article-date'>{formatPublishedDate(displayDate)}</div>
-                                </div>
-                              </Link>
-                            ) : (
-                              <div className='public-homepage-article-card'>
-                                <div className='public-homepage-article-media'>
-                                  {coverUrl ? (
-                                    <img src={coverUrl} alt={article.title || article.slug || 'Article cover'} className='public-homepage-article-image' />
-                                  ) : (
-                                    <div className='public-homepage-article-image-fallback'>Không có ảnh</div>
-                                  )}
-                                </div>
-                                <div className='public-homepage-article-body'>
-                                  <div className='public-homepage-article-title'>{article.title || article.slug || `Bài viết #${article.id}`}</div>
-                                  <div className='public-homepage-article-date'>{formatPublishedDate(displayDate)}</div>
-                                </div>
-                              </div>
-                            )}
-                          </CCol>
-                        )
-                      })}
-                    </CRow>
-                  )}
+                              )}
+                            </CCol>
+                          )
+                        })}
+                      </CRow>
+                    )}
+                  </div>
+
+                  <aside className='public-homepage-side-column'>
+                    {bannerLink ? (
+                      <a
+                        href={bannerLink}
+                        className='public-homepage-side-banner'
+                        {...(sideBanner.openInNewTab ? { target: '_blank', rel: 'noreferrer' } : {})}
+                      >
+                        {showBannerImage ? (
+                          <img
+                            src={bannerImageUrl}
+                            alt={bannerAlt}
+                            className='public-homepage-side-banner-image'
+                            onError={() => setSideBannerImageFailed(true)}
+                          />
+                        ) : (
+                          <div className='public-homepage-side-banner-fallback'>{bannerAlt}</div>
+                        )}
+                      </a>
+                    ) : showBannerImage ? (
+                      <img
+                        src={bannerImageUrl}
+                        alt={bannerAlt}
+                        className='public-homepage-side-banner-image public-homepage-side-banner-standalone'
+                        onError={() => setSideBannerImageFailed(true)}
+                      />
+                    ) : (
+                      <div className='public-homepage-side-banner-fallback public-homepage-side-banner-standalone'>{bannerAlt}</div>
+                    )}
+                  </aside>
                 </div>
 
-                <aside className='public-homepage-side-column'>
-                  {bannerLink ? (
-                    <a
-                      href={bannerLink}
-                      className='public-homepage-side-banner'
-                      {...(sideBanner.openInNewTab ? { target: '_blank', rel: 'noreferrer' } : {})}
-                    >
-                      {showBannerImage ? (
-                        <img
-                          src={bannerImageUrl}
-                          alt={bannerAlt}
-                          className='public-homepage-side-banner-image'
-                          onError={() => setSideBannerImageFailed(true)}
-                        />
-                      ) : (
-                        <div className='public-homepage-side-banner-fallback'>{bannerAlt}</div>
-                      )}
-                    </a>
-                  ) : showBannerImage ? (
-                    <img
-                      src={bannerImageUrl}
-                      alt={bannerAlt}
-                      className='public-homepage-side-banner-image public-homepage-side-banner-standalone'
-                      onError={() => setSideBannerImageFailed(true)}
-                    />
+                <section>
+                  <div className='d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3'>
+                    <div>
+                      <h2 className='h4 mb-1'>Danh mục tạp chí</h2>
+                      <div className='text-body-secondary'>Chọn danh mục để xem các số tạp chí tương ứng.</div>
+                    </div>
+                  </div>
+
+                  {journalCategories.length === 0 ? (
+                    <div className='text-center text-body-secondary py-4 border rounded-4'>Chưa có danh mục tạp chí để hiển thị</div>
                   ) : (
-                    <div className='public-homepage-side-banner-fallback public-homepage-side-banner-standalone'>{bannerAlt}</div>
+                    <div className='d-flex flex-wrap gap-2'>
+                      {journalCategories.map((category) => {
+                        const categorySlug = String(category?.slug || '').trim()
+                        const categoryPath = categorySlug
+                          ? (buildTenantUrl(`/journal-category/${encodeURIComponent(categorySlug)}`, { tenantCode, isMainDomain }) || `/journal-category/${encodeURIComponent(categorySlug)}`)
+                          : ''
+
+                        return categoryPath ? (
+                          <CButton
+                            key={category.documentId || category.id || categorySlug}
+                            component={Link}
+                            to={categoryPath}
+                            color='secondary'
+                            variant='outline'
+                          >
+                            {category.title || categorySlug}
+                          </CButton>
+                        ) : null
+                      })}
+                    </div>
                   )}
-                </aside>
+                </section>
+
+                <section>
+                  <div className='d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3'>
+                    <div>
+                      <h2 className='h4 mb-1'>Số tạp chí mới</h2>
+                      <div className='text-body-secondary'>Các số tạp chí đã công khai gần đây.</div>
+                    </div>
+                  </div>
+
+                  {issueRows.length === 0 ? (
+                    <div className='text-center text-body-secondary py-4 border rounded-4'>Chưa có số tạp chí để hiển thị</div>
+                  ) : (
+                    <CRow className='g-3'>
+                      {issueRows.map((issue) => (
+                        <CCol key={issue.documentId || issue.id || issue.slug} xs={12} md={4}>
+                          <JournalIssueCard issue={issue} />
+                        </CCol>
+                      ))}
+                    </CRow>
+                  )}
+                </section>
               </div>
             )}
 

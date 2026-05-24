@@ -32,8 +32,33 @@ export async function updateSurveyCampaign(id, payload) {
   return unwrapSuccess(res.data)
 }
 
+export async function deleteSurveyCampaign(id) {
+  const res = await api.delete(`/survey-campaigns/${id}`)
+  return unwrapSuccess(res.data)
+}
+
 export async function getSurveyAssignments(params = {}) {
   const res = await api.get('/survey-assignments', { params })
+  return unwrapSuccess(res.data)
+}
+
+export async function createSurveyAssignment(payload) {
+  const res = await api.post('/survey-assignments', payload)
+  return unwrapSuccess(res.data)
+}
+
+export async function deleteSurveyAssignmentsByFilter(payload) {
+  const res = await api.post('/survey-assignments/delete-filtered', payload)
+  return unwrapSuccess(res.data)
+}
+
+export async function restoreSurveyAssignmentsByFilter(payload) {
+  const res = await api.post('/survey-assignments/restore-filtered', payload)
+  return unwrapSuccess(res.data)
+}
+
+export async function restoreSurveyAssignment(id) {
+  const res = await api.post(`/survey-assignments/${id}/restore`)
   return unwrapSuccess(res.data)
 }
 
@@ -68,6 +93,34 @@ export async function exportSurveyCampaignLecturerReport(campaignId, lecturerId)
   return {
     blob: res.data,
     fileName: matchedName?.[1] || `survey-report-${campaignId}-${lecturerId}.xlsx`,
+  }
+}
+
+export async function exportSurveyCampaignCourseReport(campaignId, courseId) {
+  const res = await api.get(`/survey-reports/campaign/${campaignId}/course/${encodeURIComponent(String(courseId || '').trim())}/export`, {
+    responseType: 'blob',
+  })
+
+  const headerValue = String(res.headers?.['content-disposition'] || '')
+  const matchedName = headerValue.match(/filename="?([^";]+)"?/i)
+
+  return {
+    blob: res.data,
+    fileName: matchedName?.[1] || `survey-report-${campaignId}-${courseId}.xlsx`,
+  }
+}
+
+export async function exportSurveyCampaignProgressReport(campaignId) {
+  const res = await api.get(`/survey-reports/campaign/${campaignId}/progress/export`, {
+    responseType: 'blob',
+  })
+
+  const headerValue = String(res.headers?.['content-disposition'] || '')
+  const matchedName = headerValue.match(/filename="?([^";]+)"?/i)
+
+  return {
+    blob: res.data,
+    fileName: matchedName?.[1] || `survey-progress-${campaignId}.xlsx`,
   }
 }
 

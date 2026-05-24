@@ -22,7 +22,13 @@ import {
   CToaster,
 } from '@coreui/react'
 import SurveySection from '../components/SurveySection'
-import { getSurveyAssignmentDetail, saveSurveyDraft, submitSurvey } from '../services/surveyService'
+import { useAuth } from '../../../contexts/AuthContext'
+import { getSurveyAssignmentDetail, saveSurveyAnswersBatch, submitSurvey } from '../services/surveyService'
+
+const SURVEY_AUTOSAVE_BATCH_SIZE = 10
+const SURVEY_AUTOSAVE_IDLE_MS = 12000
+const SURVEY_LOCAL_DRAFT_PREFIX = 'survey-answer-buffer'
+const SURVEY_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:1339/api'
 
 function getApiMessage(error, fallback) {
   return error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || fallback
@@ -54,7 +60,62 @@ function formatMetaLabel(label, identifier, name) {
   return `${label}: ${safeId || safeName}`
 }
 
+function buildSurveyLocalDraftKey(userId, assignmentId, responseId) {
+  return `${SURVEY_LOCAL_DRAFT_PREFIX}:${String(userId || 'anonymous').trim()}:${String(assignmentId || '').trim()}:${String(responseId || 'draft').trim()}`
+}
+
+function readSurveyLocalDraft(storageKey) {
+  if (!storageKey) return null
+
+  try {
+    const rawValue = localStorage.getItem(storageKey)
+    if (!rawValue) return null
+
+    const parsed = JSON.parse(rawValue)
+    if (!parsed || typeof parsed !== 'object') return null
+
+    return {
+      answers: parsed.answers && typeof parsed.answers === 'object' ? parsed.answers : {},
+      dirtyQuestionIds: Array.isArray(parsed.dirtyQuestionIds)
+        ? parsed.dirtyQuestionIds.map((item) => Number(item)).filter((item) => Number.isInteger(item) && item > 0)
+        : [],
+      lastSavedAt: typeof parsed.lastSavedAt === 'string' ? parsed.lastSavedAt : '',
+    }
+  } catch {
+    return null
+  }
+}
+
+function writeSurveyLocalDraft(storageKey, snapshot) {
+  if (!storageKey) return
+
+  localStorage.setItem(storageKey, JSON.stringify({
+    answers: snapshot?.answers || {},
+    dirtyQuestionIds: Array.isArray(snapshot?.dirtyQuestionIds) ? snapshot.dirtyQuestionIds : [],
+    lastSavedAt: snapshot?.lastSavedAt || '',
+    updatedAt: new Date().toISOString(),
+  }))
+}
+
+function clearSurveyLocalDraft(storageKey) {
+  if (!storageKey) return
+  localStorage.removeItem(storageKey)
+}
+
+function buildAnswerPayload(questionId, answer) {
+  return {
+    questionId: Number(questionId),
+    value: String(answer?.value || ''),
+    text: String(answer?.text || ''),
+  }
+}
+
+function buildKeepaliveBatchUrl(responseId) {
+  return `${String(SURVEY_API_BASE_URL).replace(/\/+$/, '')}/survey-responses/${responseId}/answers/batch`
+}
+
 export default function SurveyForm() {
+  const auth = useAuth()
   const navigate = useNavigate()
   const { assignmentId } = useParams()
   const [loading, setLoading] = useState(true)
@@ -66,10 +127,48 @@ export default function SurveyForm() {
   const [invalidQuestionIds, setInvalidQuestionIds] = useState(new Set())
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [showSuccessToast, setShowSuccessToast] = useState(false)
-  const [savingDraft, setSavingDraft] = useState(false)
-  const [draftSavedAt, setDraftSavedAt] = useState('')
-  const [hasAutoSaveStarted, setHasAutoSaveStarted] = useState(false)
-  const hydratedPayloadRef = useRef('')
+  const [saveState, setSaveState] = useState('idle')
+  const [lastSavedAt, setLastSavedAt] = useState('')
+  const [dirtyQuestionIds, setDirtyQuestionIds] = useState(new Set())
+  const [saveErrorMessage, setSaveErrorMessage] = useState('')
+  const answersRef = useRef({})
+  const dirtyQuestionIdsRef = useRef(new Set())
+  const answerRevisionRef = useRef({})
+  const isSavingBatchRef = useRef(false)
+  const activeSavePromiseRef = useRef(null)
+  const flushAfterSaveRef = useRef(false)
+  const lastSavedAtRef = useRef('')
+
+  const responseId = Number(detail?.draftResponse?.id || 0)
+  const draftStorageKey = useMemo(
+    () => buildSurveyLocalDraftKey(auth?.user?.id || 'anonymous', assignmentId, responseId || 'draft'),
+    [assignmentId, auth?.user?.id, responseId],
+  )
+
+  function persistLocalDraft(nextAnswers = answersRef.current, nextDirtyQuestionIds = dirtyQuestionIdsRef.current, nextLastSavedAt = lastSavedAtRef.current) {
+    writeSurveyLocalDraft(draftStorageKey, {
+      answers: nextAnswers,
+      dirtyQuestionIds: Array.from(nextDirtyQuestionIds),
+      lastSavedAt: nextLastSavedAt,
+    })
+  }
+
+  function commitAnswers(nextAnswers) {
+    answersRef.current = nextAnswers
+    setAnswers(nextAnswers)
+  }
+
+  function commitDirtyQuestionIds(nextDirtyQuestionIds, nextAnswers = answersRef.current, nextLastSavedAt = lastSavedAtRef.current) {
+    dirtyQuestionIdsRef.current = nextDirtyQuestionIds
+    setDirtyQuestionIds(new Set(nextDirtyQuestionIds))
+    persistLocalDraft(nextAnswers, nextDirtyQuestionIds, nextLastSavedAt)
+  }
+
+  function commitLastSavedAt(nextLastSavedAt, nextAnswers = answersRef.current, nextDirtyQuestionIds = dirtyQuestionIdsRef.current) {
+    lastSavedAtRef.current = nextLastSavedAt
+    setLastSavedAt(nextLastSavedAt)
+    persistLocalDraft(nextAnswers, nextDirtyQuestionIds, nextLastSavedAt)
+  }
 
   useEffect(() => {
     let mounted = true
@@ -92,19 +191,25 @@ export default function SurveyForm() {
           }
         }
 
+        const nextStorageKey = buildSurveyLocalDraftKey(auth?.user?.id || 'anonymous', assignmentId, data?.draftResponse?.id || 'draft')
+        const bufferedDraft = readSurveyLocalDraft(nextStorageKey)
+        const mergedAnswers = bufferedDraft?.answers && typeof bufferedDraft.answers === 'object'
+          ? { ...hydratedAnswers, ...bufferedDraft.answers }
+          : hydratedAnswers
+        const nextDirtyQuestionIds = new Set(bufferedDraft?.dirtyQuestionIds || [])
+        const nextLastSavedAt = bufferedDraft?.lastSavedAt || ''
+
         setAnswers(hydratedAnswers)
+        answersRef.current = mergedAnswers
+        setAnswers(mergedAnswers)
         setInvalidQuestionIds(new Set())
-        hydratedPayloadRef.current = JSON.stringify(
-          Object.entries(hydratedAnswers)
-            .sort(([left], [right]) => Number(left) - Number(right))
-            .map(([questionId, answer]) => ({
-              questionId: Number(questionId),
-              value: String(answer?.value || ''),
-              text: String(answer?.text || ''),
-            })),
-        )
-        setDraftSavedAt(data?.draftResponse?.submittedAt || '')
-        setHasAutoSaveStarted(false)
+        dirtyQuestionIdsRef.current = nextDirtyQuestionIds
+        setDirtyQuestionIds(new Set(nextDirtyQuestionIds))
+        lastSavedAtRef.current = nextLastSavedAt
+        setLastSavedAt(nextLastSavedAt)
+        setSaveErrorMessage('')
+        setSaveState(nextDirtyQuestionIds.size > 0 ? 'unsaved' : nextLastSavedAt ? 'saved' : 'idle')
+        persistLocalDraft(mergedAnswers, nextDirtyQuestionIds, nextLastSavedAt)
       } catch (loadError) {
         if (!mounted) return
         setDetail(null)
@@ -118,7 +223,7 @@ export default function SurveyForm() {
     return () => {
       mounted = false
     }
-  }, [assignmentId])
+  }, [assignmentId, auth?.user?.id])
 
   const allQuestions = useMemo(() => flattenQuestions(detail?.template), [detail?.template])
 
@@ -146,13 +251,22 @@ export default function SurveyForm() {
   }, [])
 
   function handleAnswerChange(questionId, nextAnswer) {
-    setAnswers((prev) => ({
-      ...prev,
+    const nextAnswers = {
+      ...answersRef.current,
       [questionId]: {
         value: String(nextAnswer?.value || ''),
         text: String(nextAnswer?.text || ''),
       },
-    }))
+    }
+
+    answerRevisionRef.current[questionId] = Number(answerRevisionRef.current[questionId] || 0) + 1
+    commitAnswers(nextAnswers)
+
+    const nextDirtyQuestionIds = new Set(dirtyQuestionIdsRef.current)
+    nextDirtyQuestionIds.add(Number(questionId))
+    commitDirtyQuestionIds(nextDirtyQuestionIds, nextAnswers)
+    setSaveErrorMessage('')
+    setSaveState('unsaved')
 
     setInvalidQuestionIds((prev) => {
       if (!prev.has(questionId)) return prev
@@ -201,43 +315,143 @@ export default function SurveyForm() {
       }))
   }
 
-  const draftPayload = useMemo(
-    () => allQuestions.map((question) => ({
-      questionId: question.id,
-      value: String(answers[question.id]?.value || ''),
-      text: String(answers[question.id]?.text || ''),
-    })),
-    [allQuestions, answers],
-  )
+  function buildBatchPayload(questionIds, answersSnapshot = answersRef.current) {
+    return questionIds.map((questionId) => buildAnswerPayload(questionId, answersSnapshot[questionId]))
+  }
+
+  async function flushPendingAnswers(options = {}) {
+    const forceAll = options?.forceAll === true
+    const targetQuestionIds = forceAll
+      ? allQuestions.map((question) => Number(question.id)).filter((questionId) => Number.isInteger(questionId) && questionId > 0)
+      : Array.from(dirtyQuestionIdsRef.current)
+
+    if (targetQuestionIds.length === 0) {
+      return true
+    }
+
+    if (!responseId) {
+      return false
+    }
+
+    if (isSavingBatchRef.current) {
+      flushAfterSaveRef.current = true
+      return activeSavePromiseRef.current || false
+    }
+
+    const revisionSnapshot = new Map(
+      targetQuestionIds.map((questionId) => [questionId, Number(answerRevisionRef.current[questionId] || 0)]),
+    )
+    const payload = buildBatchPayload(targetQuestionIds)
+
+    if (payload.length === 0) {
+      return true
+    }
+
+    isSavingBatchRef.current = true
+    setSaveErrorMessage('')
+    setSaveState('saving')
+
+    const savePromise = (async () => {
+      try {
+        const saved = await saveSurveyAnswersBatch(responseId, payload)
+        const nextSavedAt = saved?.savedAt || new Date().toISOString()
+        commitLastSavedAt(nextSavedAt)
+
+        const nextDirtyQuestionIds = new Set(dirtyQuestionIdsRef.current)
+        targetQuestionIds.forEach((questionId) => {
+          if (Number(answerRevisionRef.current[questionId] || 0) === Number(revisionSnapshot.get(questionId) || 0)) {
+            nextDirtyQuestionIds.delete(questionId)
+          }
+        })
+
+        commitDirtyQuestionIds(nextDirtyQuestionIds)
+        setSaveState(nextDirtyQuestionIds.size > 0 ? 'unsaved' : 'saved')
+        return true
+      } catch (saveError) {
+        setSaveErrorMessage(getApiMessage(saveError, 'Lỗi lưu, hệ thống sẽ thử lại'))
+        setSaveState('error')
+        persistLocalDraft()
+        return false
+      } finally {
+        isSavingBatchRef.current = false
+        activeSavePromiseRef.current = null
+
+        if (flushAfterSaveRef.current && dirtyQuestionIdsRef.current.size > 0 && !submitting) {
+          flushAfterSaveRef.current = false
+          void flushPendingAnswers()
+        }
+      }
+    })()
+
+    activeSavePromiseRef.current = savePromise
+    return savePromise
+  }
 
   useEffect(() => {
     if (loading || !detail?.template || isCompleted || submitting) return undefined
+    if (dirtyQuestionIds.size < SURVEY_AUTOSAVE_BATCH_SIZE) return undefined
 
-    const nextPayloadSignature = JSON.stringify(draftPayload)
-    if (nextPayloadSignature === hydratedPayloadRef.current) return undefined
+    void flushPendingAnswers()
+    return undefined
+  }, [detail?.template, dirtyQuestionIds.size, isCompleted, loading, submitting])
 
-    const timer = window.setTimeout(async () => {
-      if (savingDraft) return
+  useEffect(() => {
+    if (loading || !detail?.template || isCompleted || submitting) return undefined
+    if (dirtyQuestionIds.size === 0) return undefined
 
-      setSavingDraft(true)
-      setError('')
-
-      try {
-        const saved = await saveSurveyDraft(Number(assignmentId), draftPayload)
-        hydratedPayloadRef.current = nextPayloadSignature
-        setDraftSavedAt(saved?.savedAt || new Date().toISOString())
-        setHasAutoSaveStarted(true)
-      } catch (saveError) {
-        setError(getApiMessage(saveError, 'Không thể lưu tạm khảo sát'))
-      } finally {
-        setSavingDraft(false)
-      }
-    }, 800)
+    const timer = window.setTimeout(() => {
+      void flushPendingAnswers()
+    }, SURVEY_AUTOSAVE_IDLE_MS)
 
     return () => {
       window.clearTimeout(timer)
     }
-  }, [assignmentId, detail?.template, draftPayload, isCompleted, loading, savingDraft, submitting])
+  }, [detail?.template, dirtyQuestionIds.size, isCompleted, loading, submitting])
+
+  useEffect(() => {
+    if (!responseId || isCompleted) return undefined
+
+    function attemptKeepaliveFlush() {
+      if (dirtyQuestionIdsRef.current.size === 0 || isSavingBatchRef.current) return
+
+      const token = localStorage.getItem('authJwt')
+      if (!token) return
+
+      try {
+        fetch(buildKeepaliveBatchUrl(responseId), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            answers: buildBatchPayload(Array.from(dirtyQuestionIdsRef.current), answersRef.current),
+          }),
+          keepalive: true,
+        })
+      } catch {
+        // Keep localStorage buffer for the next restore.
+      }
+    }
+
+    function handleBeforeUnload() {
+      attemptKeepaliveFlush()
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'hidden') {
+        attemptKeepaliveFlush()
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [isCompleted, responseId])
 
   function formatSavedTime(value) {
     if (!value) return ''
@@ -257,7 +471,18 @@ export default function SurveyForm() {
     setError('')
 
     try {
+      if (activeSavePromiseRef.current) {
+        await activeSavePromiseRef.current
+      }
+
+      const savedBeforeSubmit = await flushPendingAnswers({ forceAll: true })
+      if (!savedBeforeSubmit) {
+        throw new Error(saveErrorMessage || 'Không thể lưu khảo sát trước khi nộp')
+      }
+
       await submitSurvey(Number(assignmentId), buildSubmitPayload())
+      commitDirtyQuestionIds(new Set())
+      clearSurveyLocalDraft(draftStorageKey)
       setShowConfirmModal(false)
       setShowSuccessToast(true)
       setTimeout(() => {
@@ -312,7 +537,7 @@ export default function SurveyForm() {
                     color='primary'
                     size='sm'
                     onClick={onOpenConfirm}
-                    disabled={loading || submitting || savingDraft || isCompleted}
+                    disabled={loading || submitting || isCompleted}
                   >
                     {submitting ? 'Đang nộp...' : isCompleted ? 'Đã nộp' : 'Nộp khảo sát'}
                   </CButton>
@@ -338,7 +563,7 @@ export default function SurveyForm() {
         </div>
         <div className='d-flex gap-2'>
           <CButton color='light' onClick={() => navigate('/survey')}>Quay lại</CButton>
-          <CButton color='primary' onClick={onOpenConfirm} disabled={loading || submitting || savingDraft || isCompleted}>
+          <CButton color='primary' onClick={onOpenConfirm} disabled={loading || submitting || isCompleted}>
             {submitting ? 'Đang nộp...' : isCompleted ? 'Đã nộp' : 'Nộp khảo sát'}
           </CButton>
         </div>
@@ -388,13 +613,15 @@ export default function SurveyForm() {
                 <div className='small text-medium-emphasis mb-3'>{progressValue}% hoàn thành</div>
                 {!isCompleted ? (
                   <div className='small text-medium-emphasis mb-3'>
-                    {savingDraft
-                      ? 'Đang lưu tạm...'
-                      : draftSavedAt
-                        ? `Đã lưu tạm lúc ${formatSavedTime(draftSavedAt)}`
-                        : hasAutoSaveStarted
-                          ? 'Đã lưu tạm'
-                          : 'Tự động lưu khi bạn trả lời'}
+                    {saveState === 'saving'
+                      ? 'Đang lưu...'
+                      : saveState === 'error'
+                        ? (saveErrorMessage || 'Lỗi lưu, hệ thống sẽ thử lại')
+                        : dirtyQuestionIds.size > 0
+                          ? 'Có thay đổi chưa lưu'
+                          : lastSavedAt
+                            ? `Đã lưu lúc ${formatSavedTime(lastSavedAt)}`
+                            : 'Tự động lưu khi bạn trả lời'}
                   </div>
                 ) : null}
                 {invalidQuestionIds.size > 0 ? (

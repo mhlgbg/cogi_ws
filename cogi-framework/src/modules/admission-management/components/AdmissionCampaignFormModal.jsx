@@ -6,6 +6,7 @@ import {
   CFormInput,
   CFormLabel,
   CFormSelect,
+  CFormTextarea,
   CModal,
   CModalBody,
   CModalFooter,
@@ -14,6 +15,19 @@ import {
   CRow,
 } from '@coreui/react'
 import SimpleHtmlEditor from './SimpleHtmlEditor'
+import { TS2026_DEFAULT_REVIEW_DISPLAY_CONFIG } from '../utils/reviewDisplayConfig'
+
+function buildInitialReviewDisplayConfig(initialValues) {
+  if (initialValues?.reviewDisplayConfig) {
+    return JSON.stringify(initialValues.reviewDisplayConfig, null, 2)
+  }
+
+  if (String(initialValues?.code || '').trim().toLowerCase() === 'ts2026') {
+    return JSON.stringify(TS2026_DEFAULT_REVIEW_DISPLAY_CONFIG, null, 2)
+  }
+
+  return ''
+}
 
 function buildInitialState(initialValues) {
   return {
@@ -27,6 +41,7 @@ function buildInitialState(initialValues) {
     description: initialValues?.description || '',
     isActive: initialValues?.isActive !== false,
     formTemplate: initialValues?.formTemplate?.id ? String(initialValues.formTemplate.id) : '',
+    reviewDisplayConfig: buildInitialReviewDisplayConfig(initialValues),
   }
 }
 
@@ -65,6 +80,7 @@ export default function AdmissionCampaignFormModal({
       endDate: String(form.endDate || '').trim() || null,
       status: String(form.status || 'draft').trim(),
       description: String(form.description || '').trim(),
+      reviewDisplayConfig: String(form.reviewDisplayConfig || '').trim() || null,
       isActive: form.isActive === true,
       formTemplate: Number(form.formTemplate || 0),
     })
@@ -122,6 +138,17 @@ export default function AdmissionCampaignFormModal({
             </CCol>
             <CCol md={3} className='d-flex align-items-end'>
               <CFormCheck label='Đang hoạt động' checked={form.isActive} onChange={(event) => updateField('isActive', event.target.checked)} disabled={submitting} />
+            </CCol>
+            <CCol xs={12}>
+              <CFormLabel>Review Display Config (JSON)</CFormLabel>
+              <CFormTextarea
+                rows={12}
+                value={form.reviewDisplayConfig}
+                onChange={(event) => updateField('reviewDisplayConfig', event.target.value)}
+                disabled={submitting}
+                placeholder='{"sections": [{"title": "Thông tin học sinh", "fields": [{"key": "studentName", "label": "Họ tên học sinh"}]}]}'
+              />
+              <div className='small text-body-secondary mt-1'>Nếu để trống, màn review sẽ fallback về cách hiển thị hiện tại. Riêng mã chiến dịch TS2026 sẽ dùng cấu hình mặc định trong code.</div>
             </CCol>
             <CCol xs={12}>
               <SimpleHtmlEditor

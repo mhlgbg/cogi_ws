@@ -33,9 +33,6 @@ import {
   createSurveyQuestion,
   createSurveySection,
   createSurveyTemplate,
-  deleteSurveyQuestion,
-  deleteSurveySection,
-  deleteSurveyTemplate,
   getSurveyQuestionManagementBootstrap,
   getSurveyQuestions,
   updateSurveyQuestion,
@@ -507,53 +504,6 @@ export default function SurveyQuestionManagementPage() {
     }
   }
 
-  async function handleDeleteTemplate(id) {
-    if (!window.confirm('Bạn chắc chắn muốn xóa bộ câu hỏi này?')) return
-
-    setError('')
-    setSuccess('')
-
-    try {
-      await deleteSurveyTemplate(id)
-      if (String(templateFilter) === String(id)) setTemplateFilter('')
-      setSuccess('Xóa bộ câu hỏi thành công')
-      await refreshAll()
-    } catch (deleteError) {
-      setError(getApiMessage(deleteError, 'Không thể xóa bộ câu hỏi'))
-    }
-  }
-
-  async function handleDeleteSection(id) {
-    if (!window.confirm('Bạn chắc chắn muốn xóa mục khảo sát này?')) return
-
-    setError('')
-    setSuccess('')
-
-    try {
-      await deleteSurveySection(id)
-      if (String(sectionFilter) === String(id)) setSectionFilter('')
-      setSuccess('Xóa mục khảo sát thành công')
-      await refreshAll()
-    } catch (deleteError) {
-      setError(getApiMessage(deleteError, 'Không thể xóa mục khảo sát'))
-    }
-  }
-
-  async function handleDeleteQuestion(id) {
-    if (!window.confirm('Bạn chắc chắn muốn xóa câu hỏi này?')) return
-
-    setError('')
-    setSuccess('')
-
-    try {
-      await deleteSurveyQuestion(id)
-      setSuccess('Xóa câu hỏi thành công')
-      await refreshAll()
-    } catch (deleteError) {
-      setError(getApiMessage(deleteError, 'Không thể xóa câu hỏi'))
-    }
-  }
-
   function addQuestionOption() {
     setQuestionForm((current) => ({
       ...current,
@@ -702,7 +652,6 @@ export default function SurveyQuestionManagementPage() {
                             <div className="d-flex gap-2 justify-content-end flex-wrap">
                               <CButton size="sm" color="secondary" variant="outline" onClick={() => setTemplateFilter(String(template.id))}>Chọn</CButton>
                               <CButton size="sm" color="info" variant="outline" onClick={() => openEditTemplateModal(template)}>Sửa</CButton>
-                              <CButton size="sm" color="danger" variant="outline" onClick={() => handleDeleteTemplate(template.id)}>Xóa</CButton>
                             </div>
                           </CTableDataCell>
                         </CTableRow>
@@ -756,7 +705,6 @@ export default function SurveyQuestionManagementPage() {
                               <CButton size="sm" color="secondary" variant="outline" onClick={() => setSectionFilter(String(section.id))}>Chọn</CButton>
                               <CButton size="sm" color="success" variant="outline" onClick={() => openCreateQuestionModal(section.id)}>Thêm câu hỏi</CButton>
                               <CButton size="sm" color="info" variant="outline" onClick={() => openEditSectionModal(section)}>Sửa</CButton>
-                              <CButton size="sm" color="danger" variant="outline" onClick={() => handleDeleteSection(section.id)}>Xóa</CButton>
                             </div>
                           </CTableDataCell>
                         </CTableRow>
@@ -840,7 +788,6 @@ export default function SurveyQuestionManagementPage() {
                         <CTableDataCell className="text-end">
                           <div className="d-flex gap-2 justify-content-end flex-wrap">
                             <CButton size="sm" color="info" variant="outline" onClick={() => openEditQuestionModal(question)}>Sửa</CButton>
-                            <CButton size="sm" color="danger" variant="outline" onClick={() => handleDeleteQuestion(question.id)}>Xóa</CButton>
                           </div>
                         </CTableDataCell>
                       </CTableRow>

@@ -1,6 +1,8 @@
 import ArticleManagementPage from '../pages/ArticleManagementPage'
 import CategoryManagementPage from '../pages/CategoryManagementPage'
 import AuthorManagementPage from '../pages/AuthorManagementPage'
+import JournalCategoryManagementPage from '../pages/JournalCategoryManagementPage'
+import JournalIssueManagementPage from '../pages/JournalIssueManagementPage'
 import TenantConfigManagementPage from '../pages/TenantConfigManagementPage'
 
 const contentManagementRoutes = [
@@ -23,6 +25,16 @@ const contentManagementRoutes = [
     path: '/tenant-configs',
     featureKey: 'tenant-config.manage',
     component: TenantConfigManagementPage,
+  },
+  {
+    path: '/journal-categories',
+    featureKey: 'journal-category.manage',
+    component: JournalCategoryManagementPage,
+  },
+  {
+    path: '/journal-issues',
+    featureKey: 'journal-issue.manage',
+    component: JournalIssueManagementPage,
   },
 ]
 

@@ -4,6 +4,7 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:1339/a
 
 const CONTEXT_HEADER_EXCLUDED_PATHS = new Set([
 	'/api/auth/local',
+	'/api/auth/local-case-insensitive',
 	'/api/auth/invite',
 	'/api/auth/activate',
 	'/api/auth/set-password',

@@ -11,6 +11,34 @@ import {
   CTableRow,
 } from '@coreui/react'
 
+function padDatePart(value) {
+  return String(value).padStart(2, '0')
+}
+
+function formatDisplayDate(value) {
+  const text = String(value ?? '').trim()
+  if (!text) return ''
+
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text)
+  if (isoMatch) {
+    return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`
+  }
+
+  const localMatch = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text)
+  if (localMatch) {
+    return `${padDatePart(localMatch[1])}/${padDatePart(localMatch[2])}/${localMatch[3]}`
+  }
+
+  return text
+}
+
+function normalizeDateInput(value) {
+  const digitsOnly = String(value ?? '').replace(/\D+/g, '').slice(0, 8)
+  if (digitsOnly.length <= 2) return digitsOnly
+  if (digitsOnly.length <= 4) return `${digitsOnly.slice(0, 2)}/${digitsOnly.slice(2)}`
+  return `${digitsOnly.slice(0, 2)}/${digitsOnly.slice(2, 4)}/${digitsOnly.slice(4)}`
+}
+
 function getTableRows(field, value) {
   if (Array.isArray(value) && value.length > 0) return value
   if (Array.isArray(field?.rows)) return field.rows
@@ -34,61 +62,79 @@ function isDisplayOnlyColumn(column, rowValue) {
   return column?.hasExplicitType !== true && hasStaticRowValue(rowValue, column?.key)
 }
 
-function renderCellInput({ field, column, rowIndex, rowValue, onChangeCell, disabled }) {
+function renderCellInput({ field, column, rowIndex, rowValue, onChangeCell, disabled, error }) {
   if (isDisplayOnlyColumn(column, rowValue)) {
     return <span className='fw-semibold'>{String(rowValue?.[column.key] ?? '')}</span>
   }
 
   const value = rowValue?.[column.key]
   const inputName = `${field.key}.${rowIndex}.${column.key}`
+  const cellError = error?.cells?.[`${rowIndex}.${column.key}`]
 
   if (column.type === 'textarea') {
     return (
-      <CFormTextarea
-        rows={2}
-        name={inputName}
-        value={String(value ?? '')}
-        placeholder={column.placeholder || undefined}
-        onChange={(event) => onChangeCell(rowIndex, column.key, event.target.value)}
-        disabled={disabled}
-        readOnly={disabled}
-      />
+      <>
+        <CFormTextarea
+          rows={2}
+          name={inputName}
+          value={String(value ?? '')}
+          placeholder={column.placeholder || undefined}
+          onChange={(event) => onChangeCell(rowIndex, column.key, event.target.value)}
+          invalid={Boolean(cellError)}
+          disabled={disabled}
+          readOnly={disabled}
+        />
+        {cellError ? <div className='text-danger small mt-1'>{cellError}</div> : null}
+      </>
     )
   }
 
   if (column.type === 'select') {
     return (
-      <CFormSelect
-        name={inputName}
-        value={String(value ?? '')}
-        onChange={(event) => onChangeCell(rowIndex, column.key, event.target.value)}
-        disabled={disabled}
-      >
-        <option value=''>Chọn {column.label.toLowerCase()}</option>
-        {column.options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
-      </CFormSelect>
+      <>
+        <CFormSelect
+          name={inputName}
+          value={String(value ?? '')}
+          onChange={(event) => onChangeCell(rowIndex, column.key, event.target.value)}
+          invalid={Boolean(cellError)}
+          disabled={disabled}
+        >
+          <option value=''>Chọn {column.label.toLowerCase()}</option>
+          {column.options.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </CFormSelect>
+        {cellError ? <div className='text-danger small mt-1'>{cellError}</div> : null}
+      </>
     )
   }
 
   return (
-    <CFormInput
-      type={column.type === 'number' ? 'number' : column.type === 'date' ? 'date' : 'text'}
-      name={inputName}
-      value={String(value ?? '')}
-      placeholder={column.placeholder || undefined}
-      min={column.type === 'number' && column.min !== null ? column.min : undefined}
-      max={column.type === 'number' && column.max !== null ? column.max : undefined}
-      step={column.type === 'number' && column.step !== null ? column.step : undefined}
-      onChange={(event) => onChangeCell(rowIndex, column.key, event.target.value)}
-      disabled={disabled}
-      readOnly={disabled}
-    />
+    <>
+      <CFormInput
+        type={column.type === 'number' ? 'number' : 'text'}
+        name={inputName}
+        inputMode={column.type === 'date' ? 'numeric' : undefined}
+        value={column.type === 'date' ? formatDisplayDate(value) : String(value ?? '')}
+        placeholder={column.type === 'date' ? (column.placeholder || 'dd/MM/yyyy') : column.placeholder || undefined}
+        min={column.type === 'number' && column.min !== null ? column.min : undefined}
+        max={column.type === 'number' && column.max !== null ? column.max : undefined}
+        step={column.type === 'number' && column.step !== null ? column.step : undefined}
+        onChange={(event) => onChangeCell(
+          rowIndex,
+          column.key,
+          column.type === 'date' ? normalizeDateInput(event.target.value) : event.target.value,
+        )}
+        invalid={Boolean(cellError)}
+        disabled={disabled}
+        readOnly={disabled}
+      />
+      {cellError ? <div className='text-danger small mt-1'>{cellError}</div> : null}
+    </>
   )
 }
 
-export default function TableFieldRenderer({ field, value, onChangeCell, disabled }) {
+export default function TableFieldRenderer({ field, value, error, onChangeCell, disabled }) {
   const rows = getTableRows(field, value)
   const columns = Array.isArray(field?.columns) ? field.columns : []
   const sampleRow = rows[0] || null
@@ -134,6 +180,7 @@ export default function TableFieldRenderer({ field, value, onChangeCell, disable
                     column,
                     rowIndex,
                     rowValue: row,
+                    error,
                     onChangeCell,
                     disabled,
                   })}

@@ -1,17 +1,8 @@
 import api from '../api/axios'
+import { resolveMediaUrl } from './mediaUrl'
 
 function toAbsoluteUrl(url) {
-  const rawUrl = String(url || '').trim()
-  if (!rawUrl) return ''
-  if (/^https?:\/\//i.test(rawUrl)) return rawUrl
-
-  try {
-    const apiBase = String(api.defaults.baseURL || window.location.origin)
-    const origin = new URL(apiBase, window.location.origin).origin
-    return new URL(rawUrl, origin).toString()
-  } catch {
-    return rawUrl
-  }
+  return resolveMediaUrl(url)
 }
 
 export async function fetchTenantBranding() {

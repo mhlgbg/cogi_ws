@@ -10,20 +10,11 @@ import {
 import { Link, useParams } from 'react-router-dom'
 import api from '../../api/axios'
 import { useTenant } from '../../contexts/TenantContext'
+import { resolveMediaUrl } from '../../utils/mediaUrl'
 import { buildTenantUrl } from '../../utils/tenantRouting'
 
 function toAbsoluteUrl(url) {
-  const raw = String(url || '').trim()
-  if (!raw) return ''
-  if (/^https?:\/\//i.test(raw)) return raw
-
-  try {
-    const apiBase = String(api.defaults.baseURL || window.location.origin)
-    const origin = new URL(apiBase, window.location.origin).origin
-    return new URL(raw, origin).toString()
-  } catch {
-    return raw
-  }
+  return resolveMediaUrl(url)
 }
 
 function normalizeRelation(value) {
@@ -176,6 +167,151 @@ function getMediaUrl(file) {
   return toAbsoluteUrl(file?.url || file?.attributes?.url || '')
 }
 
+function getMediaName(file) {
+  return String(file?.name || file?.attributes?.name || '').trim()
+}
+
+function getMediaMimeType(file) {
+  return String(file?.mime || file?.attributes?.mime || '').trim().toLowerCase()
+}
+
+function isPdfFile(file) {
+  const mediaUrl = getMediaUrl(file).toLowerCase()
+  const mediaName = getMediaName(file).toLowerCase()
+  const mimeType = getMediaMimeType(file)
+
+  return mimeType === 'application/pdf' || mediaUrl.endsWith('.pdf') || mediaName.endsWith('.pdf')
+}
+
+function isImageFile(file) {
+  const mediaUrl = getMediaUrl(file).toLowerCase()
+  const mediaName = getMediaName(file).toLowerCase()
+  const mimeType = getMediaMimeType(file)
+
+  if (mimeType.startsWith('image/')) return true
+
+  return ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.avif'].some((extension) => (
+    mediaUrl.endsWith(extension) || mediaName.endsWith(extension)
+  ))
+}
+
+function PdfPreviewBlock({ file, title }) {
+  const mediaUrl = getMediaUrl(file)
+  const mediaName = getMediaName(file) || title || 'PDF preview'
+  const [previewUrl, setPreviewUrl] = useState('')
+  const [previewError, setPreviewError] = useState('')
+  const [previewLoading, setPreviewLoading] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    let objectUrl = ''
+
+    async function loadPreview() {
+      if (!mediaUrl) {
+        setPreviewUrl('')
+        setPreviewError('')
+        return
+      }
+
+      setPreviewLoading(true)
+      setPreviewError('')
+
+      try {
+        const response = await fetch(mediaUrl)
+        if (!response.ok) {
+          throw new Error(`Failed to load PDF (${response.status})`)
+        }
+
+        const pdfBlob = await response.blob()
+        if (cancelled) return
+
+        objectUrl = URL.createObjectURL(pdfBlob)
+        setPreviewUrl(objectUrl)
+      } catch (error) {
+        if (cancelled) return
+        setPreviewUrl('')
+        setPreviewError(getApiMessage(error, 'Không thể tải bản xem trước PDF trong trình duyệt.'))
+      } finally {
+        if (!cancelled) {
+          setPreviewLoading(false)
+        }
+      }
+    }
+
+    loadPreview()
+
+    return () => {
+      cancelled = true
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl)
+      }
+    }
+  }, [mediaUrl])
+
+  if (!mediaUrl) return null
+
+  return (
+    <div className='d-flex flex-column gap-3 p-3 border rounded-4 bg-light-subtle'>
+      {previewLoading ? (
+        <div className='d-flex align-items-center gap-2 text-body-secondary'>
+          <CSpinner size='sm' />
+          <span>Đang tải bản xem trước PDF...</span>
+        </div>
+      ) : previewUrl ? (
+        <iframe
+          src={previewUrl}
+          title={mediaName}
+          width='100%'
+          height='600'
+          style={{ border: 'none', borderRadius: 12, backgroundColor: '#fff' }}
+        />
+      ) : null}
+      <div className='d-flex flex-wrap gap-2'>
+        <CButton component='a' href={mediaUrl} target='_blank' rel='noreferrer' color='primary' variant='outline'>
+          Mở file PDF
+        </CButton>
+        <CButton component='a' href={mediaUrl} download={mediaName} color='secondary' variant='outline'>
+          Tải PDF
+        </CButton>
+      </div>
+      <div className='small text-body-secondary'>
+        {previewError || 'Nếu trình duyệt không hiển thị được PDF, vui lòng dùng nút mở file hoặc tải về.'}
+      </div>
+    </div>
+  )
+}
+
+function renderPdfBlock(file, key, title) {
+  return <PdfPreviewBlock key={key} file={file} title={title} />
+}
+
+function renderDocumentBlock(file, key, title) {
+  const mediaUrl = getMediaUrl(file)
+  if (!mediaUrl) return null
+
+  const mediaName = getMediaName(file) || title || 'Tệp đính kèm'
+
+  return (
+    <div
+      key={key}
+      className='d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3 p-3 border rounded-4 bg-light-subtle'
+    >
+      <div>
+        <div className='fw-semibold'>{mediaName}</div>
+        <div className='text-body-secondary small'>Tệp đính kèm</div>
+      </div>
+      <div className='d-flex flex-wrap gap-2'>
+        <CButton component='a' href={mediaUrl} target='_blank' rel='noreferrer' color='primary' variant='outline'>
+          Mở tệp
+        </CButton>
+        <CButton component='a' href={mediaUrl} download={mediaName} color='secondary' variant='outline'>
+          Tải xuống
+        </CButton>
+      </div>
+    </div>
+  )
+}
+
 export default function ArticleDetailPage() {
   const tenant = useTenant()
   const params = useParams()
@@ -291,8 +427,17 @@ export default function ArticleDetailPage() {
                   }
 
                   if (block.__component === 'shared.media') {
-                    const mediaUrl = getMediaUrl(block.file)
+                    const mediaFile = block.file
+                    const mediaUrl = getMediaUrl(mediaFile)
                     if (!mediaUrl) return null
+
+                    if (isPdfFile(mediaFile)) {
+                      return renderPdfBlock(mediaFile, `${block.__component}-${index}`, article.title || 'Article media')
+                    }
+
+                    if (!isImageFile(mediaFile)) {
+                      return renderDocumentBlock(mediaFile, `${block.__component}-${index}`, article.title || 'Article media')
+                    }
 
                     return (
                       <figure key={`${block.__component}-${index}`} className='m-0'>
@@ -310,6 +455,14 @@ export default function ArticleDetailPage() {
                         {files.map((file, fileIndex) => {
                           const mediaUrl = getMediaUrl(file)
                           if (!mediaUrl) return null
+
+                          if (isPdfFile(file)) {
+                            return renderPdfBlock(file, `${block.__component}-${index}-${fileIndex}`, article.title || `Slide ${fileIndex + 1}`)
+                          }
+
+                          if (!isImageFile(file)) {
+                            return renderDocumentBlock(file, `${block.__component}-${index}-${fileIndex}`, article.title || `Slide ${fileIndex + 1}`)
+                          }
 
                           return (
                             <img

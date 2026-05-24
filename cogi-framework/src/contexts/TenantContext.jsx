@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import api from '../api/axios'
 import { useAuth } from './AuthContext'
+import { resolveMediaUrl } from '../utils/mediaUrl'
 import { buildTenantUrl, isBrowserOnMainDomain } from '../utils/tenantRouting'
 
 const TenantContext = createContext(null)
@@ -48,11 +49,7 @@ function resolveApiOrigin() {
 }
 
 function toAbsoluteUrl(url) {
-  const raw = String(url || '').trim()
-  if (!raw) return ''
-  if (/^https?:\/\//i.test(raw)) return raw
-  if (!raw.startsWith('/')) return raw
-  return `${resolveApiOrigin()}${raw}`
+  return resolveMediaUrl(url)
 }
 
 function extractTenantLogoUrlFromMedia(logo) {

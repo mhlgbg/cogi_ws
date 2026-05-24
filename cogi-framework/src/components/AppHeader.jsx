@@ -71,10 +71,10 @@ export default function AppHeader({ onToggleSidebar }) {
 
       <div className="tenant-header-actions">
         <button type="button" onClick={handleSwitchTenant} className="tenant-header-action">
-          Đổi tenant
+          Đổi Không Gian Số
         </button>
         <button type="button" onClick={handleLogout} className="tenant-header-action">
-          Đăng xuất
+          Đăng Xuất
         </button>
       </div>
     </header>

@@ -25,6 +25,13 @@ export async function saveSurveyDraft(assignmentId, answers) {
   return unwrapSuccess(res.data)
 }
 
+export async function saveSurveyAnswersBatch(responseId, answers) {
+  const res = await api.post(`/survey-responses/${responseId}/answers/batch`, {
+    answers,
+  })
+  return unwrapSuccess(res.data)
+}
+
 export async function submitSurvey(assignmentId, answers) {
   const res = await api.post('/survey/submit', {
     assignmentId,

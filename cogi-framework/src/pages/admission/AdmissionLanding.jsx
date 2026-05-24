@@ -7,6 +7,7 @@ import {
 } from '@coreui/react'
 import api from '../../api/axios'
 import { useTenant } from '../../contexts/TenantContext'
+import { resolveMediaUrl } from '../../utils/mediaUrl'
 import './AdmissionLanding.css'
 import {
   AdmissionForm,
@@ -16,17 +17,7 @@ import {
 import { buildTenantUrl, isBrowserOnMainDomain } from '../../utils/tenantRouting'
 
 function toAbsoluteUrl(url) {
-  const rawUrl = String(url || '').trim()
-  if (!rawUrl) return ''
-  if (/^https?:\/\//i.test(rawUrl)) return rawUrl
-
-  try {
-    const apiBase = String(api.defaults.baseURL || window.location.origin)
-    const origin = new URL(apiBase, window.location.origin).origin
-    return new URL(rawUrl, origin).toString()
-  } catch {
-    return rawUrl
-  }
+  return resolveMediaUrl(url)
 }
 
 function hasHtmlContent(value) {

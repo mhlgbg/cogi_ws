@@ -1,17 +1,8 @@
 import api from '../../../api/axios'
+import { resolveMediaUrl } from '../../../utils/mediaUrl'
 
 function toAbsoluteUrl(url) {
-  const raw = String(url || '').trim()
-  if (!raw) return ''
-  if (/^https?:\/\//i.test(raw)) return raw
-
-  try {
-    const apiBase = String(api.defaults.baseURL || window.location.origin)
-    const origin = new URL(apiBase, window.location.origin).origin
-    return new URL(raw, origin).toString()
-  } catch {
-    return raw
-  }
+  return resolveMediaUrl(url)
 }
 
 function normalizeEntity(row) {

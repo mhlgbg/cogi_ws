@@ -3,6 +3,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../api/axios'
 import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
+import { resolveMediaUrl } from '../utils/mediaUrl'
+import { buildTenantUrl } from '../utils/tenantRouting'
+
+let chooseTenantEffectRuns = 0
+let chooseTenantRequestRuns = 0
 
 function resolveApiOrigin() {
   const explicitBase = String(import.meta.env.VITE_API_BASE_URL || '').trim()
@@ -15,11 +20,7 @@ function resolveApiOrigin() {
 }
 
 function toAbsoluteUrl(url) {
-  const raw = String(url || '').trim()
-  if (!raw) return ''
-  if (/^https?:\/\//i.test(raw)) return raw
-  if (!raw.startsWith('/')) return raw
-  return `${resolveApiOrigin()}${raw}`
+  return resolveMediaUrl(url)
 }
 
 function extractTenantLogoUrl(tenant) {
@@ -115,6 +116,18 @@ function isPublicOrAuthPath(path) {
   return normalizedPath === '/dang-ky-tuyen-sinh' || normalizedPath.startsWith('/dang-ky-tuyen-sinh/')
 }
 
+function buildLoginPath(tenantCode, redirectPath, isMainDomain) {
+  const searchParams = new URLSearchParams()
+  const normalizedRedirectPath = String(redirectPath || '').trim()
+  if (normalizedRedirectPath && normalizedRedirectPath.startsWith('/')) {
+    searchParams.set('redirect', normalizedRedirectPath)
+  }
+
+  const loginPath = buildTenantUrl('/login', { tenantCode, isMainDomain }) || '/login'
+  const query = searchParams.toString()
+  return query ? `${loginPath}?${query}` : loginPath
+}
+
 export default function ChooseTenant() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -142,15 +155,48 @@ export default function ChooseTenant() {
   }
 
   useEffect(() => {
+    chooseTenantEffectRuns += 1
+    console.info('[ChooseTenant] effect-trigger', {
+      effectRuns: chooseTenantEffectRuns,
+      hasAuthToken: Boolean(auth?.token),
+      requestedTenantCode,
+      redirectPath,
+      hasResolvedTenant: Boolean(tenantContext?.resolvedTenant?.tenantCode),
+      hasCurrentTenant: Boolean(tenantContext?.currentTenant?.tenantCode),
+    })
+
     const fetchTenantContext = async () => {
+      chooseTenantRequestRuns += 1
+      const requestLabel = `[ChooseTenant.my-tenant-context] #${chooseTenantRequestRuns}`
+
       setLoading(true)
       setError('')
+      console.count('[ChooseTenant] my-tenant-context call-count')
+      console.time(requestLabel)
 
       try {
+        console.info('[ChooseTenant] request-start', {
+          requestRuns: chooseTenantRequestRuns,
+          url: '/auth/my-tenant-context',
+          requestedTenantCode,
+          redirectPath,
+        })
         const response = await api.get('/auth/my-tenant-context')
 
         const user = response?.data?.user || null
         const tenantItems = Array.isArray(response?.data?.tenants) ? response.data.tenants : []
+        let responseBytes = -1
+        try {
+          responseBytes = new Blob([JSON.stringify(response?.data ?? null)]).size
+        } catch {
+          responseBytes = -1
+        }
+
+        console.info('[ChooseTenant] request-success', {
+          requestRuns: chooseTenantRequestRuns,
+          tenantCount: tenantItems.length,
+          responseBytes,
+        })
 
         setResolvedUser(user)
         setTenants(tenantItems)
@@ -172,9 +218,25 @@ export default function ChooseTenant() {
           navigate(resolvePostSelectionPath(selected), { replace: true })
         }
       } catch (requestError) {
+        console.info('[ChooseTenant] request-error', {
+          requestRuns: chooseTenantRequestRuns,
+          status: requestError?.response?.status || null,
+          message: requestError?.response?.data?.error?.message || requestError?.message || 'Unknown error',
+        })
+        if (requestError?.response?.status === 401) {
+          auth?.logout?.()
+          tenantContext?.clearTenant?.()
+          navigate(
+            buildLoginPath(requestedTenantCode, redirectPath, tenantContext?.isMainDomain),
+            { replace: true },
+          )
+          return
+        }
+
         const apiMessage = requestError?.response?.data?.error?.message
         setError(apiMessage || 'Không thể tải danh sách tenant. Vui lòng thử lại.')
       } finally {
+        console.timeEnd(requestLabel)
         setLoading(false)
       }
     }
@@ -201,10 +263,58 @@ export default function ChooseTenant() {
         padding: '16px',
       }}
     >
+      <style>
+        {`
+          .choose-tenant-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+          }
+
+          .choose-tenant-card {
+            border: 1px solid #e1e4ea;
+            border-radius: 10px;
+            padding: 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: #fff;
+            min-height: 84px;
+          }
+
+          .choose-tenant-name-button {
+            border: 0;
+            background: transparent;
+            padding: 0;
+            margin: 0;
+            text-align: left;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 700;
+            color: #1f2937;
+            line-height: 1.4;
+          }
+
+          .choose-tenant-name-button:hover {
+            color: #0d6efd;
+          }
+
+          .choose-tenant-meta {
+            color: #667085;
+            font-weight: 500;
+          }
+
+          @media (min-width: 992px) {
+            .choose-tenant-grid {
+              grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+          }
+        `}
+      </style>
       <div
         style={{
           width: '100%',
-          maxWidth: '720px',
+          maxWidth: '1080px',
           background: '#fff',
           borderRadius: '10px',
           padding: '24px',
@@ -237,83 +347,68 @@ export default function ChooseTenant() {
         )}
 
         {!loading && !error && tenants.length > 1 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div className='choose-tenant-grid'>
             {tenants.map((item) => {
               const tenant = item?.tenant || {}
               const roles = Array.isArray(item?.roles) ? item.roles : []
               const tenantName = tenant?.name || tenant?.label || 'Unknown Tenant'
               const tenantLogoUrl = extractTenantLogoUrl(tenant)
+              const rolesText = roles
+                .map((role) => role?.label || role?.name || role?.code)
+                .filter(Boolean)
+                .join(', ')
+              const tenantMeta = [tenant?.code || '', rolesText].filter(Boolean).join(' - ')
 
               return (
                 <div
                   key={item?.userTenantId || `${tenant?.id}-${tenant?.code}`}
-                  style={{
-                    border: '1px solid #e1e4ea',
-                    borderRadius: '8px',
-                    padding: '14px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px',
-                  }}
+                  className='choose-tenant-card'
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    {tenantLogoUrl ? (
-                      <img
-                        src={tenantLogoUrl}
-                        alt={tenantName}
-                        style={{
-                          width: '36px',
-                          height: '36px',
-                          borderRadius: '8px',
-                          objectFit: 'contain',
-                          border: '1px solid #d7deea',
-                          background: '#fff',
-                          flex: '0 0 auto',
-                        }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          width: '36px',
-                          height: '36px',
-                          borderRadius: '8px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background: '#e2e8f0',
-                          color: '#1f2937',
-                          fontWeight: 700,
-                          border: '1px solid #d7deea',
-                          flex: '0 0 auto',
-                        }}
-                      >
-                        {toInitials(tenantName)}
-                      </div>
-                    )}
+                  {tenantLogoUrl ? (
+                    <img
+                      src={tenantLogoUrl}
+                      alt={tenantName}
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '8px',
+                        objectFit: 'contain',
+                        border: '1px solid #d7deea',
+                        background: '#fff',
+                        flex: '0 0 auto',
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '8px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: '#e2e8f0',
+                        color: '#1f2937',
+                        fontWeight: 700,
+                        border: '1px solid #d7deea',
+                        flex: '0 0 auto',
+                      }}
+                    >
+                      {toInitials(tenantName)}
+                    </div>
+                  )}
 
-                    <strong>{tenantName}</strong>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <button
+                      type='button'
+                      className='choose-tenant-name-button'
+                      onClick={() => handleSelectTenant(item)}
+                      title={`Vào tenant ${tenantName}`}
+                    >
+                      {tenantName}
+                      {tenantMeta ? <span className='choose-tenant-meta'> ({tenantMeta})</span> : null}
+                    </button>
                   </div>
-                  <div>code: {tenant?.code || '-'}</div>
-                  <div>userTenant: {item?.label || '-'}</div>
-                  <div>
-                    roles:{' '}
-                    {roles.length > 0
-                      ? roles.map((role) => role?.label || role?.name || role?.code).filter(Boolean).join(', ')
-                      : '-'}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleSelectTenant(item)}
-                    style={{
-                      marginTop: '4px',
-                      width: 'fit-content',
-                      padding: '8px 12px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Vào tenant này
-                  </button>
                 </div>
               )
             })}

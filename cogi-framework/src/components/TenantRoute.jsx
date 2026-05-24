@@ -4,6 +4,13 @@ import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
 import { buildTenantUrl } from '../utils/tenantRouting'
 
+function normalizeComparablePath(path) {
+  const normalizedPath = String(path || '').trim()
+  if (!normalizedPath) return '/'
+  if (normalizedPath === '/') return '/'
+  return normalizedPath.replace(/\/+$/, '') || '/'
+}
+
 function buildLoginRedirectPath(tenantCode, location, isMainDomain) {
   const searchParams = new URLSearchParams()
   const redirectTarget = `${location.pathname || '/'}${location.search || ''}`
@@ -39,8 +46,15 @@ export default function TenantRoute({ children, requireAuth = true }) {
   const params = useParams()
   const [hasCheckedTenant, setHasCheckedTenant] = useState(false)
   const requestedTenantCode = String(params?.tenantCode || tenant?.resolvedTenant?.tenantCode || tenant?.currentTenant?.tenantCode || '').trim()
+  const hasTenantPathParam = Boolean(params?.tenantCode)
+  const resolvedTenantCode = String(tenant?.resolvedTenant?.tenantCode || '').trim()
   const nextIsMainDomain = Boolean(tenant?.isMainDomain)
-  const isTenantEntryPath = location.pathname === '/' || (requestedTenantCode && location.pathname === `/t/${requestedTenantCode}`)
+  const comparableLocationPath = normalizeComparablePath(location.pathname)
+  const comparableTenantEntryPath = normalizeComparablePath(`/t/${requestedTenantCode}`)
+  const isTenantEntryPath = comparableLocationPath === '/' || (requestedTenantCode && comparableLocationPath === comparableTenantEntryPath)
+  const hasResolvedRequestedTenant = hasTenantPathParam
+    ? Boolean(requestedTenantCode && resolvedTenantCode && requestedTenantCode.toLowerCase() === resolvedTenantCode.toLowerCase())
+    : Boolean(tenant?.hasResolvedTenant)
 
   useEffect(() => {
     let cancelled = false
@@ -64,14 +78,22 @@ export default function TenantRoute({ children, requireAuth = true }) {
     return <div>Đang xác định tenant...</div>
   }
 
-  if (isTenantEntryPath && tenant?.hasResolvedTenant) {
+  if (hasTenantPathParam && !hasResolvedRequestedTenant) {
+    if (auth?.isAuthenticated) {
+      return <Navigate to={buildChooseTenantRedirectPath('', location)} replace />
+    }
+
+    return <Navigate to={buildLoginRedirectPath('', location, false)} replace />
+  }
+
+  if (isTenantEntryPath && hasResolvedRequestedTenant) {
     const entryTarget = tenant?.resolvePublicRoutePath?.({
       tenantCode: requestedTenantCode,
       isMainDomain: nextIsMainDomain,
       fallbackToLogin: !auth?.isAuthenticated,
     })
 
-    if (entryTarget && entryTarget !== location.pathname) {
+    if (entryTarget && normalizeComparablePath(entryTarget) !== comparableLocationPath) {
       return <Navigate to={entryTarget} replace />
     }
   }
@@ -84,7 +106,7 @@ export default function TenantRoute({ children, requireAuth = true }) {
     return <Navigate to={buildLoginRedirectPath(requestedTenantCode, location, nextIsMainDomain)} replace />
   }
 
-  if (!tenant?.hasResolvedTenant) {
+  if (!hasResolvedRequestedTenant) {
     if (auth?.isAuthenticated) {
       return <Navigate to={buildChooseTenantRedirectPath(requestedTenantCode, location)} replace />
     }

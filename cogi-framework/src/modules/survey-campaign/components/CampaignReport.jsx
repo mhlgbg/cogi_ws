@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import * as XLSX from 'xlsx'
 import {
   CButton,
   CAlert,
@@ -19,6 +20,7 @@ import {
   YAxis,
 } from 'recharts'
 import {
+  exportSurveyCampaignCourseReport,
   exportSurveyCampaignLecturerReport,
   getSurveyCampaignReportCourses,
   getSurveyCampaignReportLecturers,
@@ -45,6 +47,34 @@ export default function CampaignReport({ campaignId, active, reloadKey = 0 }) {
   const [lecturers, setLecturers] = useState([])
   const [courses, setCourses] = useState([])
   const [exportingLecturerKey, setExportingLecturerKey] = useState('')
+  const [exportingCourseKey, setExportingCourseKey] = useState('')
+
+  function downloadBlob(blob, fileName) {
+    const nextBlob = blob instanceof Blob
+      ? blob
+      : new Blob([blob], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        })
+
+    const url = URL.createObjectURL(nextBlob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = fileName
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function exportGridToExcel(rows, sheetName, fileName) {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      setError('Không có dữ liệu để xuất Excel')
+      return
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(rows)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
+    XLSX.writeFile(workbook, fileName)
+  }
 
   async function handleExportLecturer(item) {
     const lecturerKey = String(item?.key || item?.lecturerId || item?.lecturerName || '').trim()
@@ -55,23 +85,53 @@ export default function CampaignReport({ campaignId, active, reloadKey = 0 }) {
 
     try {
       const result = await exportSurveyCampaignLecturerReport(campaignId, lecturerKey)
-      const blob = result?.blob instanceof Blob
-        ? result.blob
-        : new Blob([result?.blob], {
-            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          })
-
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = result?.fileName || `survey-report-${campaignId}-${lecturerKey}.xlsx`
-      link.click()
-      URL.revokeObjectURL(url)
+      downloadBlob(result?.blob, result?.fileName || `survey-report-${campaignId}-${lecturerKey}.xlsx`)
     } catch (requestError) {
       setError(getApiMessage(requestError, 'Không thể export báo cáo giảng viên'))
     } finally {
       setExportingLecturerKey('')
     }
+  }
+
+  async function handleExportCourse(item) {
+    const courseKey = String(item?.key || item?.courseId || item?.courseName || '').trim()
+    if (!campaignId || !courseKey || exportingCourseKey) return
+
+    setExportingCourseKey(courseKey)
+    setError('')
+
+    try {
+      const result = await exportSurveyCampaignCourseReport(campaignId, courseKey)
+      downloadBlob(result?.blob, result?.fileName || `survey-report-${campaignId}-${courseKey}.xlsx`)
+    } catch (requestError) {
+      setError(getApiMessage(requestError, 'Không thể export báo cáo môn học'))
+    } finally {
+      setExportingCourseKey('')
+    }
+  }
+
+  function handleExportLecturerGrid() {
+    exportGridToExcel(
+      lecturers.map((item) => ({
+        'Giảng viên': item?.lecturerName || '-',
+        'Số lượt': item?.totalResponses || 0,
+        'Điểm TB': formatScore(item?.avgScore),
+      })),
+      'GiangVien',
+      `survey-campaign-${campaignId}-lecturers.xlsx`,
+    )
+  }
+
+  function handleExportCourseGrid() {
+    exportGridToExcel(
+      courses.map((item) => ({
+        'Môn học': item?.courseName || '-',
+        'Số lượt': item?.totalResponses || 0,
+        'Điểm TB': formatScore(item?.avgScore),
+      })),
+      'MonHoc',
+      `survey-campaign-${campaignId}-courses.xlsx`,
+    )
   }
 
   useEffect(() => {
@@ -193,7 +253,10 @@ export default function CampaignReport({ campaignId, active, reloadKey = 0 }) {
         <CCol xl={6}>
           <CCard className='border-0 shadow-sm h-100'>
             <CCardBody>
-              <div className='fw-semibold mb-3'>Giảng viên</div>
+              <div className='d-flex justify-content-between align-items-center gap-2 mb-3'>
+                <div className='fw-semibold'>Giảng viên</div>
+                <CButton size='sm' color='success' variant='outline' onClick={handleExportLecturerGrid} disabled={lecturers.length === 0}>Xuất Excel</CButton>
+              </div>
               {lecturers.length === 0 ? (
                 <EmptyState text='Chưa có dữ liệu giảng viên' />
               ) : (
@@ -237,7 +300,10 @@ export default function CampaignReport({ campaignId, active, reloadKey = 0 }) {
         <CCol xl={6}>
           <CCard className='border-0 shadow-sm h-100'>
             <CCardBody>
-              <div className='fw-semibold mb-3'>Môn học</div>
+              <div className='d-flex justify-content-between align-items-center gap-2 mb-3'>
+                <div className='fw-semibold'>Môn học</div>
+                <CButton size='sm' color='success' variant='outline' onClick={handleExportCourseGrid} disabled={courses.length === 0}>Xuất Excel</CButton>
+              </div>
               {courses.length === 0 ? (
                 <EmptyState text='Chưa có dữ liệu môn học' />
               ) : (
@@ -248,6 +314,7 @@ export default function CampaignReport({ campaignId, active, reloadKey = 0 }) {
                         <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #ddd' }}>Môn học</th>
                         <th style={{ textAlign: 'right', padding: '8px', borderBottom: '1px solid #ddd' }}>Số lượt</th>
                         <th style={{ textAlign: 'right', padding: '8px', borderBottom: '1px solid #ddd' }}>Điểm TB</th>
+                        <th style={{ textAlign: 'center', padding: '8px', borderBottom: '1px solid #ddd' }}>Export</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -256,6 +323,17 @@ export default function CampaignReport({ campaignId, active, reloadKey = 0 }) {
                           <td style={{ padding: '10px 8px', borderBottom: '1px solid #eee' }}>{item.courseName || '-'}</td>
                           <td style={{ padding: '10px 8px', borderBottom: '1px solid #eee', textAlign: 'right' }}>{item.totalResponses || 0}</td>
                           <td style={{ padding: '10px 8px', borderBottom: '1px solid #eee', textAlign: 'right', fontWeight: 600 }}>{formatScore(item.avgScore)}</td>
+                          <td style={{ padding: '10px 8px', borderBottom: '1px solid #eee', textAlign: 'center' }}>
+                            <CButton
+                              size='sm'
+                              color='success'
+                              variant='outline'
+                              onClick={() => handleExportCourse(item)}
+                              disabled={!item?.key || exportingCourseKey === String(item.key)}
+                            >
+                              {exportingCourseKey === String(item?.key || '') ? 'Đang export...' : 'Export Excel'}
+                            </CButton>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

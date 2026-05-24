@@ -5,8 +5,10 @@ export default function FormRenderer({
   schema,
   formData,
   formErrors,
+  fieldOverrides,
   submitting,
   isReadOnly,
+  fileNamesOnlyOnReadOnly = false,
   onValueChange,
   onFileChange,
   onTableCellChange,
@@ -20,8 +22,10 @@ export default function FormRenderer({
         section={section}
         formData={formData}
         formErrors={formErrors}
+        fieldOverrides={fieldOverrides}
         submitting={submitting}
         isReadOnly={isReadOnly}
+        fileNamesOnlyOnReadOnly={fileNamesOnlyOnReadOnly}
         onValueChange={onValueChange}
         onFileChange={onFileChange}
         onTableCellChange={onTableCellChange}

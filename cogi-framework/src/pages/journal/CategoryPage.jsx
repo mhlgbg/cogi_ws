@@ -164,7 +164,8 @@ export default function CategoryPage() {
         const response = await api.get('/articles', {
           params: {
             'filters[category][slug][$eq]': slug,
-            sort: 'publicAt:desc,publishedAt:desc',
+            'sort[0]': 'publicAt:desc',
+            'sort[1]': 'publishedAt:desc',
             'pagination[page]': currentPage,
             'pagination[pageSize]': PAGE_SIZE,
             'populate[0]': 'cover',

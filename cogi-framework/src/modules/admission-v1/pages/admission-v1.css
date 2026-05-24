@@ -1,0 +1,323 @@
+.admission-v1-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(13, 148, 136, 0.18), transparent 30%),
+    radial-gradient(circle at top right, rgba(245, 158, 11, 0.18), transparent 26%),
+    linear-gradient(180deg, #f5faf8 0%, #eef4f2 100%);
+  color: #18342d;
+}
+
+.admission-v1-content {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.admission-v1-hero {
+  padding: 32px;
+  border-radius: 28px;
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.96), rgba(21, 128, 61, 0.9));
+  color: #f7fffc;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.14);
+}
+
+.admission-v1-hero-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.admission-v1-hero-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.admission-v1-hero-title {
+  margin: 0;
+  font-size: clamp(1.8rem, 3vw, 2.8rem);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.admission-v1-hero-subtitle {
+  margin: 12px 0 0;
+  max-width: 760px;
+  color: rgba(247, 255, 252, 0.86);
+}
+
+.admission-v1-card {
+  border: 0;
+  border-radius: 24px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+}
+
+.admission-v1-brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 220px;
+  min-height: 96px;
+  padding: 14px 18px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.admission-v1-tenant-logo {
+  display: block;
+  max-height: 72px;
+  max-width: 100%;
+  width: auto;
+  object-fit: contain;
+  object-position: center;
+}
+
+.admission-v1-brand-fallback {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admission-v1-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.admission-v1-detail-item {
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.admission-v1-detail-label {
+  display: block;
+  margin-bottom: 4px;
+  color: #5b6b66;
+  font-size: 0.82rem;
+}
+
+.admission-v1-detail-value {
+  display: block;
+  font-weight: 600;
+  color: #18342d;
+}
+
+.admission-v1-step-note {
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: #f4fbf9;
+  border: 1px solid rgba(15, 118, 110, 0.14);
+}
+
+.admission-v1-step-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.12);
+  color: #0f766e;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.admission-v1-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.admission-v1-summary-list {
+  display: grid;
+  gap: 14px;
+}
+
+.admission-v1-summary-item {
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: #fff;
+}
+
+.admission-v1-form-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.admission-v1-section__title {
+  margin-bottom: 0.9rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #18342d;
+}
+
+.admission-v1-status-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 1rem 1.1rem;
+  border-radius: 20px;
+  background: #f7fbfa;
+  border: 1px solid rgba(15, 118, 110, 0.12);
+}
+
+.admission-v1-conversation--unread {
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  box-shadow: 0 16px 36px rgba(245, 158, 11, 0.12);
+}
+
+.admission-v1-conversation-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 26rem;
+  overflow-y: auto;
+  padding-right: 0.2rem;
+  overscroll-behavior: contain;
+  scroll-behavior: auto;
+}
+
+.admission-v1-conversation-toggle {
+  min-width: 9.5rem;
+  border-width: 1px;
+  font-weight: 700;
+  background: #ffffff;
+  color: #18342d;
+}
+
+.admission-v1-conversation-toggle:hover,
+.admission-v1-conversation-toggle:focus {
+  background: #18342d;
+  color: #ffffff;
+  border-color: #18342d;
+}
+
+.admission-v1-conversation-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.admission-v1-selected-files {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+}
+
+.admission-v1-message {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-width: 94%;
+  padding: 0.85rem 1rem;
+  border-radius: 1rem;
+}
+
+.admission-v1-message--school {
+  align-self: flex-start;
+  background: #eef6ff;
+  border: 1px solid #cfe2ff;
+}
+
+.admission-v1-message--parent {
+  align-self: flex-end;
+  background: #edf9f3;
+  border: 1px solid #ccebd8;
+}
+
+.admission-v1-message--request-update {
+  align-self: stretch;
+  max-width: 100%;
+  background: #fff8e6;
+  border: 1px solid #ffd98a;
+}
+
+.admission-v1-message--system {
+  align-self: stretch;
+  max-width: 100%;
+  background: #f3f4f6;
+  border: 1px dashed #cfd4dc;
+}
+
+.admission-v1-message__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: #5b6b66;
+}
+
+.admission-v1-message__content {
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.admission-v1-message__content p:last-child,
+.admission-v1-message__content ol:last-child,
+.admission-v1-message__content ul:last-child,
+.admission-v1-message__content div:last-child {
+  margin-bottom: 0;
+}
+
+.admission-v1-message__attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.admission-v1-message__attachment {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.admission-v1-message__attachment-preview {
+  max-width: 240px;
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+@media (max-width: 767.98px) {
+  .admission-v1-hero {
+    padding: 24px;
+    border-radius: 22px;
+  }
+
+  .admission-v1-hero-head {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .admission-v1-brand-mark {
+    width: 100%;
+    flex-basis: auto;
+    min-height: 76px;
+    justify-content: flex-start;
+  }
+
+  .admission-v1-tenant-logo {
+    max-height: 52px;
+  }
+
+  .admission-v1-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admission-v1-status-card {
+    flex-direction: column;
+  }
+
+  .admission-v1-message {
+    max-width: 100%;
+  }
+}

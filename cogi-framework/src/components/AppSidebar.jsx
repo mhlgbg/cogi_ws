@@ -75,7 +75,9 @@ export default function AppSidebar({
       </div>
 
       <div className="tenant-sidebar-nav">
-        <div className="tenant-sidebar-group-title">Menu</div>
+        {
+        //<!--<div className="tenant-sidebar-group-title">Menu</div>-->
+        }
 
         {groups.length === 0 && (
           <p className="tenant-sidebar-empty">Chưa có menu theo feature.</p>

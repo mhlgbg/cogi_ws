@@ -3,11 +3,14 @@ import { Outlet, useLocation } from 'react-router-dom'
 import AppHeader from '../components/AppHeader'
 import AppFooter from '../components/AppFooter'
 import AppSidebar from '../components/AppSidebar'
+import { useAuth } from '../contexts/AuthContext'
 import { useFeature } from '../contexts/FeatureContext'
 import { buildNav } from '../navigation/buildNav'
+import { platformNavGroups } from '../platform/routes/platformRoutes'
 import './main-layout.css'
 
 export default function MainLayout() {
+  const auth = useAuth()
   const feature = useFeature()
   const location = useLocation()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -19,8 +22,15 @@ export default function MainLayout() {
   }, [location?.pathname])
 
   const navItems = useMemo(
-    () => buildNav(feature?.featureGroups || []),
-    [feature?.featureGroups],
+    () => {
+      const tenantNavItems = buildNav(feature?.featureGroups || [])
+      if (auth?.user?.isPlatformAdmin !== true) {
+        return tenantNavItems
+      }
+
+      return [...tenantNavItems, ...platformNavGroups]
+    },
+    [auth?.user?.isPlatformAdmin, feature?.featureGroups],
   )
 
   useEffect(() => {

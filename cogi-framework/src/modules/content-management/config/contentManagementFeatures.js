@@ -38,6 +38,22 @@ const contentManagementFeatures = {
       path: '/tenant-configs',
       showInMenu: true,
     },
+    {
+      name: 'Quan ly danh muc tap chi',
+      key: 'journal-category.manage',
+      order: 5,
+      description: 'Tenant quan ly cac danh muc tap chi cua minh',
+      path: '/journal-categories',
+      showInMenu: true,
+    },
+    {
+      name: 'Quan ly tap chi',
+      key: 'journal-issue.manage',
+      order: 6,
+      description: 'Tenant quan ly cac tap chi va cac item ben trong',
+      path: '/journal-issues',
+      showInMenu: true,
+    },
   ],
 }
 

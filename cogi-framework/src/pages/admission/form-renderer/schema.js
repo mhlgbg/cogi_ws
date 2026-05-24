@@ -9,6 +9,46 @@ function normalizeOption(option) {
   return value ? { value, label: value } : null
 }
 
+function normalizeConditionValue(value) {
+  if (value === null || value === undefined) return value
+  if (typeof value === 'boolean' || typeof value === 'number') return value
+
+  const text = String(value).trim()
+  if (!text) return ''
+
+  const lowered = text.toLowerCase()
+  if (lowered === 'true') return true
+  if (lowered === 'false') return false
+
+  const parsed = Number(text)
+  if (!Number.isNaN(parsed) && text === String(parsed)) return parsed
+
+  return text
+}
+
+function normalizeVisibleWhen(visibleWhen) {
+  if (!visibleWhen || typeof visibleWhen !== 'object' || Array.isArray(visibleWhen)) return null
+
+  const field = String(visibleWhen.field || '').trim()
+  if (!field) return null
+
+  return {
+    field,
+    equals: normalizeConditionValue(visibleWhen.equals),
+  }
+}
+
+function normalizeDefaultValue(fieldType, value) {
+  if (value === undefined) return undefined
+  if (value === null) return null
+
+  if (fieldType === 'radio' || fieldType === 'select') {
+    return String(value)
+  }
+
+  return value
+}
+
 function normalizeTableColumn(column, index) {
   if (!column || typeof column !== 'object') return null
 
@@ -61,6 +101,8 @@ function normalizeField(field, index) {
     min: typeof field.min === 'number' ? field.min : null,
     max: typeof field.max === 'number' ? field.max : null,
     step: typeof field.step === 'number' ? field.step : null,
+    defaultValue: normalizeDefaultValue(String(field.type || 'text').trim().toLowerCase(), field.defaultValue),
+    visibleWhen: normalizeVisibleWhen(field.visibleWhen),
     options: Array.isArray(field.options) ? field.options.map(normalizeOption).filter(Boolean) : [],
     columns: Array.isArray(field.columns) ? field.columns.map(normalizeTableColumn).filter(Boolean) : [],
     rows: Array.isArray(field.rows) ? field.rows.map(normalizeTableRow) : [],
@@ -119,6 +161,13 @@ export function extractTemplateFields(schema) {
   return extractTemplateSections(schema).flatMap((section) => section.fields)
 }
 
+export function isFieldVisible(field, formData) {
+  if (!field?.visibleWhen) return true
+
+  const leftValue = normalizeConditionValue(formData?.[field.visibleWhen.field])
+  return leftValue === field.visibleWhen.equals
+}
+
 function createInitialTableValue(field) {
   return Array.isArray(field.rows) ? field.rows.map((row) => ({ ...row })) : []
 }
@@ -138,6 +187,11 @@ export function buildInitialFormData(application, fields) {
 
   fields.forEach((field) => {
     if (nextFormData[field.key] !== undefined && nextFormData[field.key] !== null) return
+
+    if (field.defaultValue !== undefined) {
+      nextFormData[field.key] = field.defaultValue
+      return
+    }
 
     if (field.type === 'table') {
       nextFormData[field.key] = createInitialTableValue(field)
@@ -165,28 +219,175 @@ function hasTableValue(value) {
   })
 }
 
+function isBlankValue(value) {
+  if (value === null || value === undefined) return true
+  return String(value).trim() === ''
+}
+
+function parseNumberValue(value) {
+  if (isBlankValue(value)) return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : Number.NaN
+}
+
+function parseDateParts(value) {
+  const text = String(value ?? '').trim()
+  if (!text) return null
+
+  let year
+  let month
+  let day
+
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text)
+  if (isoMatch) {
+    year = Number(isoMatch[1])
+    month = Number(isoMatch[2])
+    day = Number(isoMatch[3])
+  } else {
+    const localMatch = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text)
+    if (!localMatch) return null
+    day = Number(localMatch[1])
+    month = Number(localMatch[2])
+    year = Number(localMatch[3])
+  }
+
+  const normalized = new Date(Date.UTC(year, month - 1, day))
+  if (
+    Number.isNaN(normalized.getTime())
+    || normalized.getUTCFullYear() !== year
+    || normalized.getUTCMonth() + 1 !== month
+    || normalized.getUTCDate() !== day
+  ) {
+    return null
+  }
+
+  return { year, month, day }
+}
+
+function validateDateValue(label, value) {
+  if (isBlankValue(value)) return null
+  return parseDateParts(value) ? null : `${label} phải theo định dạng dd/MM/yyyy`
+}
+
+function buildRangeMessage(label, min, max) {
+  if (min !== null && max !== null) {
+    return `${label} phải trong khoảng ${min} đến ${max}`
+  }
+  if (min !== null) {
+    return `${label} phải lớn hơn hoặc bằng ${min}`
+  }
+  if (max !== null) {
+    return `${label} phải nhỏ hơn hoặc bằng ${max}`
+  }
+  return `${label} không hợp lệ`
+}
+
+function validateNumberRange(label, value, min, max) {
+  if (isBlankValue(value)) return null
+
+  const parsed = parseNumberValue(value)
+  if (Number.isNaN(parsed)) {
+    return `${label} phải là số hợp lệ`
+  }
+  if (min !== null && parsed < min) {
+    return buildRangeMessage(label, min, max)
+  }
+  if (max !== null && parsed > max) {
+    return buildRangeMessage(label, min, max)
+  }
+
+  return null
+}
+
+function getRowLabel(row, index) {
+  if (!row || typeof row !== 'object') return `Hàng ${index + 1}`
+
+  const label = row.label || row.title || row.name || row.grade || row.id
+  return String(label || `Hàng ${index + 1}`)
+}
+
+function validateTableCell(field, rowValue, rowIndex, column) {
+  if (!column) return null
+
+  const cellValue = rowValue?.[column.key]
+  const rowLabel = getRowLabel(rowValue, rowIndex)
+  if (column.type === 'date') {
+    return validateDateValue(`${column.label} (${rowLabel})`, cellValue)
+  }
+
+  if (column.type !== 'number') return null
+
+  return validateNumberRange(`${column.label} (${rowLabel})`, cellValue, column.min, column.max)
+}
+
+function validateTableField(field, value) {
+  const tableValue = Array.isArray(value) ? value : createInitialTableValue(field)
+  const cellErrors = {}
+
+  if (field.required && !hasTableValue(tableValue)) {
+    return {
+      message: `${field.label} là bắt buộc`,
+      cells: {},
+    }
+  }
+
+  tableValue.forEach((rowValue, rowIndex) => {
+    field.columns.forEach((column) => {
+      const cellError = validateTableCell(field, rowValue, rowIndex, column)
+      if (cellError) {
+        cellErrors[`${rowIndex}.${column.key}`] = cellError
+      }
+    })
+  })
+
+  if (Object.keys(cellErrors).length > 0) {
+    return {
+      message: 'Vui lòng kiểm tra lại các ô được đánh dấu',
+      cells: cellErrors,
+    }
+  }
+
+  return null
+}
+
+export function validateFieldValue(field, value) {
+  if (!field) return null
+
+  const formData = arguments.length > 2 ? arguments[2] : undefined
+  if (!isFieldVisible(field, formData)) return null
+
+  const isFileField = field.type === 'file' || field.type === 'image'
+
+  if (field.type === 'table') {
+    return validateTableField(field, value)
+  }
+
+  const isEmpty = isFileField
+    ? !getFileValueMetaList(value).length
+    : isBlankValue(value)
+
+  if (field.required && isEmpty) {
+    return `${field.label} là bắt buộc`
+  }
+
+  if (field.type === 'number') {
+    return validateNumberRange(field.label, value, field.min, field.max)
+  }
+
+  if (field.type === 'date') {
+    return validateDateValue(field.label, value)
+  }
+
+  return null
+}
+
 export function validateFormData(formData, fields) {
   const nextErrors = {}
 
   fields.forEach((field) => {
-    if (!field.required) return
-
-    const value = formData?.[field.key]
-    const isFileField = field.type === 'file' || field.type === 'image'
-
-    if (field.type === 'table') {
-      if (!hasTableValue(value)) {
-        nextErrors[field.key] = `${field.label} là bắt buộc`
-      }
-      return
-    }
-
-    const isEmpty = isFileField
-      ? !getFileValueMetaList(value).length
-      : String(value ?? '').trim() === ''
-
-    if (isEmpty) {
-      nextErrors[field.key] = `${field.label} là bắt buộc`
+    const fieldError = validateFieldValue(field, formData?.[field.key], formData)
+    if (fieldError) {
+      nextErrors[field.key] = fieldError
     }
   })
 
@@ -205,6 +406,7 @@ function getSingleFileValueMeta(value) {
   return {
     name: name || 'Tệp đính kèm',
     type,
+    url: String(value.url || '').trim(),
     dataUrl,
     isImage: type.startsWith('image/'),
     isPdf: type === 'application/pdf' || dataUrl.startsWith('data:application/pdf'),

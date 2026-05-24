@@ -19,10 +19,13 @@ import * as salesCounter from "./sales-counter";
 import * as serviceOrders from './service-orders'
 import * as inviteUser from './invite-user'
 import * as userManagement from './user-management'
+import * as userDuplicateCleanup from './user-duplicate-cleanup'
 import * as requests from './requests'
 import * as survey from './survey'
 import * as surveyCampaign from './survey-campaign'
 import * as surveyQuestionManagement from './survey-question-management'
+import * as surveyAnalysis from './survey-analysis'
+import * as learningManagement from './learning-management'
 import * as classManagement from './class-management'
 import * as learnerManagement from './learner-management'
 import * as feeSheetManagement from './fee-sheet-management'
@@ -41,10 +44,13 @@ export const allModules = [
   serviceOrders,
   inviteUser,
   userManagement,
+  userDuplicateCleanup,
   requests,
   survey,
   surveyCampaign,
   surveyQuestionManagement,
+  surveyAnalysis,
+  learningManagement,
   classManagement,
   learnerManagement,
   feeSheetManagement,
@@ -56,7 +62,7 @@ export const allModules = [
 
 /**
  * Flat array of all route definitions from every module.
- * Each entry: { path, featureKey, component }
+ * Each entry: { path, featureKey?, featureKeys?, component }
  */
 export const allModuleRoutes = allModules.flatMap((m) => m.moduleRoutes || []);
 
@@ -68,7 +74,13 @@ export function resolvePathByFeatureKey(featureKey) {
     return '/dashboard'
   }
 
-  const matchedRoute = allModuleRoutes.find((route) => String(route?.featureKey || '').trim() === normalizedFeatureKey)
+  const matchedRoute = allModuleRoutes.find((route) => {
+    const primaryKey = String(route?.featureKey || '').trim()
+    if (primaryKey === normalizedFeatureKey) return true
+
+    if (!Array.isArray(route?.featureKeys)) return false
+    return route.featureKeys.some((key) => String(key || '').trim() === normalizedFeatureKey)
+  })
   return matchedRoute?.path || null
 }
 

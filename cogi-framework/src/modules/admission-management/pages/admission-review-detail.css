@@ -1,0 +1,100 @@
+.admission-review-panel-scroll {
+  min-height: 0;
+}
+
+.admission-review-conversation-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 26rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.admission-review-conversation-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.admission-review-selected-files {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  color: var(--cui-body-color, #212631);
+}
+
+.admission-review-message {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-width: 92%;
+  border-radius: 1rem;
+  padding: 0.85rem 1rem;
+}
+
+.admission-review-message--school {
+  align-self: flex-end;
+  background: #e7f1ff;
+  border: 1px solid #b6d4fe;
+}
+
+.admission-review-message--parent {
+  align-self: flex-start;
+  background: #f8f9fa;
+  border: 1px solid #d8dde3;
+}
+
+.admission-review-message--request-update {
+  align-self: stretch;
+  max-width: 100%;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+}
+
+.admission-review-message--system {
+  align-self: stretch;
+  max-width: 100%;
+  background: #f3f4f6;
+  border: 1px dashed #c7ccd1;
+}
+
+.admission-review-message__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: var(--cui-secondary-color, #6c757d);
+}
+
+.admission-review-message__content {
+  color: var(--cui-body-color, #212631);
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.admission-review-message__content p:last-child,
+.admission-review-message__content ol:last-child,
+.admission-review-message__content ul:last-child,
+.admission-review-message__content div:last-child {
+  margin-bottom: 0;
+}
+
+.admission-review-message__attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+@media (min-width: 992px) {
+  .admission-review-panel-scroll {
+    max-height: calc(100vh - 8.5rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 0.35rem;
+    scrollbar-gutter: stable;
+  }
+}

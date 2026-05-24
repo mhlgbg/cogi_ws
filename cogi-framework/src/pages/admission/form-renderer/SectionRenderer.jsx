@@ -1,27 +1,38 @@
 import { CCard, CCardBody, CCardHeader, CRow } from '@coreui/react'
 import FieldRenderer from './FieldRenderer'
+import { isFieldVisible } from './schema'
 
 export default function SectionRenderer({
   section,
   formData,
   formErrors,
+  fieldOverrides,
   submitting,
   isReadOnly,
+  fileNamesOnlyOnReadOnly,
   onValueChange,
   onFileChange,
   onTableCellChange,
   showCard,
 }) {
+  const visibleFields = section.fields.filter((field) => isFieldVisible(field, formData))
+
+  if (visibleFields.length === 0) {
+    return null
+  }
+
   const content = (
     <CRow className='g-3'>
-      {section.fields.map((field) => (
+      {visibleFields.map((field) => (
         <FieldRenderer
           key={field.key}
           field={field}
+          fieldOverride={fieldOverrides?.[field.key] || null}
           value={formData?.[field.key]}
           error={formErrors?.[field.key]}
           submitting={submitting}
           isReadOnly={isReadOnly}
+          fileNamesOnlyOnReadOnly={fileNamesOnlyOnReadOnly}
           onValueChange={onValueChange}
           onFileChange={onFileChange}
           onTableCellChange={onTableCellChange}

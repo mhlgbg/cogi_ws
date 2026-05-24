@@ -19,6 +19,10 @@ function normalizePath(path) {
   return rawPath.startsWith('/') ? rawPath : `/${rawPath}`
 }
 
+function normalizeLoginIdentifier(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
 function isPublicOrAuthPath(path) {
   const normalizedPath = normalizePath(path)
   if (!normalizedPath) return false
@@ -90,7 +94,7 @@ export default function Login() {
     event.preventDefault()
     setError('')
 
-    const nextIdentifier = identifier.trim()
+    const nextIdentifier = normalizeLoginIdentifier(identifier)
     if (!nextIdentifier || !password) {
       setError('Vui lòng nhập đầy đủ identifier và password.')
       return
@@ -99,7 +103,7 @@ export default function Login() {
     setLoading(true)
 
     try {
-      const response = await api.post('/auth/local', {
+      const response = await api.post('/auth/local-case-insensitive', {
         identifier: nextIdentifier,
         password,
       })
@@ -158,7 +162,7 @@ export default function Login() {
           Đăng nhập hệ thống
         </h2>
 
-        <label htmlFor="identifier">Identifier</label>
+        <label htmlFor="identifier">Tên đăng nhập</label>
         <input
           id="identifier"
           type="text"
@@ -169,7 +173,7 @@ export default function Login() {
           style={{ padding: '10px 12px' }}
         />
 
-        <label htmlFor="password">Password</label>
+        <label htmlFor="password">Mật khẩu</label>
         <input
           id="password"
           type="password"

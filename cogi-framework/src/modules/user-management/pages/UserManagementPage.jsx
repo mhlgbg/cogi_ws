@@ -204,9 +204,16 @@ export default function UserManagementPage() {
 
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
+  const [roleFilter, setRoleFilter] = useState('')
 
   const [draftRoleIdsByUserTenant, setDraftRoleIdsByUserTenant] = useState({})
   const [savingByUserTenant, setSavingByUserTenant] = useState({})
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [passwordTargetUser, setPasswordTargetUser] = useState(null)
+  const [passwordValue, setPasswordValue] = useState('')
+  const [passwordConfirmation, setPasswordConfirmation] = useState('')
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
   const [showImportModal, setShowImportModal] = useState(false)
   const [showImportUpdateRoleModal, setShowImportUpdateRoleModal] = useState(false)
   const [loadingImportOptions, setLoadingImportOptions] = useState(false)
@@ -254,6 +261,7 @@ export default function UserManagementPage() {
           page,
           pageSize,
           search,
+          roleId: roleFilter || undefined,
         },
       })
 
@@ -292,11 +300,11 @@ export default function UserManagementPage() {
     } finally {
       setLoading(false)
     }
-  }, [page, pageSize, search])
+  }, [page, pageSize, roleFilter, search])
 
   useEffect(() => {
     fetchUsers()
-  }, [page, pageSize, search])
+  }, [fetchUsers])
 
   const originalRoleIdsByUserTenant = useMemo(() => {
     const map = {}
@@ -358,6 +366,71 @@ export default function UserManagementPage() {
       setError(message)
     } finally {
       setSavingByUserTenant((prev) => ({ ...prev, [userTenantId]: false }))
+    }
+  }
+
+  const handleOpenPasswordModal = (user) => {
+    setPasswordTargetUser(user || null)
+    setPasswordValue('')
+    setPasswordConfirmation('')
+    setPasswordError('')
+    setShowPasswordModal(true)
+  }
+
+  const handleClosePasswordModal = () => {
+    if (passwordSubmitting) return
+    setShowPasswordModal(false)
+  }
+
+  const handleSubmitPassword = async () => {
+    const userTenantId = Number(passwordTargetUser?.userTenantId)
+
+    if (!Number.isInteger(userTenantId) || userTenantId <= 0) {
+      setPasswordError('Không xác định được user cần đổi mật khẩu')
+      return
+    }
+
+    if (!passwordValue) {
+      setPasswordError('Vui lòng nhập mật khẩu mới')
+      return
+    }
+
+    if (passwordValue.length < 8) {
+      setPasswordError('Mật khẩu phải có ít nhất 8 ký tự')
+      return
+    }
+
+    if (passwordValue !== passwordConfirmation) {
+      setPasswordError('Xác nhận mật khẩu không khớp')
+      return
+    }
+
+    setPasswordSubmitting(true)
+    setPasswordError('')
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await api.patch(`/admin/tenant-users/${userTenantId}/password`, {
+        password: passwordValue,
+      })
+
+      if (!response.data?.ok) {
+        setPasswordError('Không thể cập nhật mật khẩu user')
+        return
+      }
+
+      setShowPasswordModal(false)
+      setSuccess('Đổi mật khẩu user thành công')
+    } catch (requestError) {
+      const message =
+        requestError?.response?.data?.error?.message
+        || requestError?.response?.data?.message
+        || requestError?.message
+        || 'Không thể cập nhật mật khẩu user'
+      setPasswordError(message)
+    } finally {
+      setPasswordSubmitting(false)
     }
   }
 
@@ -661,6 +734,22 @@ export default function UserManagementPage() {
         />
 
         <select
+          value={roleFilter}
+          onChange={(event) => {
+            setPage(1)
+            setRoleFilter(event.target.value)
+          }}
+          style={{ padding: '8px 10px', minWidth: 220 }}
+        >
+          <option value="">Tất cả role</option>
+          {availableRoles.map((role) => (
+            <option key={role.id} value={role.id}>
+              {toRoleName(role)}
+            </option>
+          ))}
+        </select>
+
+        <select
           value={pageSize}
           onChange={(event) => {
             setPage(1)
@@ -770,6 +859,13 @@ export default function UserManagementPage() {
                     >
                       {saving ? 'Đang lưu...' : 'Lưu quyền'}
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenPasswordModal(item)}
+                      style={{ padding: '8px 12px', marginTop: 8 }}
+                    >
+                      Đặt mật khẩu
+                    </button>
                   </td>
                 </tr>
               )
@@ -800,6 +896,57 @@ export default function UserManagementPage() {
           </button>
         </div>
       </div>
+
+      <CModal visible={showPasswordModal} backdrop="static" onClose={handleClosePasswordModal}>
+        <CModalHeader>
+          <CModalTitle>Đặt mật khẩu người dùng</CModalTitle>
+        </CModalHeader>
+        <CModalBody style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div>
+            <div><strong>{passwordTargetUser?.user?.fullName || passwordTargetUser?.user?.username || '(no name)'}</strong></div>
+            <div style={{ color: '#666' }}>{passwordTargetUser?.user?.email || '-'}</div>
+          </div>
+
+          <div>
+            <CFormLabel htmlFor="tenant-user-password">Mật khẩu mới</CFormLabel>
+            <CFormInput
+              id="tenant-user-password"
+              type="password"
+              value={passwordValue}
+              onChange={(event) => setPasswordValue(event.target.value)}
+              disabled={passwordSubmitting}
+            />
+          </div>
+
+          <div>
+            <CFormLabel htmlFor="tenant-user-password-confirm">Xác nhận mật khẩu</CFormLabel>
+            <CFormInput
+              id="tenant-user-password-confirm"
+              type="password"
+              value={passwordConfirmation}
+              onChange={(event) => setPasswordConfirmation(event.target.value)}
+              disabled={passwordSubmitting}
+            />
+          </div>
+
+          <div style={{ color: '#666', fontSize: 13 }}>Mật khẩu tối thiểu 8 ký tự.</div>
+
+          {passwordError ? <CAlert color="danger">{passwordError}</CAlert> : null}
+        </CModalBody>
+        <CModalFooter>
+          <CButton color="secondary" variant="outline" onClick={handleClosePasswordModal} disabled={passwordSubmitting}>
+            Đóng
+          </CButton>
+          <CButton color="primary" onClick={handleSubmitPassword} disabled={passwordSubmitting}>
+            {passwordSubmitting ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <CSpinner size="sm" />
+                Đang cập nhật...
+              </span>
+            ) : 'Cập nhật mật khẩu'}
+          </CButton>
+        </CModalFooter>
+      </CModal>
 
       <CModal visible={showImportModal} backdrop="static" size="lg" onClose={handleCloseImportModal}>
         <CModalHeader>
