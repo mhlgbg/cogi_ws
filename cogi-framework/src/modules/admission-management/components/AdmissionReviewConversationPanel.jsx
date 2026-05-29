@@ -71,6 +71,10 @@ function getMessageVariant(message) {
   return 'school'
 }
 
+function isEmailMessage(message) {
+  return String(message?.metadata?.channel || '').trim().toUpperCase() === 'EMAIL'
+}
+
 function getSelectedFileSummary(file) {
   if (!file) return ''
   const sizeInMb = Number(file.size || 0) / (1024 * 1024)
@@ -196,6 +200,14 @@ export default function AdmissionReviewConversationPanel({ applicationId, refres
                     <span className='fw-semibold'>{getSenderName(message)}</span>
                     <span>{formatDateTime(message?.createdAt)}</span>
                   </div>
+
+                  {isEmailMessage(message) ? (
+                    <div className='admission-review-message__channel'>
+                      <span className='admission-review-message__channel-icon'>✉</span>
+                      <span>Đã gửi email tới phụ huynh</span>
+                      {message?.metadata?.subject ? <span className='text-body-secondary'>· {message.metadata.subject}</span> : null}
+                    </div>
+                  ) : null}
 
                   {html ? (
                     <div

@@ -89,6 +89,25 @@
   gap: 0.35rem;
 }
 
+.admission-review-message__channel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: #0c63e7;
+}
+
+.admission-review-message__channel-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  background: rgba(13, 110, 253, 0.12);
+}
+
 @media (min-width: 992px) {
   .admission-review-panel-scroll {
     max-height: calc(100vh - 8.5rem);

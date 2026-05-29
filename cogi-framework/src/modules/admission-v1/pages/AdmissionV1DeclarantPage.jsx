@@ -14,7 +14,9 @@ import { useTenant } from '../../../contexts/TenantContext'
 import AdmissionV1Hero from '../components/AdmissionV1Hero'
 import AdmissionV1GuideModal from '../components/AdmissionV1GuideModal'
 import {
+  buildAdmissionV1Permissions,
   buildAdmissionV1Path,
+  getAdmissionV1CampaignStatusMessage,
   getAdmissionV1ErrorMessage,
   getPublicAdmissionCampaign,
   startAdmissionV1Registration,
@@ -46,6 +48,8 @@ export default function AdmissionV1DeclarantPage() {
   const [submitting, setSubmitting] = useState(false)
   const [showGuideModal, setShowGuideModal] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
+  const campaignStatusMessage = getAdmissionV1CampaignStatusMessage(campaign)
+  const campaignPermissions = buildAdmissionV1Permissions(campaign, null)
 
   useEffect(() => {
     let cancelled = false
@@ -105,6 +109,11 @@ export default function AdmissionV1DeclarantPage() {
       return
     }
 
+    if (!campaignPermissions.canCreate) {
+      setErrorMessage(campaignStatusMessage || 'Kỳ tuyển sinh hiện chưa nhận hồ sơ mới')
+      return
+    }
+
     setSubmitting(true)
     setErrorMessage('')
 
@@ -142,6 +151,7 @@ export default function AdmissionV1DeclarantPage() {
         <CCard className='admission-v1-card'>
           <CCardBody className='p-4 p-lg-5'>
                 {errorMessage ? <CAlert color='danger'>{errorMessage}</CAlert> : null}
+                {campaignStatusMessage ? <CAlert color='warning'>{campaignStatusMessage}</CAlert> : null}
 
                 {loading ? (
                   <div className='text-center py-5'>
@@ -217,7 +227,7 @@ export default function AdmissionV1DeclarantPage() {
                       <CButton type='button' color='light' onClick={() => navigate(buildAdmissionV1Path(campaignCode, '', resolvedTenantCode))} disabled={submitting}>
                         Quay lại
                       </CButton>
-                      <CButton type='submit' color='success' disabled={submitting}>
+                      <CButton type='submit' color='success' disabled={submitting || !campaignPermissions.canCreate}>
                         {submitting ? 'Đang mở form...' : 'Tiếp tục khai hồ sơ'}
                       </CButton>
                     </div>

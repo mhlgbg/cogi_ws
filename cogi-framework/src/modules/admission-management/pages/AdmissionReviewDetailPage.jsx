@@ -11,14 +11,24 @@ import {
   CForm,
   CRow,
   CSpinner,
+  CToast,
+  CToastBody,
+  CToaster,
 } from '@coreui/react'
 import AdmissionReviewDecisionModal from '../components/AdmissionReviewDecisionModal'
-import AdmissionReviewConversationPanel from '../components/AdmissionReviewConversationPanel'
+import AdmissionReviewEmailModal from '../components/AdmissionReviewEmailModal'
+import AdmissionReviewEditApplicationModal from '../components/AdmissionReviewEditApplicationModal'
 import {
+  getAdmissionReviewEmailTemplates,
   getAdmissionReviewDetail,
+  getAdmissionReviewNotificationTemplate,
   logAdmissionReviewDetailView,
-  sendAdmissionApprovalReminder,
+  restoreAdmissionReview,
+  sendAdmissionReviewEmail,
+  softDeleteAdmissionReview,
   submitAdmissionReviewDecision,
+  updateAdmissionReviewApplication,
+  updateAdmissionReturnedReviewNote,
 } from '../services/admissionManagementService'
 import AdmissionReviewEvidenceWorkspace from '../components/AdmissionReviewEvidenceWorkspace'
 import AdmissionReviewApplicationInfoPanel from '../components/AdmissionReviewApplicationInfoPanel'
@@ -73,6 +83,42 @@ function getReviewStatusColor(status) {
   return 'secondary'
 }
 
+function buildInitialEmailDraft() {
+  return {
+    subject: '',
+    content: '',
+    attachments: [],
+    alsoCreateConversationMessage: true,
+  }
+}
+
+const RETURNED_NOTE_TEMPLATE_FALLBACK = `<div style="background:#fff7e6; border:1px solid #ffd591; border-left:6px solid #faad14; padding:16px 18px; border-radius:10px; color:#613400; line-height:1.6; font-size:15px;">
+  <div style="font-size:18px; font-weight:700; margin-bottom:8px;">
+    ⚠️ Hồ sơ cần bổ sung / chỉnh sửa
+  </div>
+
+  <p style="margin:0 0 12px 0;">
+    Nhà trường đã tiếp nhận hồ sơ đăng ký dự tuyển của học sinh. Tuy nhiên, hồ sơ hiện cần được bổ sung hoặc điều chỉnh một số nội dung như sau:
+  </p>
+
+  <div style="background:#ffffff; border:1px dashed #faad14; padding:12px 14px; border-radius:8px; margin-bottom:12px;">
+    <b>Nội dung cần bổ sung / chỉnh sửa:</b>
+
+    <ol style="margin-top:8px; padding-left:20px;">
+      <li>............................................................</li>
+      <li>............................................................</li>
+    </ol>
+  </div>
+
+  <p style="margin:0 0 10px 0;">
+    👉 Quý phụ huynh vui lòng nhấn nút <b>“Cập nhật hồ sơ”</b> để bổ sung và chỉnh sửa theo yêu cầu trên.
+  </p>
+
+  <p style="margin:0;">
+    Sau khi hoàn thiện, hồ sơ sẽ được Nhà trường tiếp tục xem xét và cập nhật trạng thái trên hệ thống.
+  </p>
+</div>`
+
 export default function AdmissionReviewDetailPage() {
   const navigate = useNavigate()
   const params = useParams()
@@ -86,8 +132,19 @@ export default function AdmissionReviewDetailPage() {
   const [decisionAction, setDecisionAction] = useState('')
   const [snapshotWarning, setSnapshotWarning] = useState('')
   const [useFallbackRenderer, setUseFallbackRenderer] = useState(false)
-  const [conversationRefreshKey, setConversationRefreshKey] = useState(0)
-  const [sendingApprovalReminder, setSendingApprovalReminder] = useState(false)
+  const [emailModalVisible, setEmailModalVisible] = useState(false)
+  const [editApplicationModalVisible, setEditApplicationModalVisible] = useState(false)
+  const [sendingReviewEmail, setSendingReviewEmail] = useState(false)
+  const [savingApplication, setSavingApplication] = useState(false)
+  const [decisionInitialTemplate, setDecisionInitialTemplate] = useState('')
+  const [loadingDecisionTemplate, setLoadingDecisionTemplate] = useState(false)
+  const [emailDraft, setEmailDraft] = useState(() => buildInitialEmailDraft())
+  const [emailTemplates, setEmailTemplates] = useState([])
+  const [loadingEmailTemplates, setLoadingEmailTemplates] = useState(false)
+  const [emailTemplateError, setEmailTemplateError] = useState('')
+  const [selectedEmailTemplateKey, setSelectedEmailTemplateKey] = useState('')
+  const [emailFileInputKey, setEmailFileInputKey] = useState(0)
+  const [emailToast, setEmailToast] = useState({ visible: false, color: 'success', message: '' })
   const viewActivityLoggedRef = useRef('')
 
   const normalizedSnapshot = useMemo(() => normalizeReviewSnapshot(detail?.reviewSnapshot), [detail?.reviewSnapshot])
@@ -112,9 +169,13 @@ export default function AdmissionReviewDetailPage() {
   }, [detail])
 
   const currentReviewStatus = String(detail?.reviewStatus || '').trim().toLowerCase()
-  const canReview = currentReviewStatus === 'submitted'
-  const canRequestRevision = currentReviewStatus === 'submitted' || currentReviewStatus === 'accepted'
-  const canSendApprovalReminder = String(detail?.admissionStatus || '').trim().toLowerCase() === 'approved' && !detail?.approvedAcknowledgedAt
+  const isDeleted = detail?.isDeleted === true
+  const canReview = !isDeleted && currentReviewStatus === 'submitted'
+  const canRequestRevision = !isDeleted && (currentReviewStatus === 'submitted' || currentReviewStatus === 'accepted')
+  const canEditReturnedNote = !isDeleted && currentReviewStatus === 'returned'
+  const deletedSummary = isDeleted
+    ? `Hồ sơ này đã bị xóa mềm${detail?.deletedAt ? ` lúc ${formatDate(detail.deletedAt)}` : ''}${detail?.deletedBy?.fullName || detail?.deletedBy?.username ? ` bởi ${detail?.deletedBy?.fullName || detail?.deletedBy?.username}` : ''}.${detail?.deleteReason ? ` Lý do: ${detail.deleteReason}` : ''}`
+    : ''
 
   const loadDetail = useCallback(async () => {
     if (!applicationId) return
@@ -159,13 +220,18 @@ export default function AdmissionReviewDetailPage() {
     setSuccess('')
 
     try {
-      await submitAdmissionReviewDecision(applicationId, payload)
-      setDecisionAction('')
-      setSuccess(payload.action === 'returned' ? 'Đã cập nhật hồ sơ cần chỉnh sửa để phụ huynh xem và bổ sung' : 'Đã tiếp nhận hồ sơ')
-      if (payload.action === 'returned') {
-        setConversationRefreshKey((current) => current + 1)
+      if (payload.action === 'edit-returned-note') {
+        const updated = await updateAdmissionReturnedReviewNote(applicationId, {
+          reviewNote: payload.reviewNote,
+        })
+        setDetail(updated)
+        setSuccess('Đã cập nhật nội dung nhận xét')
+      } else {
+        await submitAdmissionReviewDecision(applicationId, payload)
+        setSuccess(payload.action === 'returned' ? 'Đã cập nhật hồ sơ cần chỉnh sửa để phụ huynh xem và bổ sung' : 'Đã tiếp nhận hồ sơ')
+        await loadDetail()
       }
-      await loadDetail()
+      setDecisionAction('')
     } catch (requestError) {
       setError(getApiMessage(requestError, 'Không thể cập nhật kết quả duyệt hồ sơ'))
     } finally {
@@ -173,21 +239,178 @@ export default function AdmissionReviewDetailPage() {
     }
   }
 
-  async function handleSendApprovalReminder() {
-    if (!applicationId || sendingApprovalReminder) return
+  async function handleOpenEmailModal() {
+    if (!loadingEmailTemplates && emailTemplates.length === 0 && applicationId) {
+      setLoadingEmailTemplates(true)
+      setEmailTemplateError('')
+      try {
+        const rows = await getAdmissionReviewEmailTemplates(applicationId)
+        setEmailTemplates(Array.isArray(rows) ? rows : [])
+      } catch (requestError) {
+        setEmailTemplates([])
+        setEmailTemplateError(getApiMessage(requestError, 'Không tải được mẫu thư từ Notification Template'))
+      } finally {
+        setLoadingEmailTemplates(false)
+      }
+    }
+    setEmailModalVisible(true)
+  }
 
-    setSendingApprovalReminder(true)
+  function handleOpenEditApplication() {
+    if (isDeleted || loading || !detail) return
+    setEditApplicationModalVisible(true)
+  }
+
+  function handleOpenDecision(action) {
+    setDecisionAction(action)
+
+    if (action !== 'returned' && action !== 'edit-returned-note') {
+      setDecisionInitialTemplate('')
+      setLoadingDecisionTemplate(false)
+      return
+    }
+
+    if (action === 'edit-returned-note' && String(detail?.reviewNote || '').trim()) {
+      setDecisionInitialTemplate(String(detail.reviewNote || '').trim())
+      setLoadingDecisionTemplate(false)
+      return
+    }
+
+    setDecisionInitialTemplate(RETURNED_NOTE_TEMPLATE_FALLBACK)
+    if (!applicationId) return
+
+    setLoadingDecisionTemplate(true)
+    getAdmissionReviewNotificationTemplate(applicationId, 'mau-tin-nhan-yeu-cau-bo-sung')
+      .then((template) => {
+        const nextContent = String(template?.content || '').trim()
+        setDecisionInitialTemplate(nextContent || RETURNED_NOTE_TEMPLATE_FALLBACK)
+      })
+      .catch(() => {
+        setDecisionInitialTemplate(RETURNED_NOTE_TEMPLATE_FALLBACK)
+      })
+      .finally(() => {
+        setLoadingDecisionTemplate(false)
+      })
+  }
+
+  function handleCloseEmailModal() {
+    if (sendingReviewEmail) return
+    setEmailModalVisible(false)
+  }
+
+  function handleEmailDraftChange(patch) {
+    setEmailDraft((current) => ({
+      ...current,
+      ...(patch || {}),
+    }))
+  }
+
+  function handleEmailTemplateChange(templateKey) {
+    setSelectedEmailTemplateKey(templateKey)
+    const template = emailTemplates.find((entry) => entry.key === templateKey)
+    if (!template) return
+
+    setEmailDraft((current) => ({
+      ...current,
+      subject: template.subject,
+      content: template.content,
+    }))
+  }
+
+  async function handleSendReviewEmail() {
+    if (!applicationId || sendingReviewEmail) return
+
+    setSendingReviewEmail(true)
     setError('')
     setSuccess('')
 
     try {
-      const updated = await sendAdmissionApprovalReminder(applicationId)
-      setDetail(updated)
-      setSuccess('Đã gửi nhắc xác nhận tới phụ huynh')
+      const result = await sendAdmissionReviewEmail(applicationId, emailDraft)
+      if (result?.application) {
+        setDetail(result.application)
+      }
+      setEmailModalVisible(false)
+      setSelectedEmailTemplateKey('')
+      setEmailDraft(buildInitialEmailDraft())
+      setEmailFileInputKey((current) => current + 1)
+      setEmailToast({ visible: true, color: 'success', message: 'Đã gửi email cho phụ huynh' })
     } catch (requestError) {
-      setError(getApiMessage(requestError, 'Không thể gửi nhắc xác nhận'))
+      setEmailToast({
+        visible: true,
+        color: 'danger',
+        message: getApiMessage(requestError, 'Không thể gửi email cho phụ huynh'),
+      })
     } finally {
-      setSendingApprovalReminder(false)
+      setSendingReviewEmail(false)
+    }
+  }
+
+  async function handleSoftDelete() {
+  if (!applicationId || submitting || isDeleted) return
+  const confirmed = window.confirm('Xóa mềm hồ sơ này? Hồ sơ sẽ bị ẩn khỏi các luồng làm việc thông thường và có thể khôi phục sau.')
+  if (!confirmed) return
+  const reason = window.prompt('Lý do xóa mềm (có thể để trống):', detail?.deleteReason || '')
+  if (reason === null) return
+
+  setSubmitting(true)
+  setError('')
+  setSuccess('')
+  try {
+    const updated = await softDeleteAdmissionReview(applicationId, {
+      reason: String(reason || '').trim() || undefined,
+    })
+    setDetail(updated)
+    setSuccess('Đã xóa mềm hồ sơ')
+  } catch (requestError) {
+    setError(getApiMessage(requestError, 'Không thể xóa mềm hồ sơ'))
+  } finally {
+    setSubmitting(false)
+  }
+  }
+
+  async function handleRestoreDeleted() {
+  if (!applicationId || submitting || !isDeleted) return
+  const confirmed = window.confirm('Khôi phục hồ sơ này về trạng thái hoạt động?')
+  if (!confirmed) return
+  const reason = window.prompt('Lý do khôi phục (có thể để trống):', detail?.restoreReason || '')
+  if (reason === null) return
+
+  setSubmitting(true)
+  setError('')
+  setSuccess('')
+  try {
+    const updated = await restoreAdmissionReview(applicationId, {
+      reason: String(reason || '').trim() || undefined,
+    })
+    setDetail(updated)
+    setSuccess('Đã khôi phục hồ sơ')
+  } catch (requestError) {
+    setError(getApiMessage(requestError, 'Không thể khôi phục hồ sơ'))
+  } finally {
+    setSubmitting(false)
+  }
+
+  }
+
+  async function handleSaveApplication(payload) {
+    if (!applicationId || savingApplication) return
+
+    setSavingApplication(true)
+    setError('')
+    setSuccess('')
+    try {
+      const updated = await updateAdmissionReviewApplication(applicationId, payload)
+      const usableSnapshot = hasUsableReviewSnapshot(updated?.reviewSnapshot)
+      setDetail(updated)
+      setUseFallbackRenderer(!usableSnapshot)
+      setSnapshotWarning(usableSnapshot ? '' : 'Chưa có dữ liệu snapshot. Vui lòng quay lại danh sách hồ sơ và bấm "Làm mới" để sinh snapshot.')
+      setEditApplicationModalVisible(false)
+      setSuccess('Đã cập nhật hồ sơ tuyển sinh')
+    } catch (requestError) {
+      setError(getApiMessage(requestError, 'Không thể cập nhật hồ sơ tuyển sinh'))
+      throw requestError
+    } finally {
+      setSavingApplication(false)
     }
   }
 
@@ -206,6 +429,11 @@ export default function AdmissionReviewDetailPage() {
             </div>
             <CBadge color={getReviewStatusColor(detail?.reviewStatus)}>{getReviewStatusLabel(detail?.reviewStatus)}</CBadge>
           </div>
+          {isDeleted ? (
+            <CAlert color='warning' className='mt-3 mb-0'>
+              {deletedSummary}
+            </CAlert>
+          ) : null}
         </CCol>
 
         <CCol xs={12} lg={7} xl={7}>
@@ -229,15 +457,6 @@ export default function AdmissionReviewDetailPage() {
                     {error ? <CAlert color='danger'>{error}</CAlert> : null}
                     {success ? <CAlert color='success'>{success}</CAlert> : null}
                     <AdmissionReviewEvidenceWorkspace evidences={evidences} />
-
-                    {!loading && !error ? (
-                      <div className='mt-4'>
-                        <AdmissionReviewConversationPanel
-                          applicationId={applicationId}
-                          refreshKey={conversationRefreshKey}
-                        />
-                      </div>
-                    ) : null}
                   </>
                 )}
               </CCardBody>
@@ -253,15 +472,22 @@ export default function AdmissionReviewDetailPage() {
               warningMessage={snapshotWarning}
               canReview={canReview}
               canRequestRevision={canRequestRevision}
-              canSendApprovalReminder={canSendApprovalReminder}
+              canEditReturnedNote={canEditReturnedNote}
               approvalNotifiedAt={formatDate(detail?.approvalNotifiedAt)}
               approvalNotificationCount={Number(detail?.approvalNotificationCount || 0)}
               approvedAcknowledgedAt={formatDate(detail?.approvedAcknowledgedAt)}
-              onSendApprovalReminder={handleSendApprovalReminder}
-              sendingApprovalReminder={sendingApprovalReminder}
+              onOpenEmailModal={handleOpenEmailModal}
+              onEditApplication={handleOpenEditApplication}
+              onEditReturnedNote={() => handleOpenDecision('edit-returned-note')}
+              onRestoreDeleted={handleRestoreDeleted}
+              onSoftDelete={handleSoftDelete}
               submitting={submitting}
+              editingApplication={savingApplication}
+              restoringDeleted={submitting && isDeleted}
+              softDeleting={submitting && !isDeleted}
               onBack={() => navigate('/admission/reviews')}
-              onAction={setDecisionAction}
+              onAction={handleOpenDecision}
+              isDeleted={isDeleted}
               reviewStatusLabel={getReviewStatusLabel(detail?.reviewStatus)}
               reviewStatusColor={getReviewStatusColor(detail?.reviewStatus)}
               reviewerName={detail?.reviewedBy?.fullName || detail?.reviewedBy?.username || '-'}
@@ -300,13 +526,58 @@ export default function AdmissionReviewDetailPage() {
       <AdmissionReviewDecisionModal
         visible={Boolean(decisionAction)}
         action={decisionAction}
+        initialNoteTemplate={(decisionAction === 'returned' || decisionAction === 'edit-returned-note') ? decisionInitialTemplate : ''}
+        loadingInitialNote={(decisionAction === 'returned' || decisionAction === 'edit-returned-note') && loadingDecisionTemplate}
+        title={decisionAction === 'edit-returned-note' ? 'Sửa nội dung nhận xét' : undefined}
+        submitLabel={decisionAction === 'edit-returned-note' ? 'Lưu nhận xét' : undefined}
         submitting={submitting}
         onClose={() => {
           if (submitting) return
           setDecisionAction('')
+          setLoadingDecisionTemplate(false)
         }}
         onSubmit={handleDecision}
       />
+
+      <AdmissionReviewEmailModal
+        visible={emailModalVisible}
+        sending={sendingReviewEmail}
+        recipientEmail={detail?.parent?.email || ''}
+        draft={emailDraft}
+        loadingTemplates={loadingEmailTemplates}
+        templateError={emailTemplateError}
+        templates={emailTemplates}
+        selectedTemplateKey={selectedEmailTemplateKey}
+        fileInputKey={emailFileInputKey}
+        onClose={handleCloseEmailModal}
+        onTemplateChange={handleEmailTemplateChange}
+        onDraftChange={handleEmailDraftChange}
+        onFilesChange={(files) => handleEmailDraftChange({ attachments: files })}
+        onSubmit={handleSendReviewEmail}
+      />
+
+      <AdmissionReviewEditApplicationModal
+        visible={editApplicationModalVisible}
+        detail={detail}
+        saving={savingApplication}
+        onClose={() => {
+          if (savingApplication) return
+          setEditApplicationModalVisible(false)
+        }}
+        onSubmit={handleSaveApplication}
+      />
+
+      <CToaster placement='top-end'>
+        <CToast
+          visible={emailToast.visible}
+          autohide
+          delay={2500}
+          color={emailToast.color}
+          onClose={() => setEmailToast((current) => ({ ...current, visible: false }))}
+        >
+          <CToastBody>{emailToast.message}</CToastBody>
+        </CToast>
+      </CToaster>
     </CContainer>
   )
 }

@@ -15,10 +15,15 @@ import {
 import { sanitizeHtml } from '../../../pages/journal/journalPublicUtils'
 import { resolveMediaUrl } from '../../../utils/mediaUrl'
 import {
+  buildAdmissionV1FileTooLargeMessage,
+  formatAdmissionV1FileSize,
   getAdmissionV1ConversationMessages,
   getAdmissionV1ErrorMessage,
+  readAdmissionV1MaxFileSizeBytes,
   sendAdmissionV1ConversationMessage,
 } from '../services/admissionV1Service'
+
+const ADMISSION_V1_MAX_FILE_SIZE_BYTES = readAdmissionV1MaxFileSizeBytes()
 
 function formatDateTime(value) {
   if (!value) return '-'
@@ -188,6 +193,24 @@ export default function AdmissionV1ConversationPanel({
 
   const canSend = String(draft || '').trim() !== '' || files.length > 0
 
+  function handleFileChange(event) {
+    const nextFiles = Array.from(event.target.files || []).filter((file) => file instanceof File)
+    const oversizedFile = nextFiles.find((file) => file.size > ADMISSION_V1_MAX_FILE_SIZE_BYTES)
+
+    if (oversizedFile) {
+      setFiles([])
+      setSendError(buildAdmissionV1FileTooLargeMessage(oversizedFile.name, ADMISSION_V1_MAX_FILE_SIZE_BYTES))
+      setFileInputKey((current) => current + 1)
+      event.target.value = ''
+      return
+    }
+
+    setFiles(nextFiles)
+    if (sendError) {
+      setSendError('')
+    }
+  }
+
   async function handleSend() {
     if (!applicationId || !token || sending || !canSend) return
 
@@ -233,7 +256,7 @@ export default function AdmissionV1ConversationPanel({
         <div className='d-flex justify-content-between align-items-center gap-3 flex-wrap'>
           <div>
             <div className='fw-semibold fs-5'>💬 {headerLabel}</div>
-            <div className='text-body-secondary small'>
+            <div className={`small admission-v1-conversation-hint ${canAttachFiles ? 'admission-v1-conversation-hint--highlight' : 'text-body-secondary'}`}>
               {canAttachFiles
                 ? 'Bạn có thể gửi tin nhắn và bổ sung minh chứng trong phần này.'
                 : 'Bạn có thể gửi tin nhắn cho nhà trường. Minh chứng chỉ được gửi khi hồ sơ cần bổ sung.'}
@@ -313,7 +336,7 @@ export default function AdmissionV1ConversationPanel({
               rows={4}
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder='Nhập nội dung trao đổi với nhà trường'
+              placeholder='Nhập nội dung trao đổi với nhà trường hoặc tên minh chứng nếu là bổ sung minh chứng, sau đó tải minh chứng ở phía dưới.'
               disabled={sending}
             />
 
@@ -325,9 +348,9 @@ export default function AdmissionV1ConversationPanel({
                   accept='image/*,.pdf,application/pdf'
                   multiple
                   disabled={sending}
-                  onChange={(event) => setFiles(Array.from(event.target.files || []))}
+                  onChange={handleFileChange}
                 />
-                <div className='text-body-secondary small'>Bạn có thể gửi minh chứng bổ sung hoặc thay thế tại đây.</div>
+                <div className='text-body-secondary small'>Bạn có thể gửi minh chứng bổ sung hoặc thay thế tại đây. Mỗi tệp tối đa {formatAdmissionV1FileSize(ADMISSION_V1_MAX_FILE_SIZE_BYTES)}.</div>
               </>
             ) : (
               <div className='text-body-secondary small'>Phụ huynh chỉ có thể gửi bổ sung minh chứng khi hồ sơ ở trạng thái cần bổ sung.</div>

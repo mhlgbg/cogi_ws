@@ -126,6 +126,18 @@ export async function getAdmissionReviewMessages(id) {
   return unwrapSuccess(res.data)
 }
 
+export async function getAdmissionReviewEmailTemplates(id) {
+  const res = await api.get(`/admission/reviews/${id}/email-templates`)
+  return unwrapSuccess(res.data)
+}
+
+export async function getAdmissionReviewNotificationTemplate(id, code) {
+  const res = await api.get(`/admission/reviews/${id}/notification-template`, {
+    params: { code },
+  })
+  return unwrapSuccess(res.data)
+}
+
 export async function sendAdmissionReviewMessage(id, payload = {}) {
   const attachments = await toSerializableAttachments(payload?.attachments)
 
@@ -161,12 +173,49 @@ export async function updateAdmissionReviewAccount(id, payload) {
   return unwrapSuccess(res.data)
 }
 
+export async function updateAdmissionReviewApplication(id, payload) {
+  const res = await api.put(`/admission-management/reviews/${id}/application`, payload)
+  return unwrapSuccess(res.data)
+}
+
 export async function submitAdmissionReviewDecision(id, payload) {
   const res = await api.post(`/admission-management/reviews/${id}/decision`, payload)
   return unwrapSuccess(res.data)
 }
 
+export async function updateAdmissionReturnedReviewNote(id, payload) {
+  const res = await api.post(`/admission/reviews/${id}/update-returned-note`, payload)
+  return unwrapSuccess(res.data)
+}
+
+export async function resetAdmissionReviewToDraft(id) {
+  const res = await api.post(`/admission/reviews/${id}/reset-to-draft`)
+  return unwrapSuccess(res.data)
+}
+
+export async function softDeleteAdmissionReview(id, payload = {}) {
+  const res = await api.post(`/admission/reviews/${id}/soft-delete`, payload)
+  return unwrapSuccess(res.data)
+}
+
+export async function restoreAdmissionReview(id, payload = {}) {
+  const res = await api.post(`/admission/reviews/${id}/restore`, payload)
+  return unwrapSuccess(res.data)
+}
+
 export async function sendAdmissionApprovalReminder(id) {
   const res = await api.post(`/admission/reviews/${id}/send-approval-reminder`)
+  return unwrapSuccess(res.data)
+}
+
+export async function sendAdmissionReviewEmail(id, payload = {}) {
+  const attachments = await toSerializableAttachments(payload?.attachments)
+
+  const res = await api.post(`/admission/reviews/${id}/send-email`, {
+    subject: String(payload?.subject || ''),
+    content: String(payload?.content || ''),
+    attachments,
+    alsoCreateConversationMessage: payload?.alsoCreateConversationMessage !== false,
+  })
   return unwrapSuccess(res.data)
 }

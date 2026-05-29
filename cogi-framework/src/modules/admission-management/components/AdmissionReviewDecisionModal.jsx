@@ -76,18 +76,29 @@ function stripHtml(value) {
 export default function AdmissionReviewDecisionModal({
   visible,
   action,
+  initialNoteTemplate,
+  loadingInitialNote = false,
+  title,
+  submitLabel,
   submitting,
   onClose,
   onSubmit,
 }) {
   const [note, setNote] = useState('')
-  const isReturned = action === 'returned'
+  const [isDirty, setIsDirty] = useState(false)
+  const isReturned = action === 'returned' || action === 'edit-returned-note'
   const noteIsEmpty = stripHtml(note) === ''
 
   useEffect(() => {
     if (!visible) return
-    setNote(getDefaultNoteTemplate(action))
-  }, [visible, action])
+    setIsDirty(false)
+    setNote(initialNoteTemplate || getDefaultNoteTemplate(action))
+  }, [visible, action, initialNoteTemplate])
+
+  useEffect(() => {
+    if (!visible || isDirty) return
+    setNote(initialNoteTemplate || getDefaultNoteTemplate(action))
+  }, [visible, isDirty, initialNoteTemplate, action])
 
   function handleSubmit() {
     if (isReturned && noteIsEmpty) {
@@ -103,17 +114,23 @@ export default function AdmissionReviewDecisionModal({
   return (
     <CModal visible={visible} onClose={onClose} alignment='center'>
       <CModalHeader>
-        <CModalTitle>{isReturned ? 'Trả lại hồ sơ' : 'Tiếp nhận hồ sơ'}</CModalTitle>
+        <CModalTitle>{title || (isReturned ? 'Trả lại hồ sơ' : 'Tiếp nhận hồ sơ')}</CModalTitle>
       </CModalHeader>
       <CModalBody>
         <SimpleHtmlEditor
           label={isReturned ? 'Lý do trả lại hồ sơ' : 'Ghi chú duyệt'}
           value={note}
-          onChange={setNote}
+          onChange={(value) => {
+            setIsDirty(true)
+            setNote(value)
+          }}
           rows={8}
           placeholder={isReturned ? 'Nhập lý do để phụ huynh chỉnh sửa hồ sơ' : 'Nhập ghi chú nếu cần'}
           disabled={submitting}
         />
+        {isReturned && loadingInitialNote ? (
+          <div className='small text-body-secondary mt-2'>Đang tải mẫu nội dung mặc định...</div>
+        ) : null}
         {isReturned && noteIsEmpty ? (
           <div className='text-danger small mt-2'>Vui lòng nhập lý do trả lại hồ sơ</div>
         ) : null}
@@ -123,7 +140,7 @@ export default function AdmissionReviewDecisionModal({
           Hủy
         </CButton>
         <CButton color={isReturned ? 'warning' : 'success'} onClick={handleSubmit} disabled={submitting || (isReturned && noteIsEmpty)}>
-          {submitting ? 'Đang xử lý...' : isReturned ? 'Xác nhận trả lại' : 'Xác nhận tiếp nhận'}
+          {submitting ? 'Đang xử lý...' : (submitLabel || (isReturned ? 'Xác nhận trả lại' : 'Xác nhận tiếp nhận'))}
         </CButton>
       </CModalFooter>
     </CModal>

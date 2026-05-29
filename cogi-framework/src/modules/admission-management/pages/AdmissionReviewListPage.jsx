@@ -7,6 +7,7 @@ import {
   CCard,
   CCardBody,
   CCardHeader,
+  CFormCheck,
   CCol,
   CFormInput,
   CFormSelect,
@@ -118,9 +119,10 @@ export default function AdmissionReviewListPage() {
   const [pageCount, setPageCount] = useState(1)
   const [total, setTotal] = useState(0)
   const [approvalAckFilter, setApprovalAckFilter] = useState('all')
+  const [includeDeleted, setIncludeDeleted] = useState(false)
   const [sortBy, setSortBy] = useState('submittedAt')
   const [sortOrder, setSortOrder] = useState('desc')
-  const [exporting, setExporting] = useState(false)
+  const [exportingVariant, setExportingVariant] = useState('')
   const [accountModalVisible, setAccountModalVisible] = useState(false)
   const [accountSubmitting, setAccountSubmitting] = useState(false)
   const [accountError, setAccountError] = useState('')
@@ -153,6 +155,7 @@ export default function AdmissionReviewListPage() {
       const result = await getAdmissionReviewList({
         status: statusFilter,
         approvalAckStatus: approvalAckFilter,
+        includeDeleted,
         q: keyword || undefined,
         page,
         pageSize,
@@ -173,7 +176,7 @@ export default function AdmissionReviewListPage() {
     } finally {
       setLoading(false)
     }
-  }, [approvalAckFilter, keyword, page, pageSize, sortBy, sortOrder, statusFilter])
+  }, [approvalAckFilter, includeDeleted, keyword, page, pageSize, sortBy, sortOrder, statusFilter])
 
   useEffect(() => {
     loadData()
@@ -188,6 +191,7 @@ export default function AdmissionReviewListPage() {
   function resetFilters() {
     setStatusFilter('submitted')
     setApprovalAckFilter('all')
+    setIncludeDeleted(false)
     setKeywordDraft('')
     setKeyword('')
     setPage(1)
@@ -340,15 +344,17 @@ export default function AdmissionReviewListPage() {
     }
   }
 
-  async function handleExportExcel() {
-    setExporting(true)
+  async function handleExportExcel(variant = 'expanded') {
+    setExportingVariant(variant)
     setError('')
 
     try {
       const result = await exportAdmissionReviewList({
         status: statusFilter,
         approvalAckStatus: approvalAckFilter,
+        includeDeleted,
         q: keyword || undefined,
+        variant,
       })
 
       const blob = result?.blob instanceof Blob
@@ -366,7 +372,7 @@ export default function AdmissionReviewListPage() {
     } catch (requestError) {
       setError(getApiMessage(requestError, 'Không xuất được danh sách hồ sơ'))
     } finally {
-      setExporting(false)
+      setExportingVariant('')
     }
   }
 
@@ -377,8 +383,14 @@ export default function AdmissionReviewListPage() {
           <CCardHeader className='d-flex justify-content-between align-items-center gap-3 flex-wrap'>
             <strong>Duyệt hồ sơ tuyển sinh</strong>
             <div className='d-flex align-items-center gap-2 flex-wrap'>
-              <CButton color='success' variant='outline' onClick={handleExportExcel} disabled={loading || exporting}>
-                {exporting ? 'Đang xuất...' : 'Xuất Excel'}
+              <CButton color='secondary' variant='outline' onClick={() => handleExportExcel('legacy')} disabled={loading || Boolean(exportingVariant)}>
+                {exportingVariant === 'legacy' ? 'Đang xuất Excel cũ...' : 'Xuất Excel cũ'}
+              </CButton>
+              <CButton color='info' variant='outline' onClick={() => handleExportExcel('review-summary')} disabled={loading || Boolean(exportingVariant)}>
+                {exportingVariant === 'review-summary' ? 'Đang xuất Excel xét duyệt...' : 'Xuất Excel xét duyệt'}
+              </CButton>
+              <CButton color='success' variant='outline' onClick={() => handleExportExcel('expanded')} disabled={loading || Boolean(exportingVariant)}>
+                {exportingVariant === 'expanded' ? 'Đang xuất Excel mở rộng...' : 'Xuất Excel mở rộng'}
               </CButton>
               <div className='text-body-secondary small'>{fromToText}</div>
             </div>
@@ -387,7 +399,7 @@ export default function AdmissionReviewListPage() {
             <CRow className='g-3 mb-3'>
               <CCol md={5}>
                 <CFormInput
-                  placeholder='Tìm theo mã hồ sơ, học sinh, phụ huynh, SĐT, email'
+                  placeholder='Tìm theo mã hồ sơ, mã học sinh, học sinh, phụ huynh, SĐT, email'
                   value={keywordDraft}
                   onChange={(event) => setKeywordDraft(event.target.value)}
                   onKeyDown={(event) => {
@@ -410,6 +422,17 @@ export default function AdmissionReviewListPage() {
                   <option value='acknowledged'>Đã xác nhận</option>
                   <option value='pending'>Chưa xác nhận</option>
                 </CFormSelect>
+              </CCol>
+              <CCol md={2} className='d-flex align-items-center'>
+                <CFormCheck
+                  id='admission-review-include-deleted'
+                  label='Hiển thị hồ sơ đã xóa'
+                  checked={includeDeleted}
+                  onChange={(event) => {
+                    setIncludeDeleted(event.target.checked)
+                    setPage(1)
+                  }}
+                />
               </CCol>
               <CCol md={1}>
                 <CFormSelect value={pageSize} onChange={(event) => { setPage(1); setPageSize(Number(event.target.value) || 10) }}>
@@ -474,7 +497,7 @@ export default function AdmissionReviewListPage() {
                   </CTableHead>
                   <CTableBody>
                     {rows.length > 0 ? rows.map((item) => (
-                      <CTableRow key={item.id}>
+                      <CTableRow key={item.id} style={item?.isDeleted ? { opacity: 0.65, backgroundColor: 'rgba(108, 117, 125, 0.08)' } : undefined}>
                         <CTableDataCell>{item.applicationCode || '-'}</CTableDataCell>
                         <CTableDataCell>
                           <div className='fw-semibold'>{item.studentName || '-'}</div>
@@ -488,6 +511,7 @@ export default function AdmissionReviewListPage() {
                         <CTableDataCell>{formatDate(item.submittedAt || item.createdAt)}</CTableDataCell>
                         <CTableDataCell>
                           <CBadge color={getReviewStatusColor(item.reviewStatus)}>{getReviewStatusLabel(item.reviewStatus)}</CBadge>
+                          {item?.isDeleted ? <CBadge color='dark' className='ms-2'>Đã xóa</CBadge> : null}
                         </CTableDataCell>
                         <CTableDataCell>{item?.reviewedBy?.fullName || item?.reviewedBy?.username || '-'}</CTableDataCell>
                         <CTableDataCell>{formatDate(item.reviewedAt)}</CTableDataCell>
@@ -496,7 +520,7 @@ export default function AdmissionReviewListPage() {
                         </CTableDataCell>
                         <CTableDataCell className='text-end'>
                           <div className='d-inline-flex gap-2 flex-wrap justify-content-end'>
-                            <CButton size='sm' color='warning' variant='outline' onClick={() => openAccountModal(item)}>
+                            <CButton size='sm' color='warning' variant='outline' onClick={() => openAccountModal(item)} disabled={item?.isDeleted}>
                               Đổi thông tin tài khoản
                             </CButton>
                             <CButton
@@ -520,7 +544,7 @@ export default function AdmissionReviewListPage() {
                               color='success'
                               variant='outline'
                               onClick={() => handleRefreshSnapshot(item)}
-                              disabled={refreshingSnapshotId === item.id}
+                              disabled={refreshingSnapshotId === item.id || item?.isDeleted}
                             >
                               {refreshingSnapshotId === item.id ? 'Đang làm mới...' : 'Làm mới'}
                             </CButton>
@@ -558,6 +582,7 @@ export default function AdmissionReviewListPage() {
         visible={accountModalVisible}
         submitting={accountSubmitting}
         initialValues={{
+          fullName: editingRow?.parent?.fullName || '',
           email: editingRow?.parent?.email || '',
           phone: editingRow?.parent?.phone || '',
         }}

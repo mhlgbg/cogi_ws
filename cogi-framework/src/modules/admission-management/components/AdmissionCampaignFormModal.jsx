@@ -37,7 +37,7 @@ function buildInitialState(initialValues) {
     grade: initialValues?.grade || '',
     startDate: initialValues?.startDate || '',
     endDate: initialValues?.endDate || '',
-    status: initialValues?.status || 'draft',
+    campaignStatus: initialValues?.campaignStatus || initialValues?.status || 'draft',
     description: initialValues?.description || '',
     isActive: initialValues?.isActive !== false,
     formTemplate: initialValues?.formTemplate?.id ? String(initialValues.formTemplate.id) : '',
@@ -78,7 +78,7 @@ export default function AdmissionCampaignFormModal({
       grade: String(form.grade || '').trim(),
       startDate: String(form.startDate || '').trim() || null,
       endDate: String(form.endDate || '').trim() || null,
-      status: String(form.status || 'draft').trim(),
+      campaignStatus: String(form.campaignStatus || 'draft').trim(),
       description: String(form.description || '').trim(),
       reviewDisplayConfig: String(form.reviewDisplayConfig || '').trim() || null,
       isActive: form.isActive === true,
@@ -130,7 +130,7 @@ export default function AdmissionCampaignFormModal({
             </CCol>
             <CCol md={3}>
               <CFormLabel>Trạng thái</CFormLabel>
-              <CFormSelect value={form.status} onChange={(event) => updateField('status', event.target.value)} disabled={submitting}>
+              <CFormSelect value={form.campaignStatus} onChange={(event) => updateField('campaignStatus', event.target.value)} disabled={submitting}>
                 <option value='draft'>draft</option>
                 <option value='open'>open</option>
                 <option value='closed'>closed</option>

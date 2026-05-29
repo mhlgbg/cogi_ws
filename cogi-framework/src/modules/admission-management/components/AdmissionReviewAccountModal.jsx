@@ -20,6 +20,7 @@ export default function AdmissionReviewAccountModal({
   onSubmit,
 }) {
   const [form, setForm] = useState({
+    fullName: '',
     email: '',
     phone: '',
   })
@@ -27,13 +28,15 @@ export default function AdmissionReviewAccountModal({
   useEffect(() => {
     if (!visible) return
     setForm({
+      fullName: String(initialValues?.fullName || '').trim(),
       email: String(initialValues?.email || '').trim(),
       phone: String(initialValues?.phone || '').trim(),
     })
-  }, [initialValues?.email, initialValues?.phone, visible])
+  }, [initialValues?.email, initialValues?.fullName, initialValues?.phone, visible])
 
   function handleSubmit() {
     onSubmit({
+      fullName: String(form.fullName || '').trim(),
       email: String(form.email || '').trim().toLowerCase(),
       phone: String(form.phone || '').trim(),
     })
@@ -48,6 +51,16 @@ export default function AdmissionReviewAccountModal({
       </CModalHeader>
       <CModalBody>
         {error ? <CAlert color='danger'>{error}</CAlert> : null}
+
+        <div className='mb-3'>
+          <CFormLabel>Họ và tên</CFormLabel>
+          <CFormInput
+            value={form.fullName}
+            onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))}
+            placeholder='Nhập họ tên phụ huynh'
+            disabled={submitting}
+          />
+        </div>
 
         <div className='mb-3'>
           <CFormLabel>Email</CFormLabel>

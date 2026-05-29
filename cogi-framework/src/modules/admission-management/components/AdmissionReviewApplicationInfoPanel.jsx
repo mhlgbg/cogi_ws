@@ -179,15 +179,22 @@ const ApplicationInfoPanel = memo(function ApplicationInfoPanel({
   warningMessage,
   canReview,
   canRequestRevision,
-  canSendApprovalReminder,
+  canEditReturnedNote,
   approvalNotifiedAt,
   approvalNotificationCount,
   approvedAcknowledgedAt,
-  onSendApprovalReminder,
-  sendingApprovalReminder,
+  onOpenEmailModal,
+  onEditApplication,
+  onEditReturnedNote,
+  onRestoreDeleted,
+  onSoftDelete,
   submitting,
+  editingApplication,
+  restoringDeleted,
+  softDeleting,
   onBack,
   onAction,
+  isDeleted,
   reviewStatusLabel,
   reviewStatusColor,
   reviewerName,
@@ -204,19 +211,38 @@ const ApplicationInfoPanel = memo(function ApplicationInfoPanel({
           <CCardBody>
             <div className='d-flex flex-column gap-2'>
               <CButton color='secondary' variant='outline' onClick={onBack}>Quay lại danh sách</CButton>
-              {canSendApprovalReminder ? (
-                <CButton color='info' variant='outline' onClick={onSendApprovalReminder} disabled={submitting || sendingApprovalReminder}>
-                  {sendingApprovalReminder ? 'Đang gửi nhắc...' : 'Gửi nhắc xác nhận'}
-                </CButton>
-              ) : null}
-              {canRequestRevision ? (
-                <CButton color='warning' onClick={() => onAction('returned')} disabled={submitting}>
-                  {canReview ? 'Yêu cầu bổ sung' : 'Cần chỉnh sửa'}
-                </CButton>
-              ) : null}
-              {canReview ? (
-                <CButton color='success' onClick={() => onAction('accepted')} disabled={submitting}>Duyệt hồ sơ</CButton>
-              ) : null}
+              {isDeleted ? (
+                <>
+                  <CButton color='success' onClick={onRestoreDeleted} disabled={submitting || restoringDeleted}>
+                    {restoringDeleted ? 'Đang khôi phục...' : 'Khôi phục hồ sơ'}
+                  </CButton>
+                </>
+              ) : (
+                <>
+                  <CButton color='danger' variant='outline' onClick={onSoftDelete} disabled={submitting || softDeleting}>
+                    {softDeleting ? 'Đang xóa...' : 'Xóa mềm hồ sơ'}
+                  </CButton>
+                  <CButton color='info' variant='outline' onClick={onEditApplication} disabled={submitting || editingApplication}>
+                    {editingApplication ? 'Đang lưu...' : 'Chỉnh sửa hồ sơ'}
+                  </CButton>
+                  <CButton color='primary' variant='outline' onClick={onOpenEmailModal} disabled={!detail?.parent?.email || submitting}>
+                    Gửi thư cho phụ huynh
+                  </CButton>
+                  {canEditReturnedNote ? (
+                    <CButton color='warning' variant='outline' onClick={onEditReturnedNote} disabled={submitting}>
+                      Sửa nội dung nhận xét
+                    </CButton>
+                  ) : null}
+                  {canRequestRevision ? (
+                    <CButton color='warning' onClick={() => onAction('returned')} disabled={submitting}>
+                      {canReview ? 'Yêu cầu bổ sung' : 'Cần chỉnh sửa'}
+                    </CButton>
+                  ) : null}
+                  {canReview ? (
+                    <CButton color='success' onClick={() => onAction('accepted')} disabled={submitting}>Duyệt hồ sơ</CButton>
+                  ) : null}
+                </>
+              )}
             </div>
             {(approvalNotifiedAt || approvalNotificationCount > 0 || approvedAcknowledgedAt) ? (
               <div className='small text-body-secondary mt-3 border-top pt-3'>
@@ -225,6 +251,7 @@ const ApplicationInfoPanel = memo(function ApplicationInfoPanel({
                 <div>Xác nhận phụ huynh: {approvedAcknowledgedAt || 'Chưa xác nhận'}</div>
               </div>
             ) : null}
+            {!detail?.parent?.email ? <CAlert color='warning' className='mt-3 mb-0'>Hồ sơ này chưa có email phụ huynh để gửi thư.</CAlert> : null}
           </CCardBody>
         </CCard>
       </div>

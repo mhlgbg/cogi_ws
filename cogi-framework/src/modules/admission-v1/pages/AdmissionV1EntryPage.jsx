@@ -19,7 +19,9 @@ import {
 import { useTenant } from '../../../contexts/TenantContext'
 import AdmissionV1Hero from '../components/AdmissionV1Hero'
 import {
+  buildAdmissionV1Permissions,
   buildAdmissionV1Path,
+  getAdmissionV1CampaignStatusMessage,
   getAdmissionV1ErrorMessage,
   getPublicAdmissionCampaign,
   lookupAdmissionV1Access,
@@ -64,6 +66,8 @@ export default function AdmissionV1EntryPage() {
   const [showGuideModal, setShowGuideModal] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const hasCampaign = Boolean(campaign?.code)
+  const campaignStatusMessage = getAdmissionV1CampaignStatusMessage(campaign)
+  const campaignPermissions = buildAdmissionV1Permissions(campaign, null)
 
   useEffect(() => {
     let isCancelled = false
@@ -134,6 +138,11 @@ export default function AdmissionV1EntryPage() {
         return
       }
 
+      if (!campaignPermissions.canCreate) {
+		setErrorMessage(campaignStatusMessage || 'Kỳ tuyển sinh hiện chưa nhận hồ sơ mới')
+		return
+	  }
+
       navigate(buildAdmissionV1Path(campaignCode, 'nguoi-khai', resolvedTenantCode), {
         state: {
           campaign: payload?.campaign || campaign || null,
@@ -172,6 +181,7 @@ export default function AdmissionV1EntryPage() {
           <CCard className='admission-v1-card'>
             <CCardBody className='p-4 p-lg-5'>
               {errorMessage ? <CAlert color='danger'>{errorMessage}</CAlert> : null}
+              {campaignStatusMessage ? <CAlert color='warning'>{campaignStatusMessage}</CAlert> : null}
               <div className='text-body-secondary'>Không thể mở trang tuyển sinh vì không tìm thấy kỳ tuyển sinh tương ứng.</div>
             </CCardBody>
           </CCard>
@@ -206,6 +216,7 @@ export default function AdmissionV1EntryPage() {
               <CCard className='admission-v1-card'>
                 <CCardBody className='p-4 p-lg-5'>
                   {errorMessage ? <CAlert color='danger'>{errorMessage}</CAlert> : null}
+                  {campaignStatusMessage ? <CAlert color='warning'>{campaignStatusMessage}</CAlert> : null}
 
                   <div className='admission-v1-form-head mb-4'>
                     <div>
@@ -240,7 +251,7 @@ export default function AdmissionV1EntryPage() {
 
                     <div className='admission-v1-actions'>
                       <CButton type='submit' color='success' disabled={submitting}>
-                        {submitting ? 'Đang xử lý...' : 'Tiếp tục'}
+                        {submitting ? 'Đang xử lý...' : (campaignPermissions.canCreate ? 'Tiếp tục' : 'Tra cứu hồ sơ')}
                       </CButton>
                     </div>
                   </CForm>

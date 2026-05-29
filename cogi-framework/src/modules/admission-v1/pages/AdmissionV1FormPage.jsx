@@ -6,7 +6,6 @@ import {
   CButton,
   CCard,
   CCardBody,
-  CCollapse,
   CContainer,
   CForm,
   CModal,
@@ -19,7 +18,6 @@ import {
 import FormRenderer from '../../../pages/admission/form-renderer/FormRenderer'
 import AdmissionV1Hero from '../components/AdmissionV1Hero'
 import AdmissionV1GuideModal from '../components/AdmissionV1GuideModal'
-import AdmissionV1ConversationPanel from '../components/AdmissionV1ConversationPanel'
 import {
   buildInitialFormData,
   extractTemplateFields,
@@ -30,11 +28,15 @@ import { useTenant } from '../../../contexts/TenantContext'
 import { sanitizeHtml } from '../../../pages/journal/journalPublicUtils'
 import {
   acknowledgeAdmissionV1Approval,
+  buildAdmissionV1Permissions,
   buildAdmissionV1Path,
+  buildAdmissionV1FileTooLargeMessage,
   formatAdmissionStatus,
+  getAdmissionV1CampaignStatusMessage,
   getAdmissionV1ErrorMessage,
   getPublicAdmissionCampaign,
   getAdmissionV1Session,
+  readAdmissionV1MaxFileSizeBytes,
   trackAdmissionV1ParentView,
   readAdmissionV1Token,
   updateAdmissionV1Application,
@@ -42,22 +44,7 @@ import {
 } from '../services/admissionV1Service'
 import './admission-v1.css'
 
-function readAdmissionMaxFileSizeBytes() {
-  const configuredMb = Number(import.meta.env.VITE_ADMISSION_V1_MAX_FILE_SIZE_MB || 20)
-  if (!Number.isFinite(configuredMb) || configuredMb <= 0) {
-    return 20 * 1024 * 1024
-  }
-
-  return configuredMb * 1024 * 1024
-}
-
-const ADMISSION_V1_MAX_FILE_SIZE_BYTES = readAdmissionMaxFileSizeBytes()
-
-function formatBytes(value) {
-  const size = Number(value || 0)
-  if (!Number.isFinite(size) || size <= 0) return '0 MB'
-  return `${(size / (1024 * 1024)).toFixed(0)} MB`
-}
+const ADMISSION_V1_MAX_FILE_SIZE_BYTES = readAdmissionV1MaxFileSizeBytes()
 
 function formatDateTime(value) {
   if (!value) return '-'
@@ -201,6 +188,10 @@ function ensureAdmissionDefaults(formData, learner) {
   return nextFormData
 }
 
+function readApprovedAcknowledgedAt(source) {
+  return source?.application?.approvedAcknowledgedAt || source?.approvedAcknowledgedAt || source?.acknowledgedAt || null
+}
+
 export default function AdmissionV1FormPage() {
   const navigate = useNavigate()
   const tenant = useTenant()
@@ -220,59 +211,37 @@ export default function AdmissionV1FormPage() {
   const [showSubmitConfirmModal, setShowSubmitConfirmModal] = useState(false)
   const [formData, setFormData] = useState({})
   const [formErrors, setFormErrors] = useState({})
-  const [conversationHasMessages, setConversationHasMessages] = useState(Boolean(session?.application?.lastMessageAt))
+  const [showReviewNoteModal, setShowReviewNoteModal] = useState(false)
   const [acknowledgingApproval, setAcknowledgingApproval] = useState(false)
   const [approvalAcknowledgeError, setApprovalAcknowledgeError] = useState('')
+  const acknowledgementSectionRef = useRef(null)
   const viewLoggedRef = useRef('')
-  const conversationInteractedRef = useRef(false)
 
   const templateFields = useMemo(
     () => extractTemplateFields(session?.campaign?.formTemplate?.schema),
     [session?.campaign?.formTemplate?.schema],
   )
-
-  const isReadOnly = Boolean(session?.application && session?.permissions?.canEdit === false)
+  const sessionToken = readAdmissionV1Token(campaignCode, resolvedTenantCode)
+  const permissions = useMemo(
+    () => ({
+      ...buildAdmissionV1Permissions(session?.campaign || campaign, session?.application),
+      ...(session?.permissions || {}),
+    }),
+    [campaign, session?.application, session?.campaign, session?.permissions],
+  )
+  const hasApplication = Boolean(session?.application?.id)
+  const canEditFormFields = hasApplication ? permissions.canEdit : permissions.canCreate
+  const canSaveDraft = hasApplication ? permissions.isDraft && permissions.canEdit : permissions.canCreate
+  const canSubmitForm = hasApplication ? permissions.canSubmit : permissions.canCreate
+  const canUploadMainEvidence = hasApplication ? permissions.canUploadMainEvidence : permissions.canCreate
+  const campaignStatusMessage = getAdmissionV1CampaignStatusMessage(session?.campaign || campaign)
+  const isReadOnly = hasApplication && canEditFormFields === false
   const safeReviewNoteHtml = sanitizeHtml(session?.application?.reviewNote)
   const applicationStatus = String(session?.application?.status || '').trim().toLowerCase()
-  const showConversationPanel = Boolean(session?.application?.id) && applicationStatus !== 'draft'
-  const shouldAutoExpandConversation = showConversationPanel && (
-    String(session?.application?.conversationStatus || '').trim().toLowerCase() === 'need_update'
-    || Number(session?.application?.parentUnreadMessageCount || 0) > 0
-  )
-  const approvedAcknowledgedAt = session?.application?.approvedAcknowledgedAt || null
+  const approvedAcknowledgedAt = readApprovedAcknowledgedAt(session)
   const isApprovedAwaitingAcknowledgement = applicationStatus === 'approved' && !approvedAcknowledgedAt
   const isApprovedAcknowledged = applicationStatus === 'approved' && Boolean(approvedAcknowledgedAt)
-  const shouldShowReviewNotice = Boolean(safeReviewNoteHtml) && !conversationHasMessages
-  const fileFieldsLocked = Boolean(session?.application?.id) && applicationStatus !== 'draft'
-  const [conversationExpanded, setConversationExpanded] = useState(shouldAutoExpandConversation)
-  const fieldOverrides = useMemo(() => {
-    if (!fileFieldsLocked) return {}
-
-    return Object.fromEntries(
-      templateFields
-        .filter((field) => field?.type === 'file' || field?.type === 'image')
-        .map((field) => ([field.key, {
-          isReadOnly: true,
-          helperText: 'Minh chứng bổ sung hoặc thay thế vui lòng gửi trong mục Trao đổi với nhà trường.',
-        }])),
-    )
-  }, [fileFieldsLocked, templateFields])
-
-  useEffect(() => {
-    if (conversationInteractedRef.current) return
-    if (shouldAutoExpandConversation) {
-      setConversationExpanded(true)
-    }
-  }, [shouldAutoExpandConversation])
-
-  useEffect(() => {
-    setConversationHasMessages(Boolean(session?.application?.lastMessageAt))
-  }, [session?.application?.id, session?.application?.lastMessageAt])
-
-  function handleToggleConversation() {
-    conversationInteractedRef.current = true
-    setConversationExpanded((current) => !current)
-  }
+  const canOpenReviewNoteModal = Boolean(safeReviewNoteHtml) && applicationStatus === 'rejected'
 
   useEffect(() => {
     let isCancelled = false
@@ -350,16 +319,20 @@ export default function AdmissionV1FormPage() {
 
   useEffect(() => {
     const applicationId = Number(session?.application?.id || 0)
-    const token = readAdmissionV1Token(campaignCode, resolvedTenantCode)
-    const trackKey = applicationId > 0 ? `${applicationId}:${token}` : ''
-    if (!applicationId || !token || viewLoggedRef.current === trackKey) return
+    const trackKey = applicationId > 0 ? `${applicationId}:${sessionToken}` : ''
+    if (!applicationId || !sessionToken || viewLoggedRef.current === trackKey) return
 
     viewLoggedRef.current = trackKey
-    trackAdmissionV1ParentView(applicationId, token, resolvedTenantCode).catch(() => {})
-  }, [campaignCode, resolvedTenantCode, session?.application?.id])
+    trackAdmissionV1ParentView(applicationId, sessionToken, resolvedTenantCode).catch(() => {})
+  }, [resolvedTenantCode, session?.application?.id, sessionToken])
+
+  useEffect(() => {
+    if (!isApprovedAwaitingAcknowledgement) return
+    acknowledgementSectionRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }, [isApprovedAwaitingAcknowledgement])
 
   function updateFormValue(key, value) {
-    if (isReadOnly) return
+    if (!canEditFormFields) return
 
     const field = templateFields.find((item) => item.key === key)
     const nextFormData = {
@@ -386,13 +359,19 @@ export default function AdmissionV1FormPage() {
   }
 
   async function handleFileChange(field, event) {
-    if (isReadOnly || fileFieldsLocked) return
+    if (!canEditFormFields) return
+
+    if ((field?.type === 'file' || field?.type === 'image') && !canUploadMainEvidence) {
+      setErrorMessage('Hồ sơ hiện không cho phép cập nhật tệp đính kèm.')
+      event.target.value = ''
+      return
+    }
 
     try {
       const files = Array.from(event.target.files || []).filter((file) => file instanceof File)
       const oversizedFile = files.find((file) => file.size > ADMISSION_V1_MAX_FILE_SIZE_BYTES)
       if (oversizedFile) {
-        throw new Error(`Tệp "${oversizedFile.name}" vượt quá dung lượng cho phép. Hiện hệ thống hỗ trợ tối đa ${formatBytes(ADMISSION_V1_MAX_FILE_SIZE_BYTES)} mỗi tệp.`)
+        throw new Error(buildAdmissionV1FileTooLargeMessage(oversizedFile.name, ADMISSION_V1_MAX_FILE_SIZE_BYTES))
       }
 
       const serialized = await toSerializableFiles(event.target.files, field.multiple === true)
@@ -405,7 +384,7 @@ export default function AdmissionV1FormPage() {
   }
 
   function handleTableCellChange(fieldKey, rowIndex, columnKey, cellValue) {
-    if (isReadOnly) return
+    if (!canEditFormFields) return
 
     const tableField = templateFields.find((item) => item.key === fieldKey && item.type === 'table')
 
@@ -444,6 +423,21 @@ export default function AdmissionV1FormPage() {
       return
     }
 
+    if (!hasApplication && !permissions.canCreate) {
+      setErrorMessage(campaignStatusMessage || 'Kỳ tuyển sinh hiện chưa nhận hồ sơ mới')
+      return
+    }
+
+    if (submissionMode === 'draft' && !canSaveDraft) {
+      setErrorMessage('Hồ sơ hiện không hỗ trợ lưu nháp ở trạng thái này')
+      return
+    }
+
+    if (submissionMode === 'submitted' && !canSubmitForm) {
+      setErrorMessage(campaignStatusMessage || 'Hồ sơ hiện không thể nộp ở trạng thái này')
+      return
+    }
+
     const nextErrors = validateFormData(formData, templateFields)
     if (Object.keys(nextErrors).length > 0) {
       setFormErrors(nextErrors)
@@ -479,10 +473,7 @@ export default function AdmissionV1FormPage() {
         setSession((current) => ({
           ...current,
           application: response.application,
-          permissions: {
-            canCreate: false,
-            canEdit: response.application.isEditable === true,
-          },
+          permissions: buildAdmissionV1Permissions(current?.campaign || campaign, response.application),
         }))
       }
 
@@ -523,17 +514,23 @@ export default function AdmissionV1FormPage() {
 
     try {
       const payload = await acknowledgeAdmissionV1Approval(applicationId, token, {}, resolvedTenantCode)
+      const nextAcknowledgedAt = readApprovedAcknowledgedAt(payload) || new Date().toISOString()
       if (payload?.application) {
         setSession((current) => ({
           ...current,
-          application: payload.application,
+          approvedAcknowledgedAt: nextAcknowledgedAt,
+          application: {
+            ...payload.application,
+            approvedAcknowledgedAt: payload?.application?.approvedAcknowledgedAt || nextAcknowledgedAt,
+          },
         }))
       } else {
         setSession((current) => ({
           ...current,
+          approvedAcknowledgedAt: nextAcknowledgedAt,
           application: {
             ...(current?.application || {}),
-            approvedAcknowledgedAt: payload?.acknowledgedAt || new Date().toISOString(),
+            approvedAcknowledgedAt: nextAcknowledgedAt,
           },
         }))
       }
@@ -559,6 +556,7 @@ export default function AdmissionV1FormPage() {
               <>
                 {errorMessage ? <CAlert color='danger'>{errorMessage}</CAlert> : null}
                 {successMessage ? <CAlert color='success'>{successMessage}</CAlert> : null}
+                {campaignStatusMessage ? <CAlert color='warning'>{campaignStatusMessage}</CAlert> : null}
 
                 <div className='admission-v1-form-head mb-4'>
                   <div>
@@ -581,22 +579,23 @@ export default function AdmissionV1FormPage() {
                 </div>
 
                 {isApprovedAwaitingAcknowledgement ? (
-                  <CAlert color='warning' className='mb-4 d-flex justify-content-between align-items-start gap-3 flex-wrap'>
+                  <CAlert ref={acknowledgementSectionRef} color='warning' className='admission-v1-acknowledgement-banner mb-4 d-flex justify-content-between align-items-start gap-3 flex-wrap'>
                     <div>
                       <div className='fw-semibold mb-1'>Hồ sơ đã được duyệt</div>
-                      <div>Nhà trường đã duyệt hồ sơ của học sinh. Quý phụ huynh vui lòng xác nhận đã nhận được thông tin.</div>
+                      <div>Nhà trường đã duyệt hồ sơ của học sinh. Quý phụ huynh vui lòng xem hướng dẫn tiếp theo và xác nhận đã nắm được thông tin từ nhà trường.</div>
                       {approvalAcknowledgeError ? <div className='small text-danger mt-2'>{approvalAcknowledgeError}</div> : null}
                     </div>
-                    <CButton color='success' disabled={acknowledgingApproval} onClick={handleAcknowledgeApproval}>
-                      {acknowledgingApproval ? 'Đang xác nhận...' : 'Tôi đã nắm được thông tin'}
+                    <CButton color='success' className='admission-v1-cta-button' disabled={acknowledgingApproval} onClick={handleAcknowledgeApproval}>
+                      {acknowledgingApproval ? 'Đang xác nhận...' : 'Tôi đã nắm được thông tin từ nhà trường'}
                     </CButton>
                   </CAlert>
                 ) : null}
 
                 {isApprovedAcknowledged ? (
-                  <CAlert color='success' className='mb-4'>
+                  <CAlert ref={acknowledgementSectionRef} color='success' className='admission-v1-acknowledgement-banner admission-v1-acknowledgement-banner--success mb-4'>
                     <div className='fw-semibold mb-1'>Hồ sơ đã được duyệt</div>
-                    <div>Quý phụ huynh đã xác nhận đã nhận thông tin vào lúc {formatDateTime(approvedAcknowledgedAt)}.</div>
+                    <div>Quý phụ huynh đã xác nhận đã nắm được thông tin từ nhà trường.</div>
+                    <div className='small mt-2'>Thời gian xác nhận: {formatDateTime(approvedAcknowledgedAt)}</div>
                   </CAlert>
                 ) : null}
 
@@ -609,54 +608,27 @@ export default function AdmissionV1FormPage() {
                         <div className='text-body-secondary small mt-1'>
                           Trạng thái hiện tại: {formatAdmissionStatus(session.application.status)}
                         </div>
-                        {!showConversationPanel && session?.application?.lastMessageAt ? (
-                          <div className='text-body-secondary small'>Trao đổi gần nhất: {session.application.lastMessageAt}</div>
+                        {canOpenReviewNoteModal ? (
+                          <div className='mt-2'>
+                            <CButton color='warning' variant='outline' size='sm' onClick={() => setShowReviewNoteModal(true)}>
+                              Nội dung nhận xét
+                            </CButton>
+                          </div>
                         ) : null}
                       </div>
                       <div className='d-flex align-items-center gap-2 flex-wrap'>
                         <CBadge color={applicationStatus === 'rejected' ? 'warning' : 'info'}>
                           {formatAdmissionStatus(session.application.status)}
                         </CBadge>
-                        {Number(session?.application?.parentUnreadMessageCount || 0) > 0 ? (
-                          <CBadge color='warning'>{session.application.parentUnreadMessageCount} phản hồi mới</CBadge>
-                        ) : null}
                       </div>
                     </div>
-                    <CCollapse visible={!showConversationPanel || conversationExpanded}>
-                      <div>
-                        {session?.application?.lastMessageAt ? (
-                          <div className='text-body-secondary small mt-3'>Trao đổi gần nhất: {session.application.lastMessageAt}</div>
-                        ) : null}
-                        {shouldShowReviewNotice ? (
-                          <CAlert color='warning' className='mb-0 mt-3'>
-                            <div className='fw-semibold mb-1'>Lý do cần bổ sung hồ sơ</div>
-                            <div dangerouslySetInnerHTML={{ __html: safeReviewNoteHtml }} />
-                          </CAlert>
-                        ) : null}
-                      </div>
-                    </CCollapse>
                   </div>
                 ) : null}
 
-                {showConversationPanel ? (
-                  <div className='admission-v1-section mb-4'>
-                    <div className='admission-v1-section__title'>Trao đổi với nhà trường</div>
-                    <AdmissionV1ConversationPanel
-                      application={session?.application}
-                      token={readAdmissionV1Token(campaignCode, resolvedTenantCode)}
-                      tenantCode={resolvedTenantCode}
-                      expanded={conversationExpanded}
-                      onToggle={handleToggleConversation}
-                      onMessagesChange={setConversationHasMessages}
-                      onApplicationChange={(application) => {
-                        if (!application) return
-                        setSession((current) => ({
-                          ...current,
-                          application,
-                        }))
-                      }}
-                    />
-                  </div>
+                {permissions.isNeedUpdate ? (
+                  <CAlert color='warning' className='mb-4'>
+                    Quý phụ huynh có thể cập nhật lại thông tin trong hồ sơ và nộp lại trực tiếp trên form này.
+                  </CAlert>
                 ) : null}
 
                 <div className='admission-v1-section__title mb-3'>Thông tin hồ sơ</div>
@@ -669,7 +641,6 @@ export default function AdmissionV1FormPage() {
                       schema={session?.campaign?.formTemplate?.schema}
                       formData={formData}
                       formErrors={formErrors}
-                      fieldOverrides={fieldOverrides}
                       submitting={submitting}
                       isReadOnly={isReadOnly}
                       onValueChange={updateFormValue}
@@ -681,13 +652,13 @@ export default function AdmissionV1FormPage() {
                       <CButton color='light' onClick={() => navigate(buildAdmissionV1Path(campaignCode, 'theo-doi', resolvedTenantCode))}>
                         Quay lại theo dõi
                       </CButton>
-                      {!isReadOnly ? (
+                      {canSaveDraft ? (
                         <CButton color='secondary' disabled={submitting} onClick={() => submitForm('draft')}>
                           Lưu nháp
                         </CButton>
                       ) : null}
-                      <CButton color='success' disabled={submitting} onClick={() => (isReadOnly ? submitForm('submitted') : handleRequestSubmit())}>
-                        {isReadOnly ? 'Xem trạng thái hồ sơ' : 'Nộp hồ sơ'}
+                      <CButton color='success' disabled={submitting || (!isReadOnly && !canSubmitForm)} onClick={() => (isReadOnly ? submitForm('submitted') : handleRequestSubmit())}>
+                        {isReadOnly ? 'Xem trạng thái hồ sơ' : (permissions.isNeedUpdate ? 'Nộp lại hồ sơ' : 'Nộp hồ sơ')}
                       </CButton>
                     </div>
                   </CForm>
@@ -704,6 +675,24 @@ export default function AdmissionV1FormPage() {
         campaign={session?.campaign || null}
         fallbackContent='Mở lại hướng dẫn kỳ tuyển sinh để đối chiếu yêu cầu hồ sơ trước khi lưu hoặc nộp.'
       />
+
+      <CModal visible={showReviewNoteModal} onClose={() => setShowReviewNoteModal(false)} alignment='center' size='lg'>
+        <CModalHeader>
+          <CModalTitle>Nội dung nhận xét</CModalTitle>
+        </CModalHeader>
+        <CModalBody>
+          {safeReviewNoteHtml ? (
+            <div dangerouslySetInnerHTML={{ __html: safeReviewNoteHtml }} />
+          ) : (
+            <div className='text-body-secondary'>Chưa có nội dung nhận xét.</div>
+          )}
+        </CModalBody>
+        <CModalFooter>
+          <CButton color='secondary' variant='outline' onClick={() => setShowReviewNoteModal(false)}>
+            Đóng
+          </CButton>
+        </CModalFooter>
+      </CModal>
 
       <CModal visible={showSubmitConfirmModal} onClose={() => setShowSubmitConfirmModal(false)} alignment='center'>
         <CModalHeader>

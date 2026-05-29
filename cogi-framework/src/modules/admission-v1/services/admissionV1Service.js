@@ -54,6 +54,30 @@ function buildTenantRequestConfig(tenantCode) {
   }
 }
 
+export function readAdmissionV1MaxFileSizeBytes() {
+  const configuredMb = Number(import.meta.env.VITE_ADMISSION_V1_MAX_FILE_SIZE_MB || 20)
+  if (!Number.isFinite(configuredMb) || configuredMb <= 0) {
+    return 20 * 1024 * 1024
+  }
+
+  return configuredMb * 1024 * 1024
+}
+
+export function formatAdmissionV1FileSize(value) {
+  const size = Number(value || 0)
+  if (!Number.isFinite(size) || size <= 0) return '0 MB'
+  return `${(size / (1024 * 1024)).toFixed(0)} MB`
+}
+
+export function buildAdmissionV1FileTooLargeMessage(fileName = '', maxFileSizeBytes = readAdmissionV1MaxFileSizeBytes()) {
+  const limitLabel = formatAdmissionV1FileSize(maxFileSizeBytes)
+  if (fileName) {
+    return `Tệp "${fileName}" vượt quá dung lượng cho phép. Hiện hệ thống hỗ trợ tối đa ${limitLabel} mỗi tệp.`
+  }
+
+  return `Tệp tải lên vượt quá dung lượng cho phép. Hiện hệ thống hỗ trợ tối đa ${limitLabel} mỗi tệp.`
+}
+
 function toSerializableAttachment(file) {
   return new Promise((resolve, reject) => {
     if (!(file instanceof File)) {
@@ -254,6 +278,11 @@ export async function updateAdmissionV1Application(applicationId, token, payload
 }
 
 export function getAdmissionV1ErrorMessage(error, fallbackMessage) {
+  const status = Number(error?.response?.status || error?.status || 0)
+  if (status === 413) {
+    return buildAdmissionV1FileTooLargeMessage()
+  }
+
   return (
     error?.response?.data?.error?.message
     || error?.response?.data?.message
@@ -262,10 +291,64 @@ export function getAdmissionV1ErrorMessage(error, fallbackMessage) {
   )
 }
 
+export function readAdmissionV1CampaignStatus(source) {
+  return String(source?.campaignStatus || source?.status || 'draft').trim().toLowerCase() || 'draft'
+}
+
+export function readAdmissionV1ApplicationStatus(source) {
+  return String(source?.admissionStatus || source?.status || 'draft').trim().toLowerCase() || 'draft'
+}
+
+export function readAdmissionV1ReviewStatus(source) {
+  return String(source?.reviewStatus || '').trim().toLowerCase() || null
+}
+
+export function getAdmissionV1CampaignStatusMessage(campaign) {
+  const campaignStatus = readAdmissionV1CampaignStatus(campaign)
+  if (campaignStatus === 'draft') return 'Kỳ tuyển sinh này hiện chưa mở nhận hồ sơ.'
+  if (campaignStatus === 'closed') return 'Kỳ tuyển sinh này đã đóng nhận hồ sơ mới.'
+  return ''
+}
+
+export function buildAdmissionV1Permissions(campaign, application) {
+  const campaignStatus = readAdmissionV1CampaignStatus(campaign)
+  const applicationStatus = readAdmissionV1ApplicationStatus(application)
+  const reviewStatus = readAdmissionV1ReviewStatus(application)
+  const hasApplication = Boolean(application?.id)
+  const isDraft = hasApplication && applicationStatus === 'draft'
+  const isNeedUpdate = hasApplication && (applicationStatus === 'rejected' || reviewStatus === 'returned')
+  const canCreate = !hasApplication && campaignStatus === 'open'
+  const canEditDraft = isDraft && campaignStatus === 'open'
+  const canSubmitDraft = canEditDraft
+  const canEditNeedUpdate = isNeedUpdate
+  const canResubmitNeedUpdate = isNeedUpdate
+  const canUploadMainEvidence = (isDraft && campaignStatus === 'open') || isNeedUpdate
+  const canSendConversationAttachment = false
+
+  return {
+    campaignStatus,
+    applicationStatus,
+    reviewStatus,
+    isDraft,
+    isNeedUpdate,
+    canCreate,
+    canEditDraft,
+    canSubmitDraft,
+    canEditNeedUpdate,
+    canResubmitNeedUpdate,
+    canUploadMainEvidence,
+    canSendConversationAttachment,
+    canTrack: hasApplication,
+    canEdit: canEditDraft || canEditNeedUpdate,
+    canSubmit: canSubmitDraft || canResubmitNeedUpdate,
+    isMainFormFileEditAllowed: canUploadMainEvidence,
+  }
+}
+
 export function formatAdmissionStatus(status) {
   const normalized = String(status || '').trim().toLowerCase()
   if (normalized === 'draft') return 'Nháp'
-  if (normalized === 'submitted') return 'Đã nộp'
+  if (normalized === 'submitted') return 'Đang tiếp nhận'
   if (normalized === 'reviewing') return 'Đang xét duyệt'
   if (normalized === 'approved') return 'Đã duyệt'
   if (normalized === 'rejected') return 'Cần bổ sung'
