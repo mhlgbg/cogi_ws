@@ -2,6 +2,7 @@ import AdmissionDashboard from '../../../pages/admission/AdmissionDashboard.jsx'
 import AdmissionApplicationManagement from '../../../pages/admission/AdmissionApplicationManagement.jsx'
 import AdmissionApplicationForm from '../../../pages/admission/AdmissionApplicationForm.jsx'
 import AdmissionCampaignManagementPage from '../pages/AdmissionCampaignManagementPage'
+import CandidateExamManagementPage from '../pages/CandidateExamManagementPage'
 import AdmissionReviewDetailPage from '../pages/AdmissionReviewDetailPage'
 import AdmissionReviewListPage from '../pages/AdmissionReviewListPage'
 import FormTemplateManagementPage from '../pages/FormTemplateManagementPage'
@@ -62,6 +63,11 @@ const admissionManagementRoutes = [
     path: '/admission/reviews/:id',
     featureKey: 'admission.review.manage',
     component: AdmissionReviewDetailPage,
+  },
+  {
+    path: '/admission/candidate-exams',
+    featureKey: 'admission.candidate-exam.manage',
+    component: CandidateExamManagementPage,
   },
 ]
 

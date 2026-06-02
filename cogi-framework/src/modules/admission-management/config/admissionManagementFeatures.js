@@ -46,6 +46,14 @@ const admissionManagementFeatures = {
       path: '/admission/reviews',
       showInMenu: true,
     },
+    {
+      name: 'Candidate Exam Management',
+      key: 'admission.candidate-exam.manage',
+      order: 5,
+      description: 'Manage candidate exam records by admission season',
+      path: '/admission/candidate-exams',
+      showInMenu: true,
+    },
   ],
 }
 

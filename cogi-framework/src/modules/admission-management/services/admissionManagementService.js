@@ -219,3 +219,92 @@ export async function sendAdmissionReviewEmail(id, payload = {}) {
   })
   return unwrapSuccess(res.data)
 }
+
+export async function getCandidateExamAdmissionSeasons() {
+  const res = await api.get('/candidate-exams/admission-seasons')
+  return unwrapSuccess(res.data)
+}
+
+export async function getCandidateExams(params = {}) {
+  const res = await api.get('/candidate-exams', { params })
+  return unwrapSuccess(res.data)
+}
+
+export async function getCandidateExamDetail(id) {
+  const res = await api.get(`/candidate-exams/${id}`)
+  return unwrapSuccess(res.data)
+}
+
+export async function createCandidateExam(payload) {
+  const res = await api.post('/candidate-exams', payload)
+  return unwrapSuccess(res.data)
+}
+
+export async function updateCandidateExam(id, payload) {
+  const res = await api.put(`/candidate-exams/${id}`, payload)
+  return unwrapSuccess(res.data)
+}
+
+export async function softDeleteCandidateExam(id, payload = {}) {
+  const res = await api.delete(`/candidate-exams/${id}`, { data: payload })
+  return unwrapSuccess(res.data)
+}
+
+export async function restoreCandidateExam(id, payload = {}) {
+  const res = await api.put(`/candidate-exams/${id}/restore`, payload)
+  return unwrapSuccess(res.data)
+}
+
+export async function getCandidateExamLogs(id, params = {}) {
+  const res = await api.get(`/candidate-exams/${id}/logs`, { params })
+  return unwrapSuccess(res.data)
+}
+
+export async function getCandidateExamExamCard(id) {
+  const res = await api.get(`/candidate-exams/${id}/exam-card`)
+  return unwrapSuccess(res.data)
+}
+
+export async function downloadCandidateExamImportTemplate() {
+  const res = await api.get('/candidate-exams/import-template', {
+    responseType: 'blob',
+  })
+
+  const headerValue = String(res.headers?.['content-disposition'] || '')
+  const matchedName = headerValue.match(/filename="?([^";]+)"?/i)
+
+  return {
+    blob: res.data,
+    fileName: matchedName?.[1] || 'candidate-exam-import-template.xlsx',
+  }
+}
+
+export async function previewCandidateExamImport({ admissionSeasonId, file }) {
+  const formData = new FormData()
+  formData.append('admissionSeasonId', String(admissionSeasonId || ''))
+  formData.append('file', file)
+
+  const res = await api.post('/candidate-exams/import-preview', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return unwrapSuccess(res.data)
+}
+
+export async function confirmCandidateExamImport({ admissionSeasonId, file, options = {} }) {
+  const formData = new FormData()
+  formData.append('admissionSeasonId', String(admissionSeasonId || ''))
+  formData.append('updateExisting', String(options.updateExisting !== false))
+  formData.append('restoreDeleted', String(options.restoreDeleted === true))
+  formData.append('overwriteScores', String(options.overwriteScores === true))
+  formData.append('overwriteExamAssignment', String(options.overwriteExamAssignment !== false))
+  formData.append('file', file)
+
+  const res = await api.post('/candidate-exams/import-confirm', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return unwrapSuccess(res.data)
+}

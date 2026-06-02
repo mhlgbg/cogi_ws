@@ -32,6 +32,7 @@ import {
 } from '../services/admissionManagementService'
 import AdmissionReviewEvidenceWorkspace from '../components/AdmissionReviewEvidenceWorkspace'
 import AdmissionReviewApplicationInfoPanel from '../components/AdmissionReviewApplicationInfoPanel'
+import AdmissionReviewConversationPanel from '../components/AdmissionReviewConversationPanel'
 import FormRenderer from '../../../pages/admission/form-renderer/FormRenderer'
 import {
   buildInitialFormData,
@@ -494,6 +495,10 @@ export default function AdmissionReviewDetailPage() {
               reviewedAt={formatDate(detail?.reviewedAt)}
               note={detail?.reviewNote || '-'}
             />
+
+            <div className='mt-4'>
+              <AdmissionReviewConversationPanel applicationId={applicationId} />
+            </div>
 
             {useFallbackRenderer ? (
               <CCard className='border-0 shadow-sm mt-4'>

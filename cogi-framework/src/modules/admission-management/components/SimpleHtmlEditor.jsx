@@ -74,6 +74,8 @@ export default function SimpleHtmlEditor({
   disabled = false,
   rows = 10,
   placeholder = '',
+  variableTokens = [],
+  helperText = '',
 }) {
   const editorRef = useRef(null)
   const [mode, setMode] = useState('visual')
@@ -170,6 +172,16 @@ export default function SimpleHtmlEditor({
     emitChange(fromEditorHtml(editorRef.current?.innerHTML || '<p></p>'))
   }
 
+  function handleInsertVariable(tokenValue) {
+    if (disabled || mode !== 'visual') return
+    const token = String(tokenValue || '').trim()
+    if (!token) return
+
+    focusEditor()
+    document.execCommand('insertText', false, token)
+    emitChange(fromEditorHtml(editorRef.current?.innerHTML || '<p></p>'))
+  }
+
   return (
     <div>
       {label ? <CFormLabel>{label}</CFormLabel> : null}
@@ -237,6 +249,25 @@ export default function SimpleHtmlEditor({
           </CButton>
         </div>
 
+        {Array.isArray(variableTokens) && variableTokens.length > 0 ? (
+          <div className='d-flex align-items-center gap-2 flex-wrap'>
+            {variableTokens.map((token) => (
+              <CButton
+                key={token.value}
+                type='button'
+                size='sm'
+                color='info'
+                variant='outline'
+                onClick={() => handleInsertVariable(token.value)}
+                disabled={disabled || mode !== 'visual'}
+                title={token.description || token.value}
+              >
+                {token.label}
+              </CButton>
+            ))}
+          </div>
+        ) : null}
+
         <CButtonGroup size='sm' role='group'>
           <CButton
             type='button'
@@ -297,7 +328,9 @@ export default function SimpleHtmlEditor({
         />
       )}
 
-      <div className='small text-body-secondary mt-1'>Editor trực quan với placeholder thật, chèn link, ảnh, logo tenant, block mẫu và tô màu chữ/nền. Có thể chuyển sang chế độ HTML để chỉnh mã khi cần.</div>
+      <div className='small text-body-secondary mt-1'>
+        {helperText || 'Editor trực quan với placeholder thật, chèn link, ảnh, logo tenant, block mẫu và tô màu chữ/nền. Có thể chuyển sang chế độ HTML để chỉnh mã khi cần.'}
+      </div>
     </div>
   )
 }

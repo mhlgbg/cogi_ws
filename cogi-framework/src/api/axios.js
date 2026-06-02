@@ -74,6 +74,16 @@ api.interceptors.request.use((config) => {
 	const nextConfig = { ...config }
 	nextConfig.headers = nextConfig.headers || {}
 	const skipContextHeaders = shouldSkipContextHeaders(nextConfig.url)
+	const isFormData = typeof FormData !== 'undefined' && nextConfig.data instanceof FormData
+
+	if (isFormData) {
+		if (typeof nextConfig.headers.delete === 'function') {
+			nextConfig.headers.delete('Content-Type')
+		} else {
+			delete nextConfig.headers['Content-Type']
+			delete nextConfig.headers['content-type']
+		}
+	}
 
 	const token = readStoredToken()
 	if (!skipContextHeaders && token && !nextConfig.headers.Authorization) {

@@ -136,13 +136,13 @@ export default function AdmissionV1EmailVerifyPage() {
     setSuccessMessage('')
 
     try {
-      const payload = await resendAdmissionV1ApplicationCode({
+      await resendAdmissionV1ApplicationCode({
         campaignCode,
         studentCode: normalizedStudentCode,
         email: normalizedEmail,
       }, resolvedTenantCode)
 
-      setSuccessMessage(`Chúng tôi đã gửi lại mã hồ sơ vào ${payload?.maskedEmail || normalizedEmail}. Vui lòng kiểm tra email để tiếp tục.`)
+      setSuccessMessage('Nếu thông tin khớp với hồ sơ đã đăng ký, mã hồ sơ sẽ được gửi lại tới email của phụ huynh.')
     } catch (error) {
       setErrorMessage(getAdmissionV1ErrorMessage(error, 'Không thể cấp lại mã hồ sơ'))
     } finally {

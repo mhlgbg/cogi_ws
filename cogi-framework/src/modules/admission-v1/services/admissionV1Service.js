@@ -118,6 +118,14 @@ export function buildAdmissionV1Path(campaignCode, suffix = '', tenantCode = '')
   return `${basePath}/${String(suffix).replace(/^\/+/, '')}`
 }
 
+export function buildAdmissionResultLookupPath(campaignCode, tenantCode = '') {
+  const normalizedCampaignCode = encodeURIComponent(normalizeCampaignCode(campaignCode))
+  const normalizedTenantCode = normalizeTenantCode(tenantCode)
+  return normalizedTenantCode
+    ? `/t/${encodeURIComponent(normalizedTenantCode)}/tra-cuu-tuyen-sinh/${normalizedCampaignCode}`
+    : `/tra-cuu-tuyen-sinh/${normalizedCampaignCode}`
+}
+
 export function buildAdmissionV1StorageKey(campaignCode, tenantCode = '') {
   return `${STORAGE_PREFIX}:${normalizeTenantCode(tenantCode).toLowerCase()}:${normalizeCampaignCode(campaignCode).toLowerCase()}`
 }
@@ -197,6 +205,11 @@ export async function startAdmissionV1Registration(payload, tenantCode = '') {
 
 export async function resendAdmissionV1ApplicationCode(payload, tenantCode = '') {
   const response = await api.post('/admission-public-v1/resend-application-code', payload, buildTenantRequestConfig(tenantCode))
+  return normalizePayload(response?.data)
+}
+
+export async function lookupAdmissionV1Result(payload, tenantCode = '') {
+  const response = await api.post('/admission-public-v1/result-lookup', payload, buildTenantRequestConfig(tenantCode))
   return normalizePayload(response?.data)
 }
 
@@ -301,6 +314,29 @@ export function readAdmissionV1ApplicationStatus(source) {
 
 export function readAdmissionV1ReviewStatus(source) {
   return String(source?.reviewStatus || '').trim().toLowerCase() || null
+}
+
+export function getApplicationStatusGuideKey(application) {
+  const admissionStatus = String(application?.admissionStatus || application?.status || '').trim().toLowerCase()
+  const reviewStatus = String(application?.reviewStatus || '').trim().toLowerCase()
+  const candidates = [reviewStatus, admissionStatus].filter(Boolean)
+
+  if (candidates.some((value) => value === 'draft')) {
+    return 'draft'
+  }
+  if (candidates.some((value) => value === 'returned' || value === 'need_update' || value === 'rejected-as-need-update' || value === 'application_needs_update')) {
+    return 'need_update'
+  }
+  if (candidates.some((value) => value === 'accepted' || value === 'approved' || value === 'exam_scheduled' || value === 'passed' || value === 'enrolled')) {
+    return 'accepted'
+  }
+  if (candidates.some((value) => value === 'reviewing' || value === 'in_review' || value === 'under_review')) {
+    return 'reviewing'
+  }
+  if (candidates.some((value) => value === 'rejected' || value === 'not_accepted' || value === 'failed')) {
+    return 'rejected'
+  }
+  return 'submitted'
 }
 
 export function getAdmissionV1CampaignStatusMessage(campaign) {

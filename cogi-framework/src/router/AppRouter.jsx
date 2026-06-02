@@ -19,6 +19,8 @@ import AdmissionV1DeclarantPage from '../modules/admission-v1/pages/AdmissionV1D
 import AdmissionV1EmailVerifyPage from '../modules/admission-v1/pages/AdmissionV1EmailVerifyPage'
 import AdmissionV1TrackingPage from '../modules/admission-v1/pages/AdmissionV1TrackingPage'
 import AdmissionV1FormPage from '../modules/admission-v1/pages/AdmissionV1FormPage'
+import AdmissionResultLookupPage from '../modules/admission-v1/pages/AdmissionResultLookupPage'
+import CandidateExamCardPage from '../modules/admission-management/pages/CandidateExamCardPage'
 import TenantEntryRedirect from '../components/TenantEntryRedirect'
 import PublicLayout from '../layouts/PublicLayout'
 import JournalHomePage from '../pages/journal/JournalHomePage'
@@ -123,12 +125,14 @@ export default function AppRouter() {
       <Route path="/dang-ky-tuyen-sinh-v1/:campaignCode/xac-minh-email" element={<TenantRoute requireAuth={false}><AdmissionV1EmailVerifyPage /></TenantRoute>} />
       <Route path="/dang-ky-tuyen-sinh-v1/:campaignCode/theo-doi" element={<TenantRoute requireAuth={false}><AdmissionV1TrackingPage /></TenantRoute>} />
       <Route path="/dang-ky-tuyen-sinh-v1/:campaignCode/ho-so" element={<TenantRoute requireAuth={false}><AdmissionV1FormPage /></TenantRoute>} />
+      <Route path="/tra-cuu-tuyen-sinh/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionResultLookupPage /></TenantRoute>} />
       <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionV1EntryPage /></TenantRoute>} />
       <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/nguoi-khai" element={<TenantRoute requireAuth={false}><AdmissionV1DeclarantPage /></TenantRoute>} />
       <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/ma-ho-so" element={<TenantRoute requireAuth={false}><AdmissionV1EmailVerifyPage /></TenantRoute>} />
       <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/xac-minh-email" element={<TenantRoute requireAuth={false}><AdmissionV1EmailVerifyPage /></TenantRoute>} />
       <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/theo-doi" element={<TenantRoute requireAuth={false}><AdmissionV1TrackingPage /></TenantRoute>} />
       <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/ho-so" element={<TenantRoute requireAuth={false}><AdmissionV1FormPage /></TenantRoute>} />
+      <Route path="/t/:tenantCode/tra-cuu-tuyen-sinh/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionResultLookupPage /></TenantRoute>} />
 
       <Route
         path="/"
@@ -171,6 +175,28 @@ export default function AppRouter() {
           <ProtectedRoute requireTenant={false}>
             <ChooseTenant />
           </ProtectedRoute>
+        )}
+      />
+
+      <Route
+        path="/admission/candidate-exams/:id/exam-card"
+        element={(
+          <TenantRoute>
+            <FeatureRoute featureKey="admission.candidate-exam.manage">
+              <CandidateExamCardPage />
+            </FeatureRoute>
+          </TenantRoute>
+        )}
+      />
+
+      <Route
+        path="/t/:tenantCode/admission/candidate-exams/:id/exam-card"
+        element={(
+          <TenantRoute>
+            <FeatureRoute featureKey="admission.candidate-exam.manage">
+              <CandidateExamCardPage />
+            </FeatureRoute>
+          </TenantRoute>
         )}
       />
 

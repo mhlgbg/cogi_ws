@@ -17,6 +17,90 @@ import {
 import SimpleHtmlEditor from './SimpleHtmlEditor'
 import { TS2026_DEFAULT_REVIEW_DISPLAY_CONFIG } from '../utils/reviewDisplayConfig'
 
+const DEFAULT_APPLICATION_STATUS_GUIDE = {
+  draft: {
+    title: 'Hồ sơ chưa được nộp đúng hạn',
+    message: 'Đã hết hạn nộp hồ sơ.',
+    color: 'warning',
+    nextSteps: [
+      'Nhà trường cảm ơn Phụ huynh đã quan tâm đến thông tin kỳ tuyển sinh.',
+    ],
+  },
+  submitted: {
+    title: 'Đã nộp hồ sơ',
+    message: 'Hồ sơ của học sinh đã được gửi tới Nhà trường và đang chờ rà soát.',
+    color: 'info',
+    nextSteps: [
+      'Phụ huynh vui lòng theo dõi trạng thái hồ sơ trên hệ thống.',
+      'Nhà trường sẽ cập nhật kết quả sau khi rà soát.',
+    ],
+  },
+  reviewing: {
+    title: 'Đang xét duyệt hồ sơ',
+    message: 'Cán bộ tuyển sinh đang kiểm tra thông tin và minh chứng trong hồ sơ.',
+    color: 'warning',
+    nextSteps: [
+      'Phụ huynh vui lòng chờ thông báo tiếp theo từ Nhà trường.',
+    ],
+  },
+  need_update: {
+    title: 'Cần bổ sung hồ sơ',
+    message: 'Hồ sơ cần được bổ sung hoặc điều chỉnh theo yêu cầu của Nhà trường.',
+    color: 'danger',
+    nextSteps: [
+      'Phụ huynh vui lòng đọc kỹ nội dung trao đổi với Nhà trường.',
+      'Thực hiện bổ sung theo hướng dẫn và nộp lại hồ sơ.',
+    ],
+  },
+  accepted: {
+    title: 'Đã tiếp nhận hồ sơ',
+    message: 'Hồ sơ của học sinh đã được Nhà trường tiếp nhận.',
+    color: 'success',
+    nextSteps: [
+      'Phụ huynh tiếp tục theo dõi các thông tin tiếp theo.',
+      'Chậm nhất ngày 03/06/2026, phụ huynh có thể tải và tự in thẻ dự thi trên hệ thống.',
+    ],
+  },
+  rejected: {
+    title: 'Không tiếp nhận hồ sơ',
+    message: 'Hồ sơ chưa đáp ứng điều kiện tiếp nhận theo quy định của kỳ tuyển sinh.',
+    color: 'secondary',
+    nextSteps: [
+      'Phụ huynh vui lòng theo dõi thông báo cụ thể từ Nhà trường nếu có.',
+    ],
+  },
+}
+
+const EXAM_CARD_TEMPLATE_VARIABLES = [
+  { label: 'Logo tenant', value: '{{tenantLogo}}', description: 'Logo đơn vị' },
+  { label: 'Tên tenant', value: '{{tenantName}}', description: 'Tên đơn vị' },
+  { label: 'Tên kỳ TS', value: '{{campaignName}}', description: 'Tên chiến dịch tuyển sinh' },
+  { label: 'Họ tên', value: '{{studentName}}', description: 'Họ tên thí sinh' },
+  { label: 'Mã HS', value: '{{studentCode}}', description: 'Mã học sinh' },
+  { label: 'Mã hồ sơ', value: '{{applicationCode}}', description: 'Mã hồ sơ' },
+  { label: 'SBD', value: '{{candidateNumber}}', description: 'Số báo danh' },
+  { label: 'Ngày sinh', value: '{{dateOfBirth}}', description: 'Ngày sinh' },
+  { label: 'Địa điểm', value: '{{examLocation}}', description: 'Địa điểm kiểm tra' },
+  { label: 'Phòng', value: '{{examRoom}}', description: 'Phòng kiểm tra' },
+  { label: 'Ảnh thẻ', value: '{{cardImagePath}}', description: 'Đường dẫn ảnh thẻ 3x4' },
+]
+
+function formatDateTimeLocalValue(value) {
+  const text = String(value || '').trim()
+  if (!text) return ''
+
+  const date = new Date(text)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
 function buildInitialReviewDisplayConfig(initialValues) {
   if (initialValues?.reviewDisplayConfig) {
     return JSON.stringify(initialValues.reviewDisplayConfig, null, 2)
@@ -29,6 +113,14 @@ function buildInitialReviewDisplayConfig(initialValues) {
   return ''
 }
 
+function buildInitialApplicationStatusGuide(initialValues) {
+  if (initialValues?.applicationStatusGuide) {
+    return JSON.stringify(initialValues.applicationStatusGuide, null, 2)
+  }
+
+  return JSON.stringify(DEFAULT_APPLICATION_STATUS_GUIDE, null, 2)
+}
+
 function buildInitialState(initialValues) {
   return {
     name: initialValues?.name || '',
@@ -39,9 +131,14 @@ function buildInitialState(initialValues) {
     endDate: initialValues?.endDate || '',
     campaignStatus: initialValues?.campaignStatus || initialValues?.status || 'draft',
     description: initialValues?.description || '',
+    examCardTemplateHtml: initialValues?.examCardTemplateHtml || '',
+    allowExamCardPrinting: initialValues?.allowExamCardPrinting === true,
+    examCardPrintStartAt: formatDateTimeLocalValue(initialValues?.examCardPrintStartAt),
+    examCardPrintEndAt: formatDateTimeLocalValue(initialValues?.examCardPrintEndAt),
     isActive: initialValues?.isActive !== false,
     formTemplate: initialValues?.formTemplate?.id ? String(initialValues.formTemplate.id) : '',
     reviewDisplayConfig: buildInitialReviewDisplayConfig(initialValues),
+    applicationStatusGuide: buildInitialApplicationStatusGuide(initialValues),
   }
 }
 
@@ -80,7 +177,12 @@ export default function AdmissionCampaignFormModal({
       endDate: String(form.endDate || '').trim() || null,
       campaignStatus: String(form.campaignStatus || 'draft').trim(),
       description: String(form.description || '').trim(),
+      examCardTemplateHtml: String(form.examCardTemplateHtml || '').trim(),
+      allowExamCardPrinting: form.allowExamCardPrinting === true,
+      examCardPrintStartAt: String(form.examCardPrintStartAt || '').trim() || null,
+      examCardPrintEndAt: String(form.examCardPrintEndAt || '').trim() || null,
       reviewDisplayConfig: String(form.reviewDisplayConfig || '').trim() || null,
+      applicationStatusGuide: String(form.applicationStatusGuide || '').trim() || null,
       isActive: form.isActive === true,
       formTemplate: Number(form.formTemplate || 0),
     })
@@ -151,6 +253,17 @@ export default function AdmissionCampaignFormModal({
               <div className='small text-body-secondary mt-1'>Nếu để trống, màn review sẽ fallback về cách hiển thị hiện tại. Riêng mã chiến dịch TS2026 sẽ dùng cấu hình mặc định trong code.</div>
             </CCol>
             <CCol xs={12}>
+              <CFormLabel>Application Status Guide (JSON)</CFormLabel>
+              <CFormTextarea
+                rows={16}
+                value={form.applicationStatusGuide}
+                onChange={(event) => updateField('applicationStatusGuide', event.target.value)}
+                disabled={submitting}
+                placeholder='{"submitted":{"title":"Hồ sơ đã được nộp","message":"...","color":"info","nextSteps":["..."]}}'
+              />
+              <div className='small text-body-secondary mt-1'>Cấu hình thông điệp phụ huynh nhìn thấy ở trang tra cứu kết quả theo các key: submitted, reviewing, need_update, accepted, rejected.</div>
+            </CCol>
+            <CCol xs={12}>
               <SimpleHtmlEditor
                 label='Mô tả HTML'
                 rows={10}
@@ -159,6 +272,46 @@ export default function AdmissionCampaignFormModal({
                 disabled={submitting}
                 placeholder='<p>Giới thiệu kỳ tuyển sinh...</p><ul><li>Điểm nổi bật</li></ul>'
               />
+            </CCol>
+            <CCol xs={12}>
+              <SimpleHtmlEditor
+                label='Mẫu HTML thẻ dự kiểm tra'
+                rows={12}
+                value={form.examCardTemplateHtml}
+                onChange={(nextValue) => updateField('examCardTemplateHtml', nextValue)}
+                disabled={submitting}
+                placeholder='<div><img src="{{tenantLogo}}" alt="Logo" /><h2>THẺ DỰ KIỂM TRA</h2><p>{{studentName}}</p><p>SBD: {{candidateNumber}}</p></div>'
+                variableTokens={EXAM_CARD_TEMPLATE_VARIABLES}
+                helperText='Có thể soạn HTML mẫu thẻ dự kiểm tra và chèn trực tiếp các biến bên trên vào nội dung. Dữ liệu này sẽ được dùng cho tính năng in thẻ sau này.'
+              />
+            </CCol>
+            <CCol xs={12}>
+              <CFormCheck
+                label='Cho phép phụ huynh xem/in thẻ dự kiểm tra'
+                checked={form.allowExamCardPrinting}
+                onChange={(event) => updateField('allowExamCardPrinting', event.target.checked)}
+                disabled={submitting}
+              />
+            </CCol>
+            <CCol md={6}>
+              <CFormLabel>Thời gian bắt đầu phát hành thẻ</CFormLabel>
+              <CFormInput
+                type='datetime-local'
+                value={form.examCardPrintStartAt}
+                onChange={(event) => updateField('examCardPrintStartAt', event.target.value)}
+                disabled={submitting}
+              />
+              <div className='small text-body-secondary mt-1'>Nếu chưa nhập thời gian bắt đầu, hệ thống hiểu là cho phép ngay khi bật.</div>
+            </CCol>
+            <CCol md={6}>
+              <CFormLabel>Thời gian kết thúc phát hành thẻ</CFormLabel>
+              <CFormInput
+                type='datetime-local'
+                value={form.examCardPrintEndAt}
+                onChange={(event) => updateField('examCardPrintEndAt', event.target.value)}
+                disabled={submitting}
+              />
+              <div className='small text-body-secondary mt-1'>Nếu chưa nhập thời gian kết thúc, hệ thống hiểu là không giới hạn thời gian kết thúc.</div>
             </CCol>
           </CRow>
         </CModalBody>
