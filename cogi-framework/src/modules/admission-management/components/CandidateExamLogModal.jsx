@@ -34,6 +34,8 @@ function getActionLabel(action) {
   if (normalized === 'first_card_download') return 'Tải thẻ lần đầu'
   if (normalized === 'card_download') return 'Tải thẻ'
   if (normalized === 'card_print') return 'In thẻ'
+  if (normalized === 'card_reminder_sent') return 'Gửi nhắc thẻ'
+  if (normalized === 'card_reminder_failed') return 'Gửi nhắc lỗi'
   if (normalized === 'status_changed') return 'Đổi trạng thái'
   if (normalized === 'score_updated') return 'Cập nhật điểm'
   if (normalized === 'room_assigned') return 'Gán phòng / SBD'

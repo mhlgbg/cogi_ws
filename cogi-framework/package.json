@@ -13,6 +13,7 @@
     "@coreui/icons-react": "^2.3.0",
     "@coreui/react": "^5.10.0",
     "axios": "^1.13.6",
+    "html2pdf.js": "^0.14.0",
     "katex": "^0.16.46",
     "quill": "^2.0.3",
     "react": "^19.2.4",

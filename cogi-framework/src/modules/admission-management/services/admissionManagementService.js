@@ -230,6 +230,33 @@ export async function getCandidateExams(params = {}) {
   return unwrapSuccess(res.data)
 }
 
+export async function exportCandidateExams(params = {}) {
+  const res = await api.get('/candidate-exams/export', {
+    params,
+    responseType: 'blob',
+  })
+
+  const headerValue = String(res.headers?.['content-disposition'] || '')
+  const matchedName = headerValue.match(/filename="?([^";]+)"?/i)
+
+  return {
+    blob: res.data,
+    fileName: matchedName?.[1] || 'candidate-exams.xlsx',
+  }
+}
+
+export async function getCandidateExamCardReminderSummary(admissionCampaignId) {
+  const res = await api.get('/candidate-exams/card-reminder-summary', {
+    params: { admissionCampaignId },
+  })
+  return unwrapSuccess(res.data)
+}
+
+export async function sendCandidateExamCardRemindersDirect(payload = {}) {
+  const res = await api.post('/candidate-exams/send-card-reminders-direct', payload)
+  return unwrapSuccess(res.data)
+}
+
 export async function getCandidateExamDetail(id) {
   const res = await api.get(`/candidate-exams/${id}`)
   return unwrapSuccess(res.data)

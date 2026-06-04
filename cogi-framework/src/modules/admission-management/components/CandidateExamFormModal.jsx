@@ -24,6 +24,28 @@ const STATUS_OPTIONS = [
   { value: 'cancelled', label: 'Hủy' },
 ]
 
+function formatDateTime(value) {
+  if (!value) return 'Chưa'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Chưa'
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function getReminderStatusLabel(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (normalized === 'sending') return 'Đang gửi'
+  if (normalized === 'queued') return 'Đang chờ gửi'
+  if (normalized === 'sent') return 'Đã nhắc'
+  if (normalized === 'failed') return 'Lỗi gửi'
+  return 'Chưa nhắc'
+}
+
 function buildInitialState(initialValues) {
   return {
     studentCode: initialValues?.studentCode || '',
@@ -121,7 +143,7 @@ export default function CandidateExamFormModal({
   function handleSubmit(event) {
     event.preventDefault()
     onSubmit?.({
-      admissionSeasonId: admissionSeason?.id,
+      ...(initialValues?.id ? {} : { admissionSeasonId: admissionSeason?.id }),
       studentCode: String(form.studentCode || '').trim() || null,
       applicationCode: String(form.applicationCode || '').trim() || null,
       fullName: String(form.fullName || '').trim() || null,
@@ -263,6 +285,27 @@ export default function CandidateExamFormModal({
               <CFormLabel>Ghi chú</CFormLabel>
               <CFormTextarea rows={4} value={form.note} onChange={(event) => updateField('note', event.target.value)} disabled={submitting} />
             </CCol>
+
+            {initialValues?.id ? (
+              <>
+                <CCol md={3}>
+                  <CFormLabel>Trạng thái nhắc tải thẻ</CFormLabel>
+                  <CFormInput value={getReminderStatusLabel(initialValues?.cardReminderStatus)} disabled readOnly />
+                </CCol>
+                <CCol md={3}>
+                  <CFormLabel>Số lần nhắc</CFormLabel>
+                  <CFormInput value={String(initialValues?.cardReminderCount ?? 0)} disabled readOnly />
+                </CCol>
+                <CCol md={3}>
+                  <CFormLabel>Đưa vào queue lúc</CFormLabel>
+                  <CFormInput value={formatDateTime(initialValues?.cardReminderQueuedAt)} disabled readOnly />
+                </CCol>
+                <CCol md={3}>
+                  <CFormLabel>Gửi thành công lúc</CFormLabel>
+                  <CFormInput value={formatDateTime(initialValues?.cardReminderSentAt)} disabled readOnly />
+                </CCol>
+              </>
+            ) : null}
           </CRow>
         </CModalBody>
         <CModalFooter>

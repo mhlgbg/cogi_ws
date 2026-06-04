@@ -15,6 +15,7 @@ import AdmissionV1Hero from '../components/AdmissionV1Hero'
 import AdmissionV1GuideModal from '../components/AdmissionV1GuideModal'
 import {
   acknowledgeAdmissionV1Approval,
+  buildAdmissionExamCardPath,
   buildAdmissionV1Permissions,
   buildAdmissionV1Path,
   clearAdmissionV1Token,
@@ -23,6 +24,7 @@ import {
   getAdmissionV1CampaignStatusMessage,
   getAdmissionStatusColor,
   getAdmissionV1ErrorMessage,
+  getApplicationStatusGuideKey,
   getPublicAdmissionCampaign,
   getAdmissionV1Session,
   readAdmissionV1Token,
@@ -76,6 +78,11 @@ export default function AdmissionV1TrackingPage() {
   const approvedAcknowledgedAt = readApprovedAcknowledgedAt(session)
   const isAcceptedAwaitingAcknowledgement = isAcceptedApplication(session?.application) && !approvedAcknowledgedAt
   const isAcceptedAcknowledged = isAcceptedApplication(session?.application) && Boolean(approvedAcknowledgedAt)
+  const statusGuide = session?.statusGuide || null
+  const examCard = session?.examCard || null
+  const guideKey = getApplicationStatusGuideKey(session?.application)
+  const canViewExamCard = guideKey === 'accepted' && examCard?.canView === true && Boolean(session?.application?.studentCode) && Boolean(session?.application?.applicationCode)
+  const examCardNotice = guideKey === 'accepted' ? String(examCard?.message || '').trim() : ''
 
   useEffect(() => {
     let isCancelled = false
@@ -189,6 +196,15 @@ export default function AdmissionV1TrackingPage() {
     }
   }
 
+  function handleOpenExamCard() {
+  if (!session?.application?.studentCode || !session?.application?.applicationCode) return
+  const targetPath = buildAdmissionExamCardPath(campaignCode, resolvedTenantCode, {
+    studentCode: session.application.studentCode,
+    applicationCode: session.application.applicationCode,
+  })
+  window.open(targetPath, '_blank', 'noopener,noreferrer')
+  }
+
   return (
     <div className='admission-v1-shell py-4 py-lg-5'>
       <CContainer fluid className='admission-v1-content px-3 px-lg-4'>
@@ -215,7 +231,17 @@ export default function AdmissionV1TrackingPage() {
                   <div className='fw-semibold fs-5'>{session?.campaign?.name || 'Kỳ tuyển sinh'}</div>
                   <div className='text-body-secondary small'>Mã kỳ: {session?.campaign?.code || '-'}</div>
                 </div>
-                <div className='admission-v1-actions'>
+                <div className='d-flex align-items-center gap-2 flex-wrap justify-content-end'>
+                  {canViewExamCard ? (
+                    <CButton
+                      color='danger'
+                      onClick={handleOpenExamCard}
+                      style={{ color: '#facc15', fontSize: '1.05rem', fontWeight: 800, letterSpacing: '0.01em' }}
+                    >
+                      <span aria-hidden='true' style={{ marginRight: '8px', fontSize: '1.1em', lineHeight: 1 }}>🖨</span>
+                      <span>Xem / In / Xuất PDF thẻ dự kiểm tra</span>
+                    </CButton>
+                  ) : null}
                   <CButton type='button' color='light' onClick={() => setShowGuideModal(true)}>
                     Xem lại hướng dẫn
                   </CButton>
@@ -278,6 +304,11 @@ export default function AdmissionV1TrackingPage() {
                     {safeReviewNoteHtml ? (
                       <CAlert color='warning' className='mb-3'>
                         <div dangerouslySetInnerHTML={{ __html: safeReviewNoteHtml }} />
+                      </CAlert>
+                    ) : null}
+                    {examCardNotice ? (
+                      <CAlert color={examCard?.status === 'pending' ? 'warning' : 'info'} className='mb-3'>
+                        {examCardNotice}
                       </CAlert>
                     ) : null}
                     <div className='admission-v1-actions'>

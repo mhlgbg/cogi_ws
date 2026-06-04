@@ -83,7 +83,35 @@ const EXAM_CARD_TEMPLATE_VARIABLES = [
   { label: 'Địa điểm', value: '{{examLocation}}', description: 'Địa điểm kiểm tra' },
   { label: 'Phòng', value: '{{examRoom}}', description: 'Phòng kiểm tra' },
   { label: 'Ảnh thẻ', value: '{{cardImagePath}}', description: 'Đường dẫn ảnh thẻ 3x4' },
+  { label: 'URL tra cứu QR', value: '{{qrCodeUrl}}', description: 'Đường dẫn công khai dùng để sinh QR' },
+  { label: 'Ảnh QR base64', value: '{{qrCodeDataUrl}}', description: 'Ảnh QR code dạng data URL để gắn trực tiếp vào template' },
 ]
+
+const EXAM_CARD_REMINDER_VARIABLES = [
+  { label: 'Họ tên', value: '{{fullName}}', description: 'Họ tên học sinh/phụ huynh trong email nhắc' },
+  { label: 'Mã HS', value: '{{studentCode}}', description: 'Mã học sinh' },
+  { label: 'Mã hồ sơ', value: '{{applicationCode}}', description: 'Mã hồ sơ' },
+  { label: 'SBD', value: '{{candidateNumber}}', description: 'Số báo danh' },
+  { label: 'Phòng', value: '{{examRoom}}', description: 'Phòng kiểm tra' },
+  { label: 'Địa điểm', value: '{{examLocation}}', description: 'Địa điểm kiểm tra' },
+  { label: 'Link tra cứu', value: '{{lookupUrl}}', description: 'Đường dẫn để phụ huynh mở thẻ dự kiểm tra' },
+]
+
+const DEFAULT_EXAM_CARD_REMINDER_EMAIL_SUBJECT = 'Nhắc in thẻ dự kiểm tra đánh giá năng lực'
+const DEFAULT_EXAM_CARD_REMINDER_EMAIL_HTML = [
+  '<p>Kính gửi Quý phụ huynh <strong>{{fullName}}</strong>,</p>',
+  '<p>Nhà trường trân trọng nhắc Quý phụ huynh kiểm tra và tải/in thẻ dự kiểm tra cho học sinh.</p>',
+  '<ul>',
+  '<li>Mã học sinh: <strong>{{studentCode}}</strong></li>',
+  '<li>Mã hồ sơ: <strong>{{applicationCode}}</strong></li>',
+  '<li>Số báo danh: <strong>{{candidateNumber}}</strong></li>',
+  '<li>Phòng kiểm tra: <strong>{{examRoom}}</strong></li>',
+  '<li>Địa điểm kiểm tra: <strong>{{examLocation}}</strong></li>',
+  '</ul>',
+  '<p>Quý phụ huynh vui lòng truy cập đường dẫn sau để xem thông tin chi tiết và tải/in thẻ dự kiểm tra:</p>',
+  '<p><a href="{{lookupUrl}}">{{lookupUrl}}</a></p>',
+  '<p>Trân trọng.</p>',
+].join('')
 
 function formatDateTimeLocalValue(value) {
   const text = String(value || '').trim()
@@ -132,6 +160,8 @@ function buildInitialState(initialValues) {
     campaignStatus: initialValues?.campaignStatus || initialValues?.status || 'draft',
     description: initialValues?.description || '',
     examCardTemplateHtml: initialValues?.examCardTemplateHtml || '',
+    examCardReminderEmailSubject: initialValues?.examCardReminderEmailSubject || DEFAULT_EXAM_CARD_REMINDER_EMAIL_SUBJECT,
+    examCardReminderEmailHtml: initialValues?.examCardReminderEmailHtml || DEFAULT_EXAM_CARD_REMINDER_EMAIL_HTML,
     allowExamCardPrinting: initialValues?.allowExamCardPrinting === true,
     examCardPrintStartAt: formatDateTimeLocalValue(initialValues?.examCardPrintStartAt),
     examCardPrintEndAt: formatDateTimeLocalValue(initialValues?.examCardPrintEndAt),
@@ -178,6 +208,8 @@ export default function AdmissionCampaignFormModal({
       campaignStatus: String(form.campaignStatus || 'draft').trim(),
       description: String(form.description || '').trim(),
       examCardTemplateHtml: String(form.examCardTemplateHtml || '').trim(),
+      examCardReminderEmailSubject: String(form.examCardReminderEmailSubject || '').trim(),
+      examCardReminderEmailHtml: String(form.examCardReminderEmailHtml || '').trim(),
       allowExamCardPrinting: form.allowExamCardPrinting === true,
       examCardPrintStartAt: String(form.examCardPrintStartAt || '').trim() || null,
       examCardPrintEndAt: String(form.examCardPrintEndAt || '').trim() || null,
@@ -283,6 +315,27 @@ export default function AdmissionCampaignFormModal({
                 placeholder='<div><img src="{{tenantLogo}}" alt="Logo" /><h2>THẺ DỰ KIỂM TRA</h2><p>{{studentName}}</p><p>SBD: {{candidateNumber}}</p></div>'
                 variableTokens={EXAM_CARD_TEMPLATE_VARIABLES}
                 helperText='Có thể soạn HTML mẫu thẻ dự kiểm tra và chèn trực tiếp các biến bên trên vào nội dung. Dữ liệu này sẽ được dùng cho tính năng in thẻ sau này.'
+              />
+            </CCol>
+            <CCol xs={12}>
+              <CFormLabel>Tiêu đề email nhắc tải thẻ</CFormLabel>
+              <CFormInput
+                value={form.examCardReminderEmailSubject}
+                onChange={(event) => updateField('examCardReminderEmailSubject', event.target.value)}
+                disabled={submitting}
+                placeholder={DEFAULT_EXAM_CARD_REMINDER_EMAIL_SUBJECT}
+              />
+            </CCol>
+            <CCol xs={12}>
+              <SimpleHtmlEditor
+                label='Nội dung email nhắc tải thẻ'
+                rows={12}
+                value={form.examCardReminderEmailHtml}
+                onChange={(nextValue) => updateField('examCardReminderEmailHtml', nextValue)}
+                disabled={submitting}
+                placeholder={DEFAULT_EXAM_CARD_REMINDER_EMAIL_HTML}
+                variableTokens={EXAM_CARD_REMINDER_VARIABLES}
+                helperText='Các biến hỗ trợ: {{fullName}}, {{studentCode}}, {{applicationCode}}, {{candidateNumber}}, {{examRoom}}, {{examLocation}}, {{lookupUrl}}.'
               />
             </CCol>
             <CCol xs={12}>

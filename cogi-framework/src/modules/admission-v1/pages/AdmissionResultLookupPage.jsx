@@ -23,6 +23,7 @@ import {
 import { useTenant } from '../../../contexts/TenantContext'
 import AdmissionV1Hero from '../components/AdmissionV1Hero'
 import {
+  buildAdmissionExamCardPath,
   buildAdmissionV1Path,
   getAdmissionV1ErrorMessage,
   getApplicationStatusGuideKey,
@@ -219,7 +220,18 @@ export default function AdmissionResultLookupPage() {
   const guideColor = getGuideColor(statusGuide?.color)
   const canOpenNeedUpdate = guideKey === 'need_update' && Boolean(application?.applicationCode)
   const shouldShowPendingNote = guideKey === 'submitted' || guideKey === 'reviewing'
-  const canDownloadExamCard = guideKey === 'accepted' && application?.examCardAvailable && application?.examCardUrl
+  const examCard = result?.examCard || null
+  const canViewExamCard = guideKey === 'accepted' && examCard?.canView === true && Boolean(application?.studentCode) && Boolean(application?.applicationCode)
+  const examCardNotice = guideKey === 'accepted' ? String(examCard?.message || '').trim() : ''
+
+  function handleOpenExamCard() {
+    if (!application?.studentCode || !application?.applicationCode) return
+    const targetPath = buildAdmissionExamCardPath(campaignCode, resolvedTenantCode, {
+      studentCode: application.studentCode,
+      applicationCode: application.applicationCode,
+    })
+    window.open(targetPath, '_blank', 'noopener,noreferrer')
+  }
 
   return (
     <div className='admission-v1-shell py-4 py-lg-5'>
@@ -303,7 +315,19 @@ export default function AdmissionResultLookupPage() {
                           <div className='text-body-secondary small'>Mã học sinh: {application?.studentCode || '-'}</div>
                           <div className='text-body-secondary small'>Mã hồ sơ: {application?.applicationCode || '-'}</div>
                         </div>
-                        <CBadge color={guideColor}>{statusGuide?.title || 'Trạng thái hồ sơ'}</CBadge>
+                        <div className='d-flex align-items-center gap-2 flex-wrap justify-content-end'>
+                          {canViewExamCard ? (
+                            <CButton
+                              color='danger'
+                              onClick={handleOpenExamCard}
+                              style={{ color: '#facc15', fontSize: '1.05rem', fontWeight: 800, letterSpacing: '0.01em' }}
+                            >
+                              <span aria-hidden='true' style={{ marginRight: '8px', fontSize: '1.1em', lineHeight: 1 }}>🖨</span>
+                              <span>Xem / In / Xuất PDF thẻ dự kiểm tra</span>
+                            </CButton>
+                          ) : null}
+                          <CBadge color={guideColor}>{statusGuide?.title || 'Trạng thái hồ sơ'}</CBadge>
+                        </div>
                       </div>
 
                       <CAlert color={guideColor} className='mb-4'>
@@ -328,12 +352,13 @@ export default function AdmissionResultLookupPage() {
                         </CAlert>
                       ) : null}
 
+                      {examCardNotice ? (
+                        <CAlert color={examCard?.status === 'pending' ? 'warning' : 'info'} className='mb-4'>
+                          {examCardNotice}
+                        </CAlert>
+                      ) : null}
+
                       <div className='admission-v1-actions'>
-                        {canDownloadExamCard ? (
-                          <CButton color='success' component='a' href={application.examCardUrl} target='_blank' rel='noreferrer'>
-                            Tải / In thẻ dự thi
-                          </CButton>
-                        ) : null}
                         {canOpenNeedUpdate ? (
                           <CButton color='warning' disabled={openingApplication} onClick={handleOpenExistingApplication}>
                             {openingApplication ? 'Đang mở hồ sơ...' : 'Vào hồ sơ để bổ sung'}

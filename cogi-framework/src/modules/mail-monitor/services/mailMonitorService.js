@@ -25,6 +25,11 @@ export async function resendMailMonitorLog(id) {
   return res.data || {}
 }
 
+export async function sendNowMailMonitorLog(id) {
+  const res = await api.post(`/mail-monitor/logs/${id}/send-now`)
+  return res.data || {}
+}
+
 export async function cancelMailMonitorLog(id) {
   const res = await api.post(`/mail-monitor/logs/${id}/cancel`)
   return res.data || {}

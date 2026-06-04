@@ -126,6 +126,20 @@ export function buildAdmissionResultLookupPath(campaignCode, tenantCode = '') {
     : `/tra-cuu-tuyen-sinh/${normalizedCampaignCode}`
 }
 
+export function buildAdmissionExamCardPath(campaignCode, tenantCode = '', params = {}) {
+  const basePath = `${buildAdmissionResultLookupPath(campaignCode, tenantCode)}/the-du-kiem-tra`
+  const searchParams = new URLSearchParams()
+
+  const studentCode = String(params?.studentCode || '').trim()
+  const applicationCode = String(params?.applicationCode || '').trim()
+
+  if (studentCode) searchParams.set('studentCode', studentCode)
+  if (applicationCode) searchParams.set('applicationCode', applicationCode)
+
+  const queryString = searchParams.toString()
+  return queryString ? `${basePath}?${queryString}` : basePath
+}
+
 export function buildAdmissionV1StorageKey(campaignCode, tenantCode = '') {
   return `${STORAGE_PREFIX}:${normalizeTenantCode(tenantCode).toLowerCase()}:${normalizeCampaignCode(campaignCode).toLowerCase()}`
 }
@@ -210,6 +224,29 @@ export async function resendAdmissionV1ApplicationCode(payload, tenantCode = '')
 
 export async function lookupAdmissionV1Result(payload, tenantCode = '') {
   const response = await api.post('/admission-public-v1/result-lookup', payload, buildTenantRequestConfig(tenantCode))
+  return normalizePayload(response?.data)
+}
+
+export async function getPublicAdmissionExamCard(campaignCode, payload, tenantCode = '') {
+  const response = await api.get(`/public/admission-campaigns/${encodeURIComponent(normalizeCampaignCode(campaignCode))}/exam-card`, {
+    ...buildTenantRequestConfig(tenantCode),
+    params: {
+      studentCode: String(payload?.studentCode || '').trim(),
+      applicationCode: String(payload?.applicationCode || '').trim(),
+    },
+  })
+  return normalizePayload(response?.data)
+}
+
+export async function logPublicAdmissionExamCardPrint(campaignCode, payload, tenantCode = '') {
+  const response = await api.post(
+    `/public/admission-campaigns/${encodeURIComponent(normalizeCampaignCode(campaignCode))}/exam-card/print-log`,
+    {
+      studentCode: String(payload?.studentCode || '').trim(),
+      applicationCode: String(payload?.applicationCode || '').trim(),
+    },
+    buildTenantRequestConfig(tenantCode),
+  )
   return normalizePayload(response?.data)
 }
 

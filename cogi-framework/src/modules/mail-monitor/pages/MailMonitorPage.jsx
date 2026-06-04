@@ -34,6 +34,7 @@ import {
   getMailMonitorStats,
   requeueMailMonitorLog,
   resendMailMonitorLog,
+  sendNowMailMonitorLog,
   sendMailMonitorTestMail,
 } from '../services/mailMonitorService'
 
@@ -92,6 +93,10 @@ function buildPages(currentPage, pageCount) {
 }
 
 function canRequeueStatus(status) {
+  return ['FAILED', 'CANCELLED', 'QUEUED', 'RETRYING'].includes(String(status || '').trim().toUpperCase())
+}
+
+function canSendNowStatus(status) {
   return ['FAILED', 'CANCELLED', 'QUEUED', 'RETRYING'].includes(String(status || '').trim().toUpperCase())
 }
 
@@ -226,7 +231,13 @@ export default function MailMonitorPage() {
         subject: String(testSubject || '').trim() || 'COGI Mail Monitor Test',
       })
 
-      setSuccessMessage(`Đã đưa test mail vào queue${result?.data?.mailLogId ? ` (#${result.data.mailLogId})` : ''}`)
+      const sendResult = result?.data || {}
+      const providerLabel = sendResult?.provider ? ` qua ${sendResult.provider}` : ''
+      setSuccessMessage(
+        sendResult?.sendStatus
+          ? `Test mail #${sendResult.mailLogId || ''} ${sendResult.sendStatus}${providerLabel}`.trim()
+          : `Đã tạo test mail${sendResult?.mailLogId ? ` (#${sendResult.mailLogId})` : ''}`,
+      )
       setTestModalVisible(false)
       setTestEmail('')
       setTestSubject('COGI Mail Monitor Test')
@@ -266,6 +277,10 @@ export default function MailMonitorPage() {
         title: 'Xác nhận resend',
         message: `Tạo mail log mới và gửi lại mail #${row?.id}?`,
       },
+      sendNow: {
+        title: 'Xác nhận gửi ngay',
+        message: `Gửi trực tiếp mail log #${row?.id} ngay bây giờ?`,
+      },
       cancel: {
         title: 'Xác nhận cancel',
         message: `Hủy mail log #${row?.id} nếu job còn đang chờ?`,
@@ -290,6 +305,11 @@ export default function MailMonitorPage() {
       if (confirmState.type === 'requeue') {
         await requeueMailMonitorLog(confirmState.row.id)
         setSuccessMessage(`Đã requeue mail log #${confirmState.row.id}`)
+      } else if (confirmState.type === 'sendNow') {
+        const result = await sendNowMailMonitorLog(confirmState.row.id)
+        const payload = result?.data || {}
+        const providerLabel = payload?.provider ? ` qua ${payload.provider}` : ''
+        setSuccessMessage(`Đã gửi mail log #${confirmState.row.id} với trạng thái ${payload?.sendStatus || '-'}${providerLabel}`)
       } else if (confirmState.type === 'resend') {
         await resendMailMonitorLog(confirmState.row.id)
         setSuccessMessage(`Đã tạo mail log mới để resend từ #${confirmState.row.id}`)
@@ -431,6 +451,17 @@ export default function MailMonitorPage() {
                             <CButton size='sm' color='primary' variant='outline' onClick={() => handleViewDetail(item)}>
                               View detail
                             </CButton>
+                            {canManage ? (
+                              <CButton
+                                size='sm'
+                                color='info'
+                                variant='outline'
+                                disabled={!canSendNowStatus(item.sendStatus)}
+                                onClick={() => openConfirm('sendNow', item)}
+                              >
+                                Send now
+                              </CButton>
+                            ) : null}
                             {canManage ? (
                               <CButton
                                 size='sm'
