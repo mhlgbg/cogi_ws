@@ -1,5 +1,5 @@
 import { getFileValueMetaList } from '../../../pages/admission/form-renderer/schema'
-import { resolveMediaUrl } from '../../../utils/mediaUrl'
+import { buildProtectedFileUrl, resolveMediaUrl } from '../../../utils/mediaUrl'
 
 function isRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -56,7 +56,7 @@ function normalizeEvidenceItem(item, fallbackIndex = 0) {
   if (!isRecord(item)) return null
 
   const fileName = toText(item.fileName || item.name || item.title || `Tệp ${fallbackIndex + 1}`)
-  const url = resolveMediaUrl(toText(item.url || item.path || item.href || item.dataUrl))
+  const url = buildProtectedFileUrl(item) || resolveMediaUrl(toText(item.url || item.path || item.href || item.dataUrl))
   const mime = toText(item.mime || item.type)
 
   return {
@@ -66,6 +66,8 @@ function normalizeEvidenceItem(item, fallbackIndex = 0) {
     fieldLabel: toText(item.fieldLabel || item.groupLabel || ''),
     url,
     mime,
+    fileAssetId: Number.isFinite(Number(item.fileAssetId)) && Number(item.fileAssetId) > 0 ? Number(item.fileAssetId) : null,
+    storageProvider: toText(item.storageProvider) || null,
   }
 }
 
@@ -290,13 +292,13 @@ function collectRawFormFiles(value, path, bucket) {
   if (Array.isArray(value)) {
     const fileList = getFileValueMetaList(value)
     if (fileList.length > 0) {
-      fileList.forEach((item, index) => {
+        fileList.forEach((item, index) => {
         bucket.push({
           id: null,
           label: item.name || `${path} ${index + 1}`,
           fileName: item.name || `${path} ${index + 1}`,
           fieldLabel: path,
-          url: resolveMediaUrl(item.url || item.dataUrl || ''),
+            url: buildProtectedFileUrl(item) || resolveMediaUrl(item.url || item.dataUrl || ''),
           mime: item.type || '',
         })
       })
@@ -310,13 +312,13 @@ function collectRawFormFiles(value, path, bucket) {
   if (isRecord(value)) {
     const fileList = getFileValueMetaList(value)
     if (fileList.length > 0) {
-      fileList.forEach((item, index) => {
+        fileList.forEach((item, index) => {
         bucket.push({
           id: null,
           label: item.name || `${path} ${index + 1}`,
           fileName: item.name || `${path} ${index + 1}`,
           fieldLabel: path,
-          url: resolveMediaUrl(item.url || item.dataUrl || ''),
+            url: buildProtectedFileUrl(item) || resolveMediaUrl(item.url || item.dataUrl || ''),
           mime: item.type || '',
         })
       })

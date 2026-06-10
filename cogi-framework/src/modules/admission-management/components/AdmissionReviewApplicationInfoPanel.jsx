@@ -14,7 +14,7 @@ import {
   CTableHeaderCell,
   CTableRow,
 } from '@coreui/react'
-import { isDataUrl, openUrlInNewTab, resolveMediaUrl } from '../../../utils/mediaUrl'
+import { buildProtectedFileUrl, isDataUrl, openUrlInNewTab, resolveMediaUrl } from '../../../utils/mediaUrl'
 import { sanitizeHtml } from '../../../pages/journal/journalPublicUtils'
 
 function isFileLikeObject(value) {
@@ -33,7 +33,7 @@ function getFileLikeName(value) {
 
 function getFileLikeUrl(value) {
   if (!isFileLikeObject(value)) return ''
-  return resolveMediaUrl(String(value.url || value.path || value.href || value.dataUrl || '').trim())
+  return buildProtectedFileUrl(value) || resolveMediaUrl(String(value.url || value.path || value.href || value.dataUrl || '').trim())
 }
 
 function isPdfLike(value) {
@@ -260,7 +260,10 @@ const ApplicationInfoPanel = memo(function ApplicationInfoPanel({
         <CCardHeader className='bg-white border-0 fw-semibold'>Thông tin hồ sơ</CCardHeader>
         <CCardBody>
           <div className='mb-3'><strong>Học sinh:</strong> {detail?.studentName || '-'}</div>
-          <div className='mb-3'><strong>Mã hồ sơ:</strong> {detail?.applicationCode || '-'}</div>
+          <div className='mb-3'>
+            <strong>Mã hồ sơ:</strong> {detail?.applicationCode || '-'}
+            <span className='ms-3'><strong>Mã học sinh:</strong> {detail?.studentCode || '-'}</span>
+          </div>
           <div className='mb-3'><strong>Trạng thái:</strong> <CBadge color={reviewStatusColor}>{reviewStatusLabel}</CBadge></div>
           <div className='mb-3'><strong>Phụ huynh:</strong> {detail?.parent?.fullName || detail?.parent?.username || '-'}</div>
           <div className='small text-body-secondary mt-1'>SĐT: {detail?.parent?.phone || '-'}</div>

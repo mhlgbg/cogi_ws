@@ -1,3 +1,5 @@
+import { buildProtectedFileUrl } from '../../../utils/mediaUrl'
+
 function normalizeOption(option) {
   if (option && typeof option === 'object') {
     const value = String(option.value ?? option.key ?? option.code ?? option.id ?? '').trim()
@@ -52,7 +54,7 @@ function normalizeDefaultValue(fieldType, value) {
 function normalizeTableColumn(column, index) {
   if (!column || typeof column !== 'object') return null
 
-  const key = String(column.key || '').trim()
+  const key = String(column.key || column.code || '').trim()
   if (!key) return null
 
   const hasExplicitType = Object.prototype.hasOwnProperty.call(column, 'type')
@@ -86,7 +88,7 @@ function normalizeTableRow(row, index) {
 function normalizeField(field, index) {
   if (!field || typeof field !== 'object') return null
 
-  const key = String(field.key || '').trim()
+  const key = String(field.key || field.code || '').trim()
   if (!key) return null
 
   return {
@@ -395,10 +397,27 @@ export function validateFormData(formData, fields) {
 }
 
 function getSingleFileValueMeta(value) {
+  if (typeof value === 'string') {
+    const rawUrl = String(value).trim()
+    if (!rawUrl) return null
+
+    const fallbackName = rawUrl.split('/').filter(Boolean).pop() || 'Tệp đính kèm'
+    return {
+      name: fallbackName,
+      type: '',
+      url: rawUrl,
+      dataUrl: rawUrl,
+      isImage: false,
+      isPdf: rawUrl.toLowerCase().endsWith('.pdf'),
+    }
+  }
+
   if (!value || typeof value !== 'object') return null
 
-  const name = String(value.name || '').trim()
-  const type = String(value.type || '').trim().toLowerCase()
+  const rawUrl = String(value.url || '').trim()
+  const fallbackName = rawUrl.split('/').filter(Boolean).pop() || ''
+  const name = String(value.name || value.originalName || value.fileName || fallbackName || '').trim()
+  const type = String(value.type || value.mime || value.mimeType || '').trim().toLowerCase()
   const dataUrl = String(value.dataUrl || value.url || '').trim()
 
   if (!name && !dataUrl) return null
@@ -406,10 +425,17 @@ function getSingleFileValueMeta(value) {
   return {
     name: name || 'Tệp đính kèm',
     type,
-    url: String(value.url || '').trim(),
+    url: buildProtectedFileUrl({
+      ...value,
+      url: rawUrl,
+      fileAssetId: value.fileAssetId,
+      storageProvider: value.storageProvider,
+    }),
     dataUrl,
+    fileAssetId: Number.isFinite(Number(value.fileAssetId)) && Number(value.fileAssetId) > 0 ? Number(value.fileAssetId) : null,
+    storageProvider: String(value.storageProvider || '').trim() || null,
     isImage: type.startsWith('image/'),
-    isPdf: type === 'application/pdf' || dataUrl.startsWith('data:application/pdf'),
+    isPdf: type === 'application/pdf' || dataUrl.startsWith('data:application/pdf') || rawUrl.toLowerCase().endsWith('.pdf'),
   }
 }
 

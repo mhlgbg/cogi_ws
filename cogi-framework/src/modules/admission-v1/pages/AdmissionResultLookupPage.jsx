@@ -21,6 +21,7 @@ import {
   CSpinner,
 } from '@coreui/react'
 import { useTenant } from '../../../contexts/TenantContext'
+import useTenantPageTitle from '../../../utils/useTenantPageTitle'
 import AdmissionV1Hero from '../components/AdmissionV1Hero'
 import {
   buildAdmissionExamCardPath,
@@ -45,6 +46,7 @@ function getGuideColor(color) {
 }
 
 export default function AdmissionResultLookupPage() {
+  useTenantPageTitle('Tra cứu tuyển sinh')
   const navigate = useNavigate()
   const tenant = useTenant()
   const { tenantCode, campaignCode } = useParams()

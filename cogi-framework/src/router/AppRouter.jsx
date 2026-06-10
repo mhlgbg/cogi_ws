@@ -4,7 +4,6 @@ import ProtectedRoute from '../components/ProtectedRoute'
 import TenantRoute from '../components/TenantRoute'
 import MainLayout from '../layouts/MainLayout'
 import ChooseTenant from '../pages/ChooseTenant'
-import Dashboard from '../pages/Dashboard'
 import Forbidden from '../pages/Forbidden'
 import Login from '../pages/Login'
 import NotFound from '../pages/NotFound'
@@ -12,7 +11,6 @@ import Activate from '../pages/Activate'
 import SetPassword from '../pages/SetPassword'
 import ForgotPassword from '../pages/ForgotPassword'
 import ResetPassword from '../pages/ResetPassword'
-import ChangePassword from '../pages/ChangePassword'
 import AdmissionLanding from '../pages/admission/AdmissionLanding.jsx'
 import AdmissionV1EntryPage from '../modules/admission-v1/pages/AdmissionV1EntryPage'
 import AdmissionV1DeclarantPage from '../modules/admission-v1/pages/AdmissionV1DeclarantPage'
@@ -20,8 +18,10 @@ import AdmissionV1EmailVerifyPage from '../modules/admission-v1/pages/AdmissionV
 import AdmissionV1TrackingPage from '../modules/admission-v1/pages/AdmissionV1TrackingPage'
 import AdmissionV1FormPage from '../modules/admission-v1/pages/AdmissionV1FormPage'
 import AdmissionResultLookupPage from '../modules/admission-v1/pages/AdmissionResultLookupPage'
+import CandidateExamScoreLookupPage from '../modules/admission-v1/pages/CandidateExamScoreLookupPage'
 import AdmissionPublicExamCardPage from '../modules/admission-v1/pages/AdmissionPublicExamCardPage'
 import CandidateExamCardPage from '../modules/admission-management/pages/CandidateExamCardPage'
+import PublicPageDetailPage from '../pages/public/PublicPageDetailPage'
 import TenantEntryRedirect from '../components/TenantEntryRedirect'
 import PublicLayout from '../layouts/PublicLayout'
 import JournalHomePage from '../pages/journal/JournalHomePage'
@@ -33,6 +33,8 @@ import JournalIssueArchiveTreePage from '../pages/journal/JournalIssueArchiveTre
 import JournalIssueDetailPage from '../pages/journal/JournalIssueDetailPage'
 import platformRoutes, { PlatformAccessGuard } from '../platform/routes/platformRoutes'
 import { allModuleRoutes } from '../modules'
+import PublicAnalyticsBoundary from './PublicAnalyticsBoundary'
+import { tenantStaticRoutes } from './tenantStaticRoutes'
 
 /**
  * Normalize a registry path for use inside a nested <Route>.
@@ -61,6 +63,19 @@ function renderModuleRoute({ path, featureKey, featureKeys, component: Component
   return <Route key={nestedPath} path={nestedPath} element={element} />
 }
 
+function renderStaticTenantRoute({ path, featureKey, component: Component }) {
+  if (!path || !Component) return null
+
+  const nestedPath = toNestedPath(path)
+  if (!nestedPath) return null
+
+  const element = featureKey
+    ? <FeatureRoute featureKey={featureKey}><Component /></FeatureRoute>
+    : <Component />
+
+  return <Route key={`static:${nestedPath}`} path={nestedPath} element={element} />
+}
+
 function renderAppShellRoutes(keyPrefix = 'root', options = {}) {
   const includeIndex = options.includeIndex !== false
 
@@ -72,19 +87,9 @@ function renderAppShellRoutes(keyPrefix = 'root', options = {}) {
           element={<Navigate to="dashboard" replace />}
         />
       ) : null}
-      <Route
-        path="dashboard"
-        element={(
-          <FeatureRoute featureKey="dashboard.view">
-            <Dashboard />
-          </FeatureRoute>
-        )}
-      />
+      {tenantStaticRoutes.map((route) => renderStaticTenantRoute(route))}
 
       {allModuleRoutes.map((route) => renderModuleRoute({ ...route, key: `${keyPrefix}:${route.path}` }))}
-
-      <Route path="change-password" element={<ChangePassword />} />
-      <Route path="forbidden" element={<Forbidden />} />
       <Route path="*" element={<NotFound />} />
     </>
   )
@@ -103,73 +108,79 @@ function renderPlatformRoutes() {
 export default function AppRouter() {
   return (
     <Routes>
-      <Route path="/" element={<TenantEntryRedirect />} />
-      <Route path="/login" element={<TenantRoute requireAuth={false}><Login /></TenantRoute>} />
-      <Route path="/:tenantCode/login" element={<TenantRoute requireAuth={false}><Login /></TenantRoute>} />
-      <Route path="/t/:tenantCode/login" element={<TenantRoute requireAuth={false}><Login /></TenantRoute>} />
-      <Route path="/forgot-password" element={<TenantRoute requireAuth={false}><ForgotPassword /></TenantRoute>} />
-      <Route path="/t/:tenantCode/forgot-password" element={<TenantRoute requireAuth={false}><ForgotPassword /></TenantRoute>} />
-      <Route path="/reset-password" element={<TenantRoute requireAuth={false}><ResetPassword /></TenantRoute>} />
-      <Route path="/t/:tenantCode/reset-password" element={<TenantRoute requireAuth={false}><ResetPassword /></TenantRoute>} />
-      <Route path="/activate" element={<TenantRoute requireAuth={false}><Activate /></TenantRoute>} />
-      <Route path="/t/:tenantCode/activate" element={<TenantRoute requireAuth={false}><Activate /></TenantRoute>} />
-      <Route path="/set-password" element={<TenantRoute requireAuth={false}><SetPassword /></TenantRoute>} />
-      <Route path="/t/:tenantCode/set-password" element={<TenantRoute requireAuth={false}><SetPassword /></TenantRoute>} />
-      <Route path="/dang-ky-tuyen-sinh" element={<TenantRoute requireAuth={false}><AdmissionLanding /></TenantRoute>} />
-      <Route path="/dang-ky-tuyen-sinh/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionLanding /></TenantRoute>} />
-      <Route path="/t/:tenantCode/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionLanding /></TenantRoute>} />
-      <Route path="/t/:tenantCode/dang-ky-tuyen-sinh" element={<TenantRoute requireAuth={false}><AdmissionLanding /></TenantRoute>} />
-      <Route path="/t/:tenantCode/dang-ky-tuyen-sinh/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionLanding /></TenantRoute>} />
-      <Route path="/dang-ky-tuyen-sinh-v1/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionV1EntryPage /></TenantRoute>} />
-      <Route path="/dang-ky-tuyen-sinh-v1/:campaignCode/nguoi-khai" element={<TenantRoute requireAuth={false}><AdmissionV1DeclarantPage /></TenantRoute>} />
-      <Route path="/dang-ky-tuyen-sinh-v1/:campaignCode/ma-ho-so" element={<TenantRoute requireAuth={false}><AdmissionV1EmailVerifyPage /></TenantRoute>} />
-      <Route path="/dang-ky-tuyen-sinh-v1/:campaignCode/xac-minh-email" element={<TenantRoute requireAuth={false}><AdmissionV1EmailVerifyPage /></TenantRoute>} />
-      <Route path="/dang-ky-tuyen-sinh-v1/:campaignCode/theo-doi" element={<TenantRoute requireAuth={false}><AdmissionV1TrackingPage /></TenantRoute>} />
-      <Route path="/dang-ky-tuyen-sinh-v1/:campaignCode/ho-so" element={<TenantRoute requireAuth={false}><AdmissionV1FormPage /></TenantRoute>} />
-      <Route path="/tra-cuu-tuyen-sinh/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionResultLookupPage /></TenantRoute>} />
-      <Route path="/tra-cuu-tuyen-sinh/:campaignCode/the-du-kiem-tra" element={<TenantRoute requireAuth={false}><AdmissionPublicExamCardPage /></TenantRoute>} />
-      <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionV1EntryPage /></TenantRoute>} />
-      <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/nguoi-khai" element={<TenantRoute requireAuth={false}><AdmissionV1DeclarantPage /></TenantRoute>} />
-      <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/ma-ho-so" element={<TenantRoute requireAuth={false}><AdmissionV1EmailVerifyPage /></TenantRoute>} />
-      <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/xac-minh-email" element={<TenantRoute requireAuth={false}><AdmissionV1EmailVerifyPage /></TenantRoute>} />
-      <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/theo-doi" element={<TenantRoute requireAuth={false}><AdmissionV1TrackingPage /></TenantRoute>} />
-      <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/ho-so" element={<TenantRoute requireAuth={false}><AdmissionV1FormPage /></TenantRoute>} />
-      <Route path="/t/:tenantCode/tra-cuu-tuyen-sinh/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionResultLookupPage /></TenantRoute>} />
-      <Route path="/t/:tenantCode/tra-cuu-tuyen-sinh/:campaignCode/the-du-kiem-tra" element={<TenantRoute requireAuth={false}><AdmissionPublicExamCardPage /></TenantRoute>} />
+      <Route element={<PublicAnalyticsBoundary />}>
+        <Route path="/" element={<TenantEntryRedirect />} />
+        <Route path="/login" element={<TenantRoute requireAuth={false}><Login /></TenantRoute>} />
+        <Route path="/:tenantCode/login" element={<TenantRoute requireAuth={false}><Login /></TenantRoute>} />
+        <Route path="/t/:tenantCode/login" element={<TenantRoute requireAuth={false}><Login /></TenantRoute>} />
+        <Route path="/forgot-password" element={<TenantRoute requireAuth={false}><ForgotPassword /></TenantRoute>} />
+        <Route path="/t/:tenantCode/forgot-password" element={<TenantRoute requireAuth={false}><ForgotPassword /></TenantRoute>} />
+        <Route path="/reset-password" element={<TenantRoute requireAuth={false}><ResetPassword /></TenantRoute>} />
+        <Route path="/t/:tenantCode/reset-password" element={<TenantRoute requireAuth={false}><ResetPassword /></TenantRoute>} />
+        <Route path="/activate" element={<TenantRoute requireAuth={false}><Activate /></TenantRoute>} />
+        <Route path="/t/:tenantCode/activate" element={<TenantRoute requireAuth={false}><Activate /></TenantRoute>} />
+        <Route path="/set-password" element={<TenantRoute requireAuth={false}><SetPassword /></TenantRoute>} />
+        <Route path="/t/:tenantCode/set-password" element={<TenantRoute requireAuth={false}><SetPassword /></TenantRoute>} />
+        <Route path="/dang-ky-tuyen-sinh" element={<TenantRoute requireAuth={false}><AdmissionLanding /></TenantRoute>} />
+        <Route path="/dang-ky-tuyen-sinh/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionLanding /></TenantRoute>} />
+        <Route path="/t/:tenantCode/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionLanding /></TenantRoute>} />
+        <Route path="/t/:tenantCode/dang-ky-tuyen-sinh" element={<TenantRoute requireAuth={false}><AdmissionLanding /></TenantRoute>} />
+        <Route path="/t/:tenantCode/dang-ky-tuyen-sinh/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionLanding /></TenantRoute>} />
+        <Route path="/dang-ky-tuyen-sinh-v1/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionV1EntryPage /></TenantRoute>} />
+        <Route path="/dang-ky-tuyen-sinh-v1/:campaignCode/nguoi-khai" element={<TenantRoute requireAuth={false}><AdmissionV1DeclarantPage /></TenantRoute>} />
+        <Route path="/dang-ky-tuyen-sinh-v1/:campaignCode/ma-ho-so" element={<TenantRoute requireAuth={false}><AdmissionV1EmailVerifyPage /></TenantRoute>} />
+        <Route path="/dang-ky-tuyen-sinh-v1/:campaignCode/xac-minh-email" element={<TenantRoute requireAuth={false}><AdmissionV1EmailVerifyPage /></TenantRoute>} />
+        <Route path="/dang-ky-tuyen-sinh-v1/:campaignCode/theo-doi" element={<TenantRoute requireAuth={false}><AdmissionV1TrackingPage /></TenantRoute>} />
+        <Route path="/dang-ky-tuyen-sinh-v1/:campaignCode/ho-so" element={<TenantRoute requireAuth={false}><AdmissionV1FormPage /></TenantRoute>} />
+        <Route path="/tra-cuu-tuyen-sinh/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionResultLookupPage /></TenantRoute>} />
+        <Route path="/tra-cuu-diem/:campaignCode" element={<TenantRoute requireAuth={false}><CandidateExamScoreLookupPage /></TenantRoute>} />
+        <Route path="/tra-cuu-tuyen-sinh/:campaignCode/the-du-kiem-tra" element={<TenantRoute requireAuth={false}><AdmissionPublicExamCardPage /></TenantRoute>} />
+        <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionV1EntryPage /></TenantRoute>} />
+        <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/nguoi-khai" element={<TenantRoute requireAuth={false}><AdmissionV1DeclarantPage /></TenantRoute>} />
+        <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/ma-ho-so" element={<TenantRoute requireAuth={false}><AdmissionV1EmailVerifyPage /></TenantRoute>} />
+        <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/xac-minh-email" element={<TenantRoute requireAuth={false}><AdmissionV1EmailVerifyPage /></TenantRoute>} />
+        <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/theo-doi" element={<TenantRoute requireAuth={false}><AdmissionV1TrackingPage /></TenantRoute>} />
+        <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/ho-so" element={<TenantRoute requireAuth={false}><AdmissionV1FormPage /></TenantRoute>} />
+        <Route path="/t/:tenantCode/tra-cuu-tuyen-sinh/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionResultLookupPage /></TenantRoute>} />
+        <Route path="/t/:tenantCode/tra-cuu-diem/:campaignCode" element={<TenantRoute requireAuth={false}><CandidateExamScoreLookupPage /></TenantRoute>} />
+        <Route path="/t/:tenantCode/tra-cuu-tuyen-sinh/:campaignCode/the-du-kiem-tra" element={<TenantRoute requireAuth={false}><AdmissionPublicExamCardPage /></TenantRoute>} />
 
-      <Route
-        path="/"
-        element={(
-          <TenantRoute requireAuth={false}>
-            <PublicLayout />
-          </TenantRoute>
-        )}
-      >
-        <Route path="journal" element={<JournalHomePage />} />
-        <Route path="article/:slug" element={<ArticleDetailPage />} />
-        <Route path="category/:slug" element={<CategoryPage />} />
-        <Route path="journal-category/:slug" element={<JournalIssueCategoryPage />} />
-        <Route path="journal-archive/:slug" element={<JournalIssueArchiveTreePage />} />
-        <Route path="journal-issue/:slug" element={<JournalIssueDetailPage />} />
-        <Route path="archive/:slug" element={<CategoryArchiveTreePage />} />
-      </Route>
+        <Route
+          path="/"
+          element={(
+            <TenantRoute requireAuth={false}>
+              <PublicLayout />
+            </TenantRoute>
+          )}
+        >
+          <Route path="journal" element={<JournalHomePage />} />
+          <Route path="page/:slug" element={<PublicPageDetailPage />} />
+          <Route path="article/:slug" element={<ArticleDetailPage />} />
+          <Route path="category/:slug" element={<CategoryPage />} />
+          <Route path="journal-category/:slug" element={<JournalIssueCategoryPage />} />
+          <Route path="journal-archive/:slug" element={<JournalIssueArchiveTreePage />} />
+          <Route path="journal-issue/:slug" element={<JournalIssueDetailPage />} />
+          <Route path="archive/:slug" element={<CategoryArchiveTreePage />} />
+        </Route>
 
-      <Route
-        path="/t/:tenantCode"
-        element={(
-          <TenantRoute requireAuth={false}>
-            <PublicLayout />
-          </TenantRoute>
-        )}
-      >
-        <Route index element={<JournalHomePage />} />
-        <Route path="journal" element={<JournalHomePage />} />
-        <Route path="article/:slug" element={<ArticleDetailPage />} />
-        <Route path="category/:slug" element={<CategoryPage />} />
-        <Route path="journal-category/:slug" element={<JournalIssueCategoryPage />} />
-        <Route path="journal-archive/:slug" element={<JournalIssueArchiveTreePage />} />
-        <Route path="journal-issue/:slug" element={<JournalIssueDetailPage />} />
-        <Route path="archive/:slug" element={<CategoryArchiveTreePage />} />
+        <Route
+          path="/t/:tenantCode"
+          element={(
+            <TenantRoute requireAuth={false}>
+              <PublicLayout />
+            </TenantRoute>
+          )}
+        >
+          <Route index element={<JournalHomePage />} />
+          <Route path="journal" element={<JournalHomePage />} />
+          <Route path="page/:slug" element={<PublicPageDetailPage />} />
+          <Route path="article/:slug" element={<ArticleDetailPage />} />
+          <Route path="category/:slug" element={<CategoryPage />} />
+          <Route path="journal-category/:slug" element={<JournalIssueCategoryPage />} />
+          <Route path="journal-archive/:slug" element={<JournalIssueArchiveTreePage />} />
+          <Route path="journal-issue/:slug" element={<JournalIssueDetailPage />} />
+          <Route path="archive/:slug" element={<CategoryArchiveTreePage />} />
+        </Route>
       </Route>
 
       <Route

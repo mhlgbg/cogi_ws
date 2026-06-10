@@ -11,6 +11,7 @@ import {
   CSpinner,
 } from '@coreui/react'
 import { useTenant } from '../../../contexts/TenantContext'
+import useTenantPageTitle from '../../../utils/useTenantPageTitle'
 import AdmissionV1Hero from '../components/AdmissionV1Hero'
 import AdmissionV1GuideModal from '../components/AdmissionV1GuideModal'
 import {
@@ -24,6 +25,7 @@ import {
 import './admission-v1.css'
 
 export default function AdmissionV1EmailVerifyPage() {
+  useTenantPageTitle('Tuyển sinh')
   const navigate = useNavigate()
   const location = useLocation()
   const tenant = useTenant()

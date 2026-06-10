@@ -30,6 +30,7 @@ import {
 import CandidateExamFormModal from '../components/CandidateExamFormModal'
 import CandidateExamImportModal from '../components/CandidateExamImportModal'
 import CandidateExamLogModal from '../components/CandidateExamLogModal'
+import CandidateExamScoreImportModal from '../components/CandidateExamScoreImportModal'
 import {
 	downloadCandidateExamImportTemplate,
   createCandidateExam,
@@ -157,6 +158,8 @@ function buildReminderSummaryCards(summary) {
     { key: 'totalCandidates', label: 'Tổng thí sinh', value: Number(summary?.totalCandidates || 0), color: 'primary' },
     { key: 'viewedOrDownloadedCount', label: 'Đã xem/tải thẻ', value: Number(summary?.viewedOrDownloadedCount || 0), color: 'success' },
     { key: 'notViewedOrDownloadedCount', label: 'Chưa xem/tải thẻ', value: Number(summary?.notViewedOrDownloadedCount || 0), color: 'warning' },
+    { key: 'scoreLookupCount', label: 'Đã xem điểm', value: Number(summary?.scoreLookupCount || 0), color: 'info' },
+    { key: 'scoreNotLookupCount', label: 'Chưa xem điểm', value: Number(summary?.scoreNotLookupCount || 0), color: 'dark' },
     { key: 'reminderSentCount', label: 'Đã gửi nhắc', value: Number(summary?.reminderSentCount || 0), color: 'success' },
     { key: 'reminderPendingCount', label: 'Chưa gửi nhắc', value: Number(summary?.reminderPendingCount || 0), color: 'secondary' },
     { key: 'reminderFailedCount', label: 'Lỗi gửi', value: Number(summary?.reminderFailedCount || 0), color: 'danger' },
@@ -210,6 +213,8 @@ export default function CandidateExamManagementPage() {
   const [cardViewStatus, setCardViewStatus] = useState('')
   const [cardPrintStatusDraft, setCardPrintStatusDraft] = useState('')
   const [cardPrintStatus, setCardPrintStatus] = useState('')
+  const [scoreLookupStatusDraft, setScoreLookupStatusDraft] = useState('')
+  const [scoreLookupStatus, setScoreLookupStatus] = useState('')
   const [sortBy, setSortBy] = useState('')
   const [sortOrder, setSortOrder] = useState('desc')
   const [includeDeleted, setIncludeDeleted] = useState(false)
@@ -218,6 +223,7 @@ export default function CandidateExamManagementPage() {
   const [total, setTotal] = useState(0)
   const [showModal, setShowModal] = useState(false)
   const [importModalVisible, setImportModalVisible] = useState(false)
+  const [scoreImportModalVisible, setScoreImportModalVisible] = useState(false)
   const [downloadingTemplate, setDownloadingTemplate] = useState(false)
   const [exportingExcel, setExportingExcel] = useState(false)
   const [editingRow, setEditingRow] = useState(null)
@@ -263,6 +269,7 @@ export default function CandidateExamManagementPage() {
         examRoom: examRoom || undefined,
         cardViewStatus: cardViewStatus || undefined,
         cardPrintStatus: cardPrintStatus || undefined,
+        scoreLookupStatus: scoreLookupStatus || undefined,
         sortBy: sortBy || undefined,
         sortOrder: sortBy ? sortOrder : undefined,
         includeDeleted,
@@ -281,7 +288,7 @@ export default function CandidateExamManagementPage() {
     } finally {
       setLoading(false)
     }
-  }, [cardPrintStatus, cardViewStatus, examRoom, includeDeleted, keyword, page, pageSize, selectedAdmissionSeason?.id, sortBy, sortOrder])
+  }, [cardPrintStatus, cardViewStatus, examRoom, includeDeleted, keyword, page, pageSize, scoreLookupStatus, selectedAdmissionSeason?.id, sortBy, sortOrder])
 
   const loadReminderSummary = useCallback(async () => {
     if (!selectedAdmissionSeason?.id) return
@@ -330,6 +337,8 @@ export default function CandidateExamManagementPage() {
     setCardViewStatus('')
     setCardPrintStatusDraft('')
     setCardPrintStatus('')
+    setScoreLookupStatusDraft('')
+    setScoreLookupStatus('')
     setSortBy('')
     setSortOrder('desc')
     setIncludeDeleted(false)
@@ -341,6 +350,8 @@ export default function CandidateExamManagementPage() {
     setSummaryError('')
     setReminderSummary(null)
     setSendReminderResult(null)
+    setImportModalVisible(false)
+    setScoreImportModalVisible(false)
   }
 
   function handleBackToSeasonSelection() {
@@ -350,6 +361,8 @@ export default function CandidateExamManagementPage() {
     setSuccessMessage('')
     setShowModal(false)
     setEditingRow(null)
+    setImportModalVisible(false)
+    setScoreImportModalVisible(false)
     setReminderSummary(null)
     setSummaryError('')
     setSendReminderResult(null)
@@ -361,6 +374,7 @@ export default function CandidateExamManagementPage() {
     setExamRoom(String(examRoomDraft || '').trim())
     setCardViewStatus(String(cardViewStatusDraft || '').trim())
     setCardPrintStatus(String(cardPrintStatusDraft || '').trim())
+    setScoreLookupStatus(String(scoreLookupStatusDraft || '').trim())
   }
 
   function resetFilters() {
@@ -372,6 +386,8 @@ export default function CandidateExamManagementPage() {
     setCardViewStatus('')
     setCardPrintStatusDraft('')
     setCardPrintStatus('')
+    setScoreLookupStatusDraft('')
+    setScoreLookupStatus('')
     setSortBy('')
     setSortOrder('desc')
     setIncludeDeleted(false)
@@ -424,6 +440,7 @@ export default function CandidateExamManagementPage() {
         examRoom: examRoom || undefined,
         cardViewStatus: cardViewStatus || undefined,
         cardPrintStatus: cardPrintStatus || undefined,
+        scoreLookupStatus: scoreLookupStatus || undefined,
         sortBy: sortBy || undefined,
         sortOrder: sortBy ? sortOrder : undefined,
         includeDeleted,
@@ -626,9 +643,10 @@ export default function CandidateExamManagementPage() {
                 {exportingExcel ? 'Đang xuất Excel...' : 'Xuất Excel'}
               </CButton>
               <CButton color='secondary' variant='outline' onClick={handleDownloadImportTemplate} disabled={downloadingTemplate || loading}>
-                {downloadingTemplate ? 'Đang tải mẫu...' : 'Tải file mẫu'}
+                {downloadingTemplate ? 'Đang tải mẫu...' : 'Tải mẫu thí sinh'}
               </CButton>
-              <CButton color='info' variant='outline' onClick={() => setImportModalVisible(true)} disabled={loading}>Import Excel</CButton>
+              <CButton color='info' variant='outline' onClick={() => setImportModalVisible(true)} disabled={loading}>Import thí sinh</CButton>
+              <CButton color='warning' variant='outline' onClick={() => setScoreImportModalVisible(true)} disabled={loading}>Import điểm</CButton>
               <CButton color='secondary' variant='outline' onClick={loadData} disabled={loading}>Tải lại</CButton>
               <CButton color='primary' onClick={openCreateModal}>Thêm thí sinh</CButton>
             </div>
@@ -718,6 +736,13 @@ export default function CandidateExamManagementPage() {
                   <option value=''>In thẻ: tất cả</option>
                   <option value='printed'>Đã in thẻ</option>
                   <option value='not_printed'>Chưa in thẻ</option>
+                </CFormSelect>
+              </CCol>
+              <CCol md={2}>
+                <CFormSelect value={scoreLookupStatusDraft} onChange={(event) => setScoreLookupStatusDraft(event.target.value)}>
+                  <option value=''>Xem điểm: tất cả</option>
+                  <option value='looked_up'>Đã xem điểm</option>
+                  <option value='not_looked_up'>Chưa xem điểm</option>
                 </CFormSelect>
               </CCol>
               <CCol md={2}>
@@ -868,6 +893,19 @@ export default function CandidateExamManagementPage() {
           setImportModalVisible(false)
           setSuccessMessage(
             `Import hoàn tất: tạo mới ${result?.summary?.createdCount || 0}, cập nhật ${result?.summary?.updatedCount || 0}, khôi phục ${result?.summary?.restoredCount || 0}, lỗi ${result?.summary?.errorCount || 0}`
+          )
+          await Promise.all([loadData(), loadReminderSummary()])
+        }}
+      />
+
+      <CandidateExamScoreImportModal
+        visible={scoreImportModalVisible}
+        admissionSeason={selectedAdmissionSeason}
+        onClose={() => setScoreImportModalVisible(false)}
+        onImported={async (result) => {
+          setScoreImportModalVisible(false)
+          setSuccessMessage(
+            `Import điểm hoàn tất: cập nhật ${result?.summary?.updatedCount || 0}, bỏ qua ${result?.summary?.skippedCount || 0}, lỗi ${result?.summary?.errorCount || 0}`
           )
           await Promise.all([loadData(), loadReminderSummary()])
         }}

@@ -219,6 +219,9 @@ function normalizeArticleForm(article) {
     title: article?.title || '',
     slug: article?.slug || '',
     description: article?.description || '',
+    seoTitle: article?.seoTitle || '',
+    seoDescription: article?.seoDescription || '',
+    seoKeywords: article?.seoKeywords || '',
     authorId: article?.author?.id ? String(article.author.id) : '',
     categoryId: article?.category?.id ? String(article.category.id) : '',
     publicAt: toDatetimeLocalValue(article?.publicAt),
@@ -233,6 +236,9 @@ function getDefaultArticleForm() {
     title: '',
     slug: '',
     description: '',
+    seoTitle: '',
+    seoDescription: '',
+    seoKeywords: '',
     authorId: '',
     categoryId: '',
     publicAt: '',
@@ -272,6 +278,11 @@ export default function ArticleManagementPage() {
     pendingFile: null,
     changed: false,
   })
+  const [seoImageState, setSeoImageState] = useState({
+    current: null,
+    pendingFile: null,
+    changed: false,
+  })
 
   const [authors, setAuthors] = useState([])
   const [categories, setCategories] = useState([])
@@ -300,6 +311,11 @@ export default function ArticleManagementPage() {
     if (coverState.pendingFile) return ''
     return getMediaUrl(coverState.current)
   }, [coverState])
+
+  const seoImagePreviewUrl = useMemo(() => {
+    if (seoImageState.pendingFile) return ''
+    return getMediaUrl(seoImageState.current)
+  }, [seoImageState])
 
   async function load() {
     setLoading(true)
@@ -348,6 +364,11 @@ export default function ArticleManagementPage() {
       pendingFile: null,
       changed: false,
     })
+    setSeoImageState({
+      current: null,
+      pendingFile: null,
+      changed: false,
+    })
   }
 
   async function openCreateModal() {
@@ -372,6 +393,11 @@ export default function ArticleManagementPage() {
       setIsSlugManuallyEdited(Boolean(String(article?.slug || '').trim()))
       setCoverState({
         current: article?.cover || null,
+        pendingFile: null,
+        changed: false,
+      })
+      setSeoImageState({
+        current: article?.seoImage || null,
         pendingFile: null,
         changed: false,
       })
@@ -522,6 +548,9 @@ export default function ArticleManagementPage() {
     const title = String(formData.title || '').trim()
     const slug = slugifyVietnamese(String(formData.slug || '').trim() || title)
     const description = String(formData.description || '').trim()
+    const seoTitle = String(formData.seoTitle || '').trim()
+    const seoDescription = String(formData.seoDescription || '').trim()
+    const seoKeywords = String(formData.seoKeywords || '').trim()
     const authorId = String(formData.authorId || '').trim()
     const categoryId = String(formData.categoryId || '').trim()
     const publicAt = fromDatetimeLocalValue(formData.publicAt)
@@ -533,6 +562,9 @@ export default function ArticleManagementPage() {
     const payload = {
       title,
       description: description || null,
+      seoTitle: seoTitle || null,
+      seoDescription: seoDescription || null,
+      seoKeywords: seoKeywords || null,
       author: authorId || null,
       category: categoryId || null,
       publicAt,
@@ -548,6 +580,13 @@ export default function ArticleManagementPage() {
       payload.cover = uploadedIds[0] || null
     } else if (coverState.changed && !coverState.current) {
       payload.cover = null
+    }
+
+    if (seoImageState.pendingFile) {
+      const uploadedIds = await ensureUploadedIds([seoImageState.pendingFile], 'Upload SEO image thất bại')
+      payload.seoImage = uploadedIds[0] || null
+    } else if (seoImageState.changed && !seoImageState.current) {
+      payload.seoImage = null
     }
 
     return payload
@@ -902,6 +941,37 @@ export default function ArticleManagementPage() {
                                 : 'Article được lưu ở trạng thái draft.'}
                             </div>
                           </CCol>
+                          <CCol md={6}>
+                            <CFormLabel htmlFor='article-seo-title'>SEO title</CFormLabel>
+                            <CFormInput
+                              id='article-seo-title'
+                              value={formData.seoTitle}
+                              onChange={(event) => setFormData((prev) => ({ ...prev, seoTitle: event.target.value }))}
+                              placeholder='Tiêu đề SEO cho bài viết'
+                              disabled={formLoading}
+                            />
+                          </CCol>
+                          <CCol md={6}>
+                            <CFormLabel htmlFor='article-seo-keywords'>SEO keywords</CFormLabel>
+                            <CFormInput
+                              id='article-seo-keywords'
+                              value={formData.seoKeywords}
+                              onChange={(event) => setFormData((prev) => ({ ...prev, seoKeywords: event.target.value }))}
+                              placeholder='Từ khóa SEO, phân tách bằng dấu phẩy'
+                              disabled={formLoading}
+                            />
+                          </CCol>
+                          <CCol xs={12}>
+                            <CFormLabel htmlFor='article-seo-description'>SEO description</CFormLabel>
+                            <CFormTextarea
+                              id='article-seo-description'
+                              rows={3}
+                              value={formData.seoDescription}
+                              onChange={(event) => setFormData((prev) => ({ ...prev, seoDescription: event.target.value }))}
+                              placeholder='Mô tả SEO cho bài viết'
+                              disabled={formLoading}
+                            />
+                          </CCol>
                         </CRow>
                       </CCardBody>
                     </CCard>
@@ -1012,6 +1082,70 @@ export default function ArticleManagementPage() {
                             disabled={formLoading || (!coverState.current && !coverState.pendingFile)}
                           >
                             Gỡ cover
+                          </CButton>
+                        </div>
+                      </CCardBody>
+                    </CCard>
+                  </CCol>
+
+                  <CCol lg={6}>
+                    <CCard className='border-0 shadow-sm h-100'>
+                      <CCardHeader>
+                        <strong>SEO image</strong>
+                      </CCardHeader>
+                      <CCardBody>
+                        {seoImagePreviewUrl ? (
+                          <div className='mb-3'>
+                            <img
+                              src={seoImagePreviewUrl}
+                              alt={formData.seoTitle || formData.title || 'SEO image'}
+                              style={{ width: '100%', maxHeight: 260, objectFit: 'cover', borderRadius: 16 }}
+                            />
+                          </div>
+                        ) : null}
+
+                        {seoImageState.pendingFile ? (
+                          <div className='mb-3 small text-body-secondary'>
+                            Sẽ upload SEO image mới: {seoImageState.pendingFile.name}
+                          </div>
+                        ) : null}
+
+                        {!seoImagePreviewUrl && !seoImageState.pendingFile ? (
+                          <div className='mb-3 text-body-secondary small'>Chưa có SEO image</div>
+                        ) : null}
+
+                        <CFormInput
+                          type='file'
+                          accept='image/*,video/*,.pdf,.doc,.docx'
+                          onChange={(event) => {
+                            const nextFile = event.target.files?.[0] || null
+                            setSeoImageState((prev) => ({
+                              ...prev,
+                              pendingFile: nextFile,
+                              changed: true,
+                            }))
+                          }}
+                          disabled={formLoading}
+                        />
+
+                        <div className='d-flex gap-2 mt-3'>
+                          <CButton
+                            size='sm'
+                            color='secondary'
+                            variant='outline'
+                            onClick={() => setSeoImageState((prev) => ({ ...prev, pendingFile: null, changed: prev.changed || Boolean(prev.current) }))}
+                            disabled={formLoading || !seoImageState.pendingFile}
+                          >
+                            Bỏ file mới chọn
+                          </CButton>
+                          <CButton
+                            size='sm'
+                            color='danger'
+                            variant='outline'
+                            onClick={() => setSeoImageState({ current: null, pendingFile: null, changed: true })}
+                            disabled={formLoading || (!seoImageState.current && !seoImageState.pendingFile)}
+                          >
+                            Gỡ SEO image
                           </CButton>
                         </div>
                       </CCardBody>

@@ -97,6 +97,18 @@ const EXAM_CARD_REMINDER_VARIABLES = [
   { label: 'Link tra cứu', value: '{{lookupUrl}}', description: 'Đường dẫn để phụ huynh mở thẻ dự kiểm tra' },
 ]
 
+const SCORE_REPORT_TEMPLATE_VARIABLES = [
+  { label: 'Logo tenant', value: '{{tenantLogo}}', description: 'Logo đơn vị' },
+  { label: 'Tên tenant', value: '{{tenantName}}', description: 'Tên đơn vị' },
+  { label: 'Tên kỳ TS', value: '{{campaignName}}', description: 'Tên chiến dịch tuyển sinh' },
+  { label: 'Họ tên', value: '{{studentName}}', description: 'Họ tên thí sinh' },
+  { label: 'Mã HS', value: '{{studentCode}}', description: 'Mã học sinh' },
+  { label: 'Mã hồ sơ', value: '{{applicationCode}}', description: 'Mã hồ sơ' },
+  { label: 'SBD', value: '{{candidateNumber}}', description: 'Số báo danh' },
+  { label: 'Tổng điểm', value: '{{totalScore}}', description: 'Tổng điểm đánh giá' },
+  { label: 'Kết quả', value: '{{finalResult}}', description: 'Kết quả tổng hợp' },
+]
+
 const DEFAULT_EXAM_CARD_REMINDER_EMAIL_SUBJECT = 'Nhắc in thẻ dự kiểm tra đánh giá năng lực'
 const DEFAULT_EXAM_CARD_REMINDER_EMAIL_HTML = [
   '<p>Kính gửi Quý phụ huynh <strong>{{fullName}}</strong>,</p>',
@@ -160,6 +172,8 @@ function buildInitialState(initialValues) {
     campaignStatus: initialValues?.campaignStatus || initialValues?.status || 'draft',
     description: initialValues?.description || '',
     examCardTemplateHtml: initialValues?.examCardTemplateHtml || '',
+    scoreReportTemplateHtml: initialValues?.scoreReportTemplateHtml || '',
+    scorePublishedAt: formatDateTimeLocalValue(initialValues?.scorePublishedAt),
     examCardReminderEmailSubject: initialValues?.examCardReminderEmailSubject || DEFAULT_EXAM_CARD_REMINDER_EMAIL_SUBJECT,
     examCardReminderEmailHtml: initialValues?.examCardReminderEmailHtml || DEFAULT_EXAM_CARD_REMINDER_EMAIL_HTML,
     allowExamCardPrinting: initialValues?.allowExamCardPrinting === true,
@@ -208,6 +222,8 @@ export default function AdmissionCampaignFormModal({
       campaignStatus: String(form.campaignStatus || 'draft').trim(),
       description: String(form.description || '').trim(),
       examCardTemplateHtml: String(form.examCardTemplateHtml || '').trim(),
+      scoreReportTemplateHtml: String(form.scoreReportTemplateHtml || '').trim(),
+      scorePublishedAt: String(form.scorePublishedAt || '').trim() || null,
       examCardReminderEmailSubject: String(form.examCardReminderEmailSubject || '').trim(),
       examCardReminderEmailHtml: String(form.examCardReminderEmailHtml || '').trim(),
       allowExamCardPrinting: form.allowExamCardPrinting === true,
@@ -221,7 +237,7 @@ export default function AdmissionCampaignFormModal({
   }
 
   return (
-    <CModal visible={visible} onClose={() => !submitting && onClose?.()} size='lg'>
+    <CModal visible={visible} onClose={() => !submitting && onClose?.()} size='lg' backdrop='static'>
       <CModalHeader>
         <CModalTitle>{initialValues?.id ? 'Chỉnh sửa chiến dịch tuyển sinh' : 'Thêm chiến dịch tuyển sinh'}</CModalTitle>
       </CModalHeader>
@@ -315,6 +331,27 @@ export default function AdmissionCampaignFormModal({
                 placeholder='<div><img src="{{tenantLogo}}" alt="Logo" /><h2>THẺ DỰ KIỂM TRA</h2><p>{{studentName}}</p><p>SBD: {{candidateNumber}}</p></div>'
                 variableTokens={EXAM_CARD_TEMPLATE_VARIABLES}
                 helperText='Có thể soạn HTML mẫu thẻ dự kiểm tra và chèn trực tiếp các biến bên trên vào nội dung. Dữ liệu này sẽ được dùng cho tính năng in thẻ sau này.'
+              />
+            </CCol>
+            <CCol xs={12}>
+              <SimpleHtmlEditor
+                label='Mẫu HTML phiếu báo điểm'
+                rows={12}
+                value={form.scoreReportTemplateHtml}
+                onChange={(nextValue) => updateField('scoreReportTemplateHtml', nextValue)}
+                disabled={submitting}
+                placeholder='<div><img src="{{tenantLogo}}" alt="Logo" /><h2>PHIẾU BÁO ĐIỂM</h2><p>{{studentName}}</p><p>Mã HS: {{studentCode}}</p><p>Tổng điểm: {{totalScore}}</p></div>'
+                variableTokens={SCORE_REPORT_TEMPLATE_VARIABLES}
+                helperText='Có thể soạn HTML mẫu phiếu báo điểm và chèn trực tiếp các biến bên trên vào nội dung.'
+              />
+            </CCol>
+            <CCol md={6}>
+              <CFormLabel>Thời điểm công bố điểm</CFormLabel>
+              <CFormInput
+                type='datetime-local'
+                value={form.scorePublishedAt}
+                onChange={(event) => updateField('scorePublishedAt', event.target.value)}
+                disabled={submitting}
               />
             </CCol>
             <CCol xs={12}>

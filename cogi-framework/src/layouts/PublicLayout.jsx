@@ -12,8 +12,10 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useParams } from 'react-router-dom'
 import { useTenant } from '../contexts/TenantContext'
+import PublicChatWidget from '../components/public/PublicChatWidget.jsx'
 import { getTenantConfigByKey } from '../modules/content-management/services/tenantConfigService'
 import { buildTenantUrl } from '../utils/tenantRouting'
+import useTenantPageTitle from '../utils/useTenantPageTitle'
 import './public-layout.css'
 
 const defaultMenu = [
@@ -224,6 +226,21 @@ function resolveMenuLinks(items, tenantCode, isMainDomain) {
   })
 }
 
+function resolvePublicPageTitle(pathname, tenantCode) {
+  const normalizedPathname = normalizePathname(pathname)
+  const normalizedTenantRoot = tenantCode ? normalizePathname(`/t/${tenantCode}`) : ''
+
+  if (normalizedTenantRoot && normalizedPathname === normalizedTenantRoot) {
+    return ''
+  }
+
+  if (/\/(journal|category|archive|journal-category|journal-archive|journal-issue)(\/|$)/.test(normalizedPathname)) {
+    return 'Tin tức'
+  }
+
+  return ''
+}
+
 export default function PublicLayout({ children }) {
   const tenant = useTenant()
   const location = useLocation()
@@ -332,6 +349,13 @@ export default function PublicLayout({ children }) {
     }),
     [journalMenuTheme],
   )
+
+  const publicPageTitle = useMemo(
+    () => resolvePublicPageTitle(location.pathname, tenantCode),
+    [location.pathname, tenantCode],
+  )
+
+  useTenantPageTitle(publicPageTitle)
 
   return (
     <div className='public-layout' style={publicLayoutThemeVars}>
@@ -518,6 +542,14 @@ export default function PublicLayout({ children }) {
           </div>
         </CContainer>
       </CFooter>
+
+      {(tenantCode || tenant?.resolvedTenant?.tenantCode || tenant?.currentTenant?.tenantCode) ? (
+        <PublicChatWidget
+          tenantCode={tenantCode || tenant?.resolvedTenant?.tenantCode || tenant?.currentTenant?.tenantCode}
+          tenantSlug={tenantCode || tenant?.resolvedTenant?.tenantCode || tenant?.currentTenant?.tenantCode}
+          title='Chat cùng COGI'
+        />
+      ) : null}
     </div>
   )
 }

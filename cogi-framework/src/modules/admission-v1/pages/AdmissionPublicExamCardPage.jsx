@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { CAlert, CButton, CSpinner } from '@coreui/react'
+import { useTenant } from '../../../contexts/TenantContext'
+import useTenantPageTitle from '../../../utils/useTenantPageTitle'
 import {
   buildAdmissionResultLookupPath,
   getAdmissionV1ErrorMessage,
@@ -33,8 +35,10 @@ function readSearchParams(search) {
 }
 
 export default function AdmissionPublicExamCardPage() {
+  useTenantPageTitle('Thẻ dự kiểm tra')
   const navigate = useNavigate()
   const location = useLocation()
+  const tenant = useTenant()
   const { tenantCode, campaignCode } = useParams()
   const [loading, setLoading] = useState(true)
   const [printing, setPrinting] = useState(false)
@@ -60,7 +64,8 @@ export default function AdmissionPublicExamCardPage() {
       setError('')
 
       try {
-        const result = await getPublicAdmissionExamCard(campaignCode, lookupParams, tenantCode)
+        const resolvedTenantCode = String(tenantCode || tenant?.resolvedTenant?.tenantCode || tenant?.currentTenant?.tenantCode || '').trim()
+        const result = await getPublicAdmissionExamCard(campaignCode, lookupParams, resolvedTenantCode)
         if (!mounted) return
         setHtml(String(result?.html || '').trim())
         setCandidateNumber(String(result?.candidateNumber || '').trim())
@@ -80,7 +85,7 @@ export default function AdmissionPublicExamCardPage() {
     return () => {
       mounted = false
     }
-  }, [campaignCode, lookupParams, tenantCode])
+  }, [campaignCode, lookupParams, tenant, tenantCode])
 
   const renderedHtml = useMemo(() => normalizeRenderableHtml(html), [html])
 
@@ -133,7 +138,8 @@ export default function AdmissionPublicExamCardPage() {
     setPrinting(true)
     try {
       if (campaignCode && lookupParams.studentCode && lookupParams.applicationCode) {
-        await logPublicAdmissionExamCardPrint(campaignCode, lookupParams, tenantCode)
+        const resolvedTenantCode = String(tenantCode || tenant?.resolvedTenant?.tenantCode || tenant?.currentTenant?.tenantCode || '').trim()
+        await logPublicAdmissionExamCardPrint(campaignCode, lookupParams, resolvedTenantCode)
       }
     } catch {
       // Keep print flow non-blocking for parents.
@@ -144,7 +150,8 @@ export default function AdmissionPublicExamCardPage() {
   }
 
   function handleBack() {
-    navigate(buildAdmissionResultLookupPath(campaignCode, tenantCode), {
+    const resolvedTenantCode = String(tenantCode || tenant?.resolvedTenant?.tenantCode || tenant?.currentTenant?.tenantCode || '').trim()
+    navigate(buildAdmissionResultLookupPath(campaignCode, resolvedTenantCode), {
       replace: false,
       state: {
         studentCode: lookupParams.studentCode,

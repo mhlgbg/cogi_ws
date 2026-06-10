@@ -126,6 +126,14 @@ export function buildAdmissionResultLookupPath(campaignCode, tenantCode = '') {
     : `/tra-cuu-tuyen-sinh/${normalizedCampaignCode}`
 }
 
+export function buildCandidateExamScoreLookupPath(campaignCode, tenantCode = '') {
+  const normalizedCampaignCode = encodeURIComponent(normalizeCampaignCode(campaignCode))
+  const normalizedTenantCode = normalizeTenantCode(tenantCode)
+  return normalizedTenantCode
+    ? `/t/${encodeURIComponent(normalizedTenantCode)}/tra-cuu-diem/${normalizedCampaignCode}`
+    : `/tra-cuu-diem/${normalizedCampaignCode}`
+}
+
 export function buildAdmissionExamCardPath(campaignCode, tenantCode = '', params = {}) {
   const basePath = `${buildAdmissionResultLookupPath(campaignCode, tenantCode)}/the-du-kiem-tra`
   const searchParams = new URLSearchParams()
@@ -224,6 +232,16 @@ export async function resendAdmissionV1ApplicationCode(payload, tenantCode = '')
 
 export async function lookupAdmissionV1Result(payload, tenantCode = '') {
   const response = await api.post('/admission-public-v1/result-lookup', payload, buildTenantRequestConfig(tenantCode))
+  return normalizePayload(response?.data)
+}
+
+export async function lookupCandidateExamScore(payload, tenantCode = '') {
+  const response = await api.post('/candidate-exam-public/score-lookup', payload, buildTenantRequestConfig(tenantCode))
+  return normalizePayload(response?.data)
+}
+
+export async function sendCandidateExamScoreReport(payload, tenantCode = '') {
+  const response = await api.post('/candidate-exam-public/send-score-report', payload, buildTenantRequestConfig(tenantCode))
   return normalizePayload(response?.data)
 }
 

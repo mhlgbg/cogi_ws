@@ -8,6 +8,7 @@ import {
 import api from '../../api/axios'
 import { useTenant } from '../../contexts/TenantContext'
 import { resolveMediaUrl } from '../../utils/mediaUrl'
+import useTenantPageTitle from '../../utils/useTenantPageTitle'
 import './AdmissionLanding.css'
 import {
   AdmissionForm,
@@ -57,6 +58,7 @@ export default function AdmissionLanding() {
   const [successMessage, setSuccessMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [existingUserMessage, setExistingUserMessage] = useState('')
+  useTenantPageTitle('Tuyển sinh')
   const resolvedCampaignDescription = resolveCampaignDescription(campaign.description, tenant, campaign)
   const admissionRedirectPath = useMemo(
     () => `/admission/${encodeURIComponent(String(campaignCode || '').trim())}`,

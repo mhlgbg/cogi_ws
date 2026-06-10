@@ -97,6 +97,7 @@ function normalizeArticle(row) {
     category: normalizeRelation(base.category),
     tenant: normalizeRelation(base.tenant),
     cover: normalizeMedia(base.cover),
+    seoImage: normalizeMedia(base.seoImage),
     blocks: Array.isArray(base.blocks) ? base.blocks.map(normalizeBlock).filter(Boolean) : [],
   }
 }

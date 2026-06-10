@@ -30,6 +30,7 @@ function SidebarItem({ item, onNavigate }) {
 
 export default function AppSidebar({
   navItems = [],
+  isPlatformWorkspace = false,
   collapsed = false,
   mobileOpen = false,
   onCloseMobile,
@@ -75,6 +76,14 @@ export default function AppSidebar({
       </div>
 
       <div className="tenant-sidebar-nav">
+        {isPlatformWorkspace ? (
+          <div className="tenant-sidebar-workspace-banner">
+            <div className="tenant-sidebar-workspace-eyebrow">Platform</div>
+            <div className="tenant-sidebar-workspace-title">Platform Workspace</div>
+            <div className="tenant-sidebar-workspace-copy">Ưu tiên chức năng quản trị hệ thống dùng chung.</div>
+          </div>
+        ) : null}
+
         {
         //<!--<div className="tenant-sidebar-group-title">Menu</div>-->
         }

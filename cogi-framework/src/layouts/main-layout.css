@@ -89,6 +89,37 @@
   padding: 14px 10px;
 }
 
+.tenant-sidebar-workspace-banner {
+  margin: 4px 8px 14px;
+  padding: 12px 12px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+}
+
+.tenant-sidebar-workspace-eyebrow {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.tenant-sidebar-workspace-title {
+  margin-top: 4px;
+  color: #f8fafc;
+  font-size: 0.96rem;
+  font-weight: 700;
+}
+
+.tenant-sidebar-workspace-copy {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
 .tenant-sidebar-group {
   margin-bottom: 12px;
 }
@@ -274,7 +305,8 @@
 
 .tenant-sidebar.is-collapsed .tenant-sidebar-brand-text,
 .tenant-sidebar.is-collapsed .tenant-sidebar-group-title,
-.tenant-sidebar.is-collapsed .tenant-sidebar-link-label {
+.tenant-sidebar.is-collapsed .tenant-sidebar-link-label,
+.tenant-sidebar.is-collapsed .tenant-sidebar-workspace-banner {
   display: none;
 }
 

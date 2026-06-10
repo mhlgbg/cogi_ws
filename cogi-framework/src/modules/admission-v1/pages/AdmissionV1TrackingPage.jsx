@@ -11,6 +11,7 @@ import {
 } from '@coreui/react'
 import { useTenant } from '../../../contexts/TenantContext'
 import { sanitizeHtml } from '../../../pages/journal/journalPublicUtils'
+import useTenantPageTitle from '../../../utils/useTenantPageTitle'
 import AdmissionV1Hero from '../components/AdmissionV1Hero'
 import AdmissionV1GuideModal from '../components/AdmissionV1GuideModal'
 import {
@@ -47,6 +48,7 @@ function readApprovedAcknowledgedAt(source) {
 }
 
 export default function AdmissionV1TrackingPage() {
+  useTenantPageTitle('Tuyển sinh')
   const navigate = useNavigate()
   const location = useLocation()
   const tenant = useTenant()

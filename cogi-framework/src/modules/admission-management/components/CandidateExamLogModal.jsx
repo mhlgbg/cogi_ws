@@ -43,6 +43,8 @@ function getActionLabel(action) {
   if (normalized === 'import_created') return 'Import tạo mới'
   if (normalized === 'import_updated') return 'Import cập nhật'
   if (normalized === 'import_restored') return 'Import khôi phục'
+  if (normalized === 'score_lookup') return 'Xem điểm'
+  if (normalized === 'score_report_sent') return 'Đã gửi thư báo điểm'
   return normalized || '-'
 }
 

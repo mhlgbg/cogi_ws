@@ -741,6 +741,287 @@
 
   .public-layout-footer-wrap {
     padding: 16px 0;
+
+  .public-page-summary {
+    font-size: 1rem;
+    line-height: 1.7;
+  }
+
+  .public-page-html-content {
+    font-size: 1rem;
+    line-height: 1.75;
+    color: #111827;
+  }
+
+  .public-page-html-content > *:first-child {
+    margin-top: 0;
+  }
+
+  .public-page-html-content > *:last-child {
+    margin-bottom: 0;
+  }
+
+  .public-page-html-content h1,
+  .public-page-html-content h2,
+  .public-page-html-content h3,
+  .public-page-html-content h4,
+  .public-page-html-content h5,
+  .public-page-html-content h6 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+    line-height: 1.35;
+    color: #0f172a;
+  }
+
+  .public-page-html-content h1 {
+    font-size: 2rem;
+  }
+
+  .public-page-html-content h2 {
+    font-size: 1.65rem;
+  }
+
+  .public-page-html-content h3 {
+    font-size: 1.35rem;
+  }
+
+  .public-page-html-content p,
+  .public-page-html-content ul,
+  .public-page-html-content ol,
+  .public-page-html-content blockquote,
+  .public-page-html-content table,
+  .public-page-html-content pre {
+    margin-bottom: 1rem;
+  }
+
+  .public-page-html-content ul,
+  .public-page-html-content ol {
+    padding-left: 1.5rem;
+  }
+
+  .public-page-html-content li + li {
+    margin-top: 0.35rem;
+  }
+
+  .public-page-html-content a {
+    color: #0d6efd;
+    text-decoration: underline;
+  }
+
+  .public-page-html-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.75rem;
+  }
+
+  .public-page-html-content blockquote {
+    padding: 1rem 1.25rem;
+    border-left: 4px solid #93c5fd;
+    background: #eff6ff;
+    border-radius: 0.75rem;
+  }
+
+  .public-page-html-content table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .public-page-html-content table th,
+  .public-page-html-content table td {
+    border: 1px solid #d1d5db;
+    padding: 0.75rem;
+    vertical-align: top;
+  }
+
+  .public-page-html-content hr {
+    margin: 1.5rem 0;
+    border: 0;
+    border-top: 1px solid #e5e7eb;
+  }
+
+  .public-chat-widget {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 1055;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 12px;
+  }
+
+  .public-chat-widget-toggle {
+    width: 92px !important;
+    min-width: 92px !important;
+    max-width: 92px !important;
+    height: 82px !important;
+    min-height: 82px !important;
+    max-height: 82px !important;
+    border-radius: 20px;
+    padding: 8px 6px 7px;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    text-align: center;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+    overflow: hidden;
+  }
+
+  .public-chat-widget-toggle-avatar-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .public-chat-widget-toggle-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    object-fit: contain;
+    object-position: center top;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.94);
+  }
+
+  .public-chat-widget-toggle-label {
+    display: block;
+    max-width: 100%;
+    font-size: 10px;
+    line-height: 1.2;
+    font-weight: 700;
+    white-space: normal;
+    text-align: center;
+  }
+
+  .public-chat-widget-popup {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 12px);
+    width: min(360px, calc(100vw - 24px));
+    min-width: 320px;
+    max-height: 70vh;
+    border-radius: 18px;
+    overflow: hidden;
+    background: #ffffff;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22);
+  }
+
+  .public-chat-widget-close {
+    border: 0;
+    background: transparent;
+    color: #6b7280;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .public-chat-widget-messages {
+    flex: 1;
+    min-height: 240px;
+    max-height: 50vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-right: 4px;
+  }
+
+  .public-chat-widget-bubble-wrap {
+    max-width: 82%;
+  }
+
+  .public-chat-widget-message-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
+  .public-chat-widget-message-row.is-user {
+    justify-content: flex-end;
+  }
+
+  .public-chat-widget-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+    margin-top: 1rem;
+    background: #e5e7eb;
+  }
+
+  .public-chat-widget-avatar-fallback {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #1d4ed8;
+    background: #dbeafe;
+  }
+
+  .public-chat-widget-bubble-wrap.is-user {
+    text-align: right;
+  }
+
+  .public-chat-widget-role,
+  .public-chat-widget-time {
+    font-size: 0.75rem;
+    color: #6b7280;
+  }
+
+  .public-chat-widget-role {
+    margin-bottom: 4px;
+  }
+
+  .public-chat-widget-time {
+    margin-top: 4px;
+  }
+
+  .public-chat-widget-bubble {
+    padding: 10px 14px;
+    border-radius: 16px;
+    background: #f3f4f6;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .public-chat-widget-bubble.is-user {
+    background: #dbeafe;
+  }
+
+  .public-chat-widget-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  @media (max-width: 767.98px) {
+    .public-chat-widget {
+      right: 12px;
+      bottom: 12px;
+    }
+
+    .public-chat-widget-toggle {
+      width: 92px !important;
+      min-width: 92px !important;
+      max-width: 92px !important;
+      height: 82px !important;
+      min-height: 82px !important;
+      max-height: 82px !important;
+    }
+
+    .public-chat-widget-popup {
+      right: 0;
+      bottom: calc(100% + 10px);
+      width: min(340px, calc(100vw - 24px));
+      min-width: 0;
+      max-height: 70vh;
+    }
   }
 
   .public-homepage-article-image-fallback,
@@ -754,4 +1035,3 @@
     flex-direction: column;
     align-items: flex-start;
   }
-}

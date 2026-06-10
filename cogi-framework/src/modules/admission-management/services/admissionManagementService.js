@@ -306,12 +306,39 @@ export async function downloadCandidateExamImportTemplate() {
   }
 }
 
+export async function downloadCandidateExamScoreImportTemplate() {
+  const res = await api.get('/candidate-exams/score-import-template', {
+    responseType: 'blob',
+  })
+
+  const headerValue = String(res.headers?.['content-disposition'] || '')
+  const matchedName = headerValue.match(/filename="?([^";]+)"?/i)
+
+  return {
+    blob: res.data,
+    fileName: matchedName?.[1] || 'candidate-exam-score-import-template.xlsx',
+  }
+}
+
 export async function previewCandidateExamImport({ admissionSeasonId, file }) {
   const formData = new FormData()
   formData.append('admissionSeasonId', String(admissionSeasonId || ''))
   formData.append('file', file)
 
   const res = await api.post('/candidate-exams/import-preview', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return unwrapSuccess(res.data)
+}
+
+export async function previewCandidateExamScoreImport({ admissionSeasonId, file }) {
+  const formData = new FormData()
+  formData.append('admissionSeasonId', String(admissionSeasonId || ''))
+  formData.append('file', file)
+
+  const res = await api.post('/candidate-exams/score-import-preview', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
@@ -329,6 +356,19 @@ export async function confirmCandidateExamImport({ admissionSeasonId, file, opti
   formData.append('file', file)
 
   const res = await api.post('/candidate-exams/import-confirm', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return unwrapSuccess(res.data)
+}
+
+export async function confirmCandidateExamScoreImport({ admissionSeasonId, file }) {
+  const formData = new FormData()
+  formData.append('admissionSeasonId', String(admissionSeasonId || ''))
+  formData.append('file', file)
+
+  const res = await api.post('/candidate-exams/score-import-confirm', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },

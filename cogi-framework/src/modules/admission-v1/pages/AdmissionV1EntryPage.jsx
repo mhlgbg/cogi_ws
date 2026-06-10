@@ -17,6 +17,7 @@ import {
   CSpinner,
 } from '@coreui/react'
 import { useTenant } from '../../../contexts/TenantContext'
+import useTenantPageTitle from '../../../utils/useTenantPageTitle'
 import AdmissionV1Hero from '../components/AdmissionV1Hero'
 import {
   buildAdmissionV1Permissions,
@@ -51,6 +52,7 @@ function renderCampaignGuidance(campaign) {
 }
 
 export default function AdmissionV1EntryPage() {
+  useTenantPageTitle('Tuyển sinh')
   const navigate = useNavigate()
   const tenant = useTenant()
   const { tenantCode, campaignCode } = useParams()

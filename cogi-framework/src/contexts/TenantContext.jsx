@@ -3,6 +3,7 @@ import api from '../api/axios'
 import { useAuth } from './AuthContext'
 import { resolveMediaUrl } from '../utils/mediaUrl'
 import { buildTenantUrl, isBrowserOnMainDomain } from '../utils/tenantRouting'
+import { clearTenantTitleSettings, persistTenantTitleSettings } from '../utils/tenantPageTitle'
 
 const TenantContext = createContext(null)
 
@@ -78,12 +79,15 @@ function readTenantFromStorage() {
   const tenantName = localStorage.getItem('tenantName')
   const tenantShortName = localStorage.getItem('tenantShortName')
   const tenantLogoUrl = localStorage.getItem('tenantLogoUrl')
+  const tenantChatAvatarUrl = localStorage.getItem('tenantChatAvatarUrl')
   const tenantLogoRaw = localStorage.getItem('tenantLogo')
   const tenantIdRaw = localStorage.getItem('tenantId')
   const userTenantIdRaw = localStorage.getItem('userTenantId')
   const defaultFeatureCode = localStorage.getItem('defaultFeatureCode')
   const defaultPublicRoute = localStorage.getItem('defaultPublicRoute')
   const defaultProtectedRoute = localStorage.getItem('defaultProtectedRoute')
+  const siteTitle = localStorage.getItem('tenantSiteTitle')
+  const titleSuffix = localStorage.getItem('tenantTitleSuffix')
   const isMainDomainRaw = localStorage.getItem('isMainDomain')
   const tenantRolesRaw = localStorage.getItem('tenantRoles')
 
@@ -124,6 +128,13 @@ function readTenantFromStorage() {
     tenantShortName: tenantShortName || '',
     tenantLogo: tenantLogo || null,
     tenantLogoUrl: normalizedTenantLogoUrl,
+    tenantChatAvatarUrl: toAbsoluteUrl(tenantChatAvatarUrl) || '',
+    siteTitle: siteTitle || '',
+    titleSuffix: titleSuffix || '',
+    settings: {
+      siteTitle: siteTitle || '',
+      titleSuffix: titleSuffix || '',
+    },
     tenantId,
     userTenantId,
     defaultFeatureCode: defaultFeatureCode || '',
@@ -139,6 +150,14 @@ function normalizeTenantContextPayload(payload) {
     tenantCode: String(payload?.code || '').trim(),
     tenantName: String(payload?.name || payload?.displayName || '').trim(),
     tenantLogoUrl: toAbsoluteUrl(payload?.logo || ''),
+    tenantChatAvatarUrl: toAbsoluteUrl(payload?.chatAvatar || ''),
+    siteTitle: String(payload?.siteTitle || '').trim(),
+    defaultPageTitle: String(payload?.defaultPageTitle || '').trim(),
+    titleSuffix: String(payload?.titleSuffix || '').trim(),
+    settings: {
+      siteTitle: String(payload?.siteTitle || '').trim(),
+      titleSuffix: String(payload?.titleSuffix || '').trim(),
+    },
     defaultPublicRoute: String(payload?.defaultPublicRoute || '').trim(),
     defaultProtectedRoute: String(payload?.defaultProtectedRoute || '').trim(),
     isMainDomain: isBrowserOnMainDomain(),
@@ -155,6 +174,14 @@ function mergeTenantState(baseTenant, resolvedTenant) {
     tenantShortName: String(base.tenantShortName || '').trim(),
     tenantLogo: base.tenantLogo || null,
     tenantLogoUrl: toAbsoluteUrl(resolved.tenantLogoUrl || base.tenantLogoUrl || ''),
+    tenantChatAvatarUrl: toAbsoluteUrl(resolved.tenantChatAvatarUrl || base.tenantChatAvatarUrl || ''),
+    siteTitle: String(resolved.siteTitle || base.siteTitle || '').trim(),
+    defaultPageTitle: String(resolved.defaultPageTitle || base.defaultPageTitle || '').trim(),
+    titleSuffix: String(resolved.titleSuffix || base.titleSuffix || '').trim(),
+    settings: {
+      siteTitle: String(resolved.siteTitle || base.siteTitle || '').trim(),
+      titleSuffix: String(resolved.titleSuffix || base.titleSuffix || '').trim(),
+    },
     tenantId: Number(base.tenantId),
     userTenantId: Number(base.userTenantId),
     defaultFeatureCode: String(base.defaultFeatureCode || '').trim(),
@@ -183,6 +210,13 @@ export default function TenantContextProvider({ children }) {
       tenantShortName: String(tenantContextItem?.tenantShortName || '').trim(),
       tenantLogo: tenantContextItem?.tenantLogo || null,
       tenantLogoUrl: toAbsoluteUrl(tenantContextItem?.tenantLogoUrl || '') || extractTenantLogoUrlFromMedia(tenantContextItem?.tenantLogo),
+      tenantChatAvatarUrl: toAbsoluteUrl(tenantContextItem?.tenantChatAvatarUrl || ''),
+      siteTitle: String(tenantContextItem?.siteTitle || tenantContextItem?.settings?.siteTitle || '').trim(),
+      titleSuffix: String(tenantContextItem?.titleSuffix || tenantContextItem?.settings?.titleSuffix || '').trim(),
+      settings: {
+        siteTitle: String(tenantContextItem?.siteTitle || tenantContextItem?.settings?.siteTitle || '').trim(),
+        titleSuffix: String(tenantContextItem?.titleSuffix || tenantContextItem?.settings?.titleSuffix || '').trim(),
+      },
       tenantId: Number(tenantContextItem?.tenantId),
       userTenantId: Number(tenantContextItem?.userTenantId),
       defaultFeatureCode: String(tenantContextItem?.defaultFeatureCode || '').trim(),
@@ -205,7 +239,10 @@ export default function TenantContextProvider({ children }) {
     localStorage.setItem('tenantName', nextTenant.tenantName)
     localStorage.setItem('tenantShortName', nextTenant.tenantShortName)
     localStorage.setItem('tenantLogoUrl', nextTenant.tenantLogoUrl)
+    localStorage.setItem('tenantChatAvatarUrl', nextTenant.tenantChatAvatarUrl)
     localStorage.setItem('tenantLogo', JSON.stringify(nextTenant.tenantLogo || null))
+    localStorage.setItem('tenantSiteTitle', nextTenant.siteTitle)
+    localStorage.setItem('tenantTitleSuffix', nextTenant.titleSuffix)
     localStorage.setItem('tenantId', String(nextTenant.tenantId))
     localStorage.setItem('userTenantId', String(nextTenant.userTenantId))
     localStorage.setItem('defaultFeatureCode', nextTenant.defaultFeatureCode)
@@ -224,6 +261,7 @@ export default function TenantContextProvider({ children }) {
     localStorage.removeItem('tenantName')
     localStorage.removeItem('tenantShortName')
     localStorage.removeItem('tenantLogoUrl')
+    localStorage.removeItem('tenantChatAvatarUrl')
     localStorage.removeItem('tenantLogo')
     localStorage.removeItem('tenantId')
     localStorage.removeItem('userTenantId')
@@ -233,6 +271,7 @@ export default function TenantContextProvider({ children }) {
     localStorage.removeItem('isMainDomain')
     localStorage.removeItem('tenantRoles')
     localStorage.removeItem('featureContext')
+    clearTenantTitleSettings()
     setCurrentTenant(null)
     setResolvedTenant(null)
     setIsMainDomain(isBrowserOnMainDomain())
@@ -260,7 +299,9 @@ export default function TenantContextProvider({ children }) {
 
       setIsMainDomain(isBrowserOnMainDomain())
 
-      setResolvedTenant((previous) => mergeTenantState(currentTenant || previous, resolved))
+      const nextResolvedTenant = mergeTenantState(currentTenant || resolvedTenant, resolved)
+      persistTenantTitleSettings(nextResolvedTenant)
+      setResolvedTenant(nextResolvedTenant)
 
       setCurrentTenant((previous) => {
         if (!previous) return previous
@@ -271,6 +312,9 @@ export default function TenantContextProvider({ children }) {
         const nextTenant = mergeTenantState(previous, resolved)
         localStorage.setItem('tenantName', nextTenant.tenantName)
         localStorage.setItem('tenantLogoUrl', nextTenant.tenantLogoUrl)
+        localStorage.setItem('tenantChatAvatarUrl', nextTenant.tenantChatAvatarUrl)
+        localStorage.setItem('tenantSiteTitle', nextTenant.siteTitle)
+        localStorage.setItem('tenantTitleSuffix', nextTenant.titleSuffix)
         localStorage.setItem('defaultPublicRoute', nextTenant.defaultPublicRoute)
         localStorage.setItem('defaultProtectedRoute', nextTenant.defaultProtectedRoute)
         localStorage.setItem('isMainDomain', String(nextTenant.isMainDomain))
@@ -353,7 +397,9 @@ export default function TenantContextProvider({ children }) {
 
         setIsMainDomain(isBrowserOnMainDomain())
 
-        setResolvedTenant((previous) => mergeTenantState(currentTenant || previous, resolved))
+        const nextResolvedTenant = mergeTenantState(currentTenant || resolvedTenant, resolved)
+        persistTenantTitleSettings(nextResolvedTenant)
+        setResolvedTenant(nextResolvedTenant)
 
         setCurrentTenant((previous) => {
           if (!previous) return previous
@@ -365,12 +411,22 @@ export default function TenantContextProvider({ children }) {
             ...previous,
             tenantName: resolved.tenantName || previous.tenantName,
             tenantLogoUrl: resolved.tenantLogoUrl || previous.tenantLogoUrl,
+            tenantChatAvatarUrl: resolved.tenantChatAvatarUrl || previous.tenantChatAvatarUrl,
+            siteTitle: resolved.siteTitle || previous.siteTitle || '',
+            titleSuffix: resolved.titleSuffix || previous.titleSuffix || '',
+            settings: {
+              siteTitle: resolved.siteTitle || previous.siteTitle || '',
+              titleSuffix: resolved.titleSuffix || previous.titleSuffix || '',
+            },
             defaultPublicRoute: resolved.defaultPublicRoute || previous.defaultPublicRoute,
             defaultProtectedRoute: resolved.defaultProtectedRoute || previous.defaultProtectedRoute,
           }
 
           localStorage.setItem('tenantName', nextTenant.tenantName)
           localStorage.setItem('tenantLogoUrl', nextTenant.tenantLogoUrl)
+          localStorage.setItem('tenantChatAvatarUrl', nextTenant.tenantChatAvatarUrl)
+          localStorage.setItem('tenantSiteTitle', nextTenant.siteTitle)
+          localStorage.setItem('tenantTitleSuffix', nextTenant.titleSuffix)
           localStorage.setItem('defaultPublicRoute', nextTenant.defaultPublicRoute)
           localStorage.setItem('defaultProtectedRoute', nextTenant.defaultProtectedRoute)
           localStorage.setItem('isMainDomain', String(nextTenant.isMainDomain))

@@ -13,7 +13,7 @@ import {
   CSpinner,
 } from '@coreui/react'
 import { sanitizeHtml } from '../../../pages/journal/journalPublicUtils'
-import { resolveMediaUrl } from '../../../utils/mediaUrl'
+import { buildProtectedFileUrl, resolveMediaUrl } from '../../../utils/mediaUrl'
 import {
   buildAdmissionV1FileTooLargeMessage,
   formatAdmissionV1FileSize,
@@ -303,7 +303,7 @@ export default function AdmissionV1ConversationPanel({
                     {Array.isArray(message?.attachments) && message.attachments.length > 0 ? (
                       <div className='admission-v1-message__attachments'>
                         {message.attachments.map((attachment, index) => {
-                          const attachmentUrl = resolveMediaUrl(attachment?.url)
+                          const attachmentUrl = buildProtectedFileUrl(attachment) || resolveMediaUrl(attachment?.url)
                           const attachmentName = attachment?.name || `Tệp đính kèm ${index + 1}`
                           const mime = String(attachment?.mime || '').trim().toLowerCase()
                           const isImage = mime.startsWith('image/')

@@ -3,6 +3,7 @@ export default function CrmHome() {
     <div>
       <h2 style={{ marginTop: 0 }}>CRM Home</h2>
       <p>CRM module page</p>
+      <p>Quản lý chiến dịch lead tại /crms/lead-campaigns.</p>
     </div>
   );
 }

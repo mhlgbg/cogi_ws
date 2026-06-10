@@ -6,14 +6,16 @@ import AppRouter from './router/AppRouter'
 
 export default function App() {
   return (
-    <AuthContextProvider>
-      <TenantContextProvider>
-        <FeatureProvider>
-          <BrowserRouter>
-            <AppRouter />
-          </BrowserRouter>
-        </FeatureProvider>
-      </TenantContextProvider>
-    </AuthContextProvider>
+    <div className='notranslate' translate='no'>
+      <AuthContextProvider>
+        <TenantContextProvider>
+          <FeatureProvider>
+            <BrowserRouter>
+              <AppRouter />
+            </BrowserRouter>
+          </FeatureProvider>
+        </TenantContextProvider>
+      </AuthContextProvider>
+    </div>
   )
 }

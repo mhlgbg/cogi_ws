@@ -4,14 +4,13 @@ import {
   CButton,
   CCard,
   CCardBody,
-  CCardHeader,
   CSpinner,
 } from '@coreui/react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import api from '../../api/axios'
 import { useTenant } from '../../contexts/TenantContext'
 import { resolveMediaUrl } from '../../utils/mediaUrl'
-import { buildTenantUrl } from '../../utils/tenantRouting'
+import useTenantPageTitle from '../../utils/useTenantPageTitle'
 
 function toAbsoluteUrl(url) {
   return resolveMediaUrl(url)
@@ -198,18 +197,48 @@ function isImageFile(file) {
 function PdfPreviewBlock({ file, title }) {
   const mediaUrl = getMediaUrl(file)
   const mediaName = getMediaName(file) || title || 'PDF preview'
+  const [isMobileViewport, setIsMobileViewport] = useState(false)
   const [previewUrl, setPreviewUrl] = useState('')
   const [previewError, setPreviewError] = useState('')
   const [previewLoading, setPreviewLoading] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      setIsMobileViewport(false)
+      return undefined
+    }
+
+    const mediaQuery = window.matchMedia('(max-width: 768px)')
+    const syncViewport = (event) => {
+      setIsMobileViewport(Boolean(event?.matches ?? mediaQuery.matches))
+    }
+
+    syncViewport()
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', syncViewport)
+
+      return () => {
+        mediaQuery.removeEventListener('change', syncViewport)
+      }
+    }
+
+    mediaQuery.addListener(syncViewport)
+
+    return () => {
+      mediaQuery.removeListener(syncViewport)
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
     let objectUrl = ''
 
     async function loadPreview() {
-      if (!mediaUrl) {
+      if (!mediaUrl || isMobileViewport) {
         setPreviewUrl('')
         setPreviewError('')
+        setPreviewLoading(false)
         return
       }
 
@@ -246,13 +275,28 @@ function PdfPreviewBlock({ file, title }) {
         URL.revokeObjectURL(objectUrl)
       }
     }
-  }, [mediaUrl])
+  }, [isMobileViewport, mediaUrl])
 
   if (!mediaUrl) return null
 
   return (
     <div className='d-flex flex-column gap-3 p-3 border rounded-4 bg-light-subtle'>
-      {previewLoading ? (
+      {isMobileViewport ? (
+        <div className='p-3 p-md-4 border rounded-4 bg-white shadow-sm'>
+          <div className='fw-semibold mb-2'>Tài liệu PDF</div>
+          <div className='text-body-secondary mb-3'>
+            Tài liệu PDF có thể không hiển thị trực tiếp trên điện thoại. Vui lòng bấm nút bên dưới để mở hoặc tải tài liệu.
+          </div>
+          <div className='d-flex flex-wrap gap-2'>
+            <CButton component='a' href={mediaUrl} target='_blank' rel='noreferrer' color='primary'>
+              Mở tài liệu PDF
+            </CButton>
+            <CButton component='a' href={mediaUrl} download={mediaName} color='secondary' variant='outline'>
+              Tải PDF
+            </CButton>
+          </div>
+        </div>
+      ) : previewLoading ? (
         <div className='d-flex align-items-center gap-2 text-body-secondary'>
           <CSpinner size='sm' />
           <span>Đang tải bản xem trước PDF...</span>
@@ -262,20 +306,22 @@ function PdfPreviewBlock({ file, title }) {
           src={previewUrl}
           title={mediaName}
           width='100%'
-          height='600'
+          height='1200'
           style={{ border: 'none', borderRadius: 12, backgroundColor: '#fff' }}
         />
       ) : null}
       <div className='d-flex flex-wrap gap-2'>
         <CButton component='a' href={mediaUrl} target='_blank' rel='noreferrer' color='primary' variant='outline'>
-          Mở file PDF
+          {isMobileViewport ? 'Mở tài liệu PDF' : 'Mở file PDF'}
         </CButton>
         <CButton component='a' href={mediaUrl} download={mediaName} color='secondary' variant='outline'>
           Tải PDF
         </CButton>
       </div>
       <div className='small text-body-secondary'>
-        {previewError || 'Nếu trình duyệt không hiển thị được PDF, vui lòng dùng nút mở file hoặc tải về.'}
+        {isMobileViewport
+          ? 'Bạn có thể mở tài liệu ở tab mới hoặc tải về để xem thuận tiện hơn trên điện thoại.'
+          : (previewError || 'Nếu trình duyệt không hiển thị được PDF, vui lòng dùng nút mở file hoặc tải về.')}
       </div>
     </div>
   )
@@ -321,8 +367,8 @@ export default function ArticleDetailPage() {
 
   const tenantCode = String(params?.tenantCode || tenant?.currentTenant?.tenantCode || tenant?.resolvedTenant?.tenantCode || '').trim()
   const slug = String(params?.slug || '').trim()
-  const isMainDomain = Boolean(tenant?.isMainDomain)
-  const journalPath = buildTenantUrl('/journal', { tenantCode, isMainDomain }) || '/journal'
+
+  useTenantPageTitle(article?.title || '')
 
   useEffect(() => {
     let cancelled = false
@@ -340,7 +386,8 @@ export default function ArticleDetailPage() {
       try {
         const response = await api.get('/articles', {
           params: {
-            'filters[slug]': slug,
+            'filters[slug][$eq]': slug,
+            status: 'published',
             populate: '*',
           },
         })
@@ -379,14 +426,7 @@ export default function ArticleDetailPage() {
 
   return (
     <CCard>
-      <CCardHeader>
-        <strong>Article Detail</strong>
-      </CCardHeader>
       <CCardBody>
-        <div className='mb-4'>
-          <CButton component={Link} to={journalPath} color='secondary' variant='outline'>Back to list</CButton>
-        </div>
-
         {loading ? (
           <div className='d-flex align-items-center gap-2'>
             <CSpinner size='sm' />

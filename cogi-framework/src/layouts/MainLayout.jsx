@@ -5,13 +5,16 @@ import AppFooter from '../components/AppFooter'
 import AppSidebar from '../components/AppSidebar'
 import { useAuth } from '../contexts/AuthContext'
 import { useFeature } from '../contexts/FeatureContext'
+import { useTenant } from '../contexts/TenantContext'
 import { buildNav } from '../navigation/buildNav'
 import { platformNavGroups } from '../platform/routes/platformRoutes'
+import { resolveTenantRouteTitle, setTenantPageTitle } from '../utils/tenantPageTitle'
 import './main-layout.css'
 
 export default function MainLayout() {
   const auth = useAuth()
   const feature = useFeature()
+  const tenant = useTenant()
   const location = useLocation()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
@@ -21,6 +24,11 @@ export default function MainLayout() {
     return pathname === '/requests' || pathname === '/requests/monitor'
   }, [location?.pathname])
 
+  const isPlatformWorkspaceRoute = useMemo(() => {
+    const pathname = String(location?.pathname || '')
+    return pathname === '/platform' || pathname.startsWith('/platform/')
+  }, [location?.pathname])
+
   const navItems = useMemo(
     () => {
       const tenantNavItems = buildNav(feature?.featureGroups || [])
@@ -28,9 +36,11 @@ export default function MainLayout() {
         return tenantNavItems
       }
 
-      return [...tenantNavItems, ...platformNavGroups]
+      return isPlatformWorkspaceRoute
+        ? [...platformNavGroups, ...tenantNavItems]
+        : [...tenantNavItems, ...platformNavGroups]
     },
-    [auth?.user?.isPlatformAdmin, feature?.featureGroups],
+    [auth?.user?.isPlatformAdmin, feature?.featureGroups, isPlatformWorkspaceRoute],
   )
 
   useEffect(() => {
@@ -48,6 +58,16 @@ export default function MainLayout() {
     return () => media.removeEventListener('change', applyMode)
   }, [])
 
+  useEffect(() => {
+    if (isPlatformWorkspaceRoute) {
+      document.title = 'COGI'
+      return
+    }
+
+    const routeTitle = resolveTenantRouteTitle(location.pathname)
+    setTenantPageTitle(routeTitle, tenant)
+  }, [isPlatformWorkspaceRoute, location.pathname, tenant])
+
   function onToggleSidebar() {
     if (window.matchMedia('(max-width: 991.98px)').matches) {
       setMobileSidebarOpen((prev) => !prev)
@@ -61,6 +81,7 @@ export default function MainLayout() {
     <div className="tenant-layout">
       <AppSidebar
         navItems={navItems}
+        isPlatformWorkspace={isPlatformWorkspaceRoute}
         collapsed={sidebarCollapsed}
         mobileOpen={mobileSidebarOpen}
         onCloseMobile={() => setMobileSidebarOpen(false)}

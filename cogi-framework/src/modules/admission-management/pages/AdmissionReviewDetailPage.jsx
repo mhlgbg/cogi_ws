@@ -163,10 +163,20 @@ export default function AdmissionReviewDetailPage() {
   ), [detail, templateFields, useFallbackRenderer])
   const evidences = useMemo(() => {
     const snapshotEvidences = getOpenableSnapshotEvidences(detail?.reviewSnapshot)
-    if (snapshotEvidences.images.length > 0 || snapshotEvidences.pdfs.length > 0) {
+    const fallbackEvidences = extractEvidenceFallback(detail)
+    const snapshotHasProtectedMetadata = [...snapshotEvidences.images, ...snapshotEvidences.pdfs].some(
+      (item) => Number.isInteger(Number(item?.fileAssetId)) && Number(item?.fileAssetId) > 0,
+    )
+
+    if ((snapshotEvidences.images.length > 0 || snapshotEvidences.pdfs.length > 0) && snapshotHasProtectedMetadata) {
       return snapshotEvidences
     }
-    return extractEvidenceFallback(detail)
+
+    if (fallbackEvidences.images.length > 0 || fallbackEvidences.pdfs.length > 0) {
+      return fallbackEvidences
+    }
+
+    return snapshotEvidences
   }, [detail])
 
   const currentReviewStatus = String(detail?.reviewStatus || '').trim().toLowerCase()

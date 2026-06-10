@@ -26,6 +26,7 @@ import {
 } from '../../../pages/admission/form-renderer/schema'
 import { useTenant } from '../../../contexts/TenantContext'
 import { sanitizeHtml } from '../../../pages/journal/journalPublicUtils'
+import useTenantPageTitle from '../../../utils/useTenantPageTitle'
 import {
   acknowledgeAdmissionV1Approval,
   buildAdmissionV1Permissions,
@@ -193,6 +194,7 @@ function readApprovedAcknowledgedAt(source) {
 }
 
 export default function AdmissionV1FormPage() {
+  useTenantPageTitle('Tuyển sinh')
   const navigate = useNavigate()
   const tenant = useTenant()
   const { tenantCode, campaignCode } = useParams()

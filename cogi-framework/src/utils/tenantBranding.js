@@ -13,17 +13,28 @@ export async function fetchTenantBranding() {
     displayName: String(payload?.displayName || '').trim(),
     domain: String(payload?.domain || '').trim(),
     logo: toAbsoluteUrl(payload?.logo || ''),
+    siteTitle: String(payload?.siteTitle || '').trim(),
+    defaultPageTitle: String(payload?.defaultPageTitle || '').trim(),
+    titleSuffix: String(payload?.titleSuffix || '').trim(),
   }
 }
 
-export function applyTenantBranding(branding, fallbackTitle) {
-  const displayName = String(branding?.displayName || '').trim()
-  const domain = String(branding?.domain || '').trim()
-  const resolvedTitle = displayName || domain || fallbackTitle
+export function setPageTitle(pageTitle, tenant) {
+  const resolvedPageTitle = String(pageTitle || '').trim()
+  const siteTitle = String(tenant?.siteTitle || '').trim()
+  const defaultPageTitle = String(tenant?.defaultPageTitle || '').trim()
+  const titleSuffix = String(tenant?.titleSuffix || '').trim()
 
-  if (resolvedTitle) {
-    document.title = resolvedTitle
+  if (resolvedPageTitle) {
+    document.title = `${resolvedPageTitle}${titleSuffix ? ` | ${titleSuffix}` : ''}`
+    return
   }
+
+  document.title = defaultPageTitle || siteTitle || 'Website'
+}
+
+export function applyTenantBranding(branding, fallbackTitle) {
+  setPageTitle(fallbackTitle, branding)
 
   const logoUrl = String(branding?.logo || '').trim()
   if (!logoUrl) return

@@ -33,6 +33,61 @@ export function resolveMediaUrl(url) {
   return toAbsoluteUrl(url)
 }
 
+function readStoredJwt() {
+  if (typeof window === 'undefined') return ''
+  return String(window.localStorage.getItem('authJwt') || '').trim()
+}
+
+function readAdmissionV1SessionToken() {
+  if (typeof window === 'undefined') return ''
+
+  const pathname = String(window.location.pathname || '').trim()
+  const tenantMatch = pathname.match(/^\/t\/([^/]+)\/dang-ky-tuyen-sinh-v1\/([^/]+)/i)
+  const directMatch = pathname.match(/^\/dang-ky-tuyen-sinh-v1\/([^/]+)/i)
+
+  let tenantCode = ''
+  let campaignCode = ''
+
+  if (tenantMatch) {
+    tenantCode = decodeURIComponent(String(tenantMatch[1] || '').trim()).toLowerCase()
+    campaignCode = decodeURIComponent(String(tenantMatch[2] || '').trim()).toLowerCase()
+  } else if (directMatch) {
+    campaignCode = decodeURIComponent(String(directMatch[1] || '').trim()).toLowerCase()
+  }
+
+  if (!campaignCode) return ''
+
+  const storageKey = `admission-v1-session:${tenantCode}:${campaignCode}`
+  return String(window.sessionStorage.getItem(storageKey) || '').trim()
+}
+
+export function buildProtectedFileUrl(fileMeta) {
+  if (!fileMeta || typeof fileMeta !== 'object') {
+    return resolveMediaUrl(fileMeta)
+  }
+
+  const rawUrl = String(fileMeta.url || fileMeta.dataUrl || '').trim()
+  const fileAssetId = Number(fileMeta.fileAssetId || 0)
+  const storageProvider = String(fileMeta.storageProvider || '').trim().toLowerCase()
+
+  if (!rawUrl) return ''
+  if (!rawUrl.startsWith('/storage/')) return resolveMediaUrl(rawUrl)
+  if (!Number.isInteger(fileAssetId) || fileAssetId <= 0) return resolveMediaUrl(rawUrl)
+  if (storageProvider && storageProvider !== 'local') return resolveMediaUrl(rawUrl)
+
+  const jwt = readStoredJwt()
+  if (jwt) {
+    return toAbsoluteUrl(`/api/storage/files/${fileAssetId}/download?jwt=${encodeURIComponent(jwt)}`)
+  }
+
+  const admissionToken = readAdmissionV1SessionToken()
+  if (admissionToken) {
+    return toAbsoluteUrl(`/api/storage/files/${fileAssetId}/download?token=${encodeURIComponent(admissionToken)}`)
+  }
+
+  return resolveMediaUrl(rawUrl)
+}
+
 export function isDataUrl(url) {
   return /^data:/i.test(String(url || '').trim())
 }

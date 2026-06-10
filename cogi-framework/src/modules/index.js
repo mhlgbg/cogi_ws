@@ -31,6 +31,7 @@ import * as learnerManagement from './learner-management'
 import * as feeSheetManagement from './fee-sheet-management'
 import * as admissionManagement from './admission-management'
 import * as contentManagement from './content-management'
+import * as storage from './storage'
 import * as slider from './slider'
 import * as mailMonitor from './mail-monitor'
 // import * as inventory from "./inventory";
@@ -57,6 +58,7 @@ export const allModules = [
   feeSheetManagement,
   admissionManagement,
   contentManagement,
+  storage,
   slider,
   mailMonitor,
   // inventory,
