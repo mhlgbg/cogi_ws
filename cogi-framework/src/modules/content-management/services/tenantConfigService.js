@@ -79,18 +79,32 @@ export async function getTenantConfigByKey(key, options = {}) {
 
   if (!payload || typeof payload !== 'object') return null
 
+  let result = null
+
   if (payload.data?.attributes && typeof payload.data.attributes === 'object') {
-    return {
+    result = {
       id: payload.data.id,
       ...payload.data.attributes,
     }
+  } else if (payload.data && typeof payload.data === 'object') {
+    result = payload.data
   }
 
-  if (payload.data && typeof payload.data === 'object') {
-    return payload.data
+  if (!result) return null
+
+  // Normalize jsonContent when it's stored as a string (legacy rows)
+  if (result.jsonContent && typeof result.jsonContent === 'string') {
+    try {
+      result.jsonContent = JSON.parse(result.jsonContent)
+    } catch (err) {
+      if (isDev()) {
+        console.warn('[tenantConfigService.getTenantConfigByKey] failed to parse jsonContent', { key: normalizedKey, tenantCode, error: err })
+      }
+      // leave jsonContent as-is (string) if parse fails
+    }
   }
 
-  return null
+  return result
 }
 
 export async function createTenantConfig(payload) {

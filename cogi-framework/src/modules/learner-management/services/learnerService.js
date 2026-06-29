@@ -92,3 +92,9 @@ export async function importLearners(formData) {
 
   return response?.data?.data || null
 }
+
+export async function getLearnerById(id) {
+  if (!id) return null
+  const response = await api.get(`/learners/${id}`)
+  return normalizeLearner(parseSingle(response))
+}

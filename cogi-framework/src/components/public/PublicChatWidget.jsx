@@ -10,8 +10,11 @@ import {
 } from '@coreui/react'
 import axios from '../../api/axios'
 import { useTenant } from '../../contexts/TenantContext'
+// NOTE: PublicChatWidget now uses backend widget-status endpoint as single source of truth
 
-const DEFAULT_TITLE = 'Chat cùng COGI'
+// Leave default title empty so fallback uses tenant-specific displayTenantCode
+const DEFAULT_TITLE = ''
+const PUBLIC_CHAT_SESSION_STORAGE_VERSION = 'v2'
 const FLOATING_WIDGET_STYLE = {
   position: 'fixed',
   right: '16px',
@@ -92,12 +95,24 @@ const POPUP_AVATAR_STYLE = {
   marginTop: '1rem',
 }
 
+const POPUP_MESSAGES_STYLE = {
+  flex: 1,
+  minHeight: 0,
+  overflowY: 'auto',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '12px',
+  paddingRight: '4px',
+}
+
 function normalizeText(value) {
   return String(value || '').trim()
 }
 
 function getApiMessage(error, fallback) {
-  return error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || fallback
+  // Prefer server-provided message (new shape: { code, message })
+  const serverMessage = error?.response?.data?.message || error?.response?.data?.error?.message;
+  return serverMessage || fallback;
 }
 
 function formatDateTime(value) {
@@ -112,8 +127,18 @@ function formatDateTime(value) {
   }).format(date)
 }
 
+function normalizeSessionPayload(payload) {
+  if (!payload || typeof payload !== 'object') return null
+  return payload?.session || null
+}
+
+function normalizeMessagesPayload(payload) {
+  if (!payload || typeof payload !== 'object') return []
+  return Array.isArray(payload?.messages) ? payload.messages : []
+}
+
 function getStorageKey(tenantCode, tenantSlug) {
-  return `publicChatSessionId_${normalizeText(tenantCode || tenantSlug || 'default')}`
+  return `publicChatSessionId_${PUBLIC_CHAT_SESSION_STORAGE_VERSION}_${normalizeText(tenantCode || tenantSlug || 'default')}`
 }
 
 function toInitials(input) {
@@ -138,6 +163,9 @@ export default function PublicChatWidget({
 }) {
   const tenant = useTenant()
   const [isOpen, setIsOpen] = useState(false)
+  const [widgetVisible, setWidgetVisible] = useState(true)
+  const [widgetOffline, setWidgetOffline] = useState(false)
+  const [widgetConfig, setWidgetConfig] = useState(null)
   const [initializing, setInitializing] = useState(false)
   const [sending, setSending] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -151,16 +179,85 @@ export default function PublicChatWidget({
   const displayTenantCode = normalizeText(tenant?.currentTenant?.tenantCode || tenant?.resolvedTenant?.tenantCode || normalizedTenantCode || normalizedTenantSlug || 'COGI').toUpperCase()
   const tenantName = normalizeText(tenant?.currentTenant?.tenantName || tenant?.resolvedTenant?.tenantName || tenant?.currentTenant?.tenantCode || tenant?.resolvedTenant?.tenantCode || 'COGI')
   const chatAvatarUrl = normalizeText(tenant?.currentTenant?.tenantChatAvatarUrl || tenant?.resolvedTenant?.tenantChatAvatarUrl)
+  // Prefer explicit title prop (embed config) over tenant widgetTitle from backend
+  const chatWindowTitle = title || widgetConfig?.widgetTitle || `Chat cùng ${displayTenantCode || 'COGI'}`
   const collapsedLabel = `Chat voi ${displayTenantCode}`
   const storageKey = useMemo(
     () => getStorageKey(normalizedTenantCode, normalizedTenantSlug),
     [normalizedTenantCode, normalizedTenantSlug],
   )
 
+  // Load tenant chatWidgetConfig as single source of truth for widget behavior
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadConfig() {
+      try {
+        const effectiveTenantCode = normalizedTenantCode || normalizeText(tenant?.currentTenant?.tenantCode || tenant?.resolvedTenant?.tenantCode || '')
+        // Call backend status endpoint which is the single source of truth for widget runtime behavior
+        const params = {}
+        if (normalizedTenantCode) params.tenantCode = normalizedTenantCode
+        if (normalizedTenantSlug) params.tenantSlug = normalizedTenantSlug
+        const response = await axios.get('/public-chat/widget-status', { params })
+        if (cancelled) return
+        const payload = response?.data?.data || response?.data || {}
+        const finalConfig = payload || null
+        setWidgetConfig(finalConfig)
+        try {
+          console.info('[PublicChatWidget] loaded chatWidgetConfig (from widget-status)', { effectiveTenantCode, configJson: JSON.stringify(finalConfig) })
+        } catch (e) {
+          console.info('[PublicChatWidget] loaded chatWidgetConfig (raw)', { effectiveTenantCode, finalConfig })
+        }
+
+        // Determine enabled/available from backend payload
+        const enabled = finalConfig == null ? true : (finalConfig.enabled === true || String(finalConfig.enabled).toLowerCase() === 'true')
+        const available = finalConfig == null ? true : (finalConfig.available === true || String(finalConfig.available).toLowerCase() === 'true')
+
+        setWidgetVisible(enabled)
+        setWidgetOffline(!available)
+      } catch (err) {
+        // keep previous defaults on failure; log for debugging
+        console.error('[PublicChatWidget][loadConfig] error', err)
+      }
+    }
+
+    loadConfig()
+
+    return () => { cancelled = true }
+  }, [normalizedTenantCode, normalizedTenantSlug, tenant?.currentTenant?.tenantCode, tenant?.resolvedTenant?.tenantCode])
+
+  // Diagnostic render-time info
+  useEffect(() => {
+    console.info('[PublicChatWidget] render state', {
+      normalizedTenantCode,
+      normalizedTenantSlug,
+      widgetVisible,
+      widgetOffline,
+      widgetConfig,
+    })
+  })
+
   useEffect(() => {
     if (!messagesRef.current) return
     messagesRef.current.scrollTop = messagesRef.current.scrollHeight
   }, [messages, isOpen])
+
+  // If widget becomes disabled server-side, clear any stored session and close widget
+  useEffect(() => {
+    try {
+      if (!widgetVisible) {
+        setIsOpen(false)
+        setSessionId('')
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem(storageKey)
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [widgetVisible])
+
+
 
   async function loadMessagesBySession(existingSessionId) {
     const response = await axios.get(`/public-chat/session/${encodeURIComponent(existingSessionId)}/messages`)
@@ -176,8 +273,8 @@ export default function PublicChatWidget({
     })
     const payload = response?.data?.data || response?.data || {}
     return {
-      session: payload?.session || null,
-      messages: Array.isArray(payload?.messages) ? payload.messages : [],
+      session: normalizeSessionPayload(payload),
+      messages: normalizeMessagesPayload(payload),
     }
   }
 
@@ -215,11 +312,19 @@ export default function PublicChatWidget({
 
       setSessionId(nextSessionId)
       setMessages(Array.isArray(created?.messages) ? created.messages : [])
+      // Respect server-side widgetStatus or client config
+      if ((created && String(created.widgetStatus || '').toUpperCase() === 'OFFLINE') || (widgetConfig && String(widgetConfig.available).toLowerCase() !== 'true' && widgetConfig.available !== true)) {
+        setWidgetOffline(true)
+      } else {
+        setWidgetOffline(false)
+      }
       if (typeof window !== 'undefined') {
         localStorage.setItem(storageKey, nextSessionId)
       }
     } catch (error) {
-      setErrorMessage(getApiMessage(error, 'Không thể khởi tạo hội thoại'))
+      // log full error for debugging (status, response, stack)
+      console.error('[PublicChatWidget][ensureSession] error', error)
+      setErrorMessage(getApiMessage(error, 'Hiện chưa thể kết nối tới hệ thống tư vấn. Anh/Chị vui lòng thử lại sau.'))
     } finally {
       setInitializing(false)
     }
@@ -243,11 +348,29 @@ export default function PublicChatWidget({
         sessionId,
         content,
       })
-      const payload = response?.data?.data || response?.data || []
-      setMessages(Array.isArray(payload) ? payload : [])
+      const payload = response?.data?.data || response?.data || {}
+      const nextSession = normalizeSessionPayload(payload)
+      const nextMessages = normalizeMessagesPayload(payload)
+
+      if (nextSession?.id) {
+        const nextSessionId = String(nextSession.id).trim()
+        setSessionId(nextSessionId)
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(storageKey, nextSessionId)
+        }
+      }
+
+      setMessages(nextMessages)
       setInputValue('')
+      // Respect server-side widgetStatus or client config
+      if ((payload && String(payload.widgetStatus || '').toUpperCase() === 'OFFLINE') || (widgetConfig && String(widgetConfig.available).toLowerCase() !== 'true' && widgetConfig.available !== true)) {
+        setWidgetOffline(true)
+      } else {
+        setWidgetOffline(false)
+      }
     } catch (error) {
-      setErrorMessage(getApiMessage(error, 'Không thể gửi tin nhắn'))
+      console.error('[PublicChatWidget][handleSendMessage] error', error)
+      setErrorMessage(getApiMessage(error, 'Hiện chưa thể kết nối tới hệ thống tư vấn. Anh/Chị vui lòng thử lại sau.'))
     } finally {
       setSending(false)
     }
@@ -261,6 +384,7 @@ export default function PublicChatWidget({
   }
 
   if (!normalizedTenantCode && !normalizedTenantSlug) return null
+  if (!widgetVisible) return null
 
   return (
     <div className='public-chat-widget' style={FLOATING_WIDGET_STYLE}>
@@ -274,13 +398,14 @@ export default function PublicChatWidget({
       ) : (
         <CCard className='public-chat-widget-popup' style={POPUP_STYLE}>
           <CCardHeader className='d-flex justify-content-between align-items-center gap-2'>
-            <strong>{title || DEFAULT_TITLE}</strong>
+            <strong>{chatWindowTitle}</strong>
+            {widgetOffline ? <span className='text-muted small'>Tạm thời không trực tuyến</span> : null}
             <button type='button' className='public-chat-widget-close' onClick={() => setIsOpen(false)} aria-label='Đóng chat'>×</button>
           </CCardHeader>
-          <CCardBody className='d-flex flex-column gap-3'>
+          <CCardBody className='d-flex flex-column gap-3' style={{ maxHeight: 'calc(70vh - 56px)', overflow: 'hidden' }}>
             {errorMessage ? <CAlert color='danger' className='mb-0'>{errorMessage}</CAlert> : null}
 
-            <div ref={messagesRef} className='public-chat-widget-messages'>
+            <div ref={messagesRef} className='public-chat-widget-messages' style={POPUP_MESSAGES_STYLE}>
               {initializing ? (
                 <div className='d-flex align-items-center gap-2'>
                   <CSpinner size='sm' />

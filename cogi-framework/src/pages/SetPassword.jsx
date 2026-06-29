@@ -13,6 +13,7 @@ import {
   CRow,
 } from '@coreui/react'
 import api from '../api/axios'
+import { applyTenantBranding, fetchTenantBranding } from '../utils/tenantBranding'
 
 export default function SetPassword() {
   const [searchParams] = useSearchParams()
@@ -24,6 +25,29 @@ export default function SetPassword() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+
+  useEffect(() => {
+    let isCancelled = false
+
+    async function loadTenantBranding() {
+      try {
+        const branding = await fetchTenantBranding()
+        if (!isCancelled) {
+          applyTenantBranding(branding, 'Đặt mật khẩu')
+        }
+      } catch {
+        if (!isCancelled) {
+          document.title = 'Đặt mật khẩu'
+        }
+      }
+    }
+
+    loadTenantBranding()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     if (!success) return

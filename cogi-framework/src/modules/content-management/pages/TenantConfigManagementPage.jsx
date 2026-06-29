@@ -31,7 +31,9 @@ import {
   deleteTenantConfig,
   getTenantConfigs,
   updateTenantConfig,
+  getTenantConfigByKey,
 } from '../services/tenantConfigService'
+// no local api required here
 
 function getApiMessage(error, fallback) {
   return error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || fallback
@@ -96,6 +98,11 @@ export default function TenantConfigManagementPage() {
     description: '',
     jsonContentText: '{\n  \n}',
   })
+  const [showEmbedModal, setShowEmbedModal] = useState(false)
+  const [embedCode, setEmbedCode] = useState('')
+  const [embedConfig, setEmbedConfig] = useState(null)
+  const [embedError, setEmbedError] = useState('')
+  const [copying, setCopying] = useState(false)
 
   const total = meta?.pagination?.total ?? 0
   const pageCount = meta?.pagination?.pageCount ?? 1
@@ -345,6 +352,7 @@ export default function TenantConfigManagementPage() {
                     <CPaginationItem disabled={page >= pageCount || loading} onClick={() => setPage((prev) => Math.min(pageCount, prev + 1))}>Sau</CPaginationItem>
                   </CPagination>
                 </div>
+                {/* Embed action removed: managed in /ai/assistant */}
               </>
             )}
           </CCardBody>
@@ -397,6 +405,54 @@ export default function TenantConfigManagementPage() {
             <CButton color='secondary' onClick={closeModal} disabled={formLoading}>Hủy</CButton>
             <CButton color='primary' onClick={handleSubmit} disabled={formLoading}>
               {formLoading ? <><CSpinner size='sm' className='me-2' />Đang xử lý...</> : (editingId ? 'Cập nhật' : 'Thêm mới')}
+            </CButton>
+          </CModalFooter>
+        </CModal>
+
+        <CModal backdrop='static' visible={showEmbedModal} onClose={() => setShowEmbedModal(false)} size='lg'>
+          <CModalHeader>
+            <CModalTitle>Mã nhúng Chat Widget</CModalTitle>
+          </CModalHeader>
+          <CModalBody>
+            {embedError ? <CAlert color='warning'>{embedError}</CAlert> : null}
+            {!embedError ? (
+              <>
+                {embedConfig && embedConfig.enabled !== true ? (
+                  <CAlert color='warning'>Lưu ý: widget hiện đang <strong>disabled</strong> (enabled=false).</CAlert>
+                ) : null}
+                {embedConfig && embedConfig.available !== true ? (
+                  <CAlert color='info'>Lưu ý: widget đang ở chế độ <strong>tạm thời không trực tuyến</strong> (available=false).</CAlert>
+                ) : null}
+
+                <div className='mb-2 small'>Domain website bạn chèn mã nhúng phải nằm trong <code>allowedDomains</code> của cấu hình.</div>
+                <div className='mb-2 small'>Mô tả:</div>
+                <ul className='small'>
+                  <li>Mã này được dán vào website bên ngoài.</li>
+                  <li>Domain của website bên ngoài phải nằm trong <code>allowedDomains</code>.</li>
+                  <li>apiBaseUrl luôn là API của framework, không phải domain website bên ngoài.</li>
+                </ul>
+
+                <CFormTextarea rows={8} value={embedCode} readOnly style={{ fontFamily: 'monospace' }} />
+              </>
+            ) : null}
+          </CModalBody>
+          <CModalFooter>
+            <div className='me-auto'>
+              {embedConfig ? <div className='small text-body-secondary'>Preview: widget title: <strong>{embedConfig.widgetTitle || ''}</strong></div> : null}
+            </div>
+            <CButton color='secondary' onClick={() => setShowEmbedModal(false)}>Đóng</CButton>
+            <CButton color='primary' onClick={async () => {
+              if (!embedCode) return
+              try {
+                setCopying(true)
+                await navigator.clipboard.writeText(embedCode)
+                setCopying(false)
+                // keep modal open
+              } catch (err) {
+                setCopying(false)
+              }
+            }}>
+              {copying ? 'Đang sao chép...' : 'Copy mã nhúng'}
             </CButton>
           </CModalFooter>
         </CModal>

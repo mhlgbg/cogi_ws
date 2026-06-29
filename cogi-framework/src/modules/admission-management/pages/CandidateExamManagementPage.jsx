@@ -31,6 +31,7 @@ import CandidateExamFormModal from '../components/CandidateExamFormModal'
 import CandidateExamImportModal from '../components/CandidateExamImportModal'
 import CandidateExamLogModal from '../components/CandidateExamLogModal'
 import CandidateExamScoreImportModal from '../components/CandidateExamScoreImportModal'
+import CandidateExamRecheckImportModal from '../components/CandidateExamRecheckImportModal'
 import {
 	downloadCandidateExamImportTemplate,
   createCandidateExam,
@@ -224,6 +225,7 @@ export default function CandidateExamManagementPage() {
   const [showModal, setShowModal] = useState(false)
   const [importModalVisible, setImportModalVisible] = useState(false)
   const [scoreImportModalVisible, setScoreImportModalVisible] = useState(false)
+  const [recheckImportModalVisible, setRecheckImportModalVisible] = useState(false)
   const [downloadingTemplate, setDownloadingTemplate] = useState(false)
   const [exportingExcel, setExportingExcel] = useState(false)
   const [editingRow, setEditingRow] = useState(null)
@@ -647,6 +649,7 @@ export default function CandidateExamManagementPage() {
               </CButton>
               <CButton color='info' variant='outline' onClick={() => setImportModalVisible(true)} disabled={loading}>Import thí sinh</CButton>
               <CButton color='warning' variant='outline' onClick={() => setScoreImportModalVisible(true)} disabled={loading}>Import điểm</CButton>
+              <CButton color='warning' variant='outline' onClick={() => setRecheckImportModalVisible(true)} disabled={loading}>Import phúc khảo</CButton>
               <CButton color='secondary' variant='outline' onClick={loadData} disabled={loading}>Tải lại</CButton>
               <CButton color='primary' onClick={openCreateModal}>Thêm thí sinh</CButton>
             </div>
@@ -800,6 +803,12 @@ export default function CandidateExamManagementPage() {
                       <CTableHeaderCell>Trạng thái nhắc</CTableHeaderCell>
                       <CTableHeaderCell>Lần nhắc gần nhất</CTableHeaderCell>
                       <CTableHeaderCell>Trạng thái</CTableHeaderCell>
+                      <CTableHeaderCell>PK Toán</CTableHeaderCell>
+                      <CTableHeaderCell>PK Tiếng Việt</CTableHeaderCell>
+                      <CTableHeaderCell>PK Tiếng Anh</CTableHeaderCell>
+                      <CTableHeaderCell>Điểm PK Toán</CTableHeaderCell>
+                      <CTableHeaderCell>Điểm PK TV</CTableHeaderCell>
+                      <CTableHeaderCell>Điểm PK TA</CTableHeaderCell>
                       <CTableHeaderCell>Tải thẻ</CTableHeaderCell>
                       <CTableHeaderCell className='text-end'>Thao tác</CTableHeaderCell>
                     </CTableRow>
@@ -832,6 +841,12 @@ export default function CandidateExamManagementPage() {
                           <CBadge color={getStatusColor(item.candidateExamStatus)}>{getStatusLabel(item.candidateExamStatus)}</CBadge>
                           {item?.isDeleted ? <CBadge color='dark' className='ms-2'>Đã xóa</CBadge> : null}
                         </CTableDataCell>
+                        <CTableDataCell>{item.recheckMath ? 'Có' : 'Không'}</CTableDataCell>
+                        <CTableDataCell>{item.recheckVietnamese ? 'Có' : 'Không'}</CTableDataCell>
+                        <CTableDataCell>{item.recheckEnglish ? 'Có' : 'Không'}</CTableDataCell>
+                        <CTableDataCell>{item.recheckMathScore ?? '-'}</CTableDataCell>
+                        <CTableDataCell>{item.recheckVietnameseScore ?? '-'}</CTableDataCell>
+                        <CTableDataCell>{item.recheckEnglishScore ?? '-'}</CTableDataCell>
                         <CTableDataCell>{item.cardDownloadCount || 0}</CTableDataCell>
                         <CTableDataCell className='text-end'>
                           <div className='d-inline-flex gap-2 flex-wrap justify-content-end'>
@@ -906,6 +921,19 @@ export default function CandidateExamManagementPage() {
           setScoreImportModalVisible(false)
           setSuccessMessage(
             `Import điểm hoàn tất: cập nhật ${result?.summary?.updatedCount || 0}, bỏ qua ${result?.summary?.skippedCount || 0}, lỗi ${result?.summary?.errorCount || 0}`
+          )
+          await Promise.all([loadData(), loadReminderSummary()])
+        }}
+      />
+
+      <CandidateExamRecheckImportModal
+        visible={recheckImportModalVisible}
+        admissionSeason={selectedAdmissionSeason}
+        onClose={() => setRecheckImportModalVisible(false)}
+        onImported={async (result) => {
+          setRecheckImportModalVisible(false)
+          setSuccessMessage(
+            `Import phúc khảo hoàn tất: cập nhật ${result?.summary?.updatedCount || 0}, bỏ qua ${result?.summary?.skippedCount || 0}, lỗi ${result?.summary?.errorCount || 0}`
           )
           await Promise.all([loadData(), loadReminderSummary()])
         }}

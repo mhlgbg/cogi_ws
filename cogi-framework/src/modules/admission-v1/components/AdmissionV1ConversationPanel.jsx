@@ -294,7 +294,7 @@ export default function AdmissionV1ConversationPanel({
                 return (
                   <div key={message.id || `${message.createdAt}-${message.senderType}`} className={`admission-v1-message admission-v1-message--${variant}`}>
                     <div className='admission-v1-message__meta'>
-                        <span><span className='fw-semibold'>{getSenderName(message)}</span> · {getSenderTypeLabel(message)}</span>
+                      <span><span className='fw-semibold'>{getSenderName(message)}</span> · {getSenderTypeLabel(message)}</span>
                       <span>{formatDateTime(message?.createdAt)}</span>
                     </div>
 

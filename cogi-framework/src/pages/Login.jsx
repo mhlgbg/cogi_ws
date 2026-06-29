@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import api from '../api/axios'
 import { useAuth } from '../contexts/AuthContext'
 import { useTenant } from '../contexts/TenantContext'
+import { applyTenantBranding, fetchTenantBranding } from '../utils/tenantBranding'
 
 function normalizePath(path) {
   const rawPath = String(path || '').trim()
@@ -70,6 +71,29 @@ export default function Login() {
   const resolvedTenantCode = String(
     tenantCode || tenant?.resolvedTenant?.tenantCode || tenant?.currentTenant?.tenantCode || '',
   ).trim()
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadTenantBranding() {
+      try {
+        const branding = await fetchTenantBranding()
+        if (!cancelled) {
+          applyTenantBranding(branding, 'Đăng nhập')
+        }
+      } catch {
+        if (!cancelled) {
+          document.title = 'Đăng nhập'
+        }
+      }
+    }
+
+    loadTenantBranding()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   if (auth?.isAuthenticated) {
     if (tenant?.isResolvingTenant) {

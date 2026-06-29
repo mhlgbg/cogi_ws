@@ -10,7 +10,8 @@ import {
 } from '@coreui/react'
 import axios from '../../api/axios'
 
-const DEFAULT_TITLE = 'Chat cùng COGI'
+// Leave default title empty so fallback uses tenant-specific tenantCode
+const DEFAULT_TITLE = ''
 
 function normalizeText(value) {
   return String(value || '').trim()
@@ -42,6 +43,8 @@ export default function PublicChatWidget({
   title = DEFAULT_TITLE,
 }) {
   const [isOpen, setIsOpen] = useState(false)
+  const [widgetVisible, setWidgetVisible] = useState(true)
+  const [widgetOffline, setWidgetOffline] = useState(false)
   const [initializing, setInitializing] = useState(false)
   const [sending, setSending] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -61,6 +64,8 @@ export default function PublicChatWidget({
     if (!messagesRef.current) return
     messagesRef.current.scrollTop = messagesRef.current.scrollHeight
   }, [messages, isOpen])
+
+
 
   async function loadMessagesBySession(existingSessionId) {
     const response = await axios.get(`/public-chat/session/${encodeURIComponent(existingSessionId)}/messages`)
@@ -161,6 +166,7 @@ export default function PublicChatWidget({
   }
 
   if (!normalizedTenantCode && !normalizedTenantSlug) return null
+  if (!widgetVisible) return null
 
   return (
     <div className='public-chat-widget'>
@@ -172,6 +178,7 @@ export default function PublicChatWidget({
         <CCard className='public-chat-widget-popup'>
           <CCardHeader className='d-flex justify-content-between align-items-center gap-2'>
             <strong>{title || DEFAULT_TITLE}</strong>
+            {widgetOffline ? <span className='text-muted small'>Tạm thời không trực tuyến</span> : null}
             <button type='button' className='public-chat-widget-close' onClick={() => setIsOpen(false)} aria-label='Đóng chat'>×</button>
           </CCardHeader>
           <CCardBody className='d-flex flex-column gap-3'>
@@ -188,10 +195,11 @@ export default function PublicChatWidget({
               ) : messages.map((item, index) => {
                 const role = normalizeText(item?.role).toLowerCase()
                 const isUser = role === 'user'
+                const displayRole = (item && item.displayName) ? String(item.displayName).trim() : (role || 'assistant')
                 return (
                   <div key={item?.id || `${role}-${index}`} className={`d-flex ${isUser ? 'justify-content-end' : 'justify-content-start'}`}>
                     <div className={`public-chat-widget-bubble-wrap${isUser ? ' is-user' : ''}`}>
-                      <div className='public-chat-widget-role'>{role || 'assistant'}</div>
+                      <div className='public-chat-widget-role'>{displayRole}</div>
                       <div className={`public-chat-widget-bubble${isUser ? ' is-user' : ''}`}>{item?.content || ''}</div>
                       <div className='public-chat-widget-time'>{formatDateTime(item?.createdAt)}</div>
                     </div>

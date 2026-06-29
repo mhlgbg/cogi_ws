@@ -52,6 +52,7 @@ function normalizeClass(raw) {
     status: readClassStatus(entity),
     mainTeacher: normalizeRelation(entity.mainTeacher),
     updatedAt: entity.updatedAt || null,
+    createdAt: entity.createdAt || null,
   }
 }
 
@@ -153,8 +154,18 @@ export async function getClassById(id) {
   return normalizeClass(parseSingle(response))
 }
 
-export async function getClassEnrollmentOptions(classId) {
-  const response = await api.get(`/classes/${classId}/enrollment-options`)
+export async function getClassEnrollmentOptions(classId, { includeInactive = false } = {}) {
+  const params = {}
+  if (includeInactive) params.includeInactive = '1'
+  const response = await api.get(`/classes/${classId}/enrollment-options`, { params })
+  // Debug: log raw response to help troubleshoot missing learners
+  try {
+    // eslint-disable-next-line no-console
+    console.debug('[debug] getClassEnrollmentOptions response:', response?.data)
+  } catch (e) {
+    // ignore logging errors
+  }
+
   return {
     learners: Array.isArray(response?.data?.data?.learners)
       ? response.data.data.learners
@@ -211,4 +222,74 @@ export async function importClassEnrollments(classId, formData) {
   })
 
   return response?.data?.data || null
+}
+
+export async function getClassTeacherAssignments(classId) {
+  const response = await api.get(`/classes/${classId}/assignments`)
+  const items = Array.isArray(response?.data?.data) ? response.data.data : []
+
+  return items.map((item) => ({
+    id: item.id,
+    subject: item.subject || '',
+    subjectCode: item.subjectCode || '',
+    role: item.role || '',
+    startDate: item.startDate || null,
+    endDate: item.endDate || null,
+    assignmentStatus: item.assignmentStatus || 'active',
+    isPayable: Boolean(item.isPayable),
+    note: item.note || '',
+    createdAt: item.createdAt || null,
+    updatedAt: item.updatedAt || null,
+    teacher: item.teacher || null,
+  }))
+}
+
+export async function createClassTeacherAssignment(classId, payload) {
+  // payload should follow { teacher, subjectCode, subject, role, startDate, endDate, assignmentStatus, isPayable, note }
+  const data = payload || {}
+  const id = classId || (payload && payload.class)
+  if (!id) throw new Error('classId is required')
+  const response = await api.post(`/classes/${id}/assignments`, { data })
+  // Return created object in a normalized shape similar to getClassTeacherAssignments mapping
+  const raw = response?.data?.data || null
+  if (!raw) return null
+
+  return {
+    id: raw.id,
+    subject: raw.subject || '',
+    subjectCode: raw.subjectCode || '',
+    role: raw.role || '',
+    startDate: raw.startDate || null,
+    endDate: raw.endDate || null,
+    assignmentStatus: raw.assignmentStatus || 'active',
+    isPayable: Boolean(raw.isPayable),
+    note: raw.note || '',
+    createdAt: raw.createdAt || null,
+    updatedAt: raw.updatedAt || null,
+    teacher: raw.teacher || null,
+  }
+}
+
+export async function updateClassTeacherAssignment(classId, assignmentId, payload) {
+  if (!classId) throw new Error('classId is required')
+  if (!assignmentId) throw new Error('assignmentId is required')
+
+  const response = await api.put(`/classes/${classId}/assignments/${assignmentId}`, { data: payload })
+  const raw = response?.data?.data || null
+  if (!raw) return null
+
+  return {
+    id: raw.id,
+    subject: raw.subject || '',
+    subjectCode: raw.subjectCode || '',
+    role: raw.role || '',
+    startDate: raw.startDate || null,
+    endDate: raw.endDate || null,
+    assignmentStatus: raw.assignmentStatus || 'active',
+    isPayable: Boolean(raw.isPayable),
+    note: raw.note || '',
+    createdAt: raw.createdAt || null,
+    updatedAt: raw.updatedAt || null,
+    teacher: raw.teacher || null,
+  }
 }

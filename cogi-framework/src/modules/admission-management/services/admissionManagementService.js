@@ -345,7 +345,45 @@ export async function previewCandidateExamScoreImport({ admissionSeasonId, file 
   })
   return unwrapSuccess(res.data)
 }
+export async function downloadCandidateExamRecheckImportTemplate() {
+  const res = await api.get('/candidate-exams/recheck-import-template', {
+    responseType: 'blob',
+  })
 
+  const headerValue = String(res.headers?.['content-disposition'] || '')
+  const matchedName = headerValue.match(/filename="?([^";]+)"?/i)
+
+  return {
+    blob: res.data,
+    fileName: matchedName?.[1] || 'candidate-exam-recheck-import-template.xlsx',
+  }
+}
+
+export async function previewCandidateExamRecheckImport({ admissionSeasonId, file }) {
+  const formData = new FormData()
+  formData.append('admissionSeasonId', String(admissionSeasonId || ''))
+  formData.append('file', file)
+
+  const res = await api.post('/candidate-exams/recheck-import-preview', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return unwrapSuccess(res.data)
+}
+
+export async function confirmCandidateExamRecheckImport({ admissionSeasonId, file }) {
+  const formData = new FormData()
+  formData.append('admissionSeasonId', String(admissionSeasonId || ''))
+  formData.append('file', file)
+
+  const res = await api.post('/candidate-exams/recheck-import-confirm', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return unwrapSuccess(res.data)
+}
 export async function confirmCandidateExamImport({ admissionSeasonId, file, options = {} }) {
   const formData = new FormData()
   formData.append('admissionSeasonId', String(admissionSeasonId || ''))

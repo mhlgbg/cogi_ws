@@ -13,6 +13,7 @@ export async function fetchTenantBranding() {
     displayName: String(payload?.displayName || '').trim(),
     domain: String(payload?.domain || '').trim(),
     logo: toAbsoluteUrl(payload?.logo || ''),
+    favicon: toAbsoluteUrl(payload?.favicon || payload?.logo || ''),
     siteTitle: String(payload?.siteTitle || '').trim(),
     defaultPageTitle: String(payload?.defaultPageTitle || '').trim(),
     titleSuffix: String(payload?.titleSuffix || '').trim(),
@@ -36,8 +37,8 @@ export function setPageTitle(pageTitle, tenant) {
 export function applyTenantBranding(branding, fallbackTitle) {
   setPageTitle(fallbackTitle, branding)
 
-  const logoUrl = String(branding?.logo || '').trim()
-  if (!logoUrl) return
+  const faviconUrl = String(branding?.favicon || branding?.logo || '').trim()
+  if (!faviconUrl) return
 
   let favicon = document.querySelector("link[rel='icon']")
   if (!favicon) {
@@ -46,5 +47,5 @@ export function applyTenantBranding(branding, fallbackTitle) {
     document.head.appendChild(favicon)
   }
 
-  favicon.setAttribute('href', logoUrl)
+  favicon.setAttribute('href', faviconUrl)
 }

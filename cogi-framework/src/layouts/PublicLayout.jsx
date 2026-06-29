@@ -547,7 +547,6 @@ export default function PublicLayout({ children }) {
         <PublicChatWidget
           tenantCode={tenantCode || tenant?.resolvedTenant?.tenantCode || tenant?.currentTenant?.tenantCode}
           tenantSlug={tenantCode || tenant?.resolvedTenant?.tenantCode || tenant?.currentTenant?.tenantCode}
-          title='Chat cùng COGI'
         />
       ) : null}
     </div>

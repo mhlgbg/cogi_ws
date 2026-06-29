@@ -74,6 +74,15 @@ export default function CandidateExamScoreImportModal({
       : false
   ), [previewResult])
 
+  const blockingErrorRowIndexes = useMemo(() => (
+    Array.isArray(previewResult?.rows)
+      ? previewResult.rows
+        .filter((row) => row?.action === 'ERROR' || row?.action === 'DUPLICATE_IN_FILE')
+        .map((row) => Number(row?.rowIndex || 0))
+        .filter((rowIndex) => Number.isInteger(rowIndex) && rowIndex > 0)
+      : []
+  ), [previewResult])
+
   const canPreview = Boolean(admissionSeason?.id) && Boolean(file) && !previewLoading && !confirmLoading
   const canConfirm = Boolean(admissionSeason?.id) && Boolean(file) && Boolean(previewResult) && !hasBlockingErrors && !previewLoading && !confirmLoading
 
@@ -177,7 +186,12 @@ export default function CandidateExamScoreImportModal({
             </CAlert>
 
             {hasBlockingErrors ? (
-              <CAlert color='danger' className='mb-0'>Có lỗi trong file import điểm. Vui lòng sửa file và xem trước lại trước khi xác nhận.</CAlert>
+              <CAlert color='danger' className='mb-0'>
+                <div>Có lỗi trong file import điểm. Vui lòng sửa file và xem trước lại trước khi xác nhận.</div>
+                {blockingErrorRowIndexes.length > 0 ? (
+                  <div className='mt-2'>Dòng lỗi: <strong>{blockingErrorRowIndexes.join(', ')}</strong></div>
+                ) : null}
+              </CAlert>
             ) : null}
 
             <CTable hover responsive align='middle'>

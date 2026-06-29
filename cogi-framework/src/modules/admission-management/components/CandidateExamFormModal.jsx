@@ -65,6 +65,12 @@ function buildInitialState(initialValues) {
     mathScore: initialValues?.mathScore ?? '',
     incentiveScore: initialValues?.incentiveScore ?? 0,
     totalScore: initialValues?.totalScore ?? '',
+    recheckMath: initialValues?.recheckMath || false,
+    recheckVietnamese: initialValues?.recheckVietnamese || false,
+    recheckEnglish: initialValues?.recheckEnglish || false,
+    recheckMathScore: initialValues?.recheckMathScore ?? '',
+    recheckVietnameseScore: initialValues?.recheckVietnameseScore ?? '',
+    recheckEnglishScore: initialValues?.recheckEnglishScore ?? '',
     candidateExamStatus: initialValues?.candidateExamStatus || 'draft',
     note: initialValues?.note || '',
   }
@@ -161,6 +167,12 @@ export default function CandidateExamFormModal({
       mathScore: String(form.mathScore || '').trim() || null,
       incentiveScore: String(form.incentiveScore ?? '').trim() || '0',
       totalScore: String(form.totalScore || '').trim() || null,
+      recheckMath: form.recheckMath === true,
+      recheckVietnamese: form.recheckVietnamese === true,
+      recheckEnglish: form.recheckEnglish === true,
+      recheckMathScore: String(form.recheckMathScore || '').trim() || null,
+      recheckVietnameseScore: String(form.recheckVietnameseScore || '').trim() || null,
+      recheckEnglishScore: String(form.recheckEnglishScore || '').trim() || null,
       candidateExamStatus: String(form.candidateExamStatus || 'draft').trim(),
       note: String(form.note || '').trim() || null,
     })
@@ -264,8 +276,19 @@ export default function CandidateExamFormModal({
               <CFormInput type='number' step='0.01' value={toNumberOrBlank(form.mathScore)} onChange={(event) => updateScoreField('mathScore', event.target.value)} disabled={submitting} />
             </CCol>
             <CCol md={3}>
+              <CFormLabel>Phúc khảo Toán</CFormLabel>
+              <CFormSelect value={String(form.recheckMath || false)} onChange={(event) => updateField('recheckMath', event.target.value === 'true')} disabled={submitting}>
+                <option value='false'>Không</option>
+                <option value='true'>Có</option>
+              </CFormSelect>
+            </CCol>
+            <CCol md={3}>
               <CFormLabel>Điểm khuyến khích</CFormLabel>
               <CFormInput type='number' step='0.01' value={toNumberOrBlank(form.incentiveScore)} onChange={(event) => updateScoreField('incentiveScore', event.target.value)} disabled={submitting} />
+            </CCol>
+            <CCol md={3}>
+              <CFormLabel>Điểm sau phúc khảo Toán</CFormLabel>
+              <CFormInput type='number' step='0.01' value={toNumberOrBlank(form.recheckMathScore)} onChange={(event) => updateField('recheckMathScore', event.target.value)} disabled={submitting} />
             </CCol>
             <CCol md={3}>
               <CFormLabel>Tổng điểm</CFormLabel>
@@ -285,6 +308,33 @@ export default function CandidateExamFormModal({
               <CFormLabel>Ghi chú</CFormLabel>
               <CFormTextarea rows={4} value={form.note} onChange={(event) => updateField('note', event.target.value)} disabled={submitting} />
             </CCol>
+
+            {initialValues?.id ? (
+              <>
+                <CCol md={3}>
+                  <CFormLabel>Phúc khảo Tiếng Việt</CFormLabel>
+                  <CFormSelect value={String(form.recheckVietnamese || false)} onChange={(event) => updateField('recheckVietnamese', event.target.value === 'true')} disabled={submitting}>
+                    <option value='false'>Không</option>
+                    <option value='true'>Có</option>
+                  </CFormSelect>
+                </CCol>
+                <CCol md={3}>
+                  <CFormLabel>Điểm sau phúc khảo Tiếng Việt</CFormLabel>
+                  <CFormInput type='number' step='0.01' value={toNumberOrBlank(form.recheckVietnameseScore)} onChange={(event) => updateField('recheckVietnameseScore', event.target.value)} disabled={submitting} />
+                </CCol>
+                <CCol md={3}>
+                  <CFormLabel>Phúc khảo Tiếng Anh</CFormLabel>
+                  <CFormSelect value={String(form.recheckEnglish || false)} onChange={(event) => updateField('recheckEnglish', event.target.value === 'true')} disabled={submitting}>
+                    <option value='false'>Không</option>
+                    <option value='true'>Có</option>
+                  </CFormSelect>
+                </CCol>
+                <CCol md={3}>
+                  <CFormLabel>Điểm sau phúc khảo Tiếng Anh</CFormLabel>
+                  <CFormInput type='number' step='0.01' value={toNumberOrBlank(form.recheckEnglishScore)} onChange={(event) => updateField('recheckEnglishScore', event.target.value)} disabled={submitting} />
+                </CCol>
+              </>
+            ) : null}
 
             {initialValues?.id ? (
               <>

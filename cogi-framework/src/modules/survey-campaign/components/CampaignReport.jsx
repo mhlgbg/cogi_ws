@@ -20,8 +20,11 @@ import {
   YAxis,
 } from 'recharts'
 import {
+  downloadSurveyCampaignAnswersReportLatestFile,
   exportSurveyCampaignCourseReport,
   exportSurveyCampaignLecturerReport,
+  generateSurveyCampaignAnswersReportFile,
+  getSurveyCampaignAnswersReportLatestFile,
   getSurveyCampaignReportCourses,
   getSurveyCampaignReportLecturers,
   getSurveyCampaignReportSummary,
@@ -48,6 +51,9 @@ export default function CampaignReport({ campaignId, active, reloadKey = 0 }) {
   const [courses, setCourses] = useState([])
   const [exportingLecturerKey, setExportingLecturerKey] = useState('')
   const [exportingCourseKey, setExportingCourseKey] = useState('')
+  const [generatingAnswersReport, setGeneratingAnswersReport] = useState(false)
+  const [downloadingAnswersReport, setDownloadingAnswersReport] = useState(false)
+  const [answersReportInfo, setAnswersReportInfo] = useState(null)
 
   function downloadBlob(blob, fileName) {
     const nextBlob = blob instanceof Blob
@@ -110,6 +116,62 @@ export default function CampaignReport({ campaignId, active, reloadKey = 0 }) {
     }
   }
 
+  async function loadLatestAnswersReportInfo() {
+    if (!campaignId) {
+      setAnswersReportInfo(null)
+      return
+    }
+
+    try {
+      const info = await getSurveyCampaignAnswersReportLatestFile(campaignId)
+      setAnswersReportInfo(info || null)
+    } catch {
+      setAnswersReportInfo(null)
+    }
+  }
+
+  async function handleGenerateAnswersReport() {
+    if (!campaignId || generatingAnswersReport) return
+
+    setGeneratingAnswersReport(true)
+    setError('')
+
+    try {
+      const info = await generateSurveyCampaignAnswersReportFile(campaignId)
+      setAnswersReportInfo((current) => ({
+        ...(current || {}),
+        ...(info || {}),
+        hasFile: true,
+      }))
+    } catch (requestError) {
+      setError(getApiMessage(requestError, 'Không thể tạo file report toàn bộ câu trả lời'))
+    } finally {
+      setGeneratingAnswersReport(false)
+    }
+  }
+
+  async function handleDownloadAnswersReport() {
+    if (!campaignId || downloadingAnswersReport) return
+
+    if (!answersReportInfo?.hasFile) {
+      setError('Chưa có file report. Hãy nhấn "Tạo file report" trước.')
+      return
+    }
+
+    setDownloadingAnswersReport(true)
+    setError('')
+
+    try {
+      const result = await downloadSurveyCampaignAnswersReportLatestFile(campaignId)
+      downloadBlob(result?.blob, result?.fileName || `survey-answers-${campaignId}.xlsx`)
+      await loadLatestAnswersReportInfo()
+    } catch (requestError) {
+      setError(getApiMessage(requestError, 'Không thể tải file report toàn bộ câu trả lời'))
+    } finally {
+      setDownloadingAnswersReport(false)
+    }
+  }
+
   function handleExportLecturerGrid() {
     exportGridToExcel(
       lecturers.map((item) => ({
@@ -150,11 +212,19 @@ export default function CampaignReport({ campaignId, active, reloadKey = 0 }) {
           getSurveyCampaignReportCourses(campaignId),
         ])
 
+        let answersReportInfoData = null
+        try {
+          answersReportInfoData = await getSurveyCampaignAnswersReportLatestFile(campaignId)
+        } catch {
+          answersReportInfoData = null
+        }
+
         if (!mounted) return
 
         setSummary(summaryData || null)
         setLecturers(Array.isArray(lecturerData?.items) ? lecturerData.items : [])
         setCourses(Array.isArray(courseData?.items) ? courseData.items : [])
+        setAnswersReportInfo(answersReportInfoData || null)
       } catch (requestError) {
         if (!mounted) return
         setError(getApiMessage(requestError, 'Không thể tải báo cáo campaign'))
@@ -255,7 +325,22 @@ export default function CampaignReport({ campaignId, active, reloadKey = 0 }) {
             <CCardBody>
               <div className='d-flex justify-content-between align-items-center gap-2 mb-3'>
                 <div className='fw-semibold'>Giảng viên</div>
-                <CButton size='sm' color='success' variant='outline' onClick={handleExportLecturerGrid} disabled={lecturers.length === 0}>Xuất Excel</CButton>
+                <div className='d-flex gap-2 flex-wrap justify-content-end'>
+                  <CButton size='sm' color='success' variant='outline' onClick={handleExportLecturerGrid} disabled={lecturers.length === 0}>Xuất Excel</CButton>
+                  <CButton size='sm' color='primary' variant='outline' onClick={handleGenerateAnswersReport} disabled={generatingAnswersReport || !campaignId}>
+                    {generatingAnswersReport ? 'Đang tạo...' : 'Tạo file report'}
+                  </CButton>
+                  <CButton size='sm' color='info' variant='outline' onClick={handleDownloadAnswersReport} disabled={downloadingAnswersReport || !answersReportInfo?.hasFile}>
+                    {downloadingAnswersReport ? 'Đang tải...' : 'Tải file report'}
+                  </CButton>
+                </div>
+              </div>
+              <div className='small text-body-secondary mb-3'>
+                Prefix: {answersReportInfo?.prefix || '-'}
+                {' | '}
+                File mới nhất: {answersReportInfo?.fileName || 'chưa có'}
+                {' | '}
+                Thời điểm: {answersReportInfo?.generatedAt ? new Date(answersReportInfo.generatedAt).toLocaleString('vi-VN') : '-'}
               </div>
               {lecturers.length === 0 ? (
                 <EmptyState text='Chưa có dữ liệu giảng viên' />

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   CButton,
@@ -13,12 +13,36 @@ import {
   CRow,
 } from '@coreui/react'
 import api from '../api/axios'
+import { applyTenantBranding, fetchTenantBranding } from '../utils/tenantBranding'
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+
+  useEffect(() => {
+    let isCancelled = false
+
+    async function loadTenantBranding() {
+      try {
+        const branding = await fetchTenantBranding()
+        if (!isCancelled) {
+          applyTenantBranding(branding, 'Quên mật khẩu')
+        }
+      } catch {
+        if (!isCancelled) {
+          document.title = 'Quên mật khẩu'
+        }
+      }
+    }
+
+    loadTenantBranding()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [])
 
   async function onSubmit(event) {
     event.preventDefault()

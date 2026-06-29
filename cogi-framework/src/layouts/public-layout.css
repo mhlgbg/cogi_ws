@@ -910,6 +910,10 @@
     box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22);
   }
 
+  .public-chat-widget-popup .card-body {
+    min-height: 0;
+  }
+
   .public-chat-widget-close {
     border: 0;
     background: transparent;
@@ -921,6 +925,7 @@
 
   .public-chat-widget-messages {
     flex: 1;
+    min-height: 0;
     min-height: 240px;
     max-height: 50vh;
     overflow-y: auto;

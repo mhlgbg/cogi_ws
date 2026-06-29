@@ -11,6 +11,7 @@ import {
   CForm,
   CFormInput,
   CFormLabel,
+  CFormCheck,
   CFormSelect,
   CModal,
   CModalBody,
@@ -33,6 +34,7 @@ import {
   CTableHeaderCell,
   CTableRow,
 } from '@coreui/react'
+import ClassTeacherAssignmentsTab from '../components/ClassTeacherAssignmentsTab'
 import * as XLSX from 'xlsx'
 import {
   createEnrollment,
@@ -43,6 +45,8 @@ import {
   importClassEnrollments,
   updateEnrollment,
 } from '../services/classService'
+import { getLearnerPage, updateLearner } from '../../learner-management/services/learnerService'
+import AsyncCombobox from '../../../components/AsyncCombobox'
 
 function getApiMessage(error, fallback) {
   return error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || fallback
@@ -149,12 +153,14 @@ export default function ClassDetailPage() {
   const [enrollmentQ, setEnrollmentQ] = useState('')
   const [enrollmentQDraft, setEnrollmentQDraft] = useState('')
   const [enrollmentStatus, setEnrollmentStatus] = useState('')
+  const [includeInactiveLearners, setIncludeInactiveLearners] = useState(false)
   const [showEnrollmentModal, setShowEnrollmentModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [editingEnrollmentId, setEditingEnrollmentId] = useState(null)
   const [savingEnrollment, setSavingEnrollment] = useState(false)
   const [learners, setLearners] = useState([])
   const [roles, setRoles] = useState([])
+  const [selectedLearnerOption, setSelectedLearnerOption] = useState(null)
   const [enrollmentForm, setEnrollmentForm] = useState(emptyEnrollmentForm())
   const [importForm, setImportForm] = useState({
     roleId: '',
@@ -182,9 +188,52 @@ export default function ClassDetailPage() {
   }
 
   async function loadEnrollmentOptions() {
-    const data = await getClassEnrollmentOptions(id)
-    setLearners(Array.isArray(data?.learners) ? data.learners : [])
+    const data = await getClassEnrollmentOptions(id, { includeInactive: includeInactiveLearners })
+    try {
+      // eslint-disable-next-line no-console
+      console.debug('[debug] loadEnrollmentOptions data:', data)
+      // eslint-disable-next-line no-console
+      console.debug('[debug] learners length:', Array.isArray(data?.learners) ? data.learners.length : 0)
+    } catch (e) {
+      // ignore console errors
+    }
+
+    let resolvedLearners = Array.isArray(data?.learners) ? data.learners : []
+    // If backend returned no learners (e.g. filtered by active only), fallback to /learners endpoint
+    if ((!Array.isArray(resolvedLearners) || resolvedLearners.length === 0)) {
+      try {
+        const page = await getLearnerPage({ page: 1, pageSize: 200, q: '', status: includeInactiveLearners ? '' : 'active' })
+        resolvedLearners = (Array.isArray(page.rows) ? page.rows : []).map((row) => ({
+          id: row.id,
+          code: row.code || '',
+          username: row.user?.username || '',
+          email: row.user?.email || '',
+          fullName: row.fullName || '',
+          label: [(row.code || ''), (row.fullName || row.user?.fullName || ''), (row.user?.username || '')].filter(Boolean).join(' - '),
+          status: row.learnerStatus || row.status || 'active',
+        }))
+      } catch (err) {
+        // ignore fallback failure
+      }
+    }
+
+    setLearners(Array.isArray(resolvedLearners) ? resolvedLearners : [])
     setRoles(Array.isArray(data?.roles) ? data.roles : [])
+  }
+
+  async function loadLearnerOptions(input) {
+    const q = String(input || '').trim()
+    try {
+      const page = await getLearnerPage({ page: 1, pageSize: 20, q, status: includeInactiveLearners ? '' : 'active' })
+      const rows = Array.isArray(page.rows) ? page.rows : []
+      return rows.map((r) => ({
+        value: r.id,
+        label: [r.code, r.fullName || r.user?.fullName || r.user?.username].filter(Boolean).join(' - '),
+        status: r.learnerStatus || r.status || 'active',
+      }))
+    } catch (err) {
+      return []
+    }
   }
 
   async function loadEnrollments(nextPage = enrollmentPage, nextPageSize = enrollmentPageSize, nextQ = enrollmentQ, nextStatus = enrollmentStatus) {
@@ -228,13 +277,19 @@ export default function ClassDetailPage() {
     return () => window.clearTimeout(timer)
   }, [success])
 
-  function openCreateEnrollmentModal() {
+  async function openCreateEnrollmentModal() {
     setEditingEnrollmentId(null)
     setEnrollmentForm(emptyEnrollmentForm())
+    setSelectedLearnerOption(null)
+    try {
+      await loadEnrollmentOptions()
+    } catch (err) {
+      // ignore - loadEnrollmentOptions sets error state on failure
+    }
     setShowEnrollmentModal(true)
   }
 
-  function openEditEnrollmentModal(item) {
+  async function openEditEnrollmentModal(item) {
     setEditingEnrollmentId(item.id)
     setEnrollmentForm({
       learner: String(item?.learner?.id || ''),
@@ -242,6 +297,24 @@ export default function ClassDetailPage() {
       leaveDate: item.leaveDate || '',
       status: item.status || 'active',
     })
+    try {
+      await loadEnrollmentOptions()
+    } catch (err) {
+      // ignore
+    }
+    // Preload selected option so AsyncCombobox shows current learner
+    try {
+      const learnerObj = item?.learner || null
+      if (learnerObj && learnerObj.id) {
+        const label = learnerObj.fullName || learnerObj.username || learnerObj.email || `User #${learnerObj.id}`
+        setSelectedLearnerOption({ value: learnerObj.id, label, status: learnerObj.learnerStatus || learnerObj.status || 'active' })
+      } else {
+        setSelectedLearnerOption(null)
+      }
+    } catch (e) {
+      setSelectedLearnerOption(null)
+    }
+
     setShowEnrollmentModal(true)
   }
 
@@ -260,6 +333,26 @@ export default function ClassDetailPage() {
     setSavingEnrollment(true)
     setError('')
     try {
+        // If selected learner is inactive, ask whether to activate before enrolling
+        const selectedLearner = learners.find((l) => String(l.id) === String(enrollmentForm.learner)) || (selectedLearnerOption ? { id: selectedLearnerOption.value, status: selectedLearnerOption.status } : null)
+        if (selectedLearner && (selectedLearner.status === 'inactive' || selectedLearner.learnerStatus === 'inactive')) {
+          const confirmActivate = window.confirm('Học viên đang ở trạng thái inactive. Bạn có muốn kích hoạt họ trước khi nhập học? Nhấn OK để kích hoạt và tiếp tục, hoặc Hủy để hủy.');
+          if (!confirmActivate) {
+            setSavingEnrollment(false)
+            return
+          }
+          try {
+            await updateLearner(selectedLearner.id, { learnerStatus: 'active' })
+            setSuccess('Kích hoạt học viên thành công')
+            // update local learners list
+            setLearners((prev) => prev.map((it) => (String(it.id) === String(selectedLearner.id) ? { ...it, status: 'active', learnerStatus: 'active' } : it)))
+          } catch (err) {
+            setError('Không thể kích hoạt học viên')
+            setSavingEnrollment(false)
+            return
+          }
+        }
+
       const payload = {
         learner: Number(enrollmentForm.learner),
         joinDate: enrollmentForm.joinDate || null,
@@ -346,10 +439,17 @@ export default function ClassDetailPage() {
       <div className='d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4'>
         <div>
           <h3 className='mb-1'>{detail?.name || 'Class detail'}</h3>
-          <div className='text-medium-emphasis'>
-            {detail?.subjectCode || '-'}
-            {detail?.subject ? ` · ${detail.subject}` : ''}
-          </div>
+            <div className='text-medium-emphasis d-flex align-items-center gap-2'>
+              <div>
+                {detail?.subjectCode || '-'}
+                {detail?.subject ? ` · ${detail.subject}` : ''}
+              </div>
+              <div>
+                <CBadge color={detail?.status === 'inactive' ? 'secondary' : 'success'}>
+                  {detail?.status === 'inactive' ? 'Ngưng hoạt động' : 'Đang hoạt động'}
+                </CBadge>
+              </div>
+            </div>
         </div>
         <div className='d-flex gap-2'>
           <CButton color='light' onClick={() => navigate('/classes')}>Quay lại</CButton>
@@ -361,10 +461,13 @@ export default function ClassDetailPage() {
 
       <CNav variant='tabs' role='tablist' className='mb-4'>
         <CNavItem>
-          <CNavLink active={activeTab === 'info'} onClick={() => setActiveTab('info')} role='button'>Thông tin lớp</CNavLink>
+          <CNavLink active={activeTab === 'info'} onClick={() => setActiveTab('info')} role='button'>Thông tin chung</CNavLink>
         </CNavItem>
         <CNavItem>
-          <CNavLink active={activeTab === 'enrollments'} onClick={() => setActiveTab('enrollments')} role='button'>Enrollments</CNavLink>
+          <CNavLink active={activeTab === 'enrollments'} onClick={() => setActiveTab('enrollments')} role='button'>Học viên</CNavLink>
+        </CNavItem>
+        <CNavItem>
+          <CNavLink active={activeTab === 'assignments'} onClick={() => setActiveTab('assignments')} role='button'>Phân công chuyên môn</CNavLink>
         </CNavItem>
       </CNav>
 
@@ -378,138 +481,80 @@ export default function ClassDetailPage() {
                   <div className='mb-3'><strong>Tên lớp:</strong> {detail?.name || '-'}</div>
                   <div className='mb-3'><strong>Mã môn:</strong> {detail?.subjectCode || '-'}</div>
                   <div className='mb-3'><strong>Môn học:</strong> {detail?.subject || '-'}</div>
-                  <div className='mb-3'><strong>Giáo viên chính:</strong> {formatTeacherDisplay(detail?.mainTeacher)}</div>
                   <div className='mb-3'>
                     <strong>Trạng thái:</strong>{' '}
                     <CBadge color={detail?.status === 'inactive' ? 'secondary' : 'success'}>
                       {detail?.status === 'inactive' ? 'Ngưng hoạt động' : 'Đang hoạt động'}
                     </CBadge>
                   </div>
-                  <div><strong>Cập nhật:</strong> {formatDateTime(detail?.updatedAt)}</div>
+                  {detail?.createdAt ? <div className='mb-2'><strong>Ngày tạo:</strong> {formatDateTime(detail?.createdAt)}</div> : null}
+                  {detail?.updatedAt ? <div><strong>Cập nhật:</strong> {formatDateTime(detail?.updatedAt)}</div> : null}
                 </CCardBody>
               </CCard>
             </CCol>
           </CRow>
         </CTabPane>
 
+        <CTabPane visible={activeTab === 'assignments'}>
+          <ClassTeacherAssignmentsTab classId={id} />
+        </CTabPane>
         <CTabPane visible={activeTab === 'enrollments'}>
-          <CCard className='border-0 shadow-sm mb-4'>
-            <CCardHeader><strong>Bộ lọc</strong></CCardHeader>
-            <CCardBody>
-              <CRow className='g-3 align-items-end'>
-                <CCol md={7}>
-                  <CFormInput label='Từ khóa' placeholder='Tìm theo username, email, họ tên...' value={enrollmentQDraft} onChange={(event) => setEnrollmentQDraft(event.target.value)} onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      setEnrollmentPage(1)
-                      setEnrollmentQ(enrollmentQDraft.trim())
-                    }
-                  }} />
-                </CCol>
-                <CCol md={3}>
-                  <CFormLabel>Trạng thái</CFormLabel>
-                  <CFormSelect value={enrollmentStatus} onChange={(event) => { setEnrollmentPage(1); setEnrollmentStatus(event.target.value); loadEnrollments(1, enrollmentPageSize, enrollmentQ, event.target.value) }}>
-                    <option value=''>Tất cả</option>
-                    <option value='active'>Đang hoạt động</option>
-                    <option value='inactive'>Ngưng hoạt động</option>
-                  </CFormSelect>
-                </CCol>
-                <CCol md={2} className='d-flex justify-content-end gap-2'>
-                  <CButton color='primary' onClick={() => { setEnrollmentPage(1); setEnrollmentQ(enrollmentQDraft.trim()); loadEnrollments(1, enrollmentPageSize, enrollmentQDraft.trim(), enrollmentStatus) }}>Search</CButton>
-                  <CButton color='secondary' variant='outline' onClick={() => {
-                    setEnrollmentPage(1)
-                    setEnrollmentQ('')
-                    setEnrollmentQDraft('')
-                    setEnrollmentStatus('')
-                    loadEnrollments(1, enrollmentPageSize, '', '')
-                  }}>Reset</CButton>
-                </CCol>
-              </CRow>
-            </CCardBody>
-          </CCard>
+          <div className='d-flex justify-content-between align-items-center mb-3'>
+            <div className='d-flex gap-2'>
+              <CButton type='button' color='primary' onClick={openCreateEnrollmentModal}>Thêm học viên</CButton>
+              <CButton type='button' color='secondary' onClick={() => setShowImportModal(true)}>Import</CButton>
+            </div>
+            <div className='d-flex gap-2'>
+              <CFormInput placeholder='Tìm kiếm học viên' value={enrollmentQDraft} onChange={(e) => setEnrollmentQDraft(e.target.value)} />
+              <div className='d-flex align-items-center ms-2'>
+                <CFormCheck id='include-inactive' label='Bao gồm inactive' checked={includeInactiveLearners} onChange={(e) => setIncludeInactiveLearners(e.target.checked)} />
+              </div>
+              <CButton type='button' color='primary' onClick={() => { setEnrollmentPage(1); setEnrollmentQ(enrollmentQDraft); loadEnrollments(1, enrollmentPageSize, enrollmentQDraft, enrollmentStatus) }}>Tìm</CButton>
+            </div>
+          </div>
 
           <CCard className='border-0 shadow-sm'>
-            <CCardHeader className='d-flex justify-content-between align-items-center gap-2 flex-wrap'>
-              <div>
-                <strong>Enrollments</strong>
-                <CBadge color='secondary' className='ms-2'>{enrollmentTotal}</CBadge>
-              </div>
-              <div className='d-flex align-items-center gap-2 flex-wrap'>
-                <span className='text-body-secondary small'>{enrollmentRangeText}</span>
-                <CButton color='info' variant='outline' onClick={() => setShowImportModal(true)}>Import Excel</CButton>
-                <CButton color='success' onClick={openCreateEnrollmentModal}>+ Thêm enrollment</CButton>
-              </div>
-            </CCardHeader>
-            <CCardBody>
-              <CTable hover responsive className='mb-3'>
-                <CTableHead>
-                  <CTableRow>
-                    <CTableHeaderCell>#</CTableHeaderCell>
-                    <CTableHeaderCell>Học viên</CTableHeaderCell>
-                    <CTableHeaderCell>Join date</CTableHeaderCell>
-                    <CTableHeaderCell>End date</CTableHeaderCell>
-                    <CTableHeaderCell>Trạng thái</CTableHeaderCell>
-                    <CTableHeaderCell>Cập nhật</CTableHeaderCell>
-                    <CTableHeaderCell>Hành động</CTableHeaderCell>
+            <CTable hover responsive>
+              <CTableHead>
+                <CTableRow>
+                  <CTableHeaderCell style={{ width: 40 }}>#</CTableHeaderCell>
+                  <CTableHeaderCell>Học viên</CTableHeaderCell>
+                  <CTableHeaderCell>Join date</CTableHeaderCell>
+                  <CTableHeaderCell>End date</CTableHeaderCell>
+                  <CTableHeaderCell>Trạng thái</CTableHeaderCell>
+                  <CTableHeaderCell style={{ width: 160 }}>Hành động</CTableHeaderCell>
+                </CTableRow>
+              </CTableHead>
+              <CTableBody>
+                {enrollmentRows.map((row, index) => (
+                  <CTableRow key={row.id}>
+                    <CTableDataCell>{(enrollmentMeta?.page - 1) * enrollmentMeta?.pageSize + index + 1}</CTableDataCell>
+                    <CTableDataCell>{row.learner ? (row.learner.fullName || row.learner.username || row.learner.email) : '-'}</CTableDataCell>
+                    <CTableDataCell>{row.joinDate || '-'}</CTableDataCell>
+                    <CTableDataCell>{row.leaveDate || '-'}</CTableDataCell>
+                    <CTableDataCell>{row.enrollmentStatus === 'inactive' ? 'Ngưng hoạt động' : 'Đang hoạt động'}</CTableDataCell>
+                    <CTableDataCell>
+                      <CButton type='button' size='sm' color='secondary' className='me-2' onClick={() => openEditEnrollmentModal(row)}>Sửa</CButton>
+                      <CButton type='button' size='sm' color='danger' onClick={() => handleDeleteEnrollment(row.id)}>Xóa</CButton>
+                    </CTableDataCell>
                   </CTableRow>
-                </CTableHead>
-                <CTableBody>
-                  {enrollmentRows.length === 0 ? (
-                    <CTableRow>
-                      <CTableDataCell colSpan={7} className='text-center text-body-secondary'>Không có enrollment</CTableDataCell>
-                    </CTableRow>
-                  ) : enrollmentRows.map((item, index) => (
-                    <CTableRow key={item.id}>
-                      <CTableDataCell>{(enrollmentPage - 1) * enrollmentPageSize + index + 1}</CTableDataCell>
-                      <CTableDataCell>
-                        <div>{item?.learner?.fullName || item?.learner?.username || '-'}</div>
-                        <div className='small text-body-secondary'>
-                          {[item?.learner?.code, item?.learner?.username || item?.learner?.email].filter(Boolean).join(' · ') || '-'}
-                        </div>
-                      </CTableDataCell>
-                      <CTableDataCell>{formatDate(item.joinDate)}</CTableDataCell>
-                      <CTableDataCell>{formatDate(item.leaveDate)}</CTableDataCell>
-                      <CTableDataCell>
-                        <CBadge color={item.status === 'inactive' ? 'secondary' : 'success'}>
-                          {item.status === 'inactive' ? 'Ngưng hoạt động' : 'Đang hoạt động'}
-                        </CBadge>
-                      </CTableDataCell>
-                      <CTableDataCell>{formatDateTime(item.updatedAt)}</CTableDataCell>
-                      <CTableDataCell>
-                        <div className='d-flex gap-2'>
-                          <CButton size='sm' color='info' variant='outline' onClick={() => openEditEnrollmentModal(item)}>Sửa</CButton>
-                          <CButton size='sm' color='danger' variant='outline' onClick={() => handleDeleteEnrollment(item.id)}>Xóa</CButton>
-                        </div>
-                      </CTableDataCell>
-                    </CTableRow>
-                  ))}
-                </CTableBody>
-              </CTable>
-
-              <div className='d-flex flex-wrap justify-content-between align-items-center gap-2'>
-                <div className='d-flex align-items-center gap-2'>
-                  <span>Page size</span>
-                  <CFormSelect value={enrollmentPageSize} onChange={(event) => {
-                    const nextSize = Number(event.target.value) || 10
-                    setEnrollmentPage(1)
-                    setEnrollmentPageSize(nextSize)
-                    loadEnrollments(1, nextSize, enrollmentQ, enrollmentStatus)
-                  }} style={{ width: 100 }}>
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                  </CFormSelect>
-                </div>
-
-                <CPagination align='end' className='mb-0'>
-                  <CPaginationItem disabled={enrollmentPage <= 1} onClick={() => { const next = Math.max(1, enrollmentPage - 1); setEnrollmentPage(next); loadEnrollments(next, enrollmentPageSize, enrollmentQ, enrollmentStatus) }}>Trước</CPaginationItem>
-                  {enrollmentPages.map((item, index) => item === '...'
-                    ? <CPaginationItem key={`dots-${index}`} disabled>…</CPaginationItem>
-                    : <CPaginationItem key={item} active={item === enrollmentPage} onClick={() => { setEnrollmentPage(item); loadEnrollments(item, enrollmentPageSize, enrollmentQ, enrollmentStatus) }}>{item}</CPaginationItem>)}
-                  <CPaginationItem disabled={enrollmentPage >= enrollmentPageCount} onClick={() => { const next = Math.min(enrollmentPageCount, enrollmentPage + 1); setEnrollmentPage(next); loadEnrollments(next, enrollmentPageSize, enrollmentQ, enrollmentStatus) }}>Sau</CPaginationItem>
-                </CPagination>
-              </div>
-            </CCardBody>
+                ))}
+              </CTableBody>
+            </CTable>
           </CCard>
+
+          <div className='d-flex justify-content-between align-items-center mt-3'>
+            <div className='small text-body-secondary'>Hiển thị {enrollmentRangeText}</div>
+            <div>
+              <CPagination aria-label='Page navigation example'>
+                {enrollmentPages.map((p, idx) => (
+                  typeof p === 'string' ? <span key={`sep-${idx}`} className='mx-2'>...</span> : (
+                    <CPaginationItem key={`page-${p}`} active={p === enrollmentPage} onClick={() => { setEnrollmentPage(p); loadEnrollments(p, enrollmentPageSize, enrollmentQ, enrollmentStatus) }}>{p}</CPaginationItem>
+                  )
+                ))}
+              </CPagination>
+            </div>
+          </div>
         </CTabPane>
       </CTabContent>
 
@@ -522,12 +567,15 @@ export default function ClassDetailPage() {
             <CRow className='g-3'>
               <CCol md={12}>
                 <CFormLabel>Học viên</CFormLabel>
-                <CFormSelect value={enrollmentForm.learner} onChange={(event) => setEnrollmentForm((prev) => ({ ...prev, learner: event.target.value }))}>
-                  <option value=''>Chọn học viên</option>
-                  {learners.map((learner) => (
-                    <option key={learner.id} value={learner.id}>{learner.label}</option>
-                  ))}
-                </CFormSelect>
+                <AsyncCombobox
+                  loadOptions={loadLearnerOptions}
+                  value={selectedLearnerOption}
+                  onChange={(opt) => {
+                    setSelectedLearnerOption(opt || null)
+                    setEnrollmentForm((prev) => ({ ...prev, learner: opt ? opt.value : '' }))
+                  }}
+                  placeholder='Chọn học viên'
+                />
               </CCol>
               <CCol md={6}>
                 <CFormLabel>Join date</CFormLabel>

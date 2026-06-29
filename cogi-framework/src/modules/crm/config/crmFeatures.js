@@ -29,6 +29,22 @@ const crmFeatures = {
       path: '/chat-sessions',
       showInMenu: true,
     },
+    {
+      name: 'AI Assistant Setting',
+      key: 'crms.ai-assistant.manage',
+      order: 4,
+      description: 'Manage tenant AI assistant settings',
+      path: '/ai/assistant',
+      showInMenu: true,
+    },
+    {
+      name: 'AI Knowledge Management',
+      key: 'crms.ai-knowledge.manage',
+      order: 5,
+      description: 'Manage tenant AI knowledge records',
+      path: '/ai/knowledge',
+      showInMenu: true,
+    },
   ],
 };
 
