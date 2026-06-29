@@ -43,19 +43,19 @@ export default ({ env }) => ({
     config: {
       provider: "@strapi/provider-email-nodemailer",
       providerOptions: {
-        host: env("SMTP_HOST"),
-        port: env.int("SMTP_PORT"),
-        secure: env.bool("SMTP_SECURE"),
+        host: env("COMPANY_SMTP_HOST", env("SMTP_HOST")),
+        port: env.int("COMPANY_SMTP_PORT", env.int("SMTP_PORT", 587)),
+        secure: env.bool("COMPANY_SMTP_SECURE", env.bool("SMTP_SECURE", false)),
         auth: {
-          user: env("SMTP_USER"),
-          pass: env("SMTP_PASS"),
+          user: env("COMPANY_SMTP_USERNAME", env("SMTP_USER")),
+          pass: env("COMPANY_SMTP_PASSWORD", env("SMTP_PASS")),
         },
         // ❌ bỏ envelope ở đây (nodemailer không áp envelope ở transporter options)
       },
       settings: {
         // ✅ ép from chỉ là email thuần, KHÔNG kèm display name
-        defaultFrom: env("SMTP_USER"),
-        defaultReplyTo: env("SMTP_REPLY_TO", env("SMTP_USER")),
+        defaultFrom: env("COMPANY_DEFAULT_FROM", env("SMTP_FROM", env("SMTP_USER"))),
+        defaultReplyTo: env("COMPANY_DEFAULT_REPLY_TO", env("SMTP_REPLY_TO", env("SMTP_USER"))),
       },
     },
   },

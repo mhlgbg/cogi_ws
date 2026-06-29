@@ -12,6 +12,11 @@
   },
   "pluginOptions": {},
   "attributes": {
+    "isActive": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
     "role": {
       "type": "relation",
       "relation": "manyToOne",

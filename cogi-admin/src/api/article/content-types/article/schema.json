@@ -17,13 +17,32 @@
     },
     "description": {
       "type": "text",
-      "maxLength": 80
+      "maxLength": 500
+    },
+    "seoTitle": {
+      "type": "string"
+    },
+    "seoDescription": {
+      "type": "text"
+    },
+    "seoKeywords": {
+      "type": "text"
     },
     "slug": {
       "type": "uid",
       "targetField": "title"
     },
     "cover": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos"
+      ]
+    },
+    "seoImage": {
       "type": "media",
       "multiple": false,
       "required": false,

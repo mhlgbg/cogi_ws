@@ -7,6 +7,10 @@ const SURVEY_QUESTION_OPTION_UID = 'api::survey-question-option.survey-question-
 const SURVEY_CAMPAIGN_UID = 'api::survey-campaign.survey-campaign';
 const SURVEY_ANSWER_UID = 'api::survey-answer.survey-answer';
 const SURVEY_RESPONSE_UID = 'api::survey-response.survey-response';
+const SURVEY_ASSIGNMENT_UID = 'api::survey-assignment.survey-assignment';
+const DELETE_ID_BATCH_SIZE = 1000;
+const DELETE_EXECUTION_BATCH_SIZE = 50;
+const QUESTION_PAGE_SIZE_MAX = 50;
 
 const QUESTION_TYPES = ['LIKERT_1_5', 'SINGLE_CHOICE', 'MULTI_CHOICE', 'TEXT'] as const;
 const TEMPLATE_TYPES = ['TEACHING_EVALUATION', 'GRADUATION_EXIT'] as const;
@@ -73,6 +77,27 @@ function parseIdOrThrow(value: unknown, label: string): number {
     throw new SurveyQuestionManagementError(400, `${label} is invalid`);
   }
   return parsed;
+}
+
+function chunkIds(ids: number[], size = DELETE_ID_BATCH_SIZE) {
+  const chunks: number[][] = [];
+  for (let index = 0; index < ids.length; index += size) {
+    chunks.push(ids.slice(index, index + size));
+  }
+  return chunks;
+}
+
+async function deleteEntitiesByIds(uid: string, ids: number[]) {
+  let deleted = 0;
+
+  for (const chunk of chunkIds(ids, DELETE_EXECUTION_BATCH_SIZE)) {
+    await Promise.all(chunk.map(async (id) => {
+      await strapi.db.query(uid).delete({ where: { id } });
+    }));
+    deleted += chunk.length;
+  }
+
+  return deleted;
 }
 
 async function findTemplateOrThrow(id: unknown, tenantId: number | string) {
@@ -287,42 +312,9 @@ async function loadQuestionAnswerCounts(questionIds: number[], tenantId: number 
   const counts = new Map<number, number>();
   if (questionIds.length === 0) return counts;
 
-  const answers = await strapi.db.query(SURVEY_ANSWER_UID).findMany({
-    where: mergeTenantWhere({
-      survey_question: {
-        id: {
-          $in: questionIds,
-        },
-      },
-      survey_response: {
-        $or: [
-          {
-            responseStatus: 'SUBMITTED',
-          },
-          {
-            responseStatus: {
-              $null: true,
-            },
-            submittedAt: {
-              $notNull: true,
-            },
-          },
-        ],
-      },
-    }, tenantId),
-    select: ['id'],
-    populate: {
-      survey_question: {
-        select: ['id'],
-      },
-    },
-  });
-
-  for (const answer of answers || []) {
-    const questionId = Number(answer?.survey_question?.id || 0);
-    if (!questionId) continue;
-    counts.set(questionId, Number(counts.get(questionId) || 0) + 1);
-  }
+  await Promise.all(questionIds.map(async (questionId) => {
+    counts.set(questionId, await getQuestionAnswerCount(questionId, tenantId));
+  }));
 
   return counts;
 }
@@ -507,7 +499,7 @@ export async function getSurveyQuestionManagementBootstrap(tenantId: number | st
 
 export async function listSurveyQuestions(query: Record<string, unknown>, tenantId: number | string) {
   const page = toPaginationInt(query?.page, 1);
-  const pageSize = toPaginationInt(query?.pageSize, 10);
+  const pageSize = Math.min(QUESTION_PAGE_SIZE_MAX, toPaginationInt(query?.pageSize, 10));
   const start = (page - 1) * pageSize;
 
   const q = toText(query?.q);
@@ -674,37 +666,156 @@ export async function updateSurveyTemplate(id: unknown, body: any, tenantId: num
 
 export async function deleteSurveyTemplate(id: unknown, tenantId: number | string) {
   const existing = await findTemplateOrThrow(id, tenantId);
-  const [sectionCount, campaignCount] = await Promise.all([
-    strapi.db.query(SURVEY_SECTION_UID).count({
+
+  const campaignRows = await strapi.db.query(SURVEY_CAMPAIGN_UID).findMany({
+    where: mergeTenantWhere({
+      survey_template: {
+        id: {
+          $eq: existing.id,
+        },
+      },
+    }, tenantId),
+    select: ['id'],
+  });
+  const campaignIds = (campaignRows || [])
+    .map((row: any) => Number(row?.id || 0))
+    .filter((value: number) => Number.isInteger(value) && value > 0);
+
+  const assignmentIds: number[] = [];
+  for (const campaignChunk of chunkIds(campaignIds)) {
+    if (campaignChunk.length === 0) continue;
+
+    const assignmentRows = await strapi.db.query(SURVEY_ASSIGNMENT_UID).findMany({
       where: mergeTenantWhere({
-        survey_template: {
+        survey_campaign: {
           id: {
-            $eq: existing.id,
+            $in: campaignChunk,
           },
         },
       }, tenantId),
-    }),
-    strapi.db.query(SURVEY_CAMPAIGN_UID).count({
+      select: ['id'],
+    });
+
+    assignmentIds.push(...(assignmentRows || [])
+      .map((row: any) => Number(row?.id || 0))
+      .filter((value: number) => Number.isInteger(value) && value > 0));
+  }
+
+  const responseIds: number[] = [];
+  for (const assignmentChunk of chunkIds(assignmentIds)) {
+    if (assignmentChunk.length === 0) continue;
+
+    const responseRows = await strapi.db.query(SURVEY_RESPONSE_UID).findMany({
       where: mergeTenantWhere({
-        survey_template: {
+        survey_assignment: {
           id: {
-            $eq: existing.id,
+            $in: assignmentChunk,
           },
         },
       }, tenantId),
-    }),
-  ]);
+      select: ['id'],
+    });
 
-  if (sectionCount > 0) {
-    throw new SurveyQuestionManagementError(409, 'Cannot delete template that still has sections');
+    responseIds.push(...(responseRows || [])
+      .map((row: any) => Number(row?.id || 0))
+      .filter((value: number) => Number.isInteger(value) && value > 0));
   }
 
-  if (campaignCount > 0) {
-    throw new SurveyQuestionManagementError(409, 'Cannot delete template that is already used by survey campaigns');
+  const answerIds: number[] = [];
+  for (const responseChunk of chunkIds(responseIds)) {
+    if (responseChunk.length === 0) continue;
+
+    const answerRows = await strapi.db.query(SURVEY_ANSWER_UID).findMany({
+      where: mergeTenantWhere({
+        survey_response: {
+          id: {
+            $in: responseChunk,
+          },
+        },
+      }, tenantId),
+      select: ['id'],
+    });
+
+    answerIds.push(...(answerRows || [])
+      .map((row: any) => Number(row?.id || 0))
+      .filter((value: number) => Number.isInteger(value) && value > 0));
   }
+
+  const sectionRows = await strapi.db.query(SURVEY_SECTION_UID).findMany({
+    where: mergeTenantWhere({
+      survey_template: {
+        id: {
+          $eq: existing.id,
+        },
+      },
+    }, tenantId),
+    select: ['id'],
+  });
+  const sectionIds = (sectionRows || [])
+    .map((row: any) => Number(row?.id || 0))
+    .filter((value: number) => Number.isInteger(value) && value > 0);
+
+  const questionIds: number[] = [];
+  for (const sectionChunk of chunkIds(sectionIds)) {
+    if (sectionChunk.length === 0) continue;
+
+    const questionRows = await strapi.db.query(SURVEY_QUESTION_UID).findMany({
+      where: mergeTenantWhere({
+        survey_section: {
+          id: {
+            $in: sectionChunk,
+          },
+        },
+      }, tenantId),
+      select: ['id'],
+    });
+
+    questionIds.push(...(questionRows || [])
+      .map((row: any) => Number(row?.id || 0))
+      .filter((value: number) => Number.isInteger(value) && value > 0));
+  }
+
+  const optionIds: number[] = [];
+  for (const questionChunk of chunkIds(questionIds)) {
+    if (questionChunk.length === 0) continue;
+
+    const optionRows = await strapi.db.query(SURVEY_QUESTION_OPTION_UID).findMany({
+      where: mergeTenantWhere({
+        survey_question: {
+          id: {
+            $in: questionChunk,
+          },
+        },
+      }, tenantId),
+      select: ['id'],
+    });
+
+    optionIds.push(...(optionRows || [])
+      .map((row: any) => Number(row?.id || 0))
+      .filter((value: number) => Number.isInteger(value) && value > 0));
+  }
+
+  const deletedAnswers = await deleteEntitiesByIds(SURVEY_ANSWER_UID, answerIds);
+  const deletedResponses = await deleteEntitiesByIds(SURVEY_RESPONSE_UID, responseIds);
+  const deletedAssignments = await deleteEntitiesByIds(SURVEY_ASSIGNMENT_UID, assignmentIds);
+  const deletedCampaigns = await deleteEntitiesByIds(SURVEY_CAMPAIGN_UID, campaignIds);
+  const deletedOptions = await deleteEntitiesByIds(SURVEY_QUESTION_OPTION_UID, optionIds);
+  const deletedQuestions = await deleteEntitiesByIds(SURVEY_QUESTION_UID, questionIds);
+  const deletedSections = await deleteEntitiesByIds(SURVEY_SECTION_UID, sectionIds);
 
   await strapi.db.query(SURVEY_TEMPLATE_UID).delete({ where: { id: existing.id } });
-  return { id: existing.id };
+  return {
+    id: existing.id,
+    name: existing.name,
+    deletedTemplates: 1,
+    deletedCampaigns,
+    deletedAssignments,
+    deletedResponses,
+    deletedAnswers,
+    deletedSections,
+    deletedQuestions,
+    deletedOptions,
+  };
 }
 
 export async function createSurveySection(body: any, tenantId: number | string) {

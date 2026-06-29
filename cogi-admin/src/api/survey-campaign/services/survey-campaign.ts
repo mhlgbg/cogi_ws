@@ -1,11 +1,12 @@
 import fs from 'node:fs/promises';
 import XLSX from 'xlsx';
 import { findEntityByRef, mergeTenantWhere, resolveCurrentTenantId, toText } from '../../../utils/tenant-scope';
+import { buildActiveSoftDeleteWhere, buildRestoreData, buildSoftDeleteData, mergeTenantSoftDeleteWhere } from '../../../utils/soft-delete';
 
 const SURVEY_CAMPAIGN_UID = 'api::survey-campaign.survey-campaign';
 const SURVEY_ASSIGNMENT_UID = 'api::survey-assignment.survey-assignment';
-const SURVEY_TEMPLATE_UID = 'api::survey-template.survey-template';
 const SURVEY_RESPONSE_UID = 'api::survey-response.survey-response';
+const SURVEY_TEMPLATE_UID = 'api::survey-template.survey-template';
 const USER_UID = 'plugin::users-permissions.user';
 
 type UploadedFileLike = {
@@ -178,33 +179,41 @@ async function collectCampaignStats(campaignIds: number[], tenantId: number | st
     return new Map<number, { total: number; completed: number }>();
   }
 
-  const rows = await strapi.db.query(SURVEY_ASSIGNMENT_UID).findMany({
-    where: mergeTenantWhere({
-      survey_campaign: {
-        id: {
-          $in: campaignIds,
-        },
-      },
-    }, tenantId),
-    select: ['id', 'isCompleted'],
-    populate: {
-      survey_campaign: {
-        select: ['id'],
-      },
-    },
-  });
-
   const stats = new Map<number, { total: number; completed: number }>();
 
-  for (const row of rows || []) {
-    const campaignId = Number(row?.survey_campaign?.id || row?.survey_campaign || 0);
-    if (!Number.isInteger(campaignId) || campaignId <= 0) continue;
+  await Promise.all(campaignIds.map(async (campaignId) => {
+    const where = mergeTenantSoftDeleteWhere({
+      survey_campaign: {
+        $and: [
+          {
+            id: {
+              $eq: campaignId,
+            },
+          },
+          buildActiveSoftDeleteWhere(),
+        ],
+      },
+    }, tenantId);
 
-    const current = stats.get(campaignId) || { total: 0, completed: 0 };
-    current.total += 1;
-    if (row?.isCompleted) current.completed += 1;
-    stats.set(campaignId, current);
-  }
+    const [total, completed] = await Promise.all([
+      strapi.db.query(SURVEY_ASSIGNMENT_UID).count({ where }),
+      strapi.db.query(SURVEY_ASSIGNMENT_UID).count({
+        where: {
+          $and: [
+            where,
+            {
+              isCompleted: true,
+            },
+          ],
+        },
+      }),
+    ]);
+
+    stats.set(campaignId, {
+      total: Number(total || 0),
+      completed: Number(completed || 0),
+    });
+  }));
 
   return stats;
 }
@@ -216,7 +225,7 @@ async function findCampaignOrThrow(id: unknown, tenantId: number | string) {
   }
 
   const campaign = await strapi.db.query(SURVEY_CAMPAIGN_UID).findOne({
-    where: mergeTenantWhere({ id: campaignId }, tenantId),
+    where: mergeTenantSoftDeleteWhere({ id: campaignId }, tenantId),
     populate: {
       survey_template: {
         select: ['id', 'name', 'code', 'type'],
@@ -279,7 +288,7 @@ export async function listSurveyCampaigns(query: any, tenantId: number | string)
   }
 
   const baseWhere = whereClauses.length > 0 ? { $and: whereClauses } : {};
-  const where = mergeTenantWhere(baseWhere, tenantId);
+  const where = mergeTenantSoftDeleteWhere(baseWhere, tenantId, query);
 
   const [rows, total] = await Promise.all([
     strapi.db.query(SURVEY_CAMPAIGN_UID).findMany({
@@ -364,6 +373,48 @@ export async function updateSurveyCampaign(id: unknown, body: any, tenantId: num
   });
 
   return getSurveyCampaignDetail(existing.id, tenantId);
+}
+
+export async function deleteSurveyCampaign(id: unknown, tenantId: number | string, userId?: number) {
+  const campaign = await findCampaignOrThrow(id, tenantId);
+
+  await strapi.db.query(SURVEY_CAMPAIGN_UID).update({
+    where: mergeTenantWhere({ id: campaign.id }, tenantId),
+    data: buildSoftDeleteData(userId),
+  });
+
+  return {
+    campaignId: campaign.id,
+    campaignName: campaign.name,
+    softDeletedCampaigns: 1,
+  };
+}
+
+export async function restoreSurveyCampaign(id: unknown, tenantId: number | string) {
+  const campaignId = toPositiveInt(id);
+  if (!campaignId) {
+    throw new SurveyCampaignError(400, 'Campaign id is invalid');
+  }
+
+  const campaign = await strapi.db.query(SURVEY_CAMPAIGN_UID).findOne({
+    where: mergeTenantSoftDeleteWhere({ id: campaignId }, tenantId, { deletedOnly: true }),
+    select: ['id', 'name'],
+  });
+
+  if (!campaign?.id) {
+    throw new SurveyCampaignError(404, 'Survey campaign not found');
+  }
+
+  await strapi.db.query(SURVEY_CAMPAIGN_UID).update({
+    where: mergeTenantWhere({ id: campaign.id }, tenantId),
+    data: buildRestoreData(),
+  });
+
+  return {
+    campaignId: campaign.id,
+    campaignName: campaign.name,
+    restoredCampaigns: 1,
+  };
 }
 
 export async function resetSurveyCampaignResponses(id: unknown, tenantId: number | string) {

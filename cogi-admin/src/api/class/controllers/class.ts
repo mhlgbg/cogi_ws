@@ -489,6 +489,9 @@ export default factories.createCoreController(CLASS_UID, () => ({
 	},
 
 	async enrollmentOptions(ctx) {
+		// Require an authenticated user (JWT) but do not enforce Strapi role-based permissions here.
+		// This keeps the endpoint tenant-scoped while allowing any logged-in user in the tenant
+		// to fetch learner/role lookup data for forms.
 		if (!(await requireAuthenticatedUser(ctx))) return;
 
 		const tenantId = resolveCurrentTenantId(ctx);
@@ -499,11 +502,20 @@ export default factories.createCoreController(CLASS_UID, () => ({
 		}
 
 		const [learnerRows, roles] = await Promise.all([
+			// Respect query param `includeInactive` to optionally return all learners (including inactive/null)
 			strapi.db.query(LEARNER_UID).findMany({
-				where: {
-					tenant: tenantId,
-					learnerStatus: 'active',
-				},
+				where: ((): Record<string, unknown> => {
+					const includeInactiveRaw = (ctx.query?.includeInactive ?? '') as unknown
+					const includeInactive = String(includeInactiveRaw || '').toLowerCase()
+					const truthy = includeInactive === '1' || includeInactive === 'true' || includeInactive === 'yes'
+					if (truthy) {
+						return { tenant: tenantId }
+					}
+					return {
+						tenant: tenantId,
+						learnerStatus: 'active',
+					}
+				})(),
 				populate: {
 					user: {
 						select: ['id', 'username', 'email', 'fullName'],
@@ -597,6 +609,182 @@ export default factories.createCoreController(CLASS_UID, () => ({
 				total,
 			},
 		};
+	},
+
+	async listAssignments(ctx) {
+		if (!(await requireAuthenticatedUser(ctx))) return;
+
+		const tenantId = resolveCurrentTenantId(ctx);
+		let classEntity: any;
+		try {
+			classEntity = await findClassOrThrow(ctx.params?.id, tenantId);
+		} catch (error: any) {
+			return ctx.notFound(error?.message || 'Class not found');
+		}
+
+		try {
+			const rows = await strapi.db.query('api::class-teacher-assignment.class-teacher-assignment').findMany({
+				where: mergeTenantWhere({
+					class: { id: { $eq: classEntity.id } },
+				}, tenantId),
+				orderBy: [{ assignmentStatus: 'desc' }, { startDate: 'desc' }, { createdAt: 'desc' }],
+				populate: {
+					teacher: {
+						select: ['id', 'username', 'email', 'fullName'],
+					},
+				},
+			});
+
+			const data = (rows || []).map((row: any) => ({
+				id: row.id,
+				subject: row.subject || '',
+				subjectCode: row.subjectCode || '',
+				role: row.role || '',
+				startDate: row.startDate || null,
+				endDate: row.endDate || null,
+				assignmentStatus: row.assignmentStatus || 'active',
+				isPayable: Boolean(row.isPayable),
+				note: row.note || '',
+				createdAt: row.createdAt || null,
+				updatedAt: row.updatedAt || null,
+				teacher: row.teacher || null,
+			}));
+
+			ctx.body = { data };
+		} catch (error: any) {
+			return ctx.badRequest(error?.message || 'Failed to load assignments');
+		}
+	},
+
+	async createAssignment(ctx) {
+		if (!(await requireAuthenticatedUser(ctx))) return;
+
+		const tenantId = resolveCurrentTenantId(ctx);
+		let classEntity: any;
+		try {
+			classEntity = await findClassOrThrow(ctx.params?.id, tenantId);
+		} catch (error: any) {
+			return ctx.notFound(error?.message || 'Class not found');
+		}
+
+		const data = resolveRequestData(ctx);
+		try {
+			const teacher = await ensureMainTeacherInTenant(data.teacher, tenantId);
+			const created = await strapi.db.query('api::class-teacher-assignment.class-teacher-assignment').create({
+				data: {
+					teacher: teacher.id,
+					class: classEntity.id,
+					subjectCode: data.subjectCode || null,
+					subject: data.subject || null,
+					role: data.role || 'co_teacher',
+					startDate: data.startDate || null,
+					endDate: data.endDate || null,
+					assignmentStatus: normalizeStatus(data.assignmentStatus ?? data.status),
+					isPayable: Boolean(data.isPayable !== undefined ? data.isPayable : true),
+					note: data.note || null,
+					tenant: tenantId,
+				},
+			});
+
+			const populated = await strapi.db.query('api::class-teacher-assignment.class-teacher-assignment').findOne({
+				where: { id: created.id },
+				populate: {
+					teacher: { select: ['id', 'username', 'email', 'fullName'] },
+				},
+			});
+
+			const result = populated || created;
+			const body = {
+				id: result.id,
+				subject: result.subject || '',
+				subjectCode: result.subjectCode || '',
+				role: result.role || '',
+				startDate: result.startDate || null,
+				endDate: result.endDate || null,
+				assignmentStatus: result.assignmentStatus || 'active',
+				isPayable: Boolean(result.isPayable),
+				note: result.note || '',
+				createdAt: result.createdAt || null,
+				updatedAt: result.updatedAt || null,
+				teacher: result.teacher || null,
+			};
+
+			ctx.body = { data: body };
+		} catch (error: any) {
+			return ctx.badRequest(error?.message || 'Invalid assignment payload');
+		}
+	},
+
+	async updateAssignment(ctx) {
+		if (!(await requireAuthenticatedUser(ctx))) return;
+
+		const tenantId = resolveCurrentTenantId(ctx);
+		let classEntity: any;
+		try {
+			classEntity = await findClassOrThrow(ctx.params?.id, tenantId);
+		} catch (error: any) {
+			return ctx.notFound(error?.message || 'Class not found');
+		}
+
+		const assignmentId = Number(ctx.params?.assignmentId);
+		if (!Number.isInteger(assignmentId) || assignmentId <= 0) {
+			return ctx.notFound('Assignment not found');
+		}
+
+		const existing = await strapi.db.query('api::class-teacher-assignment.class-teacher-assignment').findOne({
+			where: mergeTenantWhere({ id: assignmentId, class: { id: { $eq: classEntity.id } } }, tenantId),
+		});
+
+		if (!existing?.id) {
+			return ctx.notFound('Assignment not found');
+		}
+
+		const data = resolveRequestData(ctx);
+		try {
+			const teacher = data.teacher ? await ensureMainTeacherInTenant(data.teacher, tenantId) : null;
+			const updated = await strapi.db.query('api::class-teacher-assignment.class-teacher-assignment').update({
+				where: { id: existing.id },
+				data: {
+					teacher: teacher ? teacher.id : existing.teacher,
+					subjectCode: data.subjectCode ?? existing.subjectCode ?? null,
+					subject: data.subject ?? existing.subject ?? null,
+					role: data.role ?? existing.role,
+					startDate: data.startDate ?? existing.startDate ?? null,
+					endDate: data.endDate ?? existing.endDate ?? null,
+					assignmentStatus: data.assignmentStatus ? normalizeStatus(data.assignmentStatus) : existing.assignmentStatus,
+					isPayable: data.isPayable !== undefined ? Boolean(data.isPayable) : Boolean(existing.isPayable),
+					note: data.note ?? existing.note ?? null,
+					// do not allow changing class or tenant here
+				},
+			});
+
+			const populated = await strapi.db.query('api::class-teacher-assignment.class-teacher-assignment').findOne({
+				where: { id: updated.id },
+				populate: {
+					teacher: { select: ['id', 'username', 'email', 'fullName'] },
+				},
+			});
+
+			const result = populated || updated;
+			const body = {
+				id: result.id,
+				subject: result.subject || '',
+				subjectCode: result.subjectCode || '',
+				role: result.role || '',
+				startDate: result.startDate || null,
+				endDate: result.endDate || null,
+				assignmentStatus: result.assignmentStatus || 'active',
+				isPayable: Boolean(result.isPayable),
+				note: result.note || '',
+				createdAt: result.createdAt || null,
+				updatedAt: result.updatedAt || null,
+				teacher: result.teacher || null,
+			};
+
+			ctx.body = { data: body };
+		} catch (error: any) {
+			return ctx.badRequest(error?.message || 'Invalid assignment payload');
+		}
 	},
 
 	async createEnrollment(ctx) {

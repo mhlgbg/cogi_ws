@@ -46,6 +46,7 @@ export async function listTenantUsers(options: {
   page?: number;
   pageSize?: number;
   search?: string;
+  roleId?: number;
 }) {
   const tenantId = toPositiveInt(options.tenantId);
   if (!tenantId) {
@@ -55,6 +56,68 @@ export async function listTenantUsers(options: {
   const page = Math.max(1, toPositiveInt(options.page || 1, 1));
   const pageSize = Math.min(100, Math.max(1, toPositiveInt(options.pageSize || 10, 10)));
   const search = String(options.search || '').trim();
+  const roleId = toPositiveInt(options.roleId || 0, 0);
+  let matchingUserTenantIds: number[] | null = null;
+
+  if (roleId > 0) {
+    const tenantUserTenantRows = await strapi.db.query(USER_TENANT_UID).findMany({
+      where: {
+        tenant: tenantId,
+      },
+      select: ['id'],
+    });
+
+    const tenantUserTenantIds = uniquePositiveInts((tenantUserTenantRows || []).map((item: any) => item?.id));
+
+    if (tenantUserTenantIds.length === 0) {
+      return {
+        data: [],
+        meta: {
+          page,
+          pageSize,
+          total: 0,
+          pageCount: 1,
+        },
+      };
+    }
+
+    const roleAssignments = await strapi.db.query(USER_TENANT_ROLE_UID).findMany({
+      where: {
+        userTenantRoleStatus: 'active',
+        role: roleId,
+        userTenant: {
+          id: {
+            $in: tenantUserTenantIds,
+          },
+        },
+      },
+      populate: {
+        userTenant: {
+          select: ['id'],
+        },
+      },
+    });
+
+    const tenantUserTenantIdSet = new Set(tenantUserTenantIds);
+
+    matchingUserTenantIds = uniquePositiveInts(
+      (roleAssignments || [])
+        .map((item: any) => item?.userTenant?.id ?? item?.userTenant)
+        .filter((userTenantId: unknown) => tenantUserTenantIdSet.has(toPositiveInt(userTenantId))),
+    );
+
+    if (matchingUserTenantIds.length === 0) {
+      return {
+        data: [],
+        meta: {
+          page,
+          pageSize,
+          total: 0,
+          pageCount: 1,
+        },
+      };
+    }
+  }
 
   const where: Record<string, unknown> = {
     tenant: tenantId,
@@ -67,6 +130,12 @@ export async function listTenantUsers(options: {
         { username: { $containsi: search } },
         { fullName: { $containsi: search } },
       ],
+    };
+  }
+
+  if (matchingUserTenantIds) {
+    where.id = {
+      $in: matchingUserTenantIds,
     };
   }
 
@@ -267,6 +336,52 @@ export async function updateTenantUserRoles(options: {
       },
     });
   }
+
+  return { ok: true };
+}
+
+export async function updateTenantUserPassword(options: {
+  tenantId: number;
+  userTenantId: number;
+  password: string;
+}) {
+  const tenantId = toPositiveInt(options.tenantId);
+  const userTenantId = toPositiveInt(options.userTenantId);
+  const password = typeof options.password === 'string' ? options.password : '';
+
+  if (!tenantId || !userTenantId) {
+    return { ok: false, error: 'Invalid tenant or userTenant id' };
+  }
+
+  if (!password) {
+    return { ok: false, error: 'password is required' };
+  }
+
+  if (password.length < 8) {
+    return { ok: false, error: 'password must be at least 8 characters' };
+  }
+
+  const userTenant = await strapi.db.query(USER_TENANT_UID).findOne({
+    where: {
+      id: userTenantId,
+      tenant: tenantId,
+    },
+    populate: {
+      user: {
+        select: ['id'],
+      },
+    },
+  });
+
+  const userId = toPositiveInt(userTenant?.user?.id ?? userTenant?.user);
+  if (!userId) {
+    return { ok: false, error: 'User tenant not found in current tenant' };
+  }
+
+  const usersPermissionsUserService = strapi.plugin('users-permissions').service('user');
+  await usersPermissionsUserService.edit(userId, {
+    password,
+  });
 
   return { ok: true };
 }

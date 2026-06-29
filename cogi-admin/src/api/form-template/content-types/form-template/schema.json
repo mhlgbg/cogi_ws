@@ -49,6 +49,12 @@
       "relation": "oneToMany",
       "target": "api::campaign.campaign",
       "mappedBy": "formTemplate"
+    },
+    "leadCampaigns": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::lead-campaign.lead-campaign",
+      "mappedBy": "formTemplate"
     }
   }
 }

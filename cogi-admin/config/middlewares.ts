@@ -119,5 +119,6 @@ export default [
   },
   'strapi::session',
   'strapi::favicon',
+  'global::storage-static',
   'strapi::public',
 ];

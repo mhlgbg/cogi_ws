@@ -1,4 +1,5 @@
 import { mergeTenantWhere } from '../../../utils/tenant-scope';
+import { buildActiveSoftDeleteWhere, mergeTenantSoftDeleteWhere } from '../../../utils/soft-delete';
 
 const SURVEY_ASSIGNMENT_UID = 'api::survey-assignment.survey-assignment';
 const SURVEY_CAMPAIGN_UID = 'api::survey-campaign.survey-campaign';
@@ -13,10 +14,18 @@ type SubmitAnswerPayload = {
   questionId?: number | string;
   value?: string | null;
   text?: string | null;
+  optionIds?: Array<number | string> | null;
+  textValue?: string | null;
+  numberValue?: number | string | null;
+  note?: string | null;
 };
 
 type SubmitPayload = {
   assignmentId?: number | string;
+  answers?: SubmitAnswerPayload[];
+};
+
+type BatchSavePayload = {
   answers?: SubmitAnswerPayload[];
 };
 
@@ -240,7 +249,10 @@ function normalizeSubmitResult(response: any, assignmentId: number, answersCount
 
 async function findAssignmentById(assignmentId: number, tenantId?: TenantId) {
   return strapi.db.query(SURVEY_ASSIGNMENT_UID).findOne({
-    where: applyTenantWhere({ id: assignmentId }, tenantId),
+    where: mergeTenantSoftDeleteWhere({
+      id: assignmentId,
+      survey_campaign: buildActiveSoftDeleteWhere(),
+    }, tenantId),
     populate: {
       respondent: {
         select: ['id', 'username', 'email'],
@@ -358,15 +370,34 @@ function inferQuestionOptionId(question: any, value: string): number | null {
   return matched?.id || null;
 }
 
+function normalizeAnswerInput(answer: SubmitAnswerPayload | null | undefined) {
+  const optionIds = Array.isArray(answer?.optionIds)
+    ? answer.optionIds
+        .map((item) => toPositiveInt(item))
+        .filter((item): item is number => Number.isInteger(item) && item > 0)
+    : [];
+
+  const valueFromOptionIds = optionIds.length > 0 ? optionIds.join(',') : '';
+  const value = toTrimmedString(answer?.value) || valueFromOptionIds || toTrimmedString(answer?.numberValue);
+  const text = toTrimmedString(answer?.text ?? answer?.textValue ?? answer?.note);
+
+  return {
+    value,
+    text,
+    optionIds,
+  };
+}
+
 function validateAnswerPayload(question: any, answer: SubmitAnswerPayload) {
-  const value = toTrimmedString(answer?.value);
-  const text = toTrimmedString(answer?.text);
+  const normalizedInput = normalizeAnswerInput(answer);
+  const value = normalizedInput.value;
+  const text = normalizedInput.text;
 
   if (question.type === 'TEXT') {
     if (!text) {
       throw new SurveyError(400, `Question ${question.id} requires text answer`);
     }
-    return { value: '', text };
+    return { value: '', text, optionIds: normalizedInput.optionIds };
   }
 
   if (!value) {
@@ -374,13 +405,13 @@ function validateAnswerPayload(question: any, answer: SubmitAnswerPayload) {
   }
 
   if (question.type === 'LIKERT_1_5' || question.type === 'SINGLE_CHOICE') {
-    const matchedOptionId = inferQuestionOptionId(question, value);
+    const matchedOptionId = normalizedInput.optionIds[0] || inferQuestionOptionId(question, value);
     if (!matchedOptionId) {
       throw new SurveyError(400, `Question ${question.id} has invalid option value`);
     }
   }
 
-  return { value, text };
+  return { value, text, optionIds: normalizedInput.optionIds };
 }
 
 function validateRequiredQuestions(questions: any[], answersByQuestionId: Map<number, SubmitAnswerPayload>) {
@@ -415,6 +446,56 @@ async function findInProgressResponse(assignmentId: number, tenantId: number | s
   });
 }
 
+async function findResponseById(responseId: number, tenantId?: TenantId) {
+  return strapi.db.query(SURVEY_RESPONSE_UID).findOne({
+    where: applyTenantWhere({ id: responseId }, tenantId),
+    populate: {
+      survey_assignment: {
+        populate: {
+          respondent: {
+            select: ['id', 'username', 'email'],
+          },
+          tenant: {
+            select: ['id'],
+          },
+          survey_campaign: {
+            select: ['id', 'campaignStatus'],
+            populate: {
+              survey_template: {
+                select: ['id'],
+              },
+            },
+          },
+        },
+      },
+      survey_answers: {
+        populate: {
+          survey_question: true,
+          survey_question_option: true,
+        },
+      },
+    },
+  });
+}
+
+function assertResponseEditable(response: any, userId: number) {
+  if (!response?.id) {
+    throw new SurveyError(404, 'Survey response not found');
+  }
+
+  const assignment = response?.survey_assignment;
+  if (!assignment?.id) {
+    throw new SurveyError(404, 'Survey assignment not found');
+  }
+
+  assertAssignmentOwner(assignment, userId);
+  assertCampaignOpen(assignment);
+
+  if (assignment?.isCompleted || getResponseStatus(response) === 'SUBMITTED') {
+    throw new SurveyError(409, 'Survey assignment already submitted');
+  }
+}
+
 async function replaceResponseAnswers(responseId: number, answersByQuestionId: Map<number, SubmitAnswerPayload>, questionMap: Map<number, any>, tenantId: number | string, trx: any) {
   const existingAnswers = await strapi.db.query(SURVEY_ANSWER_UID).findMany({
     where: mergeTenantWhere({ survey_response: responseId }, tenantId),
@@ -432,9 +513,10 @@ async function replaceResponseAnswers(responseId: number, answersByQuestionId: M
     const question = questionMap.get(questionId);
     if (!question) continue;
 
+    const normalizedInput = normalizeAnswerInput(rawAnswer);
     const normalized = question.type === 'TEXT'
-      ? { value: '', text: toTrimmedString(rawAnswer?.text) }
-      : { value: toTrimmedString(rawAnswer?.value), text: toTrimmedString(rawAnswer?.text) };
+      ? { value: '', text: normalizedInput.text }
+      : { value: normalizedInput.value, text: normalizedInput.text };
 
     const hasMeaningfulAnswer = question.type === 'TEXT'
       ? Boolean(normalized.text)
@@ -443,7 +525,7 @@ async function replaceResponseAnswers(responseId: number, answersByQuestionId: M
     if (!hasMeaningfulAnswer) continue;
 
     const optionId = question.type === 'LIKERT_1_5' || question.type === 'SINGLE_CHOICE'
-      ? inferQuestionOptionId(question, normalized.value)
+      ? normalizedInput.optionIds[0] || inferQuestionOptionId(question, normalized.value)
       : null;
 
     await strapi.db.query(SURVEY_ANSWER_UID).create({
@@ -458,6 +540,96 @@ async function replaceResponseAnswers(responseId: number, answersByQuestionId: M
       transacting: trx,
     } as any);
   }
+}
+
+async function upsertResponseAnswers(responseId: number, answersByQuestionId: Map<number, SubmitAnswerPayload>, questionMap: Map<number, any>, tenantId: number | string, trx: any) {
+  const existingAnswers = await strapi.db.query(SURVEY_ANSWER_UID).findMany({
+    where: mergeTenantWhere({ survey_response: responseId }, tenantId),
+    transacting: trx,
+  } as any);
+
+  const existingByQuestionId = new Map<number, any>();
+  const duplicateAnswerIds: number[] = [];
+
+  for (const answer of existingAnswers || []) {
+    const questionId = getRelationId(answer?.survey_question);
+    if (!questionId) continue;
+
+    if (existingByQuestionId.has(questionId)) {
+      duplicateAnswerIds.push(Number(answer.id));
+      continue;
+    }
+
+    existingByQuestionId.set(questionId, answer);
+  }
+
+  for (const duplicateAnswerId of duplicateAnswerIds) {
+    await strapi.db.query(SURVEY_ANSWER_UID).delete({
+      where: { id: duplicateAnswerId },
+      transacting: trx,
+    } as any);
+  }
+
+  if (duplicateAnswerIds.length > 0) {
+    strapi.log.warn(`[survey.saveResponseAnswersBatch] deleted duplicate answers responseId=${responseId} duplicateCount=${duplicateAnswerIds.length}`);
+  }
+
+  const savedQuestionIds: number[] = [];
+
+  for (const [questionId, rawAnswer] of answersByQuestionId.entries()) {
+    const question = questionMap.get(questionId);
+    if (!question) continue;
+
+    const normalizedInput = normalizeAnswerInput(rawAnswer);
+    const normalized = question.type === 'TEXT'
+      ? { value: '', text: normalizedInput.text }
+      : { value: normalizedInput.value, text: normalizedInput.text };
+
+    const hasMeaningfulAnswer = question.type === 'TEXT'
+      ? Boolean(normalized.text)
+      : Boolean(normalized.value);
+
+    const existingAnswer = existingByQuestionId.get(questionId);
+    if (!hasMeaningfulAnswer) {
+      if (existingAnswer?.id) {
+        await strapi.db.query(SURVEY_ANSWER_UID).delete({
+          where: { id: existingAnswer.id },
+          transacting: trx,
+        } as any);
+      }
+      continue;
+    }
+
+    const optionId = question.type === 'LIKERT_1_5' || question.type === 'SINGLE_CHOICE'
+      ? normalizedInput.optionIds[0] || inferQuestionOptionId(question, normalized.value)
+      : null;
+
+    const answerData = {
+      survey_response: responseId,
+      survey_question: question.id,
+      survey_question_option: optionId,
+      value: normalized.value || null,
+      text: normalized.text || null,
+      tenant: tenantId,
+    };
+
+    if (existingAnswer?.id) {
+      await strapi.db.query(SURVEY_ANSWER_UID).update({
+        where: { id: existingAnswer.id },
+        data: answerData,
+        transacting: trx,
+      } as any);
+    } else {
+      await strapi.db.query(SURVEY_ANSWER_UID).create({
+        data: answerData,
+        transacting: trx,
+      } as any);
+    }
+
+    savedQuestionIds.push(questionId);
+  }
+
+  return savedQuestionIds;
 }
 
 async function buildValidatedSubmissionContext(userIdInput: unknown, payloadInput: SubmitPayload, tenantId?: TenantId) {
@@ -538,6 +710,18 @@ function normalizeDraftResult(response: any, assignmentId: number, answersCount:
   };
 }
 
+function normalizeBatchSaveResult(response: any, savedQuestionIds: number[]) {
+  const responseStatus = getResponseStatus(response) || 'IN_PROGRESS';
+  return {
+    responseId: response?.id || null,
+    savedAt: response?.updatedAt || response?.createdAt || null,
+    responseStatus,
+    status: responseStatus,
+    savedQuestionIds,
+    answersCount: savedQuestionIds.length,
+  };
+}
+
 export default {
   async getMyAssignments(userIdInput: unknown, tenantId?: TenantId) {
     const userId = toPositiveInt(userIdInput);
@@ -546,7 +730,10 @@ export default {
     }
 
     const rows = await strapi.db.query(SURVEY_ASSIGNMENT_UID).findMany({
-      where: applyTenantWhere({ respondent: userId }, tenantId),
+      where: mergeTenantSoftDeleteWhere({
+        respondent: userId,
+        survey_campaign: buildActiveSoftDeleteWhere(),
+      }, tenantId),
       populate: {
         survey_campaign: {
           populate: {
@@ -681,6 +868,94 @@ export default {
 
       strapi.log.error('[survey.saveDraftSurvey] failed', error);
       throw new SurveyError(500, 'Failed to save survey draft');
+    }
+  },
+
+  async saveResponseAnswersBatch(userIdInput: unknown, responseIdInput: unknown, payloadInput: BatchSavePayload, tenantId?: TenantId, authUser?: AuthUser) {
+    const userId = toPositiveInt(userIdInput);
+    const responseId = toPositiveInt(responseIdInput);
+
+    if (!userId) {
+      throw new SurveyError(401, 'Unauthorized');
+    }
+
+    if (!responseId) {
+      throw new SurveyError(400, 'responseId is required');
+    }
+
+    const payload = payloadInput && typeof payloadInput === 'object' ? payloadInput : {};
+    if (!Array.isArray(payload.answers)) {
+      throw new SurveyError(400, 'answers must be an array');
+    }
+
+    if (payload.answers.length === 0) {
+      throw new SurveyError(400, 'answers must be a non-empty array');
+    }
+
+    const response = await findResponseById(responseId, tenantId);
+    assertResponseEditable(response, userId);
+
+    const assignment = response?.survey_assignment;
+    const assignmentTenantId = getRelationId(assignment?.tenant);
+    if (!assignmentTenantId) {
+      throw new SurveyError(400, 'Survey assignment is missing tenant');
+    }
+
+    const templateId = getRelationId(assignment?.survey_campaign?.survey_template);
+    if (!templateId) {
+      throw new SurveyError(400, 'Survey assignment is missing template');
+    }
+
+    const answersByQuestionId = new Map<number, SubmitAnswerPayload>();
+    for (const item of payload.answers) {
+      const questionId = toPositiveInt(item?.questionId);
+      if (!questionId) {
+        throw new SurveyError(400, 'Each answer must include valid questionId');
+      }
+
+      answersByQuestionId.set(questionId, item);
+    }
+
+    const templateQuestions = await loadTemplateQuestions(templateId, assignmentTenantId);
+    const questionMap = buildQuestionMap(templateQuestions || []);
+    for (const questionId of answersByQuestionId.keys()) {
+      if (!questionMap.has(questionId)) {
+        throw new SurveyError(400, `Question ${questionId} does not belong to assignment template`);
+      }
+    }
+
+    try {
+      const saved = await strapi.db.transaction(async ({ trx }: any) => {
+        await strapi.db.query(SURVEY_RESPONSE_UID).update({
+          where: { id: response.id },
+          data: {
+            respondentSnapshot: {
+              id: userId,
+              username: authUser?.username || assignment?.respondent?.username || null,
+            },
+          },
+          transacting: trx,
+        } as any);
+
+        const savedQuestionIds = await upsertResponseAnswers(response.id, answersByQuestionId, questionMap, assignmentTenantId, trx);
+
+        const reloaded = await strapi.db.query(SURVEY_RESPONSE_UID).findOne({
+          where: { id: response.id },
+          populate: { survey_answers: true },
+          transacting: trx,
+        } as any);
+
+        return normalizeBatchSaveResult(reloaded, savedQuestionIds);
+      });
+
+      return saved;
+    } catch (error: any) {
+      if (error instanceof SurveyError) {
+        throw error;
+      }
+
+      strapi.log.error('[survey.saveResponseAnswersBatch] failed', error);
+      throw new SurveyError(500, 'Failed to save survey answers batch');
     }
   },
 

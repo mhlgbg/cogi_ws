@@ -7,12 +7,17 @@
  *
  * Config:
  * {
- *   key: 'user.invite'  // Feature permission key
+ *   key: 'user.invite'  // Single feature permission key
+ * }
+ * or
+ * {
+ *   keys: ['user.invite', 'user.manage'] // Any-of feature permission keys
  * }
  */
 
 type PolicyConfig = {
   key?: string;
+  keys?: string[];
 };
 
 const USER_TENANT_UID = 'api::user-tenant.user-tenant';
@@ -128,9 +133,12 @@ export default async (policyContext, config: PolicyConfig = {}) => {
     throw error;
   };
 
-  const requiredKey = config?.key;
+  const requiredKeys = [
+    ...((Array.isArray(config?.keys) ? config.keys : []).map((item) => String(item || '').trim()).filter(Boolean)),
+    ...(config?.key ? [String(config.key).trim()] : []),
+  ];
 
-  if (!requiredKey) {
+  if (requiredKeys.length === 0) {
     return forbidden('Permission key is required');
   }
 
@@ -161,8 +169,8 @@ export default async (policyContext, config: PolicyConfig = {}) => {
 
   const permissionKeys = await getTenantScopedPermissionKeys(userId, tenantId);
 
-  if (!permissionKeys.has(requiredKey)) {
-    return forbidden(`Forbidden: missing permission '${requiredKey}' in tenant scope`);
+  if (!requiredKeys.some((key) => permissionKeys.has(key))) {
+    return forbidden(`Forbidden: missing required permission in tenant scope (${requiredKeys.join(', ')})`);
   }
   return true;
 };

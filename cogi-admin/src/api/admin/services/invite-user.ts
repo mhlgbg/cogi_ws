@@ -12,6 +12,8 @@ const DEPARTMENT_UID = 'api::department.department';
 const DEPARTMENT_MEMBERSHIP_UID = 'api::department-membership.department-membership';
 const NOTIFICATION_SERVICE_UID = 'api::notification.notification';
 
+import { enqueueMail } from '../../../services/mail-queue';
+
 export { buildActivationLink, buildResetPasswordLink, buildVerifyEmailLink, getBaseUrl } from '../../../utils/tenant-base-url';
 
 export type InvitePurpose = 'tenant' | 'admission';
@@ -189,11 +191,18 @@ export async function sendInviteNotification(options: {
         });
 
     try {
-      await strapi.plugin('email').service('email').send({
+      await enqueueMail({
+        tenantId: options.tenantId,
+        mailType: options.invitePurpose === 'admission' ? 'admission_invite_fallback' : 'tenant_invite_fallback',
         to: recipientEmail,
         subject: fallback.subject,
         text: fallback.text,
         html: fallback.html,
+        metadata: {
+          templateCode,
+          usedFallback: true,
+          invitePurpose: options.invitePurpose || 'tenant',
+        },
       });
 
       return {

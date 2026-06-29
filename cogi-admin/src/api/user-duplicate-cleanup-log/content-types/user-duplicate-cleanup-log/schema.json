@@ -1,0 +1,59 @@
+{
+  "kind": "collectionType",
+  "collectionName": "user_duplicate_cleanup_logs",
+  "info": {
+    "singularName": "user-duplicate-cleanup-log",
+    "pluralName": "user-duplicate-cleanup-logs",
+    "displayName": "User Duplicate Cleanup Log"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "username": {
+      "type": "string",
+      "required": true
+    },
+    "keepUserId": {
+      "type": "integer"
+    },
+    "deletedUserIds": {
+      "type": "json"
+    },
+    "deletedAssignments": {
+      "type": "integer",
+      "default": 0
+    },
+    "deletedResponses": {
+      "type": "integer",
+      "default": 0
+    },
+    "deletedAnswers": {
+      "type": "integer",
+      "default": 0
+    },
+    "warnings": {
+      "type": "json"
+    },
+    "errors": {
+      "type": "json"
+    },
+    "cleanupStatus": {
+      "type": "enumeration",
+      "enum": ["success", "warning", "failed"],
+      "required": true,
+      "default": "success"
+    },
+    "tenantId": {
+      "type": "integer",
+      "required": true
+    },
+    "previewGroup": {
+      "type": "json"
+    },
+    "cleanedAt": {
+      "type": "datetime"
+    }
+  }
+}

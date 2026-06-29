@@ -1,0 +1,98 @@
+{
+  "kind": "collectionType",
+  "collectionName": "lead_campaigns",
+  "info": {
+    "singularName": "lead-campaign",
+    "pluralName": "lead-campaigns",
+    "displayName": "LeadCampaign",
+    "description": "Tenant-scoped marketing campaigns for public lead capture forms."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "leadCampaigns",
+      "required": true
+    },
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "code": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "leadCampaignStatus": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "active",
+        "paused",
+        "closed",
+        "archived"
+      ],
+      "required": true,
+      "default": "draft"
+    },
+    "startDate": {
+      "type": "datetime"
+    },
+    "endDate": {
+      "type": "datetime"
+    },
+    "formTemplate": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::form-template.form-template",
+      "inversedBy": "leadCampaigns"
+    },
+    "successMessage": {
+      "type": "text"
+    },
+    "submitButtonText": {
+      "type": "string",
+      "default": "Đăng ký"
+    },
+    "autoReplyEnabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "autoReplySubject": {
+      "type": "string"
+    },
+    "autoReplyHtml": {
+      "type": "richtext"
+    },
+    "internalNotifyEnabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "internalNotifyEmails": {
+      "type": "json"
+    },
+    "leads": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::lead-capture.lead-capture",
+      "mappedBy": "campaign"
+    },
+    "publicPages": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::public-page.public-page",
+      "mappedBy": "leadCampaign"
+    },
+    "isDeleted": {
+      "type": "boolean",
+      "default": false
+    }
+  }
+}

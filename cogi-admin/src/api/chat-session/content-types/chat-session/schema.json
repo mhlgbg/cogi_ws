@@ -1,0 +1,61 @@
+{
+  "kind": "collectionType",
+  "collectionName": "chat_sessions",
+  "info": {
+    "singularName": "chat-session",
+    "pluralName": "chat-sessions",
+    "displayName": "ChatSession",
+    "description": "Tenant-scoped public chat sessions for website visitors."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "chatSessions",
+      "required": true
+    },
+    "visitorName": {
+      "type": "string"
+    },
+    "visitorPhone": {
+      "type": "string"
+    },
+    "visitorEmail": {
+      "type": "email"
+    },
+    "sourcePage": {
+      "type": "string"
+    },
+    "chatSessionStatus": {
+      "type": "enumeration",
+      "enum": [
+        "OPEN",
+        "CLOSED"
+      ],
+      "required": true,
+      "default": "OPEN"
+    },
+    "chatLeadStatus": {
+      "type": "enumeration",
+      "enum": [
+        "NEW",
+        "CONTACTED",
+        "CONVERTED",
+        "IGNORED"
+      ],
+      "required": true,
+      "default": "NEW"
+    },
+    "messages": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::chat-message.chat-message",
+      "mappedBy": "session"
+    }
+  }
+}

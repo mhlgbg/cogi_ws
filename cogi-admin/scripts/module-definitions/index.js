@@ -23,7 +23,10 @@ const learnerManagement = require('./learner');
 const feeSheetManagement = require('./fee-sheet');
 const admissionManagement = require('./admission');
 const contentManagement = require('./content');
+const storage = require('./storage');
+const learningManagement = require('./learning');
 const slider = require('./slider');
+const system = require('./system');
 // const inventory = require('./inventory');
 
 module.exports = [
@@ -42,6 +45,9 @@ module.exports = [
   feeSheetManagement,
   admissionManagement,
   contentManagement,
+  storage,
+  learningManagement,
   slider,
+  system,
   // inventory,
 ];

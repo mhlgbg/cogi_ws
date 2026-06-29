@@ -1,5 +1,11 @@
 import { resolveCurrentTenantId } from '../../../utils/tenant-scope';
-import { listSurveyAssignments } from '../services/survey-assignment';
+import {
+  createSurveyAssignment,
+  deleteSurveyAssignmentsByFilter,
+  listSurveyAssignments,
+  restoreSurveyAssignment,
+  restoreSurveyAssignmentsByFilter,
+} from '../services/survey-assignment';
 
 type AuthUser = {
   id: number;
@@ -66,6 +72,7 @@ function handleError(ctx: any, error: any) {
   if (status === 401) return ctx.unauthorized(message);
   if (status === 403) return ctx.forbidden(message);
   if (status === 404) return ctx.notFound(message);
+  if (status === 409) return ctx.conflict(message);
 
   strapi.log.error('[survey-assignment] unexpected error', error);
   return ctx.internalServerError(message);
@@ -78,6 +85,63 @@ export default {
 
     try {
       const data = await listSurveyAssignments(ctx.request?.query || {}, resolveCurrentTenantId(ctx));
+      ctx.body = { success: true, data };
+    } catch (error: any) {
+      return handleError(ctx, error);
+    }
+  },
+
+  async deleteFiltered(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const payload = ctx.request?.body?.data && typeof ctx.request.body.data === 'object'
+        ? ctx.request.body.data
+        : ctx.request?.body || {};
+      const data = await deleteSurveyAssignmentsByFilter(payload, resolveCurrentTenantId(ctx), authUser.id);
+      ctx.body = { success: true, data };
+    } catch (error: any) {
+      return handleError(ctx, error);
+    }
+  },
+
+  async restoreFiltered(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const payload = ctx.request?.body?.data && typeof ctx.request.body.data === 'object'
+        ? ctx.request.body.data
+        : ctx.request?.body || {};
+      const data = await restoreSurveyAssignmentsByFilter(payload, resolveCurrentTenantId(ctx));
+      ctx.body = { success: true, data };
+    } catch (error: any) {
+      return handleError(ctx, error);
+    }
+  },
+
+  async restore(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const data = await restoreSurveyAssignment(ctx.params?.id, resolveCurrentTenantId(ctx));
+      ctx.body = { success: true, data };
+    } catch (error: any) {
+      return handleError(ctx, error);
+    }
+  },
+
+  async create(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const payload = ctx.request?.body?.data && typeof ctx.request.body.data === 'object'
+        ? ctx.request.body.data
+        : ctx.request?.body || {};
+      const data = await createSurveyAssignment(payload, resolveCurrentTenantId(ctx));
       ctx.body = { success: true, data };
     } catch (error: any) {
       return handleError(ctx, error);

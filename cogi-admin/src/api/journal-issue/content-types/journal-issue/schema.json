@@ -1,0 +1,77 @@
+{
+  "kind": "collectionType",
+  "collectionName": "journal_issues",
+  "info": {
+    "singularName": "journal-issue",
+    "pluralName": "journal-issues",
+    "displayName": "JournalIssue",
+    "description": "Tenant-scoped journal issues for the public journal module."
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "slug": {
+      "type": "uid",
+      "targetField": "title",
+      "required": true
+    },
+    "issueNumber": {
+      "type": "string",
+      "required": true
+    },
+    "volume": {
+      "type": "string"
+    },
+    "year": {
+      "type": "integer",
+      "required": true
+    },
+    "publicAt": {
+      "type": "datetime"
+    },
+    "summary": {
+      "type": "richtext"
+    },
+    "coverImage": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "pdfFile": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": [
+        "files"
+      ]
+    },
+    "journalCategory": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::journal-category.journal-category",
+      "inversedBy": "journalIssues"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true,
+      "index": true
+    },
+    "issueItems": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::journal-issue-item.journal-issue-item",
+      "mappedBy": "journalIssue"
+    }
+  }
+}

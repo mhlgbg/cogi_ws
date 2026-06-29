@@ -1,7 +1,9 @@
 import { mergeTenantWhere } from '../../../utils/tenant-scope';
+import { buildRestoreData, buildSoftDeleteData, mergeTenantSoftDeleteWhere } from '../../../utils/soft-delete';
 
 const SURVEY_ASSIGNMENT_UID = 'api::survey-assignment.survey-assignment';
 const SURVEY_CAMPAIGN_UID = 'api::survey-campaign.survey-campaign';
+const USER_UID = 'plugin::users-permissions.user';
 
 type ResponseStatus = 'IN_PROGRESS' | 'SUBMITTED' | 'RESET';
 
@@ -23,6 +25,15 @@ function toPositiveInt(value: unknown, fallback: number | null = null): number |
 function toTrimmedString(value: unknown): string {
   if (value === null || value === undefined) return '';
   return String(value).trim();
+}
+
+function toContextType(value: unknown): 'COURSE_LECTURER' | 'GRADUATION_EXIT' {
+  const normalized = toTrimmedString(value).toUpperCase();
+  if (normalized === 'COURSE_LECTURER' || normalized === 'GRADUATION_EXIT') {
+    return normalized;
+  }
+
+  throw new SurveyAssignmentError(400, 'contextType is invalid');
 }
 
 function toBooleanFilter(value: unknown): boolean | null {
@@ -91,7 +102,7 @@ async function findCampaignOrThrow(id: unknown, tenantId: number | string) {
   }
 
   const campaign = await strapi.db.query(SURVEY_CAMPAIGN_UID).findOne({
-    where: mergeTenantWhere({ id: campaignId }, tenantId),
+    where: mergeTenantSoftDeleteWhere({ id: campaignId }, tenantId),
     select: ['id'],
   });
 
@@ -102,17 +113,85 @@ async function findCampaignOrThrow(id: unknown, tenantId: number | string) {
   return campaign;
 }
 
-export async function listSurveyAssignments(query: any, tenantId: number | string) {
-  const campaign = await findCampaignOrThrow(query?.campaignId, tenantId);
-  const page = toPositiveInt(query?.page, 1) || 1;
-  const pageSize = toPositiveInt(query?.pageSize, 20) || 20;
-  const start = (page - 1) * pageSize;
+async function findRespondentByStudentCode(studentCode: unknown) {
+  const normalizedStudentCode = toTrimmedString(studentCode);
+  if (!normalizedStudentCode) {
+    throw new SurveyAssignmentError(400, 'studentCode is required');
+  }
 
+  const respondent = await strapi.db.query(USER_UID).findOne({
+    where: {
+      username: {
+        $eqi: normalizedStudentCode,
+      },
+    },
+    select: ['id', 'username', 'fullName', 'email'],
+  });
+
+  if (!respondent?.id) {
+    throw new SurveyAssignmentError(404, 'User not found by studentCode');
+  }
+
+  return respondent;
+}
+
+function buildDeletedFilter(query: any) {
+  return {
+    deletedOnly: query?.deletedOnly,
+    showDeleted: query?.showDeleted,
+    withDeleted: query?.withDeleted,
+  };
+}
+
+function buildDuplicateWhere(options: {
+  tenantId: number | string;
+  campaignId: number;
+  respondentId: number;
+  contextType: 'COURSE_LECTURER' | 'GRADUATION_EXIT';
+  classSectionId?: string;
+  lecturerId?: string;
+}) {
+  const duplicateWhere: Record<string, unknown> = {
+    tenant: {
+      id: {
+        $eq: options.tenantId,
+      },
+    },
+    survey_campaign: {
+      id: {
+        $eq: options.campaignId,
+      },
+    },
+    respondent: {
+      id: {
+        $eq: options.respondentId,
+      },
+    },
+  };
+
+  if (options.contextType === 'COURSE_LECTURER') {
+    duplicateWhere.classSectionId = options.classSectionId || '';
+    duplicateWhere.lecturerId = options.lecturerId || '';
+  }
+
+  return {
+    $and: [
+      duplicateWhere,
+      {
+        isDeleted: {
+          $ne: true,
+        },
+      },
+    ],
+  };
+}
+
+async function buildAssignmentWhere(query: any, tenantId: number | string, campaignId: number) {
   const whereClauses: Record<string, unknown>[] = [
     {
       survey_campaign: {
         id: {
-          $eq: campaign.id,
+          $eq: campaignId,
         },
       },
     },
@@ -133,7 +212,42 @@ export async function listSurveyAssignments(query: any, tenantId: number | strin
     whereClauses.push({ lecturerId: { $eqi: lecturerId } });
   }
 
-  const where = mergeTenantWhere({ $and: whereClauses }, tenantId);
+  const keyword = toTrimmedString(query?.q || query?.studentKeyword || query?.student || query?.keyword);
+  if (keyword) {
+    const matchedRespondents = await strapi.db.query(USER_UID).findMany({
+      where: {
+        $or: [
+          { username: { $containsi: keyword } },
+          { fullName: { $containsi: keyword } },
+        ],
+      },
+      select: ['id'],
+      limit: 200,
+    });
+
+    const respondentIds = (matchedRespondents || [])
+      .map((row: any) => Number(row?.id || 0))
+      .filter((value: number) => Number.isInteger(value) && value > 0);
+
+    whereClauses.push({
+      respondent: {
+        id: {
+          $in: respondentIds.length > 0 ? respondentIds : [-1],
+        },
+      },
+    });
+  }
+
+  return mergeTenantSoftDeleteWhere({ $and: whereClauses }, tenantId, buildDeletedFilter(query));
+}
+
+export async function listSurveyAssignments(query: any, tenantId: number | string) {
+  const campaign = await findCampaignOrThrow(query?.campaignId, tenantId);
+  const page = toPositiveInt(query?.page, 1) || 1;
+  const pageSize = toPositiveInt(query?.pageSize, 20) || 20;
+  const start = (page - 1) * pageSize;
+
+  const where = await buildAssignmentWhere(query, tenantId, Number(campaign.id));
 
   const [rows, total] = await Promise.all([
     strapi.db.query(SURVEY_ASSIGNMENT_UID).findMany({
@@ -162,4 +276,161 @@ export async function listSurveyAssignments(query: any, tenantId: number | strin
       total,
     },
   };
+}
+
+export async function createSurveyAssignment(payload: any, tenantId: number | string) {
+  const campaign = await findCampaignOrThrow(payload?.campaignId, tenantId);
+  const contextType = toContextType(payload?.contextType);
+  const respondent = await findRespondentByStudentCode(payload?.studentCode);
+  const courseId = toTrimmedString(payload?.courseId);
+  const courseName = toTrimmedString(payload?.courseName);
+  const lecturerId = toTrimmedString(payload?.lecturerId);
+  const lecturerName = toTrimmedString(payload?.lecturerName);
+  const classSectionId = toTrimmedString(payload?.classSectionId);
+
+  const duplicateWhere = buildDuplicateWhere({
+    tenantId,
+    campaignId: Number(campaign.id),
+    respondentId: Number(respondent.id),
+    contextType,
+    classSectionId,
+    lecturerId,
+  });
+
+  const existing = await strapi.db.query(SURVEY_ASSIGNMENT_UID).findOne({
+    where: duplicateWhere,
+    select: ['id'],
+  });
+
+  if (existing?.id) {
+    throw new SurveyAssignmentError(409, 'Assignment already exists');
+  }
+
+  const createdEntity = await strapi.entityService.create(SURVEY_ASSIGNMENT_UID, {
+    data: {
+      tenant: tenantId,
+      survey_campaign: campaign.id,
+      respondent: respondent.id,
+      contextType,
+      courseId,
+      courseName,
+      lecturerId,
+      lecturerName,
+      classSectionId,
+      isDeleted: false,
+      deletedAt: null,
+      deletedBy: null,
+    } as any,
+  }) as any;
+
+  const created = await strapi.db.query(SURVEY_ASSIGNMENT_UID).findOne({
+    where: mergeTenantWhere({ id: createdEntity?.id }, tenantId),
+    populate: {
+      respondent: {
+        select: ['id', 'username', 'fullName', 'email'],
+      },
+      survey_responses: {
+        select: ['id', 'responseStatus', 'submittedAt', 'updatedAt', 'createdAt'],
+      },
+    },
+  });
+
+  return normalizeAssignment(created);
+}
+
+export async function deleteSurveyAssignmentsByFilter(query: any, tenantId: number | string, userId?: number) {
+  const campaign = await findCampaignOrThrow(query?.campaignId, tenantId);
+  const where = await buildAssignmentWhere(query, tenantId, Number(campaign.id));
+
+  const assignmentRows = await strapi.db.query(SURVEY_ASSIGNMENT_UID).findMany({
+    where,
+    select: ['id'],
+  });
+
+  const assignmentIds = (assignmentRows || [])
+    .map((row: any) => Number(row?.id || 0))
+    .filter((value: number) => Number.isInteger(value) && value > 0);
+
+  if (assignmentIds.length === 0) {
+    return {
+      softDeletedAssignments: 0,
+    };
+  }
+
+  await Promise.all(assignmentIds.map((assignmentId) => strapi.db.query(SURVEY_ASSIGNMENT_UID).update({
+    where: mergeTenantWhere({ id: assignmentId }, tenantId),
+    data: buildSoftDeleteData(userId),
+  })));
+
+  return {
+    softDeletedAssignments: assignmentIds.length,
+  };
+}
+
+export async function restoreSurveyAssignmentsByFilter(query: any, tenantId: number | string) {
+  const campaign = await findCampaignOrThrow(query?.campaignId, tenantId);
+  const where = await buildAssignmentWhere({
+    ...query,
+    deletedOnly: true,
+  }, tenantId, Number(campaign.id));
+
+  const rows = await strapi.db.query(SURVEY_ASSIGNMENT_UID).findMany({
+    where,
+    select: ['id'],
+  });
+
+  const assignmentIds = (rows || [])
+    .map((row: any) => Number(row?.id || 0))
+    .filter((value: number) => Number.isInteger(value) && value > 0);
+
+  await Promise.all(assignmentIds.map((assignmentId) => strapi.db.query(SURVEY_ASSIGNMENT_UID).update({
+    where: mergeTenantWhere({ id: assignmentId }, tenantId),
+    data: buildRestoreData(),
+  })));
+
+  return {
+    restoredAssignments: assignmentIds.length,
+  };
+}
+
+export async function restoreSurveyAssignment(id: unknown, tenantId: number | string) {
+  const assignmentId = toPositiveInt(id);
+  if (!assignmentId) {
+    throw new SurveyAssignmentError(400, 'assignmentId is invalid');
+  }
+
+  const existing = await strapi.db.query(SURVEY_ASSIGNMENT_UID).findOne({
+    where: mergeTenantSoftDeleteWhere({ id: assignmentId }, tenantId, { deletedOnly: true }),
+    populate: {
+      respondent: {
+        select: ['id', 'username', 'fullName', 'email'],
+      },
+      survey_responses: {
+        select: ['id', 'responseStatus', 'submittedAt', 'updatedAt', 'createdAt'],
+      },
+    },
+  });
+
+  if (!existing?.id) {
+    throw new SurveyAssignmentError(404, 'Survey assignment not found');
+  }
+
+  await strapi.db.query(SURVEY_ASSIGNMENT_UID).update({
+    where: mergeTenantWhere({ id: existing.id }, tenantId),
+    data: buildRestoreData(),
+  });
+
+  const restored = await strapi.db.query(SURVEY_ASSIGNMENT_UID).findOne({
+    where: mergeTenantWhere({ id: existing.id }, tenantId),
+    populate: {
+      respondent: {
+        select: ['id', 'username', 'fullName', 'email'],
+      },
+      survey_responses: {
+        select: ['id', 'responseStatus', 'submittedAt', 'updatedAt', 'createdAt'],
+      },
+    },
+  });
+
+  return normalizeAssignment(restored);
 }

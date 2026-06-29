@@ -1,0 +1,91 @@
+{
+  "kind": "collectionType",
+  "collectionName": "challenge_participants",
+  "info": {
+    "singularName": "challenge-participant",
+    "pluralName": "challenge-participants",
+    "displayName": "Challenge Participant",
+    "description": "Tenant-scoped challenge enrollment and aggregate progress for a user."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "challengeParticipants",
+      "required": true
+    },
+    "challenge": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::fitness-challenge.fitness-challenge",
+      "inversedBy": "participants",
+      "required": true
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "REGISTERED",
+        "ACTIVE",
+        "COMPLETED",
+        "WITHDRAWN",
+        "DISQUALIFIED"
+      ],
+      "default": "REGISTERED",
+      "required": true
+    },
+    "joinedAt": {
+      "type": "datetime"
+    },
+    "withdrawnAt": {
+      "type": "datetime"
+    },
+    "completedAt": {
+      "type": "datetime"
+    },
+    "displayName": {
+      "type": "string"
+    },
+    "note": {
+      "type": "text"
+    },
+    "totalDistance": {
+      "type": "decimal",
+      "default": 0
+    },
+    "totalMovingTime": {
+      "type": "integer",
+      "default": 0
+    },
+    "totalElevationGain": {
+      "type": "decimal",
+      "default": 0
+    },
+    "activityCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "rank": {
+      "type": "integer"
+    },
+    "lastCalculatedAt": {
+      "type": "datetime"
+    },
+    "challengeActivities": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::challenge-activity.challenge-activity",
+      "mappedBy": "participant"
+    }
+  }
+}

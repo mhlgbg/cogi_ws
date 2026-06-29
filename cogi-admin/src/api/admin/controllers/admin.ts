@@ -14,7 +14,13 @@ import {
   getTenantEnabledRoles,
   listTenantUsers,
   updateTenantUserRoles,
+  updateTenantUserPassword,
 } from '../services/manage-tenant-users';
+import {
+  cleanupAllTenantDuplicateGroups,
+  cleanupOneTenantDuplicateGroup,
+  scanTenantDuplicateUsers,
+} from '../services/user-duplicate-cleanup';
 import { readTenantUsersImportFile } from '../services/import-tenant-users';
 import {
   cancelImportTenantUsersJob,
@@ -309,6 +315,66 @@ export default {
     }
   },
 
+  async scanUserDuplicateCleanup(ctx) {
+    try {
+      const tenantId = ctx.state?.tenantId ?? ctx.state?.tenant?.id;
+      if (!tenantId) {
+        return ctx.badRequest('Tenant context is required');
+      }
+
+      const result = await scanTenantDuplicateUsers({
+        tenantId: Number(tenantId),
+        username: ctx.request?.query?.username,
+      });
+
+      ctx.body = result;
+    } catch (error: any) {
+      const message = error?.message || 'Failed to scan duplicate users';
+      return ctx.badRequest(message);
+    }
+  },
+
+  async cleanupOneUserDuplicateGroup(ctx) {
+    try {
+      const tenantId = ctx.state?.tenantId ?? ctx.state?.tenant?.id;
+      if (!tenantId) {
+        return ctx.badRequest('Tenant context is required');
+      }
+
+      const body = ctx.request?.body || {};
+      const result = await cleanupOneTenantDuplicateGroup({
+        tenantId: Number(tenantId),
+        username: body?.username,
+        keepUserId: body?.keepUserId,
+      });
+
+      ctx.body = result;
+    } catch (error: any) {
+      const message = error?.message || 'Failed to cleanup duplicate user group';
+      return ctx.badRequest(message);
+    }
+  },
+
+  async cleanupAllUserDuplicateGroups(ctx) {
+    try {
+      const tenantId = ctx.state?.tenantId ?? ctx.state?.tenant?.id;
+      if (!tenantId) {
+        return ctx.badRequest('Tenant context is required');
+      }
+
+      const body = ctx.request?.body || {};
+      const result = await cleanupAllTenantDuplicateGroups({
+        tenantId: Number(tenantId),
+        username: body?.username,
+      });
+
+      ctx.body = result;
+    } catch (error: any) {
+      const message = error?.message || 'Failed to cleanup duplicate user groups';
+      return ctx.badRequest(message);
+    }
+  },
+
   async listTenantUsers(ctx) {
     try {
       const tenantId = ctx.state?.tenantId ?? ctx.state?.tenant?.id;
@@ -320,9 +386,17 @@ export default {
       const page = Number(query.page || 1);
       const pageSize = Number(query.pageSize || 10);
       const search = typeof query.search === 'string' ? query.search : '';
+      const rawRoleId = query.roleId;
+      const roleId = rawRoleId === undefined || rawRoleId === null || rawRoleId === ''
+        ? 0
+        : Number(rawRoleId);
+
+      if (rawRoleId !== undefined && rawRoleId !== null && rawRoleId !== '' && (!Number.isInteger(roleId) || roleId <= 0)) {
+        return ctx.badRequest('roleId must be a positive integer');
+      }
 
       const [result, availableRoles] = await Promise.all([
-        listTenantUsers({ tenantId, page, pageSize, search }),
+        listTenantUsers({ tenantId, page, pageSize, search, roleId }),
         getTenantEnabledRoles(tenantId),
       ]);
 
@@ -369,6 +443,37 @@ export default {
     } catch (error) {
       console.error('[updateTenantUserRoles] Unexpected error:', error);
       return ctx.internalServerError('Failed to update user roles');
+    }
+  },
+
+  async updateTenantUserPassword(ctx) {
+    try {
+      const tenantId = ctx.state?.tenantId ?? ctx.state?.tenant?.id;
+      if (!tenantId) {
+        return ctx.badRequest('Tenant context is required');
+      }
+
+      const userTenantId = Number(ctx.params?.userTenantId);
+      if (!Number.isInteger(userTenantId) || userTenantId <= 0) {
+        return ctx.badRequest('Invalid userTenantId');
+      }
+
+      const password = typeof ctx.request?.body?.password === 'string'
+        ? ctx.request.body.password
+        : '';
+
+      const result = await updateTenantUserPassword({ tenantId, userTenantId, password });
+      if (!result.ok) {
+        return ctx.badRequest(result.error || 'Failed to update password');
+      }
+
+      ctx.body = {
+        ok: true,
+        message: 'Password updated successfully',
+      };
+    } catch (error) {
+      console.error('[updateTenantUserPassword] Unexpected error:', error);
+      return ctx.internalServerError('Failed to update user password');
     }
   },
 

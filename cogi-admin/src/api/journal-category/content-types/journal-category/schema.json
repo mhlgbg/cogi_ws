@@ -1,0 +1,41 @@
+{
+  "kind": "collectionType",
+  "collectionName": "journal_categories",
+  "info": {
+    "singularName": "journal-category",
+    "pluralName": "journal-categories",
+    "displayName": "JournalCategory",
+    "description": "Tenant-scoped master data for journal issue categories."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "slug": {
+      "type": "uid",
+      "targetField": "title",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true,
+      "index": true
+    },
+    "journalIssues": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::journal-issue.journal-issue",
+      "mappedBy": "journalCategory"
+    }
+  }
+}

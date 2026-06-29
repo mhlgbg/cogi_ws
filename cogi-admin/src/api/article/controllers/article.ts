@@ -80,6 +80,7 @@ function resolveArticlePopulate(ctx: any) {
 		category: true,
 		tenant: true,
 		cover: true,
+		seoImage: true,
 		blocks: {
 			on: {
 				'shared.rich-text': true,

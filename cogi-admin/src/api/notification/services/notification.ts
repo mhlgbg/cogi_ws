@@ -1,4 +1,5 @@
 import { errors } from '@strapi/utils';
+import { enqueueMail } from '../../../services/mail-queue';
 import { toText, whereByParam } from '../../../utils/tenant-scope';
 
 const NOTIFICATION_TEMPLATE_UID = 'api::notification-template.notification-template';
@@ -78,16 +79,17 @@ export default {
 
     const subjectAfterReplace = replaceVariables(template.subject, data);
     const contentAfterReplace = replaceVariables(template.content, data);
-    const emailService = strapi.plugin('email')?.service('email');
-
-    if (!emailService?.send) {
-      throw new errors.ApplicationError('Email service is not available');
-    }
-
-    await emailService.send({
+    const queued = await enqueueMail({
+      tenantId,
+      mailType: normalizedTemplateCode,
       to: recipientEmail,
       subject: subjectAfterReplace,
       html: contentAfterReplace,
+      metadata: {
+        templateId: template.id,
+        templateCode: normalizedTemplateCode,
+        tenantId,
+      },
     });
 
     return {
@@ -97,6 +99,8 @@ export default {
       to: recipientEmail,
       subject: subjectAfterReplace,
       html: contentAfterReplace,
+      queueName: queued.queueName,
+      mailLogId: queued.mailLogId,
     };
   },
 };

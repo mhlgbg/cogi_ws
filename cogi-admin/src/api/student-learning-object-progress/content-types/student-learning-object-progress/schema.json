@@ -1,0 +1,73 @@
+{
+  "kind": "collectionType",
+  "collectionName": "student_learning_object_progresses",
+  "info": {
+    "singularName": "student-learning-object-progress",
+    "pluralName": "student-learning-object-progresses",
+    "displayName": "Student Learning Object Progress",
+    "description": "Tenant-scoped progress for a student working through a learning object."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "progressStatus": {
+      "type": "enumeration",
+      "enum": [
+        "not_started",
+        "in_progress",
+        "completed",
+        "needs_review"
+      ],
+      "default": "not_started",
+      "required": true
+    },
+    "startedAt": {
+      "type": "datetime"
+    },
+    "completedAt": {
+      "type": "datetime"
+    },
+    "score": {
+      "type": "decimal"
+    },
+    "timeSpent": {
+      "type": "integer",
+      "default": 0
+    },
+    "attemptCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "teacherNote": {
+      "type": "richtext"
+    },
+    "aiNote": {
+      "type": "richtext"
+    },
+    "metadata": {
+      "type": "json"
+    },
+    "student": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "learningObject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::learning-object.learning-object",
+      "inversedBy": "studentProgressRecords",
+      "required": true
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "studentLearningObjectProgressRecords",
+      "required": true
+    }
+  }
+}

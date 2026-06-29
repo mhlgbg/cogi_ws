@@ -68,6 +68,10 @@
       "default": false,
       "configurable": false
     },
+    "isPlatformAdmin": {
+      "type": "boolean",
+      "default": false
+    },
     "role": {
       "type": "relation",
       "relation": "manyToOne",

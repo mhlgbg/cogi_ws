@@ -1,0 +1,120 @@
+{
+  "kind": "collectionType",
+  "collectionName": "candidate_exam_logs",
+  "info": {
+    "singularName": "candidate-exam-log",
+    "pluralName": "candidate-exam-logs",
+    "displayName": "CandidateExamLog",
+    "description": "Tenant-scoped audit trail for candidate exam card and exam operations."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "admissionSeason": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::campaign.campaign",
+      "required": true
+    },
+    "candidateExam": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::candidate-exam.candidate-exam",
+      "required": true,
+      "inversedBy": "logs"
+    },
+    "admissionApplication": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::admission-application.admission-application"
+    },
+    "action": {
+      "type": "enumeration",
+      "enum": [
+        "card_view",
+        "first_card_download",
+        "card_download",
+        "card_print",
+        "card_reminder_sent",
+        "card_reminder_failed",
+        "status_changed",
+        "score_updated",
+        "room_assigned",
+        "note_updated",
+        "import_created",
+        "import_updated",
+        "import_restored",
+        "score_lookup",
+        "score_report_sent"
+      ],
+      "required": true
+    },
+    "actionAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "actionBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "actorType": {
+      "type": "enumeration",
+      "enum": [
+        "parent",
+        "staff",
+        "system"
+      ],
+      "required": true
+    },
+    "ip": {
+      "type": "string"
+    },
+    "userAgent": {
+      "type": "string"
+    },
+    "oldValue": {
+      "type": "json"
+    },
+    "newValue": {
+      "type": "json"
+    },
+    "note": {
+      "type": "text"
+    },
+    "isDeleted": {
+      "type": "boolean",
+      "default": false
+    },
+    "deletedAt": {
+      "type": "datetime"
+    },
+    "deletedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "deleteReason": {
+      "type": "text"
+    },
+    "restoredAt": {
+      "type": "datetime"
+    },
+    "restoredBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "restoreReason": {
+      "type": "text"
+    }
+  }
+}

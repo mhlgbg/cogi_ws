@@ -1,5 +1,11 @@
 import {
+  downloadCampaignAllAnswersLatestReportFile,
+  exportCampaignAllAnswersReport,
+  exportCampaignCourseReport,
   exportCampaignLecturerReport,
+  exportCampaignProgressReport,
+  generateCampaignAllAnswersReportFile,
+  getCampaignAllAnswersLatestReportFile,
   getCampaignCourseReport,
   getCampaignLecturerReport,
   getCampaignSummaryReport,
@@ -121,6 +127,114 @@ export default {
         ctx.params?.campaignId,
         ctx.params?.lecturerId,
         ctx.state?.tenantId ?? ctx.state?.tenant?.id,
+      );
+
+      ctx.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      ctx.set('Content-Disposition', `attachment; filename="${result.fileName}"`);
+      ctx.body = result.buffer;
+    } catch (error: any) {
+      return handleError(ctx, error);
+    }
+  },
+
+  async exportCourse(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const result = await exportCampaignCourseReport(
+        ctx.params?.campaignId,
+        ctx.params?.courseId,
+        ctx.state?.tenantId ?? ctx.state?.tenant?.id,
+      );
+
+      ctx.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      ctx.set('Content-Disposition', `attachment; filename="${result.fileName}"`);
+      ctx.body = result.buffer;
+    } catch (error: any) {
+      return handleError(ctx, error);
+    }
+  },
+
+  async exportProgress(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const result = await exportCampaignProgressReport(
+        ctx.params?.campaignId,
+        ctx.state?.tenantId ?? ctx.state?.tenant?.id,
+      );
+
+      ctx.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      ctx.set('Content-Disposition', `attachment; filename="${result.fileName}"`);
+      ctx.body = result.buffer;
+    } catch (error: any) {
+      return handleError(ctx, error);
+    }
+  },
+
+  async exportAllAnswers(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const result = await exportCampaignAllAnswersReport(
+        ctx.params?.campaignId,
+        ctx.state?.tenantId ?? ctx.state?.tenant?.id,
+      );
+
+      ctx.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      ctx.set('Content-Disposition', `attachment; filename="${result.fileName}"`);
+      ctx.body = result.buffer;
+    } catch (error: any) {
+      return handleError(ctx, error);
+    }
+  },
+
+  async generateAllAnswersFile(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const data = await generateCampaignAllAnswersReportFile(
+        ctx.params?.campaignId,
+        ctx.state?.tenantId ?? ctx.state?.tenant?.id,
+        ctx.state?.tenant?.code || ctx.state?.tenantCode,
+      );
+
+      ctx.body = { success: true, data };
+    } catch (error: any) {
+      return handleError(ctx, error);
+    }
+  },
+
+  async latestAllAnswersFile(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const data = await getCampaignAllAnswersLatestReportFile(
+        ctx.params?.campaignId,
+        ctx.state?.tenantId ?? ctx.state?.tenant?.id,
+        ctx.state?.tenant?.code || ctx.state?.tenantCode,
+      );
+
+      ctx.body = { success: true, data };
+    } catch (error: any) {
+      return handleError(ctx, error);
+    }
+  },
+
+  async downloadLatestAllAnswersFile(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const result = await downloadCampaignAllAnswersLatestReportFile(
+        ctx.params?.campaignId,
+        ctx.state?.tenantId ?? ctx.state?.tenant?.id,
+        ctx.state?.tenant?.code || ctx.state?.tenantCode,
       );
 
       ctx.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

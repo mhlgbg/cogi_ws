@@ -1,0 +1,143 @@
+{
+  "kind": "collectionType",
+  "collectionName": "fitness_challenges",
+  "info": {
+    "singularName": "fitness-challenge",
+    "pluralName": "fitness-challenges",
+    "displayName": "Fitness Challenge",
+    "description": "Tenant-scoped configuration for a sports or wellness challenge."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "fitnessChallenges",
+      "required": true
+    },
+    "code": {
+      "type": "string",
+      "required": true
+    },
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "slug": {
+      "type": "string"
+    },
+    "description": {
+      "type": "text"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "DRAFT",
+        "PUBLISHED",
+        "ACTIVE",
+        "FINISHED",
+        "CANCELLED"
+      ],
+      "default": "DRAFT",
+      "required": true
+    },
+    "startAt": {
+      "type": "datetime"
+    },
+    "endAt": {
+      "type": "datetime"
+    },
+    "sportTypes": {
+      "type": "json"
+    },
+    "metric": {
+      "type": "enumeration",
+      "enum": [
+        "DISTANCE",
+        "MOVING_TIME",
+        "ELEVATION_GAIN",
+        "ACTIVITY_COUNT"
+      ],
+      "default": "DISTANCE",
+      "required": true
+    },
+    "goalValue": {
+      "type": "decimal"
+    },
+    "goalUnit": {
+      "type": "string"
+    },
+    "leaderboardMode": {
+      "type": "enumeration",
+      "enum": [
+        "TOTAL",
+        "BEST_ACTIVITY",
+        "FIRST_FINISH"
+      ],
+      "default": "TOTAL",
+      "required": true
+    },
+    "activityAcceptMode": {
+      "type": "enumeration",
+      "enum": [
+        "AUTO_ACCEPT",
+        "USER_CONFIRM",
+        "MANUAL_SUBMIT"
+      ],
+      "default": "USER_CONFIRM",
+      "required": true
+    },
+    "allowReuseActivity": {
+      "type": "boolean",
+      "default": true
+    },
+    "requireAdminReview": {
+      "type": "boolean",
+      "default": false
+    },
+    "isPublic": {
+      "type": "boolean",
+      "default": false
+    },
+    "visibility": {
+      "type": "enumeration",
+      "enum": [
+        "PRIVATE",
+        "TENANT",
+        "PUBLIC"
+      ],
+      "default": "TENANT",
+      "required": true
+    },
+    "maxParticipants": {
+      "type": "integer"
+    },
+    "rulesText": {
+      "type": "text"
+    },
+    "coverImageUrl": {
+      "type": "string"
+    },
+    "createdBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "participants": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::challenge-participant.challenge-participant",
+      "mappedBy": "challenge"
+    },
+    "challengeActivities": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::challenge-activity.challenge-activity",
+      "mappedBy": "challenge"
+    }
+  }
+}

@@ -57,3 +57,6 @@ export default {
     ctx.body = { data: users };
   },
 };
+/*
+Ok rồi, theo đà đó chuyển cho tôi chức năng Quản lý đơn hàng (danh sách các đơn hàng) từ cogi-fw sang Cogi-Framwork, chức năng đó đang nằm trong service-orders của cogi-fw, giữ nguyên tư tưởng flow của nó, chỉ là có khác ở mức tenant nhé
+*/

@@ -80,6 +80,18 @@ function extractMediaUrl(media) {
 	return '';
 }
 
+function nowMs() {
+	return Date.now();
+}
+
+function safeJsonByteLength(value) {
+	try {
+		return Buffer.byteLength(JSON.stringify(value ?? null), 'utf8');
+	} catch {
+		return -1;
+	}
+}
+
 async function loadRolesByUserTenantId(strapi, userTenantId) {
 	const where = {
 		userTenant: userTenantId,
@@ -127,9 +139,10 @@ async function loadTenantBrandingById(strapi, tenantId) {
 
 	const tenant = await strapi.db.query(TENANT_UID).findOne({
 		where: { id: tenantId },
-		select: ['id', 'shortName', 'defaultFeatureCode', 'defaultPublicRoute', 'defaultProtectedRoute'],
+		select: ['id', 'shortName', 'slogan', 'defaultFeatureCode', 'defaultPublicRoute', 'defaultProtectedRoute'],
 		populate: {
 			logo: true,
+			banner: true,
 		},
 	});
 
@@ -139,9 +152,15 @@ async function loadTenantBrandingById(strapi, tenantId) {
 module.exports = (plugin) => {
 	plugin.controllers.auth.myTenantContext = async (ctx) => {
 		try {
+			const requestStartedAt = nowMs();
+			let accumulatedDbMs = 0;
 			let authUser = ctx.state?.user;
 			if (!authUser?.id) {
+				const authStartedAt = nowMs();
 				authUser = await resolveUserFromJwt(strapi, ctx);
+				const authDbMs = nowMs() - authStartedAt;
+				accumulatedDbMs += authDbMs;
+				strapi.log.info(`[users-permissions.auth.myTenantContext] resolveUserFromJwt dbMs=${authDbMs}`);
 			}
 			if (!authUser?.id) {
 				return ctx.unauthorized('Unauthorized');
@@ -151,10 +170,14 @@ module.exports = (plugin) => {
 				return ctx.unauthorized('Account is blocked');
 			}
 
+			const userQueryStartedAt = nowMs();
 			const user = await strapi.db.query(USER_UID).findOne({
 				where: { id: authUser.id },
 				select: ['id', 'username', 'email'],
 			});
+			const userQueryMs = nowMs() - userQueryStartedAt;
+			accumulatedDbMs += userQueryMs;
+			strapi.log.info(`[users-permissions.auth.myTenantContext] userQuery dbMs=${userQueryMs} userId=${authUser.id}`);
 
 			if (!user) {
 				return ctx.unauthorized('Unauthorized');
@@ -165,14 +188,18 @@ module.exports = (plugin) => {
 				...getActiveWhere(strapi, USER_TENANT_UID),
 			};
 
+			const userTenantsQueryStartedAt = nowMs();
 			const userTenants = await strapi.db.query(USER_TENANT_UID).findMany({
 				where: userTenantWhere,
 				select: ['id', 'label'],
 				populate: {
 					tenant: {
-						select: ['id', 'name', 'code', 'shortName', 'tenantStatus', 'defaultFeatureCode', 'defaultPublicRoute', 'defaultProtectedRoute'],
+						select: ['id', 'name', 'code', 'shortName', 'slogan', 'tenantStatus', 'defaultFeatureCode', 'defaultPublicRoute', 'defaultProtectedRoute'],
 						populate: {
 							logo: {
+								select: ['url'],
+							},
+							banner: {
 								select: ['url'],
 							},
 						},
@@ -187,6 +214,9 @@ module.exports = (plugin) => {
 					},
 				},
 			});
+			const userTenantsQueryMs = nowMs() - userTenantsQueryStartedAt;
+			accumulatedDbMs += userTenantsQueryMs;
+			strapi.log.info(`[users-permissions.auth.myTenantContext] userTenantsQuery dbMs=${userTenantsQueryMs} rows=${Array.isArray(userTenants) ? userTenants.length : 0}`);
 
 			const tenants = await Promise.all(
 				(userTenants || []).map(async (entry) => {
@@ -208,7 +238,11 @@ module.exports = (plugin) => {
 
 					const userTenantId = getRelationId(entry?.id);
 					if (userTenantRoleRows.length === 0 && userTenantId) {
+						const loadRolesStartedAt = nowMs();
 						userTenantRoleRows = await loadRolesByUserTenantId(strapi, userTenantId);
+						const loadRolesMs = nowMs() - loadRolesStartedAt;
+						accumulatedDbMs += loadRolesMs;
+						strapi.log.info(`[users-permissions.auth.myTenantContext] fallbackRolesQuery dbMs=${loadRolesMs} userTenantId=${userTenantId}`);
 					}
 
 					const roles = userTenantRoleRows
@@ -238,9 +272,15 @@ module.exports = (plugin) => {
 
 					const tenantName = normalizeText(tenant.name);
 					const tenantCode = normalizeText(tenant.code);
+					const brandingStartedAt = nowMs();
 					const brandingTenant = await loadTenantBrandingById(strapi, tenantId);
+					const brandingMs = nowMs() - brandingStartedAt;
+					accumulatedDbMs += brandingMs;
+					strapi.log.info(`[users-permissions.auth.myTenantContext] brandingQuery dbMs=${brandingMs} tenantId=${tenantId}`);
 					const tenantShortName = normalizeText(brandingTenant?.shortName || tenant.shortName);
 					const tenantLogoUrl = extractMediaUrl(brandingTenant?.logo || tenant.logo);
+					const tenantBanner = brandingTenant?.banner || tenant.banner || null;
+					const tenantBannerUrl = extractMediaUrl(tenantBanner);
 
 					return {
 						userTenantId: getRelationId(entry?.id),
@@ -250,11 +290,14 @@ module.exports = (plugin) => {
 							name: tenantName || tenantCode,
 							code: tenantCode || null,
 							shortName: tenantShortName || null,
+							slogan: normalizeText(brandingTenant?.slogan || tenant.slogan) || null,
 							defaultFeatureCode: normalizeText(brandingTenant?.defaultFeatureCode || tenant.defaultFeatureCode) || null,
 							defaultPublicRoute: normalizeText(brandingTenant?.defaultPublicRoute || tenant.defaultPublicRoute) || null,
 							defaultProtectedRoute: normalizeText(brandingTenant?.defaultProtectedRoute || tenant.defaultProtectedRoute) || null,
 							logo: brandingTenant?.logo || tenant.logo || null,
 							logoUrl: tenantLogoUrl || null,
+							banner: tenantBanner,
+							bannerUrl: tenantBannerUrl || null,
 							label: tenantName || tenantCode || `Tenant #${tenantId}`,
 						},
 						roles: uniqueRoles,
@@ -262,7 +305,7 @@ module.exports = (plugin) => {
 				}),
 			);
 
-			ctx.body = {
+			const responseBody = {
 				user: {
 					id: user.id,
 					username: user.username,
@@ -271,6 +314,11 @@ module.exports = (plugin) => {
 				tenants: tenants.filter(Boolean),
 			};
 
+			const serializeStartedAt = nowMs();
+			const responseBytes = safeJsonByteLength(responseBody);
+			const serializeMs = nowMs() - serializeStartedAt;
+			ctx.body = responseBody;
+
 			strapi.log.info(`[my-tenant-context] user=${user.id} tenants=${JSON.stringify((ctx.body.tenants || []).map((item) => ({
 				userTenantId: item?.userTenantId,
 				tenantId: item?.tenant?.id,
@@ -278,28 +326,12 @@ module.exports = (plugin) => {
 				hasLogoField: Boolean(item?.tenant?.logo),
 				logoUrl: item?.tenant?.logoUrl || null,
 			})))}`);
+			strapi.log.info(`[users-permissions.auth.myTenantContext] completed totalMs=${nowMs() - requestStartedAt} dbMs=${accumulatedDbMs} serializeMs=${serializeMs} responseBytes=${responseBytes} tenants=${responseBody.tenants.length}`);
 		} catch (error) {
 			strapi.log.error('[users-permissions.auth.myTenantContext] failed', error);
 			return ctx.internalServerError('Failed to load tenant context');
 		}
 	};
-
-	const contentApiRoutes = plugin.routes?.['content-api']?.routes || [];
-	const existed = contentApiRoutes.some(
-		(route) => route.method === 'GET' && route.path === '/auth/my-tenant-context',
-	);
-
-	if (!existed) {
-		contentApiRoutes.push({
-			method: 'GET',
-			path: '/auth/my-tenant-context',
-			handler: 'auth.myTenantContext',
-			config: {
-				prefix: '',
-				auth: false,
-			},
-		});
-	}
 
 	const originalBootstrap = plugin.bootstrap;
 	plugin.bootstrap = async (args) => {

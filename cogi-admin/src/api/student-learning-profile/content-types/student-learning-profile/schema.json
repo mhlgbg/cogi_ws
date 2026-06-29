@@ -1,0 +1,56 @@
+{
+  "kind": "collectionType",
+  "collectionName": "student_learning_profiles",
+  "info": {
+    "singularName": "student-learning-profile",
+    "pluralName": "student-learning-profiles",
+    "displayName": "Student Learning Profile",
+    "description": "Tenant-scoped student learning profile by subject and grade."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "currentLevel": {
+      "type": "string"
+    },
+    "strengths": {
+      "type": "json"
+    },
+    "weaknesses": {
+      "type": "json"
+    },
+    "notes": {
+      "type": "richtext"
+    },
+    "metadata": {
+      "type": "json"
+    },
+    "student": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "subject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::subject.subject",
+      "inversedBy": "studentLearningProfiles"
+    },
+    "grade": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::grade.grade",
+      "inversedBy": "studentLearningProfiles"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "studentLearningProfiles",
+      "required": true
+    }
+  }
+}

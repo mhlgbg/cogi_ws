@@ -3,6 +3,18 @@ const TENANT_UID = 'api::tenant.tenant';
 const USER_TENANT_UID = 'api::user-tenant.user-tenant';
 const USER_TENANT_ROLE_UID = 'api::user-tenant-role.user-tenant-role';
 
+function nowMs(): number {
+  return Date.now();
+}
+
+function safeJsonByteLength(value: unknown): number {
+  try {
+    return Buffer.byteLength(JSON.stringify(value ?? null), 'utf8');
+  } catch {
+    return -1;
+  }
+}
+
 async function resolveUserFromJwt(ctx: any) {
   try {
     const authHeader = ctx.request?.headers?.authorization || ctx.request?.header?.authorization || '';
@@ -123,9 +135,16 @@ async function loadRolesByUserTenantId(userTenantId: number) {
 export default {
   async index(ctx: any) {
     try {
+      const requestStartedAt = nowMs();
+      let accumulatedDbMs = 0;
+
       let authUser = ctx.state?.user;
       if (!authUser?.id) {
+        const authStartedAt = nowMs();
         authUser = await resolveUserFromJwt(ctx);
+        const authDbMs = nowMs() - authStartedAt;
+        accumulatedDbMs += authDbMs;
+        strapi.log.info(`[api.my-tenant-context] resolveUserFromJwt dbMs=${authDbMs}`);
       }
 
       if (!authUser?.id) {
@@ -136,15 +155,20 @@ export default {
         return ctx.unauthorized('Account is blocked');
       }
 
+      const userQueryStartedAt = nowMs();
       const user = await strapi.db.query(USER_UID).findOne({
         where: { id: authUser.id },
         select: ['id', 'username', 'email'],
       });
+      const userQueryMs = nowMs() - userQueryStartedAt;
+      accumulatedDbMs += userQueryMs;
+      strapi.log.info(`[api.my-tenant-context] userQuery dbMs=${userQueryMs} userId=${authUser.id}`);
 
       if (!user) {
         return ctx.unauthorized('Unauthorized');
       }
 
+      const userTenantsQueryStartedAt = nowMs();
       const userTenants = await strapi.db.query(USER_TENANT_UID).findMany({
         where: {
           user: authUser.id,
@@ -153,9 +177,10 @@ export default {
         select: ['id', 'label'],
         populate: {
           tenant: {
-            select: ['id', 'name', 'code', 'shortName', 'tenantStatus', 'defaultFeatureCode', 'defaultPublicRoute', 'defaultProtectedRoute'],
+            select: ['id', 'name', 'code', 'shortName', 'slogan', 'tenantStatus', 'defaultFeatureCode', 'defaultPublicRoute', 'defaultProtectedRoute'],
             populate: {
               logo: true,
+              banner: true,
             },
           },
           userTenantRoles: {
@@ -168,6 +193,9 @@ export default {
           },
         },
       });
+      const userTenantsQueryMs = nowMs() - userTenantsQueryStartedAt;
+      accumulatedDbMs += userTenantsQueryMs;
+      strapi.log.info(`[api.my-tenant-context] userTenantsQuery dbMs=${userTenantsQueryMs} rows=${Array.isArray(userTenants) ? userTenants.length : 0}`);
 
       const tenants = await Promise.all(
         (userTenants || []).map(async (entry: any) => {
@@ -185,7 +213,11 @@ export default {
 
           const userTenantId = getRelationId(entry?.id);
           if (userTenantRoles.length === 0 && userTenantId) {
+            const loadRolesStartedAt = nowMs();
             userTenantRoles = await loadRolesByUserTenantId(userTenantId);
+            const loadRolesMs = nowMs() - loadRolesStartedAt;
+            accumulatedDbMs += loadRolesMs;
+            strapi.log.info(`[api.my-tenant-context] fallbackRolesQuery dbMs=${loadRolesMs} userTenantId=${userTenantId}`);
           }
 
           const roles = userTenantRoles
@@ -214,6 +246,7 @@ export default {
           const tenantCode = normalizeText(tenant.code);
           const tenantShortName = normalizeText(tenant.shortName);
           const tenantLogoUrl = extractMediaUrl(tenant.logo);
+          const tenantBannerUrl = extractMediaUrl((tenant as any).banner);
 
           return {
             userTenantId,
@@ -223,11 +256,14 @@ export default {
               name: tenantName || tenantCode,
               code: tenantCode || null,
               shortName: tenantShortName || null,
+              slogan: normalizeText((tenant as any).slogan) || null,
               defaultFeatureCode: normalizeText((tenant as any).defaultFeatureCode) || null,
               defaultPublicRoute: normalizeText((tenant as any).defaultPublicRoute) || null,
               defaultProtectedRoute: normalizeText((tenant as any).defaultProtectedRoute) || null,
               logo: tenant.logo || null,
               logoUrl: tenantLogoUrl || null,
+              banner: (tenant as any).banner || null,
+              bannerUrl: tenantBannerUrl || null,
               label: tenantName || tenantCode || `Tenant #${tenantId}`,
             },
             roles: uniqueRoles,
@@ -235,7 +271,7 @@ export default {
         }),
       );
 
-      ctx.body = {
+      const responseBody = {
         user: {
           id: user.id,
           username: user.username,
@@ -243,6 +279,15 @@ export default {
         },
         tenants: tenants.filter(Boolean),
       };
+
+      const serializeStartedAt = nowMs();
+      const responseBytes = safeJsonByteLength(responseBody);
+      const serializeMs = nowMs() - serializeStartedAt;
+      ctx.body = responseBody;
+
+      strapi.log.info(
+        `[api.my-tenant-context] completed totalMs=${nowMs() - requestStartedAt} dbMs=${accumulatedDbMs} serializeMs=${serializeMs} responseBytes=${responseBytes} tenants=${responseBody.tenants.length}`,
+      );
 
 
     } catch (error) {

@@ -1,0 +1,96 @@
+{
+  "kind": "collectionType",
+  "collectionName": "visual_assets",
+  "info": {
+    "singularName": "visual-asset",
+    "pluralName": "visual-assets",
+    "displayName": "Visual Asset",
+    "description": "Tenant-scoped reusable media and visual learning asset."
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": [
+        "image",
+        "video",
+        "audio",
+        "diagram",
+        "animation",
+        "simulation",
+        "pdf",
+        "other"
+      ],
+      "required": true
+    },
+    "file": {
+      "type": "media",
+      "multiple": false
+    },
+    "url": {
+      "type": "string"
+    },
+    "description": {
+      "type": "text"
+    },
+    "altText": {
+      "type": "string"
+    },
+    "visualAssetStatus": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "archived"
+      ],
+      "default": "active",
+      "required": true
+    },
+    "subject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::subject.subject",
+      "inversedBy": "visualAssets"
+    },
+    "grade": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::grade.grade",
+      "inversedBy": "visualAssets"
+    },
+    "knowledgeNode": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::knowledge-node.knowledge-node",
+      "inversedBy": "visualAssets"
+    },
+    "learningObjects": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::learning-object.learning-object",
+      "mappedBy": "visualAssets"
+    },
+    "contentBlocks": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::content-block.content-block",
+      "mappedBy": "visualAsset"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "visualAssets",
+      "required": true
+    }
+  }
+}

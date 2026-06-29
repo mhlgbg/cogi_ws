@@ -1,0 +1,68 @@
+{
+  "kind": "collectionType",
+  "collectionName": "lead_activities",
+  "info": {
+    "singularName": "lead-activity",
+    "pluralName": "lead-activities",
+    "displayName": "LeadActivity",
+    "description": "Tenant-scoped care and audit activities for captured leads."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "leadActivities",
+      "required": true
+    },
+    "lead": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::lead-capture.lead-capture",
+      "inversedBy": "activities",
+      "required": true
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": [
+        "note",
+        "call",
+        "sms",
+        "email",
+        "zalo",
+        "status_change",
+        "assign",
+        "convert"
+      ],
+      "required": true,
+      "default": "note"
+    },
+    "title": {
+      "type": "string"
+    },
+    "content": {
+      "type": "text"
+    },
+    "oldStatus": {
+      "type": "string"
+    },
+    "newStatus": {
+      "type": "string"
+    },
+    "actor": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "activityAt": {
+      "type": "datetime"
+    },
+    "metadata": {
+      "type": "json"
+    }
+  }
+}

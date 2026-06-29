@@ -1,0 +1,135 @@
+{
+  "kind": "collectionType",
+  "collectionName": "strava_activities",
+  "info": {
+    "singularName": "strava-activity",
+    "pluralName": "strava-activities",
+    "displayName": "Strava Activity",
+    "description": "Tenant-scoped activity snapshot synchronized from Strava for a user."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "stravaActivities",
+      "required": true
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "connection": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::strava-connection.strava-connection",
+      "inversedBy": "activities"
+    },
+    "stravaActivityId": {
+      "type": "string",
+      "required": true
+    },
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string"
+    },
+    "sportType": {
+      "type": "string"
+    },
+    "startDate": {
+      "type": "datetime"
+    },
+    "startDateLocal": {
+      "type": "datetime"
+    },
+    "timezone": {
+      "type": "string"
+    },
+    "distance": {
+      "type": "decimal"
+    },
+    "movingTime": {
+      "type": "integer"
+    },
+    "elapsedTime": {
+      "type": "integer"
+    },
+    "totalElevationGain": {
+      "type": "decimal"
+    },
+    "averageSpeed": {
+      "type": "decimal"
+    },
+    "maxSpeed": {
+      "type": "decimal"
+    },
+    "averageHeartrate": {
+      "type": "decimal"
+    },
+    "maxHeartrate": {
+      "type": "decimal"
+    },
+    "calories": {
+      "type": "decimal"
+    },
+    "achievementCount": {
+      "type": "integer"
+    },
+    "kudosCount": {
+      "type": "integer"
+    },
+    "locationCountry": {
+      "type": "string"
+    },
+    "locationCity": {
+      "type": "string"
+    },
+    "hasMap": {
+      "type": "boolean",
+      "default": false
+    },
+    "mapSummaryPolyline": {
+      "type": "text",
+      "private": true,
+      "searchable": false
+    },
+    "visibility": {
+      "type": "enumeration",
+      "enum": [
+        "PRIVATE",
+        "SHARED_WITH_GROUP",
+        "PUBLIC"
+      ],
+      "default": "PRIVATE",
+      "required": true
+    },
+    "syncStatus": {
+      "type": "enumeration",
+      "enum": [
+        "SYNCED",
+        "DELETED_ON_STRAVA",
+        "ERROR"
+      ],
+      "default": "SYNCED",
+      "required": true
+    },
+    "rawActivity": {
+      "type": "json",
+      "private": true
+    },
+    "challengeActivities": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::challenge-activity.challenge-activity",
+      "mappedBy": "activity"
+    }
+  }
+}

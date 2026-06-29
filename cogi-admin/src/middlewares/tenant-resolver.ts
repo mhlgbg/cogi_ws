@@ -81,6 +81,10 @@ export function isSystemRoute(path?: string | null): boolean {
   return SYSTEM_ROUTE_SEGMENTS.has(segment);
 }
 
+export function isPlatformRoute(path?: string | null): boolean {
+  return getFirstPathSegment(path) === 'platform';
+}
+
 function getRequestHost(ctx: any): string {
   const forwardedHost = ctx.request?.headers?.['x-forwarded-host'];
 
@@ -199,6 +203,7 @@ export default (_config: unknown, { strapi }: { strapi: any }) => {
     const hasPathTenantCode = Boolean(pathTenantCode);
     const systemHost = isSystemHost(host);
     const systemRoute = isSystemRoute(path);
+    const platformRoute = isPlatformRoute(path);
     const isMainDomain = isMainDomainHost(host) || isMainDomainHost(requestOrigin);
 
     ctx.state.tenant = null;
@@ -206,8 +211,31 @@ export default (_config: unknown, { strapi }: { strapi: any }) => {
     ctx.state.tenantCode = null;
     ctx.state.tenantSource = null;
     ctx.state.isSystemRequest = Boolean(systemRoute);
+    ctx.state.isPlatformRequest = platformRoute;
     ctx.state.isMainDomain = isMainDomain;
     ctx.state.tenantConflict = false;
+
+    if (platformRoute) {
+      ctx.state.isSystemRequest = false;
+      debugTenantResolve({
+        path,
+        host,
+        originHost,
+        domainLookupHosts,
+        requestOrigin,
+        tenantCodeHeader,
+        pathTenantCode,
+        firstSegment,
+        resolvedSource: null,
+        tenantCode: null,
+        tenantId: null,
+        isMainDomain,
+        tenantConflict: false,
+        isPlatformRequest: true,
+      });
+      await next();
+      return;
+    }
 
     // Skip Strapi internal/system routes to avoid affecting admin panel.
     // Exception: if x-tenant-code header is explicitly sent, still resolve tenant.

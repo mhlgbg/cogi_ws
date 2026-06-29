@@ -1,0 +1,66 @@
+{
+  "kind": "collectionType",
+  "collectionName": "journal_issue_items",
+  "info": {
+    "singularName": "journal-issue-item",
+    "pluralName": "journal-issue-items",
+    "displayName": "JournalIssueItem",
+    "description": "Tenant-scoped table-of-contents rows for a journal issue."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "orderNo": {
+      "type": "integer",
+      "required": true
+    },
+    "articleTitle": {
+      "type": "string",
+      "required": true
+    },
+    "authorsText": {
+      "type": "text"
+    },
+    "startPage": {
+      "type": "integer"
+    },
+    "endPage": {
+      "type": "integer"
+    },
+    "pageText": {
+      "type": "string"
+    },
+    "doi": {
+      "type": "string"
+    },
+    "pdfFile": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": [
+        "files"
+      ]
+    },
+    "article": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::article.article"
+    },
+    "journalIssue": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::journal-issue.journal-issue",
+      "required": true,
+      "inversedBy": "issueItems"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true,
+      "index": true
+    }
+  }
+}

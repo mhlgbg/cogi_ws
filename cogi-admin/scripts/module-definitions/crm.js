@@ -15,5 +15,33 @@ module.exports = {
       description: 'CRM home page',
       path: '/crms',
     },
+    {
+      name: 'Lead Campaign Management',
+      key: 'crms.lead-campaign.manage',
+      order: 2,
+      description: 'Manage tenant lead capture campaigns',
+      path: '/crms/lead-campaigns',
+    },
+    {
+      name: 'Customer Chat Session Management',
+      key: 'crms.chat-session.manage',
+      order: 3,
+      description: 'Manage tenant customer chat conversations',
+      path: '/chat-sessions',
+    },
+    {
+      name: 'AI Assistant Setting',
+      key: 'crms.ai-assistant.manage',
+      order: 4,
+      description: 'Manage tenant AI assistant settings',
+      path: '/ai/assistant',
+    },
+    {
+      name: 'AI Knowledge Management',
+      key: 'crms.ai-knowledge.manage',
+      order: 5,
+      description: 'Manage tenant AI knowledge records',
+      path: '/ai/knowledge',
+    },
   ],
 };

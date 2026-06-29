@@ -65,6 +65,70 @@ export default {
       },
     },
     {
+      method: 'PATCH',
+      path: '/admin/tenant-users/:userTenantId/password',
+      handler: 'admin.updateTenantUserPassword',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'user.manage',
+            },
+          },
+        ],
+      },
+    },
+    {
+      method: 'GET',
+      path: '/admin/user-duplicate-cleanup/scan',
+      handler: 'admin.scanUserDuplicateCleanup',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'admin.userDuplicateCleanup.view',
+            },
+          },
+        ],
+      },
+    },
+    {
+      method: 'POST',
+      path: '/admin/user-duplicate-cleanup/cleanup-one',
+      handler: 'admin.cleanupOneUserDuplicateGroup',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'admin.userDuplicateCleanup.cleanup',
+            },
+          },
+        ],
+      },
+    },
+    {
+      method: 'POST',
+      path: '/admin/user-duplicate-cleanup/cleanup-all',
+      handler: 'admin.cleanupAllUserDuplicateGroups',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'admin.userDuplicateCleanup.cleanup',
+            },
+          },
+        ],
+      },
+    },
+    {
       method: 'POST',
       path: '/users/import',
       handler: 'admin.importUsers',

@@ -35,5 +35,14 @@ module.exports = {
       icon: 'cilClipboard',
       showInMenu: true,
     },
+    {
+      name: 'Survey Analysis DHCD',
+      key: 'survey.analysis.dhcd',
+      order: 4,
+      description: 'Analyze survey progress reports from Excel for DHCD tenant',
+      path: '/survey-analysis/dhcd',
+      icon: 'cilChartLine',
+      showInMenu: true,
+    },
   ],
 };

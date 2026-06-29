@@ -26,5 +26,23 @@ module.exports = {
       icon: 'cilPeople',
       showInMenu: true,
     },
+    {
+      name: 'Dọn user trùng',
+      key: 'admin.userDuplicateCleanup.view',
+      order: 3,
+      description: 'Rà soát user trùng theo tenant hiện tại',
+      path: '/user-duplicate-cleanup',
+      icon: 'cilFilterX',
+      showInMenu: true,
+    },
+    {
+      name: 'Cleanup user trùng',
+      key: 'admin.userDuplicateCleanup.cleanup',
+      order: 4,
+      description: 'Cho phép cleanup user trùng theo tenant hiện tại',
+      path: '/user-duplicate-cleanup',
+      icon: 'cilTrash',
+      showInMenu: false,
+    },
   ],
 };

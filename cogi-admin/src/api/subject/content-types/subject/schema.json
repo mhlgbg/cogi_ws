@@ -1,0 +1,91 @@
+{
+  "kind": "collectionType",
+  "collectionName": "subjects",
+  "info": {
+    "singularName": "subject",
+    "pluralName": "subjects",
+    "displayName": "Subject",
+    "description": "Tenant-scoped learning subject taxonomy."
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true
+    },
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "subjectStatus": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "archived"
+      ],
+      "default": "active",
+      "required": true
+    },
+    "learningObjects": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::learning-object.learning-object",
+      "mappedBy": "subject"
+    },
+    "skills": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::skill.skill",
+      "mappedBy": "subject"
+    },
+    "formulas": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::formula.formula",
+      "mappedBy": "subject"
+    },
+    "questions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::question.question",
+      "mappedBy": "subject"
+    },
+    "visualAssets": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::visual-asset.visual-asset",
+      "mappedBy": "subject"
+    },
+    "knowledgeNodes": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::knowledge-node.knowledge-node",
+      "mappedBy": "subject"
+    },
+    "learningPaths": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::learning-path.learning-path",
+      "mappedBy": "subject"
+    },
+    "studentLearningProfiles": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::student-learning-profile.student-learning-profile",
+      "mappedBy": "subject"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "subjects",
+      "required": true
+    }
+  }
+}

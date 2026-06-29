@@ -49,6 +49,22 @@ export default {
       },
     },
     {
+      method: 'POST',
+      path: '/survey-campaigns/:id/restore',
+      handler: 'survey-campaign.restore',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'survey.campaign.manage',
+            },
+          },
+        ],
+      },
+    },
+    {
       method: 'GET',
       path: '/survey-campaigns',
       handler: 'survey-campaign.find',
@@ -100,6 +116,22 @@ export default {
       method: 'PUT',
       path: '/survey-campaigns/:id',
       handler: 'survey-campaign.update',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'survey.campaign.manage',
+            },
+          },
+        ],
+      },
+    },
+    {
+      method: 'DELETE',
+      path: '/survey-campaigns/:id',
+      handler: 'survey-campaign.delete',
       config: {
         auth: false,
         policies: [

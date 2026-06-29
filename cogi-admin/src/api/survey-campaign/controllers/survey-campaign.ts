@@ -1,10 +1,12 @@
 import {
   createSurveyCampaign,
+  deleteSurveyCampaign,
   getSurveyCampaignDetail,
   getSurveyCampaignFormOptions,
   getTenantIdFromContext,
   importSurveyAssignments,
   listSurveyCampaigns,
+  restoreSurveyCampaign,
   resetSurveyCampaignResponses,
   updateSurveyCampaign,
 } from '../services/survey-campaign';
@@ -135,6 +137,30 @@ export default {
 
     try {
       const data = await updateSurveyCampaign(ctx.params?.id, ctx.request?.body || {}, getTenantIdFromContext(ctx));
+      ctx.body = { success: true, data };
+    } catch (error: any) {
+      return handleError(ctx, error);
+    }
+  },
+
+  async delete(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const data = await deleteSurveyCampaign(ctx.params?.id, getTenantIdFromContext(ctx), authUser.id);
+      ctx.body = { success: true, data };
+    } catch (error: any) {
+      return handleError(ctx, error);
+    }
+  },
+
+  async restore(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const data = await restoreSurveyCampaign(ctx.params?.id, getTenantIdFromContext(ctx));
       ctx.body = { success: true, data };
     } catch (error: any) {
       return handleError(ctx, error);

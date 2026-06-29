@@ -1,0 +1,95 @@
+{
+  "kind": "collectionType",
+  "collectionName": "grades",
+  "info": {
+    "singularName": "grade",
+    "pluralName": "grades",
+    "displayName": "Grade",
+    "description": "Tenant-scoped grade taxonomy."
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true
+    },
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "order": {
+      "type": "integer",
+      "default": 0
+    },
+    "description": {
+      "type": "text"
+    },
+    "gradeStatus": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "archived"
+      ],
+      "default": "active",
+      "required": true
+    },
+    "learningObjects": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::learning-object.learning-object",
+      "mappedBy": "grade"
+    },
+    "skills": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::skill.skill",
+      "mappedBy": "grade"
+    },
+    "formulas": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::formula.formula",
+      "mappedBy": "grade"
+    },
+    "questions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::question.question",
+      "mappedBy": "grade"
+    },
+    "visualAssets": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::visual-asset.visual-asset",
+      "mappedBy": "grade"
+    },
+    "knowledgeNodes": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::knowledge-node.knowledge-node",
+      "mappedBy": "grade"
+    },
+    "learningPaths": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::learning-path.learning-path",
+      "mappedBy": "grade"
+    },
+    "studentLearningProfiles": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::student-learning-profile.student-learning-profile",
+      "mappedBy": "grade"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "grades",
+      "required": true
+    }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "kind": "collectionType",
+  "collectionName": "admission_application_activities",
+  "info": {
+    "singularName": "admission-application-activity",
+    "pluralName": "admission-application-activities",
+    "displayName": "AdmissionApplicationActivity",
+    "description": "Activity logs for admission application access and important actions."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "admissionApplicationActivities",
+      "required": true
+    },
+    "application": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::admission-application.admission-application",
+      "inversedBy": "activities",
+      "required": true
+    },
+    "actorUser": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "actorType": {
+      "type": "enumeration",
+      "enum": [
+        "SCHOOL",
+        "PARENT",
+        "SYSTEM",
+        "UNKNOWN"
+      ],
+      "required": true,
+      "default": "UNKNOWN"
+    },
+    "actionType": {
+      "type": "enumeration",
+      "enum": [
+        "OPEN_APPLICATION",
+        "VIEW_REVIEW_DETAIL",
+        "VIEW_PARENT_TRACKING",
+        "MESSAGE_SENT",
+        "FILE_ATTACHED",
+        "STATUS_CHANGED",
+        "APPLICATION_UPDATED",
+        "REVIEW_SNAPSHOT_REBUILT",
+        "APPLICATION_SUBMITTED",
+        "APPLICATION_APPROVED",
+        "APPLICATION_REJECTED",
+        "APPLICATION_NEEDS_UPDATE",
+        "APPROVAL_ACKNOWLEDGED",
+        "EMAIL_SENT",
+        "APPLICATION_SOFT_DELETED",
+        "APPLICATION_RESTORED"
+      ],
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "ipAddress": {
+      "type": "string"
+    },
+    "userAgent": {
+      "type": "text"
+    },
+    "metadata": {
+      "type": "json"
+    }
+  }
+}

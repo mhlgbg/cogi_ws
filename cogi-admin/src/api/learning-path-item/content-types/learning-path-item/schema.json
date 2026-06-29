@@ -1,0 +1,51 @@
+{
+  "kind": "collectionType",
+  "collectionName": "learning_path_items",
+  "info": {
+    "singularName": "learning-path-item",
+    "pluralName": "learning-path-items",
+    "displayName": "Learning Path Item",
+    "description": "Tenant-scoped ordered item inside a learning path."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "order": {
+      "type": "integer",
+      "default": 0
+    },
+    "required": {
+      "type": "boolean",
+      "default": true
+    },
+    "unlockCondition": {
+      "type": "json"
+    },
+    "note": {
+      "type": "text"
+    },
+    "learningPath": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::learning-path.learning-path",
+      "inversedBy": "items",
+      "required": true
+    },
+    "learningObject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::learning-object.learning-object",
+      "inversedBy": "learningPathItems",
+      "required": true
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "learningPathItems",
+      "required": true
+    }
+  }
+}

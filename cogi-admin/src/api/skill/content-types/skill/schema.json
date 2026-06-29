@@ -1,0 +1,103 @@
+{
+  "kind": "collectionType",
+  "collectionName": "skills",
+  "info": {
+    "singularName": "skill",
+    "pluralName": "skills",
+    "displayName": "Skill",
+    "description": "Tenant-scoped learning skill graph."
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true
+    },
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "level": {
+      "type": "enumeration",
+      "enum": [
+        "remember",
+        "understand",
+        "apply",
+        "analyze",
+        "evaluate",
+        "create"
+      ],
+      "required": true
+    },
+    "skillStatus": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "archived"
+      ],
+      "default": "active",
+      "required": true
+    },
+    "subject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::subject.subject",
+      "inversedBy": "skills"
+    },
+    "grade": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::grade.grade",
+      "inversedBy": "skills"
+    },
+    "knowledgeNode": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::knowledge-node.knowledge-node",
+      "inversedBy": "skills"
+    },
+    "parentSkill": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::skill.skill",
+      "inversedBy": "childSkills"
+    },
+    "childSkills": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::skill.skill",
+      "mappedBy": "parentSkill"
+    },
+    "learningObjects": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::learning-object.learning-object",
+      "mappedBy": "skills"
+    },
+    "questions": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::question.question",
+      "mappedBy": "skills"
+    },
+    "studentSkillProgressRecords": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::student-skill-progress.student-skill-progress",
+      "mappedBy": "skill"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "skills",
+      "required": true
+    }
+  }
+}

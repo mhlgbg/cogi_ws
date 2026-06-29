@@ -1,0 +1,82 @@
+{
+  "kind": "collectionType",
+  "collectionName": "admission_application_messages",
+  "info": {
+    "singularName": "admission-application-message",
+    "pluralName": "admission-application-messages",
+    "displayName": "AdmissionApplicationMessage",
+    "description": "Conversation messages for one admission application."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "admissionApplicationMessages",
+      "required": true
+    },
+    "application": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::admission-application.admission-application",
+      "inversedBy": "messages",
+      "required": true
+    },
+    "senderUser": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "senderType": {
+      "type": "enumeration",
+      "enum": [
+        "SCHOOL",
+        "PARENT",
+        "SYSTEM"
+      ],
+      "required": true
+    },
+    "messageType": {
+      "type": "enumeration",
+      "enum": [
+        "MESSAGE",
+        "REQUEST_UPDATE",
+        "SUPPLEMENT_FILE",
+        "STATUS_NOTICE",
+        "SYSTEM"
+      ],
+      "required": true,
+      "default": "MESSAGE"
+    },
+    "content": {
+      "type": "richtext"
+    },
+    "attachments": {
+      "type": "json"
+    },
+    "visibility": {
+      "type": "enumeration",
+      "enum": [
+        "PUBLIC",
+        "INTERNAL"
+      ],
+      "default": "PUBLIC"
+    },
+    "readByParentAt": {
+      "type": "datetime"
+    },
+    "readBySchoolAt": {
+      "type": "datetime"
+    },
+    "metadata": {
+      "type": "json"
+    },
+    "createdByRole": {
+      "type": "string"
+    }
+  }
+}

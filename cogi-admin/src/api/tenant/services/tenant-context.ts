@@ -64,9 +64,18 @@ export async function buildTenantContextPayload(strapi: any, ctx: any) {
 
   const tenant = await strapi.db.query(TENANT_UID).findOne({
     where: { id: tenantId, tenantStatus: ACTIVE_STATUS },
-    select: ['id', 'name', 'shortName', 'code', 'settings', 'defaultPublicRoute', 'defaultProtectedRoute'],
+    select: ['id', 'name', 'shortName', 'code', 'slogan', 'siteTitle', 'defaultPageTitle', 'titleSuffix', 'googleAnalyticsId', 'googleTagManagerId', 'googleSearchConsoleVerification', 'facebookPixelId', 'settings', 'defaultPublicRoute', 'defaultProtectedRoute'],
     populate: {
       logo: {
+        select: ['url'],
+      },
+      favicon: {
+        select: ['url'],
+      },
+      banner: {
+        select: ['url'],
+      },
+      chatAvatar: {
         select: ['url'],
       },
     },
@@ -95,6 +104,17 @@ export async function buildTenantContextPayload(strapi: any, ctx: any) {
     displayName,
     domain: normalizeText(primaryDomain?.domain) || readRequestHost(ctx) || 'localhost',
     logo: extractMediaUrl((tenant as any).logo),
+    favicon: extractMediaUrl((tenant as any).favicon) || extractMediaUrl((tenant as any).logo),
+    siteTitle: normalizeText((tenant as any).siteTitle),
+    defaultPageTitle: normalizeText((tenant as any).defaultPageTitle),
+    titleSuffix: normalizeText((tenant as any).titleSuffix),
+    googleAnalyticsId: normalizeText((tenant as any).googleAnalyticsId),
+    googleTagManagerId: normalizeText((tenant as any).googleTagManagerId),
+    googleSearchConsoleVerification: normalizeText((tenant as any).googleSearchConsoleVerification),
+    facebookPixelId: normalizeText((tenant as any).facebookPixelId),
+    slogan: normalizeText((tenant as any).slogan),
+    banner: extractMediaUrl((tenant as any).banner),
+    chatAvatar: extractMediaUrl((tenant as any).chatAvatar),
     defaultPublicRoute: buildDefaultPublicRoute(tenant, code, settings),
     defaultProtectedRoute: buildDefaultProtectedRoute(tenant, settings),
     isMainDomain: Boolean(ctx.state?.isMainDomain),

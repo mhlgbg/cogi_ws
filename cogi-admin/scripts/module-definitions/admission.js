@@ -53,5 +53,14 @@ module.exports = {
       icon: 'cilTask',
       showInMenu: true,
     },
+    {
+      name: 'Candidate Exam Management',
+      key: 'admission.candidate-exam.manage',
+      order: 5,
+      description: 'Manage candidate exam records by admission season',
+      path: '/admission/candidate-exams',
+      icon: 'cilAddressBook',
+      showInMenu: true,
+    },
   ],
 };

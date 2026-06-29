@@ -122,6 +122,25 @@ export default {
     }
   },
 
+  async saveAnswersBatch(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const payload = ctx.request?.body || {};
+      const data = await surveyService.saveResponseAnswersBatch(
+        authUser.id,
+        ctx.params?.responseId,
+        payload,
+        getOptionalTenantId(ctx),
+        authUser,
+      );
+      ctx.body = { success: true, data };
+    } catch (error: any) {
+      return handleSurveyError(ctx, error);
+    }
+  },
+
   async submit(ctx: any) {
     const authUser = await requireAuthenticatedUser(ctx);
     if (!authUser?.id) return;

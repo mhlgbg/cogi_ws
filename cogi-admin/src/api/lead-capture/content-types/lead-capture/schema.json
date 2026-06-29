@@ -1,0 +1,98 @@
+{
+  "kind": "collectionType",
+  "collectionName": "lead_captures",
+  "info": {
+    "singularName": "lead-capture",
+    "pluralName": "lead-captures",
+    "displayName": "Lead",
+    "description": "Tenant-scoped submitted lead records captured from dynamic forms."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "leadCaptures",
+      "required": true
+    },
+    "campaign": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::lead-campaign.lead-campaign",
+      "inversedBy": "leads",
+      "required": true
+    },
+    "fullName": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "email": {
+      "type": "email"
+    },
+    "data": {
+      "type": "json",
+      "required": true
+    },
+    "source": {
+      "type": "string"
+    },
+    "leadStatus": {
+      "type": "enumeration",
+      "enum": [
+        "new",
+        "contacted",
+        "qualified",
+        "converted",
+        "lost",
+        "spam"
+      ],
+      "required": true,
+      "default": "new"
+    },
+    "assignedTo": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "assignedAt": {
+      "type": "datetime"
+    },
+    "contactedAt": {
+      "type": "datetime"
+    },
+    "convertedAt": {
+      "type": "datetime"
+    },
+    "lostReason": {
+      "type": "text"
+    },
+    "note": {
+      "type": "text"
+    },
+    "ipAddress": {
+      "type": "string"
+    },
+    "userAgent": {
+      "type": "text"
+    },
+    "referrer": {
+      "type": "text"
+    },
+    "activities": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::lead-activity.lead-activity",
+      "mappedBy": "lead"
+    },
+    "isDeleted": {
+      "type": "boolean",
+      "default": false
+    }
+  }
+}

@@ -48,6 +48,37 @@
     "description": {
       "type": "richtext"
     },
+    "examCardTemplateHtml": {
+      "type": "richtext"
+    },
+    "examCardReminderEmailSubject": {
+      "type": "string"
+    },
+    "examCardReminderEmailHtml": {
+      "type": "richtext"
+    },
+    "scoreReportTemplateHtml": {
+      "type": "richtext"
+    },
+    "scorePublishedAt": {
+      "type": "datetime"
+    },
+    "allowExamCardPrinting": {
+      "type": "boolean",
+      "default": false
+    },
+    "examCardPrintStartAt": {
+      "type": "datetime"
+    },
+    "examCardPrintEndAt": {
+      "type": "datetime"
+    },
+    "reviewDisplayConfig": {
+      "type": "json"
+    },
+    "applicationStatusGuide": {
+      "type": "json"
+    },
     "isActive": {
       "type": "boolean",
       "default": true

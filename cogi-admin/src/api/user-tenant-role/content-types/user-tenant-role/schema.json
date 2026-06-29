@@ -29,6 +29,9 @@
     "revokedAt": {
       "type": "datetime"
     },
+    "inactiveReason": {
+      "type": "string"
+    },
     "note": {
       "type": "text"
     },

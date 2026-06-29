@@ -1,0 +1,69 @@
+{
+  "kind": "collectionType",
+  "collectionName": "student_skill_progresses",
+  "info": {
+    "singularName": "student-skill-progress",
+    "pluralName": "student-skill-progresses",
+    "displayName": "Student Skill Progress",
+    "description": "Tenant-scoped mastery progress for a student skill."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "progressStatus": {
+      "type": "enumeration",
+      "enum": [
+        "not_started",
+        "learning",
+        "practicing",
+        "mastered",
+        "needs_review"
+      ],
+      "default": "not_started",
+      "required": true
+    },
+    "masteryScore": {
+      "type": "decimal"
+    },
+    "lastPracticedAt": {
+      "type": "datetime"
+    },
+    "attemptCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "correctCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "wrongCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "metadata": {
+      "type": "json"
+    },
+    "student": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "skill": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::skill.skill",
+      "inversedBy": "studentSkillProgressRecords",
+      "required": true
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "studentSkillProgressRecords",
+      "required": true
+    }
+  }
+}

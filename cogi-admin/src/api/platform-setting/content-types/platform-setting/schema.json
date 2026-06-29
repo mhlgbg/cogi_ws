@@ -1,0 +1,37 @@
+{
+  "kind": "collectionType",
+  "collectionName": "platform_settings",
+  "info": {
+    "singularName": "platform-setting",
+    "pluralName": "platform-settings",
+    "displayName": "Platform Setting",
+    "description": "Global platform-level configuration entries"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "key": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "value": {
+      "type": "json"
+    },
+    "description": {
+      "type": "text"
+    },
+    "group": {
+      "type": "string"
+    },
+    "dataType": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "default": "active"
+    }
+  }
+}

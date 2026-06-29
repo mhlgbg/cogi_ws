@@ -29,6 +29,25 @@
       "required": true,
       "default": true
     },
+    "activatedAt": {
+      "type": "datetime"
+    },
+    "activatedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "deactivatedAt": {
+      "type": "datetime"
+    },
+    "deactivatedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "inactiveReason": {
+      "type": "string"
+    },
     "note": {
       "type": "text"
     },

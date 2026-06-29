@@ -232,6 +232,60 @@ async function dropArticleSlugGlobalUnique(knex) {
   }
 }
 
+function normalizeSlugBase(value) {
+  const text = String(value || '').trim().replace(/-+/g, '-').replace(/^-+|-+$/g, '')
+  return text || 'article'
+}
+
+function buildDedupedSlug(baseSlug, articleId, usedSlugs) {
+  const normalizedBase = normalizeSlugBase(baseSlug)
+  const maxBaseLength = 160
+  const trimmedBase = normalizedBase.slice(0, maxBaseLength) || 'article'
+
+  let counter = 0
+  while (true) {
+    const suffix = counter === 0 ? `dup-${articleId}` : `dup-${articleId}-${counter}`
+    const candidate = `${trimmedBase}-${suffix}`
+    if (!usedSlugs.has(candidate)) {
+      return candidate
+    }
+    counter += 1
+  }
+}
+
+async function dedupeArticleTenantSlugs(knex) {
+  const rows = await knex('articles')
+    .select('id', 'tenant_id', 'slug')
+    .whereNotNull('tenant_id')
+    .whereNotNull('slug')
+    .orderBy([{ column: 'tenant_id', order: 'asc' }, { column: 'slug', order: 'asc' }, { column: 'id', order: 'asc' }])
+
+  const seenByTenant = new Map()
+
+  for (const row of rows || []) {
+    const tenantId = String(row?.tenant_id || '')
+    const slug = String(row?.slug || '').trim()
+    const articleId = row?.id
+
+    if (!tenantId || !slug || !articleId) continue
+
+    let usedSlugs = seenByTenant.get(tenantId)
+    if (!usedSlugs) {
+      usedSlugs = new Set()
+      seenByTenant.set(tenantId, usedSlugs)
+    }
+
+    if (!usedSlugs.has(slug)) {
+      usedSlugs.add(slug)
+      continue
+    }
+
+    const nextSlug = buildDedupedSlug(slug, articleId, usedSlugs)
+    await knex('articles').where({ id: articleId }).update({ slug: nextSlug })
+    usedSlugs.add(nextSlug)
+  }
+}
+
 async function ensureArticleTenantSlugUnique(knex) {
   const client = String(knex?.client?.config?.client || '').toLowerCase()
 
@@ -280,6 +334,7 @@ module.exports = {
     await ensureIndex(knex, 'articles', ['tenant_id'], 'articles_tenant_id_index')
 
     await dropArticleSlugGlobalUnique(knex)
+    await dedupeArticleTenantSlugs(knex)
     await ensureArticleTenantSlugUnique(knex)
   },
 

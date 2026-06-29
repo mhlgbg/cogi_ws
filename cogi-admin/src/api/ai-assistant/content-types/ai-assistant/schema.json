@@ -1,0 +1,63 @@
+{
+  "kind": "collectionType",
+  "collectionName": "ai_assistants",
+  "info": {
+    "singularName": "ai-assistant",
+    "pluralName": "ai-assistants",
+    "displayName": "AiAssistant",
+    "description": "Tenant-scoped AI assistant configuration for public chat and future AI features."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "aiAssistants",
+      "required": true
+    },
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "assistantName": {
+      "type": "string",
+      "default": ""
+    },
+    "provider": {
+      "type": "enumeration",
+      "enum": [
+        "OPENAI",
+        "GEMINI",
+        "ANTHROPIC"
+      ],
+      "required": true,
+      "default": "OPENAI"
+    },
+    "model": {
+      "type": "string",
+      "default": "gpt-4o-mini"
+    },
+    "systemPrompt": {
+      "type": "richtext"
+    },
+    "welcomeMessage": {
+      "type": "text"
+    },
+    "enabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "temperature": {
+      "type": "decimal",
+      "default": 0.3
+    },
+    "maxTokens": {
+      "type": "integer",
+      "default": 800
+    }
+  }
+}

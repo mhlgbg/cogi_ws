@@ -1,0 +1,123 @@
+{
+  "kind": "collectionType",
+  "collectionName": "questions",
+  "info": {
+    "singularName": "question",
+    "pluralName": "questions",
+    "displayName": "Question",
+    "description": "Tenant-scoped learning assessment question bank."
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true
+    },
+    "title": {
+      "type": "string"
+    },
+    "questionText": {
+      "type": "richtext",
+      "required": true
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": [
+        "single_choice",
+        "multiple_choice",
+        "true_false",
+        "short_answer",
+        "essay",
+        "ordering",
+        "matching",
+        "fill_blank"
+      ],
+      "required": true
+    },
+    "difficulty": {
+      "type": "enumeration",
+      "enum": [
+        "easy",
+        "medium",
+        "hard"
+      ]
+    },
+    "correctAnswer": {
+      "type": "json"
+    },
+    "explanation": {
+      "type": "richtext"
+    },
+    "rubric": {
+      "type": "json"
+    },
+    "questionStatus": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "active",
+        "archived"
+      ],
+      "default": "draft",
+      "required": true
+    },
+    "subject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::subject.subject",
+      "inversedBy": "questions"
+    },
+    "grade": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::grade.grade",
+      "inversedBy": "questions"
+    },
+    "knowledgeNode": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::knowledge-node.knowledge-node",
+      "inversedBy": "questions"
+    },
+    "skills": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::skill.skill",
+      "inversedBy": "questions"
+    },
+    "learningObjects": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::learning-object.learning-object",
+      "mappedBy": "questions"
+    },
+    "formulas": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::formula.formula",
+      "inversedBy": "questions"
+    },
+    "options": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::question-option.question-option",
+      "mappedBy": "question"
+    },
+    "contentBlocks": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::content-block.content-block",
+      "mappedBy": "question"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "questions",
+      "required": true
+    }
+  }
+}

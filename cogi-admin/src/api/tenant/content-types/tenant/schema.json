@@ -34,10 +34,78 @@
     "shortName": {
       "type": "string"
     },
+    "siteTitle": {
+      "type": "string"
+    },
+    "defaultPageTitle": {
+      "type": "string"
+    },
+    "titleSuffix": {
+      "type": "string"
+    },
+    "googleAnalyticsId": {
+      "type": "string"
+    },
+    "googleTagManagerId": {
+      "type": "string"
+    },
+    "googleSearchConsoleVerification": {
+      "type": "string"
+    },
+    "facebookPixelId": {
+      "type": "string"
+    },
+    "siteShortTitle": {
+      "type": "string"
+    },
+    "siteDescription": {
+      "type": "text"
+    },
+    "siteKeywords": {
+      "type": "text"
+    },
     "description": {
       "type": "text"
     },
+    "slogan": {
+      "type": "text"
+    },
     "logo": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "siteLogo": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "defaultMetaImage": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "favicon": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "banner": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "chatAvatar": {
       "type": "media",
       "multiple": false,
       "allowedTypes": [
@@ -64,6 +132,9 @@
     },
     "settings": {
       "type": "json"
+    },
+    "storageDefaultConfigId": {
+      "type": "integer"
     },
     "startDate": {
       "type": "date"
@@ -110,16 +181,214 @@
       "target": "api::admission-application.admission-application",
       "mappedBy": "tenant"
     },
+    "admissionApplicationMessages": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::admission-application-message.admission-application-message",
+      "mappedBy": "tenant"
+    },
+    "admissionApplicationActivities": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::admission-application-activity.admission-application-activity",
+      "mappedBy": "tenant"
+    },
     "formTemplates": {
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::form-template.form-template",
       "mappedBy": "tenant"
     },
+    "leadCampaigns": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::lead-campaign.lead-campaign",
+      "mappedBy": "tenant"
+    },
+    "leadCaptures": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::lead-capture.lead-capture",
+      "mappedBy": "tenant"
+    },
+    "leadActivities": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::lead-activity.lead-activity",
+      "mappedBy": "tenant"
+    },
+    "publicPages": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::public-page.public-page",
+      "mappedBy": "tenant"
+    },
+    "chatSessions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::chat-session.chat-session",
+      "mappedBy": "tenant"
+    },
+    "chatMessages": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::chat-message.chat-message",
+      "mappedBy": "tenant"
+    },
+    "aiAssistants": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::ai-assistant.ai-assistant",
+      "mappedBy": "tenant"
+    },
+    "aiKnowledges": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::ai-knowledge.ai-knowledge",
+      "mappedBy": "tenant"
+    },
     "notificationTemplates": {
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::notification-template.notification-template",
+      "mappedBy": "tenant"
+    },
+    "subjects": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::subject.subject",
+      "mappedBy": "tenant"
+    },
+    "grades": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::grade.grade",
+      "mappedBy": "tenant"
+    },
+    "learningObjects": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::learning-object.learning-object",
+      "mappedBy": "tenant"
+    },
+    "contentBlocks": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::content-block.content-block",
+      "mappedBy": "tenant"
+    },
+    "skills": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::skill.skill",
+      "mappedBy": "tenant"
+    },
+    "formulas": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::formula.formula",
+      "mappedBy": "tenant"
+    },
+    "questions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::question.question",
+      "mappedBy": "tenant"
+    },
+    "questionOptions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::question-option.question-option",
+      "mappedBy": "tenant"
+    },
+    "visualAssets": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::visual-asset.visual-asset",
+      "mappedBy": "tenant"
+    },
+    "knowledgeNodes": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::knowledge-node.knowledge-node",
+      "mappedBy": "tenant"
+    },
+    "learningPaths": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::learning-path.learning-path",
+      "mappedBy": "tenant"
+    },
+    "learningPathItems": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::learning-path-item.learning-path-item",
+      "mappedBy": "tenant"
+    },
+    "studentLearningProfiles": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::student-learning-profile.student-learning-profile",
+      "mappedBy": "tenant"
+    },
+    "studentSkillProgressRecords": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::student-skill-progress.student-skill-progress",
+      "mappedBy": "tenant"
+    },
+    "studentLearningObjectProgressRecords": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::student-learning-object-progress.student-learning-object-progress",
+      "mappedBy": "tenant"
+    },
+    "tenantStorages": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::tenant-storage.tenant-storage",
+      "mappedBy": "tenant"
+    },
+    "fileAssets": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::file-asset.file-asset",
+      "mappedBy": "tenant"
+    },
+    "stravaConnections": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::strava-connection.strava-connection",
+      "mappedBy": "tenant"
+    },
+    "stravaOAuthStates": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::strava-oauth-state.strava-oauth-state",
+      "mappedBy": "tenant"
+    },
+    "stravaActivities": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::strava-activity.strava-activity",
+      "mappedBy": "tenant"
+    },
+    "fitnessChallenges": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::fitness-challenge.fitness-challenge",
+      "mappedBy": "tenant"
+    },
+    "challengeParticipants": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::challenge-participant.challenge-participant",
+      "mappedBy": "tenant"
+    },
+    "challengeActivities": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::challenge-activity.challenge-activity",
       "mappedBy": "tenant"
     }
   }

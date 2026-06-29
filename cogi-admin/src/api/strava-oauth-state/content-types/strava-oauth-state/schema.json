@@ -1,0 +1,45 @@
+{
+  "kind": "collectionType",
+  "collectionName": "strava_oauth_states",
+  "info": {
+    "singularName": "strava-oauth-state",
+    "pluralName": "strava-oauth-states",
+    "displayName": "Strava OAuth State",
+    "description": "Tenant-scoped one-time OAuth state verifier for Strava connect callback."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "stravaOAuthStates",
+      "required": true
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "nonce": {
+      "type": "string",
+      "required": true
+    },
+    "stateHash": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "expiresAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "usedAt": {
+      "type": "datetime"
+    }
+  }
+}

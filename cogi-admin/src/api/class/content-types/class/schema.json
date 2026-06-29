@@ -42,6 +42,12 @@
       "target": "api::enrollment.enrollment",
       "mappedBy": "class"
     },
+    "teacherAssignments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::class-teacher-assignment.class-teacher-assignment",
+      "mappedBy": "class"
+    },
     "feeSheetClasses": {
       "type": "relation",
       "relation": "oneToMany",

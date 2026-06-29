@@ -1,0 +1,50 @@
+{
+  "kind": "collectionType",
+  "collectionName": "question_options",
+  "info": {
+    "singularName": "question-option",
+    "pluralName": "question-options",
+    "displayName": "Question Option",
+    "description": "Tenant-scoped answer option for a question."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "label": {
+      "type": "string"
+    },
+    "value": {
+      "type": "string"
+    },
+    "content": {
+      "type": "richtext"
+    },
+    "isCorrect": {
+      "type": "boolean",
+      "default": false
+    },
+    "order": {
+      "type": "integer",
+      "default": 0
+    },
+    "explanation": {
+      "type": "text"
+    },
+    "question": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::question.question",
+      "inversedBy": "options",
+      "required": true
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "questionOptions",
+      "required": true
+    }
+  }
+}

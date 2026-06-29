@@ -30,12 +30,42 @@ export default {
 			handler: 'class.enrollmentOptions',
 			config: {
 				auth: false,
+				policies: [
+					{
+						name: 'global::has-tenant-permission',
+						config: { key: 'class.manage' },
+					},
+				],
 			},
 		},
 		{
 			method: 'GET',
 			path: '/classes/:id/enrollments',
 			handler: 'class.listEnrollments',
+			config: {
+				auth: false,
+			},
+		},
+		{
+			method: 'GET',
+			path: '/classes/:id/assignments',
+			handler: 'class.listAssignments',
+			config: {
+				auth: false,
+			},
+		},
+		{
+			method: 'POST',
+			path: '/classes/:id/assignments',
+			handler: 'class.createAssignment',
+			config: {
+				auth: false,
+			},
+		},
+		{
+			method: 'PUT',
+			path: '/classes/:id/assignments/:assignmentId',
+			handler: 'class.updateAssignment',
 			config: {
 				auth: false,
 			},

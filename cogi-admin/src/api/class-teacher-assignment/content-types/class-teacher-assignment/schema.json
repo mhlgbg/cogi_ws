@@ -1,0 +1,69 @@
+{
+  "kind": "collectionType",
+  "collectionName": "class_teacher_assignments",
+  "info": {
+    "singularName": "class-teacher-assignment",
+    "pluralName": "class-teacher-assignments",
+    "displayName": "ClassTeacherAssignment",
+    "description": "Assignments of teachers to classes (tenant-scoped)."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "class": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::class.class",
+      "inversedBy": "teacherAssignments",
+      "required": true
+    },
+    "teacher": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "subjectCode": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "role": {
+      "type": "enumeration",
+      "enum": [
+        "main",
+        "co_teacher",
+        "assistant",
+        "substitute"
+      ],
+      "default": "co_teacher"
+    },
+    "startDate": {
+      "type": "date"
+    },
+    "endDate": {
+      "type": "date"
+    },
+    "assignmentStatus": {
+      "type": "enumeration",
+      "enum": ["active", "inactive"],
+      "default": "active"
+    },
+    "isPayable": {
+      "type": "boolean",
+      "default": true
+    },
+    "note": {
+      "type": "text"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

@@ -1,0 +1,66 @@
+'use strict';
+
+module.exports = {
+  group: {
+    name: 'Learning',
+    code: 'learning',
+    order: 13,
+    icon: 'cilLibrary',
+  },
+  features: [
+    {
+      name: 'Learning Object Management',
+      key: 'learning.learning-object.manage',
+      order: 1,
+      description: 'Manage tenant learning objects and related study knowledge data',
+      path: '/learning/learning-objects',
+      icon: 'cilLibrary',
+      showInMenu: true,
+    },
+    {
+      name: 'Subject Management',
+      key: 'learning.subject.manage',
+      order: 2,
+      description: 'Manage tenant subjects for learning content',
+      path: '/learning/subjects',
+      icon: 'cilLibrary',
+      showInMenu: true,
+    },
+    {
+      name: 'Grade Management',
+      key: 'learning.grade.manage',
+      order: 3,
+      description: 'Manage tenant grades for learning content',
+      path: '/learning/grades',
+      icon: 'cilLibrary',
+      showInMenu: true,
+    },
+    {
+      name: 'Question Management',
+      key: 'learning.question.manage',
+      order: 4,
+      description: 'Manage tenant questions and question options',
+      path: '/learning/questions',
+      icon: 'cilLibrary',
+      showInMenu: true,
+    },
+    {
+      name: 'Formula Management',
+      key: 'learning.formula.manage',
+      order: 5,
+      description: 'Manage tenant formulas and examples',
+      path: '/learning/formulas',
+      icon: 'cilLibrary',
+      showInMenu: true,
+    },
+    {
+      name: 'Learning Package Import',
+      key: 'learning.package-import.manage',
+      order: 6,
+      description: 'Import learning content packages in tenant scope',
+      path: '/learning/import-packages',
+      icon: 'cilCloudUpload',
+      showInMenu: true,
+    },
+  ],
+};

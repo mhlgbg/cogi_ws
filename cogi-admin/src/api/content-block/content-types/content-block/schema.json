@@ -1,0 +1,95 @@
+{
+  "kind": "collectionType",
+  "collectionName": "content_blocks",
+  "info": {
+    "singularName": "content-block",
+    "pluralName": "content-blocks",
+    "displayName": "Content Block",
+    "description": "Tenant-scoped ordered content blocks inside a learning object."
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "type": {
+      "type": "enumeration",
+      "enum": [
+        "text",
+        "html",
+        "image",
+        "video",
+        "audio",
+        "question",
+        "formula",
+        "example",
+        "exercise",
+        "interactive",
+        "summary"
+      ],
+      "required": true
+    },
+    "title": {
+      "type": "string"
+    },
+    "order": {
+      "type": "integer",
+      "default": 0
+    },
+    "content": {
+      "type": "text"
+    },
+    "htmlContent": {
+      "type": "richtext"
+    },
+    "media": {
+      "type": "media",
+      "multiple": false
+    },
+    "config": {
+      "type": "json"
+    },
+    "contentBlockStatus": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "hidden",
+        "archived"
+      ],
+      "default": "active",
+      "required": true
+    },
+    "learningObject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::learning-object.learning-object",
+      "inversedBy": "contentBlocks",
+      "required": true
+    },
+    "formula": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::formula.formula",
+      "inversedBy": "contentBlocks"
+    },
+    "question": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::question.question",
+      "inversedBy": "contentBlocks"
+    },
+    "visualAsset": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::visual-asset.visual-asset",
+      "inversedBy": "contentBlocks"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "contentBlocks",
+      "required": true
+    }
+  }
+}

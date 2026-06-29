@@ -1,0 +1,188 @@
+{
+  "kind": "collectionType",
+  "collectionName": "candidate_exams",
+  "info": {
+    "singularName": "candidate-exam",
+    "pluralName": "candidate-exams",
+    "displayName": "CandidateExam",
+    "description": "Tenant-scoped candidate exam records derived from qualified admission applications."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "admissionSeason": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::campaign.campaign",
+      "required": true
+    },
+    "admissionApplication": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::admission-application.admission-application"
+    },
+    "studentCode": {
+      "type": "string",
+      "index": true
+    },
+    "applicationCode": {
+      "type": "string"
+    },
+    "fullName": {
+      "type": "string"
+    },
+    "lastName": {
+      "type": "string"
+    },
+    "firstName": {
+      "type": "string"
+    },
+    "dateOfBirth": {
+      "type": "date"
+    },
+    "gender": {
+      "type": "enumeration",
+      "enum": [
+        "male",
+        "female",
+        "other"
+      ]
+    },
+    "primarySchool": {
+      "type": "string"
+    },
+    "cardImagePath": {
+      "type": "text"
+    },
+    "examLocation": {
+      "type": "string"
+    },
+    "examRoom": {
+      "type": "string"
+    },
+    "candidateNumber": {
+      "type": "string",
+      "index": true
+    },
+    "vietnameseScore": {
+      "type": "decimal"
+    },
+    "englishScore": {
+      "type": "decimal"
+    },
+    "mathScore": {
+      "type": "decimal"
+    },
+    "incentiveScore": {
+      "type": "decimal",
+      "default": 0
+    },
+    "totalScore": {
+      "type": "decimal"
+    },
+    "recheckMath": {
+      "type": "boolean",
+      "default": false
+    },
+    "recheckVietnamese": {
+      "type": "boolean",
+      "default": false
+    },
+    "recheckEnglish": {
+      "type": "boolean",
+      "default": false
+    },
+    "recheckMathScore": {
+      "type": "decimal"
+    },
+    "recheckVietnameseScore": {
+      "type": "decimal"
+    },
+    "recheckEnglishScore": {
+      "type": "decimal"
+    },
+    "candidateExamStatus": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "ready",
+        "card_downloaded",
+        "checked_in",
+        "absent",
+        "completed",
+        "cancelled"
+      ],
+      "required": true,
+      "default": "draft"
+    },
+    "cardFirstDownloadedAt": {
+      "type": "datetime"
+    },
+    "cardFirstDownloadedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "cardDownloadCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "cardReminderQueuedAt": {
+      "type": "datetime"
+    },
+    "cardReminderSentAt": {
+      "type": "datetime"
+    },
+    "cardReminderCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "cardReminderStatus": {
+      "type": "string",
+      "default": "pending"
+    },
+    "note": {
+      "type": "text"
+    },
+    "isDeleted": {
+      "type": "boolean",
+      "default": false
+    },
+    "deletedAt": {
+      "type": "datetime"
+    },
+    "deletedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "deleteReason": {
+      "type": "text"
+    },
+    "restoredAt": {
+      "type": "datetime"
+    },
+    "restoredBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "restoreReason": {
+      "type": "text"
+    },
+    "logs": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::candidate-exam-log.candidate-exam-log",
+      "mappedBy": "candidateExam"
+    }
+  }
+}

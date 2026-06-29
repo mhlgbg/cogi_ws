@@ -1,0 +1,122 @@
+{
+  "kind": "collectionType",
+  "collectionName": "public_pages",
+  "info": {
+    "singularName": "public-page",
+    "pluralName": "public-pages",
+    "displayName": "PublicPage",
+    "description": "Tenant-scoped public landing/content pages rendered in the shared public layout."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "publicPages",
+      "required": true
+    },
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "slug": {
+      "type": "string",
+      "required": true
+    },
+    "summary": {
+      "type": "text"
+    },
+    "contentHtml": {
+      "type": "richtext"
+    },
+    "publicPageStatus": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "published",
+        "archived"
+      ],
+      "required": true,
+      "default": "draft"
+    },
+    "pageType": {
+      "type": "enumeration",
+      "enum": [
+        "page",
+        "landing",
+        "lead",
+        "thank_you",
+        "default_page"
+      ],
+      "required": true,
+      "default": "page"
+    },
+    "leadCampaign": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::lead-campaign.lead-campaign",
+      "inversedBy": "publicPages"
+    },
+    "leadFormPosition": {
+      "type": "enumeration",
+      "enum": [
+        "top",
+        "bottom",
+        "shortcode"
+      ],
+      "default": "bottom"
+    },
+    "seoTitle": {
+      "type": "string"
+    },
+    "seoDescription": {
+      "type": "text"
+    },
+    "seoKeywords": {
+      "type": "text"
+    },
+    "seoImage": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos"
+      ]
+    },
+    "publishedAt": {
+      "type": "datetime"
+    },
+    "isDeleted": {
+      "type": "boolean",
+      "default": false
+    },
+    "deletedAt": {
+      "type": "datetime"
+    },
+    "deletedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "deleteReason": {
+      "type": "text"
+    },
+    "restoredAt": {
+      "type": "datetime"
+    },
+    "restoredBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "restoreReason": {
+      "type": "text"
+    }
+  }
+}

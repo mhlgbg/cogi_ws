@@ -1,6 +1,14 @@
 export default {
   routes: [
     {
+      method: 'POST',
+      path: '/auth/local-case-insensitive',
+      handler: 'auth-extended.localCaseInsensitive',
+      config: {
+        auth: false,
+      },
+    },
+    {
       method: 'GET',
       path: '/admission-campaigns/by-code/:campaignCode',
       handler: 'auth-extended.admissionCampaignByCode',

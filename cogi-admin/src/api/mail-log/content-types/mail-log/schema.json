@@ -1,0 +1,95 @@
+{
+  "kind": "collectionType",
+  "collectionName": "mail_logs",
+  "info": {
+    "singularName": "mail-log",
+    "pluralName": "mail-logs",
+    "displayName": "MailLog",
+    "description": "Queued and delivered email audit log."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant"
+    },
+    "mailType": {
+      "type": "string",
+      "required": true
+    },
+    "toEmail": {
+      "type": "string",
+      "required": true
+    },
+    "cc": {
+      "type": "json"
+    },
+    "bcc": {
+      "type": "json"
+    },
+    "subject": {
+      "type": "string",
+      "required": true
+    },
+    "html": {
+      "type": "text"
+    },
+    "text": {
+      "type": "text"
+    },
+    "replyTo": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string"
+    },
+    "fallbackProvider": {
+      "type": "string"
+    },
+    "providerMessageId": {
+      "type": "string"
+    },
+    "sendStatus": {
+      "type": "enumeration",
+      "enum": [
+        "QUEUED",
+        "SENDING",
+        "SENT",
+        "FAILED",
+        "RETRYING",
+        "CANCELLED"
+      ],
+      "required": true,
+      "default": "QUEUED"
+    },
+    "attempts": {
+      "type": "integer",
+      "default": 0
+    },
+    "lastError": {
+      "type": "text"
+    },
+    "lastProviderError": {
+      "type": "text"
+    },
+    "fallbackError": {
+      "type": "text"
+    },
+    "queuedAt": {
+      "type": "datetime"
+    },
+    "sentAt": {
+      "type": "datetime"
+    },
+    "failedAt": {
+      "type": "datetime"
+    },
+    "metadata": {
+      "type": "json"
+    }
+  }
+}

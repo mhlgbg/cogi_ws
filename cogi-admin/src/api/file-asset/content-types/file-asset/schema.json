@@ -1,0 +1,124 @@
+{
+  "kind": "collectionType",
+  "collectionName": "file_assets",
+  "info": {
+    "singularName": "file-asset",
+    "pluralName": "file-assets",
+    "displayName": "File Asset",
+    "description": "Logical metadata records for uploaded files across all modules."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "uid",
+      "targetField": "fileName",
+      "required": true,
+      "unique": true
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "fileAssets",
+      "required": true,
+      "index": true
+    },
+    "storageConfig": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant-storage.tenant-storage",
+      "inversedBy": "fileAssets"
+    },
+    "moduleKey": {
+      "type": "string",
+      "required": true
+    },
+    "entityType": {
+      "type": "string"
+    },
+    "entityId": {
+      "type": "string"
+    },
+    "originalName": {
+      "type": "string",
+      "required": true
+    },
+    "fileName": {
+      "type": "string",
+      "required": true
+    },
+    "extension": {
+      "type": "string"
+    },
+    "mimeType": {
+      "type": "string"
+    },
+    "size": {
+      "type": "biginteger",
+      "required": true,
+      "default": "0"
+    },
+    "provider": {
+      "type": "enumeration",
+      "enum": [
+        "local",
+        "s3",
+        "minio",
+        "wasabi",
+        "azure",
+        "gcs"
+      ],
+      "default": "local",
+      "required": true
+    },
+    "relativePath": {
+      "type": "string",
+      "required": true,
+      "index": true
+    },
+    "url": {
+      "type": "string",
+      "required": true
+    },
+    "checksum": {
+      "type": "string",
+      "index": true
+    },
+    "uploadedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "downloadCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "lastAccessAt": {
+      "type": "datetime"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "ACTIVE",
+        "DELETED",
+        "ARCHIVED"
+      ],
+      "default": "ACTIVE",
+      "required": true
+    },
+    "metadata": {
+      "type": "json"
+    },
+    "isPublic": {
+      "type": "boolean",
+      "default": true
+    },
+    "isDeleted": {
+      "type": "boolean",
+      "default": false
+    }
+  }
+}

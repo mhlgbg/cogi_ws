@@ -1,0 +1,101 @@
+{
+  "kind": "collectionType",
+  "collectionName": "strava_connections",
+  "info": {
+    "singularName": "strava-connection",
+    "pluralName": "strava-connections",
+    "displayName": "Strava Connection",
+    "description": "Tenant-scoped Strava connection for an internal user."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "stravaConnections",
+      "required": true
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "stravaAthleteId": {
+      "type": "string",
+      "required": true
+    },
+    "athleteUsername": {
+      "type": "string"
+    },
+    "athleteFirstname": {
+      "type": "string"
+    },
+    "athleteLastname": {
+      "type": "string"
+    },
+    "profileUrl": {
+      "type": "string"
+    },
+    "accessToken": {
+      "type": "text",
+      "private": true,
+      "searchable": false
+    },
+    "refreshToken": {
+      "type": "text",
+      "private": true,
+      "searchable": false
+    },
+    "tokenExpiresAt": {
+      "type": "datetime"
+    },
+    "scope": {
+      "type": "string"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "ACTIVE",
+        "DISCONNECTED",
+        "ERROR"
+      ],
+      "default": "ACTIVE",
+      "required": true
+    },
+    "lastSyncAt": {
+      "type": "datetime"
+    },
+    "lastSyncStatus": {
+      "type": "enumeration",
+      "enum": [
+        "NEVER",
+        "SUCCESS",
+        "FAILED",
+        "PARTIAL"
+      ],
+      "default": "NEVER",
+      "required": true
+    },
+    "lastSyncError": {
+      "type": "text"
+    },
+    "disconnectedAt": {
+      "type": "datetime"
+    },
+    "rawAthlete": {
+      "type": "json",
+      "private": true
+    },
+    "activities": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::strava-activity.strava-activity",
+      "mappedBy": "connection"
+    }
+  }
+}

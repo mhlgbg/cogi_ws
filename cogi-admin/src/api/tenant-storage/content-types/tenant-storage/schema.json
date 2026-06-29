@@ -1,0 +1,76 @@
+{
+  "kind": "collectionType",
+  "collectionName": "tenant_storages",
+  "info": {
+    "singularName": "tenant-storage",
+    "pluralName": "tenant-storages",
+    "displayName": "Tenant Storage",
+    "description": "Tenant-scoped storage configuration and quota settings"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "tenantStorages",
+      "required": true
+    },
+    "provider": {
+      "type": "enumeration",
+      "enum": [
+        "local",
+        "s3",
+        "minio",
+        "wasabi",
+        "azure",
+        "gcs"
+      ],
+      "default": "local",
+      "required": true
+    },
+    "basePath": {
+      "type": "string",
+      "required": true
+    },
+    "publicBaseUrl": {
+      "type": "string"
+    },
+    "quotaGB": {
+      "type": "decimal",
+      "default": 5
+    },
+    "usedBytes": {
+      "type": "biginteger",
+      "default": "0"
+    },
+    "isDefault": {
+      "type": "boolean",
+      "default": true
+    },
+    "isActive": {
+      "type": "boolean",
+      "default": true
+    },
+    "settings": {
+      "type": "json"
+    },
+    "notes": {
+      "type": "text"
+    },
+    "fileAssets": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::file-asset.file-asset",
+      "mappedBy": "storageConfig"
+    }
+  }
+}

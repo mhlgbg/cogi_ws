@@ -1,0 +1,44 @@
+{
+  "kind": "collectionType",
+  "collectionName": "ai_knowledges",
+  "info": {
+    "singularName": "ai-knowledge",
+    "pluralName": "ai-knowledges",
+    "displayName": "AiKnowledge",
+    "description": "Tenant-scoped knowledge entries for future AI-assisted public chat and support flows."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "aiKnowledges",
+      "required": true
+    },
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "content": {
+      "type": "richtext",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "ACTIVE",
+        "INACTIVE"
+      ],
+      "required": true,
+      "default": "ACTIVE"
+    },
+    "priority": {
+      "type": "integer",
+      "default": 0
+    }
+  }
+}

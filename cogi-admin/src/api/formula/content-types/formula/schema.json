@@ -1,0 +1,88 @@
+{
+  "kind": "collectionType",
+  "collectionName": "formulas",
+  "info": {
+    "singularName": "formula",
+    "pluralName": "formulas",
+    "displayName": "Formula",
+    "description": "Tenant-scoped formulas and symbolic knowledge."
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true
+    },
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "latex": {
+      "type": "text"
+    },
+    "plainText": {
+      "type": "text"
+    },
+    "examples": {
+      "type": "json"
+    },
+    "formulaStatus": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "archived"
+      ],
+      "default": "active",
+      "required": true
+    },
+    "subject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::subject.subject",
+      "inversedBy": "formulas"
+    },
+    "grade": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::grade.grade",
+      "inversedBy": "formulas"
+    },
+    "knowledgeNode": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::knowledge-node.knowledge-node",
+      "inversedBy": "formulas"
+    },
+    "learningObjects": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::learning-object.learning-object",
+      "mappedBy": "formulas"
+    },
+    "questions": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::question.question",
+      "mappedBy": "formulas"
+    },
+    "contentBlocks": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::content-block.content-block",
+      "mappedBy": "formula"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "formulas",
+      "required": true
+    }
+  }
+}

@@ -54,12 +54,14 @@
       "default": "draft"
     },
     "studentName": {
+    "type": "string"
+    },
+    "studentCode": {
       "type": "string",
-      "required": true
+      "index": true
     },
     "dob": {
-      "type": "date",
-      "required": true
+    "type": "date"
     },
     "gender": {
       "type": "enumeration",
@@ -76,6 +78,9 @@
       "type": "text"
     },
     "formData": {
+      "type": "json"
+    },
+    "reviewSnapshot": {
       "type": "json"
     },
     "formTemplateVersion": {
@@ -102,6 +107,82 @@
     },
     "reviewNote": {
       "type": "text"
+    },
+    "isDeleted": {
+      "type": "boolean",
+      "default": false
+    },
+    "deletedAt": {
+      "type": "datetime"
+    },
+    "deletedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "deleteReason": {
+      "type": "text"
+    },
+    "restoredAt": {
+      "type": "datetime"
+    },
+    "restoredBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "restoreReason": {
+      "type": "text"
+    },
+    "approvalNotifiedAt": {
+      "type": "datetime"
+    },
+    "approvalNotificationCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "approvedAcknowledgedAt": {
+      "type": "datetime"
+    },
+    "approvedAcknowledgedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "approvedAcknowledgedNote": {
+      "type": "text"
+    },
+    "messages": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::admission-application-message.admission-application-message",
+      "mappedBy": "application"
+    },
+    "activities": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::admission-application-activity.admission-application-activity",
+      "mappedBy": "application"
+    },
+    "parentLastOpenedAt": {
+      "type": "datetime"
+    },
+    "schoolLastOpenedAt": {
+      "type": "datetime"
+    },
+    "parentUnreadMessageCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "schoolUnreadMessageCount": {
+      "type": "integer",
+      "default": 0
+    },
+    "lastMessageAt": {
+      "type": "datetime"
+    },
+    "lastActivityAt": {
+      "type": "datetime"
     },
     "applicationFiles": {
       "type": "relation",

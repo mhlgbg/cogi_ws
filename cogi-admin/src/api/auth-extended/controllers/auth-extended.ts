@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import { enqueueMail } from '../../../services/mail-queue';
+import { mergeTenantWhere, resolveCurrentTenantId } from '../../../utils/tenant-scope';
 import { ensureUserHasAuthenticatedRole } from '../services/ensure-authenticated-role';
 import {
   buildActivationLink,
@@ -23,6 +25,52 @@ function normalizeText(value: unknown): string {
   return String(value).trim();
 }
 
+function normalizeLoginIdentifier(value: unknown): string {
+  return normalizeText(value).toLowerCase();
+}
+
+function looksLikeEmail(value: unknown): boolean {
+  return normalizeText(value).includes('@');
+}
+
+async function sanitizeAuthUser(user: any, ctx: any) {
+  const userModel = strapi.getModel('plugin::users-permissions.user');
+  return strapi.contentAPI.sanitize.output(user, userModel, { auth: ctx.state?.auth });
+}
+
+async function loadAuthUserForResponse(userId: number) {
+  return strapi.db.query('plugin::users-permissions.user').findOne({
+    where: { id: userId },
+    select: ['id', 'username', 'email', 'fullName', 'phone', 'provider', 'confirmed', 'blocked', 'isPlatformAdmin', 'createdAt', 'updatedAt'],
+  });
+}
+
+async function findMatchingLocalUser(identifier: string, password: string) {
+  const normalizedIdentifier = normalizeLoginIdentifier(identifier);
+  if (!normalizedIdentifier || !password) return null;
+
+  const preferEmail = looksLikeEmail(identifier);
+  const query = strapi.db.connection('up_users').select('*');
+  const candidates = preferEmail
+    ? await query.whereRaw("LOWER(TRIM(COALESCE(email, ''))) = ?", [normalizedIdentifier])
+    : await query.whereRaw("LOWER(TRIM(COALESCE(username, ''))) = ?", [normalizedIdentifier]);
+
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    return null;
+  }
+
+  const userService = strapi.plugin('users-permissions').service('user');
+  for (const candidate of candidates) {
+    if (normalizeText(candidate?.provider || 'local') !== 'local') continue;
+    if (!candidate?.password) continue;
+
+    const valid = await userService.validatePassword(password, candidate.password);
+    if (valid) return candidate;
+  }
+
+  return null;
+}
+
 function extractMediaUrl(media: any): string | null {
   if (!media) return null;
   if (typeof media.url === 'string' && media.url.trim()) return media.url.trim();
@@ -43,9 +91,12 @@ async function findActiveTenantByCode(tenantCode: string) {
       },
       tenantStatus: 'active',
     },
-    select: ['id', 'name', 'code', 'shortName'],
+    select: ['id', 'name', 'code', 'shortName', 'slogan'],
     populate: {
       logo: {
+        select: ['url'],
+      },
+      banner: {
         select: ['url'],
       },
     },
@@ -74,22 +125,28 @@ async function findAplicantRoleIdForTenant(tenantId: number) {
   return Number(tenantRole?.role?.id || 0) || null;
 }
 
-async function findActiveCampaignByCode(campaignCode: string) {
-  return strapi.db.query(CAMPAIGN_UID).findOne({
-    where: {
-      code: {
-        $eqi: campaignCode,
-      },
-      isActive: true,
-      campaignStatus: 'open',
+async function findCampaignByCode(campaignCode: string, options?: { tenantId?: number | string; includeNonOpen?: boolean }) {
+  const baseWhere = {
+    code: {
+      $eqi: campaignCode,
     },
-    select: ['id', 'name', 'code', 'description', 'campaignStatus', 'isActive'],
+    isActive: true,
+    ...(options?.includeNonOpen ? {} : { campaignStatus: 'open' }),
+  };
+
+  return strapi.db.query(CAMPAIGN_UID).findOne({
+    where: options?.tenantId ? mergeTenantWhere(baseWhere, options.tenantId) : baseWhere,
+    select: ['id', 'name', 'code', 'description', 'campaignStatus', 'isActive', 'scoreReportTemplateHtml', 'scorePublishedAt'],
     populate: {
       tenant: {
-        select: ['id', 'code', 'name'],
+        select: ['id', 'code', 'name', 'note'],
       },
     },
   });
+}
+
+async function findActiveCampaignByCode(campaignCode: string, tenantId?: number | string) {
+  return findCampaignByCode(campaignCode, { tenantId, includeNonOpen: false });
 }
 
 async function activateUserTenantIfNeeded(userTenantId: number) {
@@ -163,6 +220,48 @@ function normalizePotentialToken(input: unknown): string {
 }
 
 export default {
+  async localCaseInsensitive(ctx) {
+    try {
+      const body = ctx.request.body || {};
+      const identifier = normalizeText(body.identifier);
+      const password = typeof body.password === 'string' ? body.password : '';
+
+      if (!identifier || !password) {
+        return ctx.badRequest('identifier and password are required');
+      }
+
+      const user = await findMatchingLocalUser(identifier, password);
+      if (!user) {
+        return ctx.badRequest('Invalid identifier or password');
+      }
+
+      const store = strapi.store({ type: 'plugin', name: 'users-permissions' });
+      const advancedSettings = ((await store.get({ key: 'advanced' })) || {}) as Record<string, unknown>;
+      const requiresConfirmation = Boolean(advancedSettings?.email_confirmation);
+
+      if (requiresConfirmation && user.confirmed !== true) {
+        return ctx.badRequest('Your account email is not confirmed');
+      }
+
+      if (user.blocked === true) {
+        return ctx.badRequest('Your account has been blocked by an administrator');
+      }
+
+      const authUser = await loadAuthUserForResponse(Number(user.id));
+      if (!authUser?.id) {
+        return ctx.internalServerError('Failed to load authenticated user');
+      }
+
+      ctx.body = {
+        jwt: strapi.plugin('users-permissions').service('jwt').issue({ id: user.id }),
+        user: await sanitizeAuthUser(authUser, ctx),
+      };
+    } catch (error) {
+      strapi.log.error('[auth.localCaseInsensitive] unexpected error', error);
+      return ctx.internalServerError('Failed to login');
+    }
+  },
+
   async admissionCampaignByCode(ctx) {
     try {
       const campaignCode = normalizeText(ctx.params?.campaignCode).toLowerCase();
@@ -170,7 +269,21 @@ export default {
         return ctx.badRequest('campaignCode is required');
       }
 
-      const campaign = await findActiveCampaignByCode(campaignCode);
+		let tenantId: number | string | null = null;
+		try {
+			tenantId = resolveCurrentTenantId(ctx);
+		} catch {
+			tenantId = null;
+		}
+
+		if (!tenantId) {
+			return ctx.notFound('Admission campaign not found');
+		}
+
+		const campaign = await findCampaignByCode(campaignCode, {
+			tenantId,
+			includeNonOpen: true,
+		});
       if (!campaign?.id) {
         return ctx.notFound('Admission campaign not found');
       }
@@ -180,11 +293,16 @@ export default {
         code: normalizeText(campaign.code),
         name: normalizeText(campaign.name),
         description: normalizeText(campaign.description),
+		campaignStatus: normalizeText((campaign as any).campaignStatus || 'draft').toLowerCase() || 'draft',
+		status: normalizeText((campaign as any).campaignStatus || 'draft').toLowerCase() || 'draft',
+		scoreReportTemplateHtml: normalizeText((campaign as any).scoreReportTemplateHtml),
+		scorePublishedAt: (campaign as any).scorePublishedAt || null,
         tenant: campaign.tenant
           ? {
               id: campaign.tenant.id,
               code: normalizeText(campaign.tenant.code),
               name: normalizeText(campaign.tenant.name),
+              note: normalizeText((campaign.tenant as any).note),
             }
           : null,
       };
@@ -212,6 +330,9 @@ export default {
         name: normalizeText(tenant.name) || normalizeText(tenant.shortName) || normalizeText(tenant.code),
         logo: tenant.logo || null,
         logoUrl: extractMediaUrl(tenant.logo),
+        slogan: normalizeText((tenant as any).slogan),
+        banner: (tenant as any).banner || null,
+        bannerUrl: extractMediaUrl((tenant as any).banner),
       };
     } catch (error) {
       strapi.log.error('[auth.tenantByCode] unexpected error', error);
@@ -259,7 +380,7 @@ export default {
         return ctx.notFound('Tenant not found');
       }
 
-      const campaign = await findActiveCampaignByCode(campaignCode);
+      const campaign = await findActiveCampaignByCode(campaignCode, Number(tenant.id));
       if (!campaign?.id) {
         return ctx.notFound('Admission campaign not found');
       }
@@ -427,17 +548,17 @@ export default {
       const resetLink = await buildResetPasswordLink(ctx, resetPasswordToken);
 
       try {
-        const emailService = strapi.plugin('email')?.service('email');
-        if (emailService?.send) {
-          await emailService.send({
-            to: user.email,
-            subject: 'Password reset instructions',
-            text: `Use this link to reset your password: ${resetLink}`,
-            html: `<p>Use this link to reset your password:</p><p><a href="${resetLink}">${resetLink}</a></p>`,
-          });
-        } else {
-          strapi.log.warn('[auth.forgotPasswordSafe] email service is not available');
-        }
+        await enqueueMail({
+          mailType: 'forgot_password',
+          to: user.email,
+          subject: 'Password reset instructions',
+          text: `Use this link to reset your password: ${resetLink}`,
+          html: `<p>Use this link to reset your password:</p><p><a href="${resetLink}">${resetLink}</a></p>`,
+          metadata: {
+            userId: user.id,
+            source: 'auth.forgotPasswordSafe',
+          },
+        });
       } catch (mailError) {
         strapi.log.error('[auth.forgotPasswordSafe] failed to send reset email', mailError);
       }

@@ -1,0 +1,109 @@
+{
+  "kind": "collectionType",
+  "collectionName": "challenge_activities",
+  "info": {
+    "singularName": "challenge-activity",
+    "pluralName": "challenge-activities",
+    "displayName": "Challenge Activity",
+    "description": "Tenant-scoped accepted or pending activity ledger used by challenge scoring."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "challengeActivities",
+      "required": true
+    },
+    "challenge": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::fitness-challenge.fitness-challenge",
+      "inversedBy": "challengeActivities",
+      "required": true
+    },
+    "participant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::challenge-participant.challenge-participant",
+      "inversedBy": "challengeActivities",
+      "required": true
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "activity": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::strava-activity.strava-activity",
+      "inversedBy": "challengeActivities",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "PENDING",
+        "ACCEPTED",
+        "REJECTED",
+        "WITHDRAWN"
+      ],
+      "default": "PENDING",
+      "required": true
+    },
+    "submittedBy": {
+      "type": "enumeration",
+      "enum": [
+        "SYSTEM",
+        "USER",
+        "ADMIN"
+      ],
+      "default": "USER",
+      "required": true
+    },
+    "submittedAt": {
+      "type": "datetime"
+    },
+    "acceptedAt": {
+      "type": "datetime"
+    },
+    "acceptedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "rejectedAt": {
+      "type": "datetime"
+    },
+    "rejectedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "rejectReason": {
+      "type": "text"
+    },
+    "countedDistance": {
+      "type": "decimal"
+    },
+    "countedMovingTime": {
+      "type": "integer"
+    },
+    "countedElevationGain": {
+      "type": "decimal"
+    },
+    "countedActivityCount": {
+      "type": "integer",
+      "default": 1
+    },
+    "note": {
+      "type": "text"
+    }
+  }
+}

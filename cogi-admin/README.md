@@ -53,6 +53,23 @@ Lưu ý:
 - Nên dùng **Gmail App Password** (yêu cầu bật **2FA**) cho `SMTP_PASS`.
 - Không nên dùng mật khẩu Gmail thường vì dễ gặp lỗi xác thực `534`.
 
+## AI Chat Env
+
+Public Chat AI dùng một API key OpenAI dùng chung toàn hệ thống.
+
+Thêm vào file `.env`:
+
+```env
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_DEFAULT_MODEL=gpt-4o-mini
+```
+
+Lưu ý:
+
+- `OPENAI_API_KEY` là tùy chọn ở giai đoạn này. Nếu thiếu, hệ thống sẽ log warning và fallback về scripted reply.
+- `OPENAI_DEFAULT_MODEL` là tùy chọn. Nếu tenant đã cấu hình `ai-assistant.model` thì model của tenant sẽ được ưu tiên.
+- Không lưu API key vào tenant. Tenant chỉ cấu hình prompt, knowledge, model và trạng thái bật/tắt assistant.
+
 ## ⚙️ Deployment
 
 Strapi gives you many possible deployment options for your project including [Strapi Cloud](https://cloud.strapi.io). Browse the [deployment section of the documentation](https://docs.strapi.io/dev-docs/deployment) to find the best solution for your use case.

@@ -4,6 +4,21 @@ const CAMPAIGN_UID = 'api::campaign.campaign';
 const FORM_TEMPLATE_UID = 'api::form-template.form-template';
 const ADMISSION_APPLICATION_UID = 'api::admission-application.admission-application';
 const NOTIFICATION_TEMPLATE_UID = 'api::notification-template.notification-template';
+const DEFAULT_EXAM_CARD_REMINDER_EMAIL_SUBJECT = 'Nhắc in thẻ dự kiểm tra đánh giá năng lực';
+const DEFAULT_EXAM_CARD_REMINDER_EMAIL_HTML = [
+  '<p>Kính gửi Quý phụ huynh <strong>{{fullName}}</strong>,</p>',
+  '<p>Nhà trường trân trọng nhắc Quý phụ huynh kiểm tra và tải/in thẻ dự kiểm tra cho học sinh.</p>',
+  '<ul>',
+  '<li>Mã học sinh: <strong>{{studentCode}}</strong></li>',
+  '<li>Mã hồ sơ: <strong>{{applicationCode}}</strong></li>',
+  '<li>Số báo danh: <strong>{{candidateNumber}}</strong></li>',
+  '<li>Phòng kiểm tra: <strong>{{examRoom}}</strong></li>',
+  '<li>Địa điểm kiểm tra: <strong>{{examLocation}}</strong></li>',
+  '</ul>',
+  '<p>Quý phụ huynh vui lòng truy cập đường dẫn sau để xem thông tin chi tiết và tải/in thẻ dự kiểm tra:</p>',
+  '<p><a href="{{lookupUrl}}">{{lookupUrl}}</a></p>',
+  '<p>Trân trọng.</p>',
+].join('');
 
 class AdmissionManagementError extends Error {
   status: number;
@@ -35,6 +50,16 @@ function toNullableDate(value: unknown, label: string): string | null {
     throw new AdmissionManagementError(400, `${label} is invalid`);
   }
   return date.toISOString().slice(0, 10);
+}
+
+function toNullableDateTime(value: unknown, label: string): string | null {
+  const text = toText(value)
+  if (!text) return null
+  const date = new Date(text)
+  if (Number.isNaN(date.getTime())) {
+    throw new AdmissionManagementError(400, `${label} is invalid`)
+  }
+  return date.toISOString()
 }
 
 function toRequiredInteger(value: unknown, label: string): number {
@@ -71,6 +96,15 @@ function toBoolean(value: unknown, fallback = false): boolean {
   return ['true', '1', 'yes', 'on'].includes(text);
 }
 
+function buildActiveAdmissionWhere() {
+  return {
+    $or: [
+      { isDeleted: false },
+      { isDeleted: { $null: true } },
+    ],
+  };
+}
+
 function extractPayload(body: any): Record<string, unknown> {
   if (body?.data && typeof body.data === 'object' && !Array.isArray(body.data)) {
     return body.data as Record<string, unknown>;
@@ -81,6 +115,20 @@ function extractPayload(body: any): Record<string, unknown> {
   }
 
   return {};
+}
+
+function parseOptionalJson(value: unknown, label: string) {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'object') return value;
+
+  const text = toText(value);
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new AdmissionManagementError(400, `${label} must be valid JSON`);
+  }
 }
 
 
@@ -118,6 +166,16 @@ function normalizeCampaign(row: any, applicationCount = 0) {
     campaignStatus: readCampaignStatus(row),
     status: readCampaignStatus(row),
     description: row.description || '',
+    examCardTemplateHtml: row.examCardTemplateHtml || '',
+    scoreReportTemplateHtml: row.scoreReportTemplateHtml || '',
+    scorePublishedAt: row.scorePublishedAt || null,
+    examCardReminderEmailSubject: row.examCardReminderEmailSubject || DEFAULT_EXAM_CARD_REMINDER_EMAIL_SUBJECT,
+    examCardReminderEmailHtml: row.examCardReminderEmailHtml || DEFAULT_EXAM_CARD_REMINDER_EMAIL_HTML,
+    allowExamCardPrinting: row.allowExamCardPrinting === true,
+    examCardPrintStartAt: row.examCardPrintStartAt || null,
+    examCardPrintEndAt: row.examCardPrintEndAt || null,
+    reviewDisplayConfig: row.reviewDisplayConfig ?? null,
+    applicationStatusGuide: row.applicationStatusGuide ?? null,
     isActive: row.isActive !== false,
     formTemplateVersion: Number(row.formTemplateVersion || 0),
     formTemplate: row.formTemplate
@@ -252,11 +310,16 @@ async function getApplicationCountMap(campaignIds: number[], tenantId: number | 
 
   const rows = await strapi.db.query(ADMISSION_APPLICATION_UID).findMany({
     where: mergeTenantWhere({
-      campaign: {
-        id: {
-          $in: campaignIds,
+      $and: [
+        {
+          campaign: {
+            id: {
+              $in: campaignIds,
+            },
+          },
         },
-      },
+        buildActiveAdmissionWhere(),
+      ],
     }, tenantId),
     select: ['id'],
     populate: {
@@ -307,9 +370,16 @@ async function getCampaignUsageCountMap(formTemplateIds: number[], tenantId: num
 function buildCampaignData(payload: Record<string, unknown>, tenantId: number | string, formTemplateId: number) {
   const startDate = toNullableDate(payload.startDate, 'startDate');
   const endDate = toNullableDate(payload.endDate, 'endDate');
+  const examCardPrintStartAt = toNullableDateTime(payload.examCardPrintStartAt, 'examCardPrintStartAt')
+  const examCardPrintEndAt = toNullableDateTime(payload.examCardPrintEndAt, 'examCardPrintEndAt')
+  const scorePublishedAt = toNullableDateTime(payload.scorePublishedAt, 'scorePublishedAt')
 
   if (startDate && endDate && endDate < startDate) {
     throw new AdmissionManagementError(400, 'endDate must be greater than or equal to startDate');
+  }
+
+  if (examCardPrintStartAt && examCardPrintEndAt && new Date(examCardPrintEndAt).getTime() < new Date(examCardPrintStartAt).getTime()) {
+    throw new AdmissionManagementError(400, 'examCardPrintEndAt must be greater than or equal to examCardPrintStartAt')
   }
 
   return {
@@ -321,6 +391,16 @@ function buildCampaignData(payload: Record<string, unknown>, tenantId: number | 
     endDate,
     campaignStatus: toCampaignStatus(payload.campaignStatus ?? payload.status),
     description: toNullableText(payload.description),
+    examCardTemplateHtml: toNullableText(payload.examCardTemplateHtml),
+    scoreReportTemplateHtml: toNullableText(payload.scoreReportTemplateHtml),
+    scorePublishedAt,
+    examCardReminderEmailSubject: toNullableText(payload.examCardReminderEmailSubject) || DEFAULT_EXAM_CARD_REMINDER_EMAIL_SUBJECT,
+    examCardReminderEmailHtml: toNullableText(payload.examCardReminderEmailHtml) || DEFAULT_EXAM_CARD_REMINDER_EMAIL_HTML,
+    allowExamCardPrinting: toBoolean(payload.allowExamCardPrinting, false),
+    examCardPrintStartAt,
+    examCardPrintEndAt,
+    reviewDisplayConfig: parseOptionalJson(payload.reviewDisplayConfig, 'reviewDisplayConfig'),
+    applicationStatusGuide: parseOptionalJson(payload.applicationStatusGuide, 'applicationStatusGuide'),
     isActive: toBoolean(payload.isActive, true),
     formTemplate: formTemplateId,
     tenant: tenantId,
@@ -468,7 +548,13 @@ export async function createAdmissionCampaign(body: any, tenantId: number | stri
 
 export async function updateAdmissionCampaign(id: unknown, body: any, tenantId: number | string) {
   const campaign = await findCampaignOrThrow(id, tenantId);
-  const payload = extractPayload(body);
+  const rawPayload = extractPayload(body);
+  const payload: Record<string, unknown> = {
+    ...rawPayload,
+    ...(rawPayload.campaignStatus === undefined && rawPayload.status !== undefined
+      ? { campaignStatus: rawPayload.status }
+      : {}),
+  };
   const code = toRequiredText(payload.code ?? campaign.code, 'code');
   await ensureCampaignCodeAvailable(code, Number(campaign.id));
 
