@@ -1,0 +1,52 @@
+{
+  "kind": "collectionType",
+  "collectionName": "lucky_wheels",
+  "info": {
+    "singularName": "lucky-wheel",
+    "pluralName": "lucky-wheels",
+    "displayName": "Lucky Wheel",
+    "description": "Lucky Wheel campaigns"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "name": { "type": "string" },
+    "code": { "type": "string" },
+    "description": { "type": "text" },
+    "publicMessage": { "type": "text" },
+    "resultNotice": { "type": "text" },
+    "status": {
+      "type": "enumeration",
+      "enum": ["draft","opened","closed","cancelled"],
+      "default": "draft",
+      "required": true
+    },
+    "startAt": { "type": "datetime" },
+    "endAt": { "type": "datetime" },
+    "openedAt": { "type": "datetime" },
+    "closedAt": { "type": "datetime" },
+    "cancelledAt": { "type": "datetime" },
+    "participationMode": {
+      "type": "enumeration",
+      "enum": ["predefined","open"],
+      "default": "predefined",
+      "required": true
+    },
+    "participantFormConfig": { "type": "json" },
+    "allowNoPrize": { "type": "boolean", "default": true },
+    "maxParticipants": { "type": "integer", "min": 0 },
+    "isDeleted": { "type": "boolean", "default": false, "required": true },
+    "deletedAt": { "type": "datetime" },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "luckyWheels",
+      "required": true
+    },
+    "prizes": { "type": "relation", "relation": "oneToMany", "target": "api::lucky-wheel-prize.lucky-wheel-prize", "mappedBy": "luckyWheel" },
+    "participants": { "type": "relation", "relation": "oneToMany", "target": "api::lucky-wheel-participant.lucky-wheel-participant", "mappedBy": "luckyWheel" },
+    "spins": { "type": "relation", "relation": "oneToMany", "target": "api::lucky-wheel-spin.lucky-wheel-spin", "mappedBy": "luckyWheel" }
+  }
+}

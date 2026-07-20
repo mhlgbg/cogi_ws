@@ -1,0 +1,30 @@
+{
+  "kind": "collectionType",
+  "collectionName": "lucky_wheel_participants",
+  "info": {
+    "singularName": "lucky-wheel-participant",
+    "pluralName": "lucky-wheel-participants",
+    "displayName": "Lucky Wheel Participant",
+    "description": "Participants of a Lucky Wheel campaign"
+  },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "participantCode": { "type": "string", "required": true },
+    "fullName": { "type": "string" },
+    "phone": { "type": "string" },
+    "email": { "type": "string" },
+    "className": { "type": "string" },
+    "source": { "type": "enumeration", "enum": ["admin_created","imported","generated","self_registered"], "default": "admin_created" },
+    "status": { "type": "enumeration", "enum": ["eligible","used","blocked","cancelled"], "default": "eligible", "required": true },
+    "registeredAt": { "type": "datetime" },
+    "usedAt": { "type": "datetime" },
+    "blockedAt": { "type": "datetime" },
+    "cancelledAt": { "type": "datetime" },
+    "note": { "type": "text" },
+    "isDeleted": { "type": "boolean", "default": false, "required": true },
+    "deletedAt": { "type": "datetime" },
+    "tenant": { "type": "relation", "relation": "manyToOne", "target": "api::tenant.tenant", "inversedBy": "luckyWheelParticipants", "required": true },
+    "luckyWheel": { "type": "relation", "relation": "manyToOne", "target": "api::lucky-wheel.lucky-wheel", "inversedBy": "participants", "required": true },
+    "spins": { "type": "relation", "relation": "oneToMany", "target": "api::lucky-wheel-spin.lucky-wheel-spin", "mappedBy": "participant" }
+  }
+}

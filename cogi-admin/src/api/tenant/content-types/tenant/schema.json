@@ -391,5 +391,30 @@
       "target": "api::challenge-activity.challenge-activity",
       "mappedBy": "tenant"
     }
+    ,
+    "luckyWheels": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::lucky-wheel.lucky-wheel",
+      "mappedBy": "tenant"
+    },
+    "luckyWheelPrizes": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::lucky-wheel-prize.lucky-wheel-prize",
+      "mappedBy": "tenant"
+    },
+    "luckyWheelParticipants": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::lucky-wheel-participant.lucky-wheel-participant",
+      "mappedBy": "tenant"
+    },
+    "luckyWheelSpins": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::lucky-wheel-spin.lucky-wheel-spin",
+      "mappedBy": "tenant"
+    }
   }
 }

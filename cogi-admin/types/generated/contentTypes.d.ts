@@ -3171,6 +3171,319 @@ export interface ApiLearningPathLearningPath
   };
 }
 
+export interface ApiLuckyWheelParticipantLuckyWheelParticipant
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'lucky_wheel_participants';
+  info: {
+    description: 'Participants of a Lucky Wheel campaign';
+    displayName: 'Lucky Wheel Participant';
+    pluralName: 'lucky-wheel-participants';
+    singularName: 'lucky-wheel-participant';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    blockedAt: Schema.Attribute.DateTime;
+    cancelledAt: Schema.Attribute.DateTime;
+    className: Schema.Attribute.String;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    deletedAt: Schema.Attribute.DateTime;
+    email: Schema.Attribute.String;
+    fullName: Schema.Attribute.String;
+    isDeleted: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::lucky-wheel-participant.lucky-wheel-participant'
+    > &
+      Schema.Attribute.Private;
+    luckyWheel: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::lucky-wheel.lucky-wheel'
+    > &
+      Schema.Attribute.Required;
+    note: Schema.Attribute.Text;
+    participantCode: Schema.Attribute.String & Schema.Attribute.Required;
+    phone: Schema.Attribute.String;
+    publishedAt: Schema.Attribute.DateTime;
+    registeredAt: Schema.Attribute.DateTime;
+    source: Schema.Attribute.Enumeration<
+      ['admin_created', 'imported', 'generated', 'self_registered']
+    > &
+      Schema.Attribute.DefaultTo<'admin_created'>;
+    spins: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::lucky-wheel-spin.lucky-wheel-spin'
+    >;
+    status: Schema.Attribute.Enumeration<
+      ['eligible', 'used', 'blocked', 'cancelled']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'eligible'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    usedAt: Schema.Attribute.DateTime;
+  };
+}
+
+export interface ApiLuckyWheelPrizeLuckyWheelPrize
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'lucky_wheel_prizes';
+  info: {
+    description: 'Prize or outcome segments of a Lucky Wheel campaign';
+    displayName: 'Lucky Wheel Prize';
+    pluralName: 'lucky-wheel-prizes';
+    singularName: 'lucky-wheel-prize';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    deletedAt: Schema.Attribute.DateTime;
+    description: Schema.Attribute.Text;
+    displayColor: Schema.Attribute.String;
+    displayOrder: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    image: Schema.Attribute.Media<'images'>;
+    imageFile: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::file-asset.file-asset'
+    >;
+    isActive: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    isDeleted: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    isNoPrize: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    isUnlimited: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::lucky-wheel-prize.lucky-wheel-prize'
+    > &
+      Schema.Attribute.Private;
+    luckyWheel: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::lucky-wheel.lucky-wheel'
+    > &
+      Schema.Attribute.Required;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    quantity: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      >;
+    remainingQuantity: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      >;
+    resultMessage: Schema.Attribute.Text;
+    shortLabel: Schema.Attribute.String;
+    spins: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::lucky-wheel-spin.lucky-wheel-spin'
+    >;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    textColor: Schema.Attribute.String;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    weight: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<1>;
+  };
+}
+
+export interface ApiLuckyWheelSpinLuckyWheelSpin
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'lucky_wheel_spins';
+  info: {
+    description: 'Recorded Lucky Wheel spin results';
+    displayName: 'Lucky Wheel Spin';
+    pluralName: 'lucky-wheel-spins';
+    singularName: 'lucky-wheel-spin';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    claimedAt: Schema.Attribute.DateTime;
+    claimedByName: Schema.Attribute.String;
+    claimNote: Schema.Attribute.Text;
+    claimStatus: Schema.Attribute.Enumeration<
+      ['not_applicable', 'unclaimed', 'claimed']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'unclaimed'>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    deletedAt: Schema.Attribute.DateTime;
+    eligiblePrizesSnapshot: Schema.Attribute.JSON;
+    ipAddress: Schema.Attribute.String;
+    isDeleted: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::lucky-wheel-spin.lucky-wheel-spin'
+    > &
+      Schema.Attribute.Private;
+    luckyWheel: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::lucky-wheel.lucky-wheel'
+    > &
+      Schema.Attribute.Required;
+    participant: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::lucky-wheel-participant.lucky-wheel-participant'
+    > &
+      Schema.Attribute.Required;
+    participantClassNameSnapshot: Schema.Attribute.String;
+    participantCodeSnapshot: Schema.Attribute.String &
+      Schema.Attribute.Required;
+    participantEmailSnapshot: Schema.Attribute.String;
+    participantNameSnapshot: Schema.Attribute.String;
+    participantPhoneSnapshot: Schema.Attribute.String;
+    prize: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::lucky-wheel-prize.lucky-wheel-prize'
+    >;
+    prizeDescriptionSnapshot: Schema.Attribute.Text;
+    prizeDisplayColorSnapshot: Schema.Attribute.String;
+    prizeDocumentIdSnapshot: Schema.Attribute.String;
+    prizeIdSnapshot: Schema.Attribute.String;
+    prizeImageSnapshot: Schema.Attribute.JSON;
+    prizeIsNoPrizeSnapshot: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
+    prizeNameSnapshot: Schema.Attribute.String & Schema.Attribute.Required;
+    prizeResultMessageSnapshot: Schema.Attribute.Text;
+    prizeTextColorSnapshot: Schema.Attribute.String;
+    publishedAt: Schema.Attribute.DateTime;
+    randomValue: Schema.Attribute.String;
+    requestId: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    spunAt: Schema.Attribute.DateTime & Schema.Attribute.Required;
+    status: Schema.Attribute.Enumeration<
+      ['completed', 'claimed', 'cancelled']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'completed'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    userAgent: Schema.Attribute.Text;
+    verificationCode: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+  };
+}
+
+export interface ApiLuckyWheelLuckyWheel extends Struct.CollectionTypeSchema {
+  collectionName: 'lucky_wheels';
+  info: {
+    description: 'Lucky Wheel campaigns';
+    displayName: 'Lucky Wheel';
+    pluralName: 'lucky-wheels';
+    singularName: 'lucky-wheel';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    allowNoPrize: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    cancelledAt: Schema.Attribute.DateTime;
+    closedAt: Schema.Attribute.DateTime;
+    code: Schema.Attribute.String;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    deletedAt: Schema.Attribute.DateTime;
+    description: Schema.Attribute.Text;
+    endAt: Schema.Attribute.DateTime;
+    isDeleted: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::lucky-wheel.lucky-wheel'
+    > &
+      Schema.Attribute.Private;
+    maxParticipants: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      >;
+    name: Schema.Attribute.String;
+    openedAt: Schema.Attribute.DateTime;
+    participantFormConfig: Schema.Attribute.JSON;
+    participants: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::lucky-wheel-participant.lucky-wheel-participant'
+    >;
+    participationMode: Schema.Attribute.Enumeration<['predefined', 'open']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'predefined'>;
+    prizes: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::lucky-wheel-prize.lucky-wheel-prize'
+    >;
+    publicMessage: Schema.Attribute.Text;
+    publishedAt: Schema.Attribute.DateTime;
+    resultNotice: Schema.Attribute.Text;
+    spins: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::lucky-wheel-spin.lucky-wheel-spin'
+    >;
+    startAt: Schema.Attribute.DateTime;
+    status: Schema.Attribute.Enumeration<
+      ['draft', 'opened', 'closed', 'cancelled']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiMailLogMailLog extends Struct.CollectionTypeSchema {
   collectionName: 'mail_logs';
   info: {
@@ -5466,6 +5779,22 @@ export interface ApiTenantTenant extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private;
     logo: Schema.Attribute.Media<'images'>;
+    luckyWheelParticipants: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::lucky-wheel-participant.lucky-wheel-participant'
+    >;
+    luckyWheelPrizes: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::lucky-wheel-prize.lucky-wheel-prize'
+    >;
+    luckyWheels: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::lucky-wheel.lucky-wheel'
+    >;
+    luckyWheelSpins: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::lucky-wheel-spin.lucky-wheel-spin'
+    >;
     name: Schema.Attribute.String & Schema.Attribute.Required;
     note: Schema.Attribute.Text;
     notificationTemplates: Schema.Attribute.Relation<
@@ -6416,6 +6745,10 @@ declare module '@strapi/strapi' {
       'api::learning-object.learning-object': ApiLearningObjectLearningObject;
       'api::learning-path-item.learning-path-item': ApiLearningPathItemLearningPathItem;
       'api::learning-path.learning-path': ApiLearningPathLearningPath;
+      'api::lucky-wheel-participant.lucky-wheel-participant': ApiLuckyWheelParticipantLuckyWheelParticipant;
+      'api::lucky-wheel-prize.lucky-wheel-prize': ApiLuckyWheelPrizeLuckyWheelPrize;
+      'api::lucky-wheel-spin.lucky-wheel-spin': ApiLuckyWheelSpinLuckyWheelSpin;
+      'api::lucky-wheel.lucky-wheel': ApiLuckyWheelLuckyWheel;
       'api::mail-log.mail-log': ApiMailLogMailLog;
       'api::notification-template.notification-template': ApiNotificationTemplateNotificationTemplate;
       'api::payment-allocation.payment-allocation': ApiPaymentAllocationPaymentAllocation;

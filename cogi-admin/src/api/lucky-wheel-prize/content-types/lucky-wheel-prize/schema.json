@@ -1,0 +1,33 @@
+{
+  "kind": "collectionType",
+  "collectionName": "lucky_wheel_prizes",
+  "info": {
+    "singularName": "lucky-wheel-prize",
+    "pluralName": "lucky-wheel-prizes",
+    "displayName": "Lucky Wheel Prize",
+    "description": "Prize or outcome segments of a Lucky Wheel campaign"
+  },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "name": { "type": "string", "required": true },
+    "shortLabel": { "type": "string" },
+    "description": { "type": "text" },
+    "resultMessage": { "type": "text" },
+    "image": { "type": "media", "multiple": false, "allowedTypes": ["images"] },
+    "imageFile": { "type": "relation", "relation": "manyToOne", "target": "api::file-asset.file-asset" },
+    "displayColor": { "type": "string" },
+    "textColor": { "type": "string" },
+    "displayOrder": { "type": "integer", "default": 0 },
+    "quantity": { "type": "integer", "min": 0 },
+    "remainingQuantity": { "type": "integer", "min": 0 },
+    "isUnlimited": { "type": "boolean", "default": false, "required": true },
+    "weight": { "type": "integer", "min": 1, "default": 1, "required": true },
+    "isNoPrize": { "type": "boolean", "default": false, "required": true },
+    "isActive": { "type": "boolean", "default": true, "required": true },
+    "isDeleted": { "type": "boolean", "default": false, "required": true },
+    "deletedAt": { "type": "datetime" },
+    "tenant": { "type": "relation", "relation": "manyToOne", "target": "api::tenant.tenant", "inversedBy": "luckyWheelPrizes", "required": true },
+    "luckyWheel": { "type": "relation", "relation": "manyToOne", "target": "api::lucky-wheel.lucky-wheel", "inversedBy": "prizes", "required": true },
+    "spins": { "type": "relation", "relation": "oneToMany", "target": "api::lucky-wheel-spin.lucky-wheel-spin", "mappedBy": "prize" }
+  }
+}
