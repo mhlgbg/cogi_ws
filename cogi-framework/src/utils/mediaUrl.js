@@ -10,7 +10,16 @@ function getWindowOrigin() {
 
 export function getApiOrigin() {
   try {
-    const apiBase = String(api.defaults.baseURL || getWindowOrigin()).trim()
+    let apiBase = String(api.defaults.baseURL || '').trim()
+    // If apiBase is empty or a relative path (starts with '/'), prefer explicit env var
+    if (!apiBase || apiBase.startsWith('/')) {
+      const envCandidate = String(import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_BACKEND_URL || '').trim()
+      if (envCandidate && /^https?:\/\//i.test(envCandidate)) {
+        apiBase = envCandidate
+      } else {
+        apiBase = getWindowOrigin()
+      }
+    }
     return new URL(apiBase, getWindowOrigin()).origin
   } catch {
     return getWindowOrigin()

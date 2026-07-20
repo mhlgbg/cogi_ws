@@ -23,6 +23,7 @@ import CandidateExamRecheckLookupPage from '../modules/admission-v1/pages/Candid
 import AdmissionPublicExamCardPage from '../modules/admission-v1/pages/AdmissionPublicExamCardPage'
 import CandidateExamCardPage from '../modules/admission-management/pages/CandidateExamCardPage'
 import PublicPageDetailPage from '../pages/public/PublicPageDetailPage'
+import LuckyWheelPublicPage from '../pages/public/LuckyWheelPublicPage'
 import TenantEntryRedirect from '../components/TenantEntryRedirect'
 import PublicLayout from '../layouts/PublicLayout'
 import PublicChatShell from '../components/public/PublicChatShell'
@@ -157,6 +158,7 @@ export default function AppRouter() {
             </TenantRoute>
           )}
         >
+          <Route path="lucky-wheel/:code" element={<LuckyWheelPublicPage />} />
           <Route path="journal" element={<JournalHomePage />} />
           <Route path="page/:slug" element={<PublicPageDetailPage />} />
           <Route path="article/:slug" element={<ArticleDetailPage />} />
@@ -175,6 +177,7 @@ export default function AppRouter() {
             </TenantRoute>
           )}
         >
+          <Route path="lucky-wheel/:code" element={<LuckyWheelPublicPage />} />
           <Route index element={<JournalHomePage />} />
           <Route path="journal" element={<JournalHomePage />} />
           <Route path="page/:slug" element={<PublicPageDetailPage />} />
