@@ -110,7 +110,15 @@ export async function getStravaActivities(params = {}) {
 }
 
 export async function createStravaConnectUrl() {
-  const response = await api.post('/strava/connect-url')
+  const frontendOrigin = typeof window !== 'undefined'
+    ? String(window.location.origin || '').trim()
+    : ''
+
+  const response = await api.post('/strava/connect-url', {}, {
+    headers: frontendOrigin
+      ? { 'x-frontend-origin': frontendOrigin }
+      : undefined,
+  })
   return extractApiPayload(response)
 }
 

@@ -30,7 +30,44 @@ import {
 } from '../../modules/crm/services/quickMessagePublicService'
 
 const pendingAutoAccessByCode = new Map()
-const openedTokenKeys = new Set()
+const OPEN_RESULT_CACHE_TTL_MS = 5000
+const openedTokenRequests = new Map()
+
+function clearOpenedTokenRequest(key) {
+  const cached = openedTokenRequests.get(key)
+  if (cached?.cleanupTimer) {
+    window.clearTimeout(cached.cleanupTimer)
+  }
+  openedTokenRequests.delete(key)
+}
+
+function getOrCreateOpenedTokenRequest(key, factory) {
+  const existing = openedTokenRequests.get(key)
+  if (existing?.promise) {
+    return existing.promise
+  }
+
+  const entry = {
+    promise: null,
+    cleanupTimer: null,
+  }
+
+  entry.promise = Promise.resolve()
+    .then(factory)
+    .then((data) => {
+      entry.cleanupTimer = window.setTimeout(() => {
+        clearOpenedTokenRequest(key)
+      }, OPEN_RESULT_CACHE_TTL_MS)
+      return data
+    })
+    .catch((error) => {
+      clearOpenedTokenRequest(key)
+      throw error
+    })
+
+  openedTokenRequests.set(key, entry)
+  return entry.promise
+}
 
 function toText(value) {
   if (value === null || value === undefined) return ''
@@ -197,23 +234,17 @@ export default function QuickMessagePublicPage() {
     }
 
     const openKey = `${code}:${token}`
-    if (openedTokenKeys.has(openKey)) {
-      return
-    }
-
-    openedTokenKeys.add(openKey)
     openRequestKeyRef.current = openKey
     setPhase('opening_content')
     setPageError('')
 
     try {
-      const data = await openQuickMessage(code, token)
+      const data = await getOrCreateOpenedTokenRequest(openKey, () => openQuickMessage(code, token))
       setContentData(data)
       setPhase('content_ready')
       setPinValue('')
       setPinError('')
     } catch (error) {
-      openedTokenKeys.delete(openKey)
       const errorCode = getApiErrorCode(error)
       if (errorCode === 'INVALID_PUBLIC_ACCESS_TOKEN' || errorCode === 'PUBLIC_ACCESS_REVOKED') {
         setPublicToken('')
@@ -303,7 +334,7 @@ export default function QuickMessagePublicPage() {
   async function handleReauthenticate() {
     setPublicToken('')
     setContentData(null)
-    openedTokenKeys.delete(openRequestKeyRef.current)
+    clearOpenedTokenRequest(openRequestKeyRef.current)
     openRequestKeyRef.current = ''
     await performLookup({ autoAccess: true })
   }
