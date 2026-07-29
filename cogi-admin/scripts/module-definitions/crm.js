@@ -43,5 +43,12 @@ module.exports = {
       description: 'Manage tenant AI knowledge records',
       path: '/ai/knowledge',
     },
+    {
+      name: 'Quick Message Management',
+      key: 'crms.quick-message.manage',
+      order: 6,
+      description: 'Manage tenant quick messages, accesses and replies',
+      path: '/quick-messages',
+    },
   ],
 };

@@ -265,6 +265,75 @@ export default {
       ctx.body = result.buffer;
     } catch (e) { return handleError(ctx, e); }
   },
+  async verifyResult(ctx) {
+    const user = await requireAuthenticatedUser(ctx);
+    if (!user) return;
+    try {
+      const svc = strapi.service('api::lucky-wheel.lucky-wheel');
+      const tenantId = await svc.getTenantContext(ctx);
+      const data = await svc.verifyResultByCode(ctx.params?.id, ctx.params?.verificationCode, tenantId);
+      ctx.body = { data };
+    } catch (e) { return handleError(ctx, e); }
+  },
+  async claimResult(ctx) {
+    const user = await requireAuthenticatedUser(ctx);
+    if (!user) return;
+    try {
+      const svc = strapi.service('api::lucky-wheel.lucky-wheel');
+      const tenantId = await svc.getTenantContext(ctx);
+      const data = await svc.claimResult(ctx.params?.id, ctx.params?.spinId, ctx.request?.body || {}, tenantId, ctx.state.user);
+      ctx.body = { data };
+    } catch (e) {
+      if (e?.current) {
+        const status = Number(e.status || 409);
+        ctx.status = status;
+        ctx.body = { error: e.message || 'ERROR', data: e.current };
+        return;
+      }
+      return handleError(ctx, e);
+    }
+  },
+  async presentation(ctx) {
+    const user = await requireAuthenticatedUser(ctx);
+    if (!user) return;
+    try {
+      const svc = strapi.service('api::lucky-wheel.lucky-wheel');
+      const tenantId = await svc.getTenantContext(ctx);
+      const data = await svc.getPresentationData(ctx.params?.id, tenantId, ctx);
+      ctx.body = { data };
+    } catch (e) { return handleError(ctx, e); }
+  },
+  async presentationStatus(ctx) {
+    const user = await requireAuthenticatedUser(ctx);
+    if (!user) return;
+    try {
+      const svc = strapi.service('api::lucky-wheel.lucky-wheel');
+      const tenantId = await svc.getTenantContext(ctx);
+      const data = await svc.getPresentationStatus(ctx.params?.id, tenantId);
+      ctx.body = { data };
+    } catch (e) { return handleError(ctx, e); }
+  },
+  async presentationEligibleParticipants(ctx) {
+    const user = await requireAuthenticatedUser(ctx);
+    if (!user) return;
+    try {
+      const svc = strapi.service('api::lucky-wheel.lucky-wheel');
+      const tenantId = await svc.getTenantContext(ctx);
+      const result = await svc.listPresentationEligibleParticipants(ctx.params?.id, ctx.request?.query || {}, tenantId);
+      const rows = (result.rows || []).map((r) => ({ id: r.id, attributes: { ...r } }));
+      ctx.body = { data: rows, meta: { pagination: result.pagination || {} } };
+    } catch (e) { return handleError(ctx, e); }
+  },
+  async presentationSpinForParticipant(ctx) {
+    const user = await requireAuthenticatedUser(ctx);
+    if (!user) return;
+    try {
+      const svc = strapi.service('api::lucky-wheel.lucky-wheel');
+      const tenantId = await svc.getTenantContext(ctx);
+      const data = await svc.spinForParticipantByAdmin(ctx.params?.id, ctx.request?.body || {}, tenantId, ctx.state.user, ctx);
+      ctx.body = { data };
+    } catch (e) { return handleError(ctx, e); }
+  },
   async getParticipantFormConfig(ctx) {
     const user = await requireAuthenticatedUser(ctx);
     if (!user) return;

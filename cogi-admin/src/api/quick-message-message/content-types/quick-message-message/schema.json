@@ -1,0 +1,69 @@
+{
+  "kind": "collectionType",
+  "collectionName": "quick_message_messages",
+  "info": {
+    "singularName": "quick-message-message",
+    "pluralName": "quick-message-messages",
+    "displayName": "Quick Message Message",
+    "description": "Tenant-scoped admin/public conversation messages for one quick message access code."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "quickMessageMessages",
+      "required": true
+    },
+    "message": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::quick-message.quick-message",
+      "inversedBy": "messages",
+      "required": true
+    },
+    "access": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::quick-message-access.quick-message-access",
+      "inversedBy": "messages",
+      "required": true
+    },
+    "senderUser": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "senderType": {
+      "type": "enumeration",
+      "enum": [
+        "ADMIN",
+        "PUBLIC",
+        "SYSTEM"
+      ],
+      "required": true,
+      "default": "ADMIN"
+    },
+    "senderDisplayName": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "content": {
+      "type": "text",
+      "required": true
+    },
+    "readByAdminAt": {
+      "type": "datetime"
+    },
+    "readByPublicAt": {
+      "type": "datetime"
+    },
+    "metadata": {
+      "type": "json"
+    }
+  }
+}

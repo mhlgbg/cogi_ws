@@ -1,6 +1,7 @@
 // import type { Core } from '@strapi/strapi';
 import { initServiceSalesMasterData } from './bootstrap/init-service-sales-master-data';
 import { seedSurvey } from './bootstrap/seed-survey';
+import { startStravaSyncRunner, stopStravaSyncRunner } from './bootstrap/strava-sync-runner';
 
 const WINDOWS_TEMP_UNLINK_EPERM =
   process.platform === 'win32'
@@ -87,5 +88,10 @@ export default {
 
     await initServiceSalesMasterData(strapi);
     await seedSurvey(strapi);
+    await startStravaSyncRunner(strapi);
+  },
+
+  async destroy({ strapi } /* : { strapi: Core.Strapi } */) {
+    await stopStravaSyncRunner(strapi);
   },
 };

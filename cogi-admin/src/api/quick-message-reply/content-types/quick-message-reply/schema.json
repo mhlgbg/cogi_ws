@@ -1,0 +1,87 @@
+{
+  "kind": "collectionType",
+  "collectionName": "quick_message_replies",
+  "info": {
+    "singularName": "quick-message-reply",
+    "pluralName": "quick-message-replies",
+    "displayName": "Quick Message Reply",
+    "description": "Tenant-scoped reply submitted through a quick message access code."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "quickMessageReplies",
+      "required": true
+    },
+    "message": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::quick-message.quick-message",
+      "inversedBy": "replies",
+      "required": true
+    },
+    "access": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::quick-message-access.quick-message-access",
+      "inversedBy": "replies",
+      "required": true
+    },
+    "replyType": {
+      "type": "enumeration",
+      "enum": [
+        "quick",
+        "text"
+      ],
+      "default": "quick",
+      "required": true
+    },
+    "quickResponse": {
+      "type": "enumeration",
+      "enum": [
+        "received",
+        "opened",
+        "understood",
+        "need_help",
+        "cannot_open",
+        "agree",
+        "disagree"
+      ]
+    },
+    "content": {
+      "type": "text"
+    },
+    "responderName": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "clientSessionId": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "ipHash": {
+      "type": "string",
+      "maxLength": 128
+    },
+    "userAgent": {
+      "type": "text"
+    },
+    "isRead": {
+      "type": "boolean",
+      "default": false,
+      "required": true
+    },
+    "readAt": {
+      "type": "datetime"
+    },
+    "metadata": {
+      "type": "json"
+    }
+  }
+}

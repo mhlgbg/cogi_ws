@@ -1,0 +1,164 @@
+{
+  "kind": "collectionType",
+  "collectionName": "strava_sync_jobs",
+  "info": {
+    "singularName": "strava-sync-job",
+    "pluralName": "strava-sync-jobs",
+    "displayName": "Strava Sync Job",
+    "description": "Database-backed Strava synchronization job with resumable checkpoints for a tenant-scoped internal user."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "stravaSyncJobs",
+      "required": true
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "connection": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::strava-connection.strava-connection",
+      "inversedBy": "syncJobs",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "queued",
+        "running",
+        "partial_ready",
+        "completed",
+        "failed",
+        "cancelled"
+      ],
+      "default": "queued",
+      "required": true
+    },
+    "phase": {
+      "type": "enumeration",
+      "enum": [
+        "preparing",
+        "syncing_recent",
+        "syncing_history",
+        "rebuilding_snapshot",
+        "finalizing"
+      ],
+      "default": "preparing",
+      "required": true
+    },
+    "syncMode": {
+      "type": "enumeration",
+      "enum": [
+        "initial",
+        "incremental",
+        "retry"
+      ],
+      "default": "initial",
+      "required": true
+    },
+    "currentPage": {
+      "type": "integer",
+      "default": 1,
+      "min": 1,
+      "required": true
+    },
+    "perPage": {
+      "type": "integer",
+      "default": 100,
+      "min": 1,
+      "required": true
+    },
+    "oldestSyncedAt": {
+      "type": "datetime"
+    },
+    "newestSyncedAt": {
+      "type": "datetime"
+    },
+    "processedActivities": {
+      "type": "integer",
+      "default": 0,
+      "min": 0,
+      "required": true
+    },
+    "createdActivities": {
+      "type": "integer",
+      "default": 0,
+      "min": 0,
+      "required": true
+    },
+    "updatedActivities": {
+      "type": "integer",
+      "default": 0,
+      "min": 0,
+      "required": true
+    },
+    "skippedActivities": {
+      "type": "integer",
+      "default": 0,
+      "min": 0,
+      "required": true
+    },
+    "failedActivities": {
+      "type": "integer",
+      "default": 0,
+      "min": 0,
+      "required": true
+    },
+    "heartbeatAt": {
+      "type": "datetime"
+    },
+    "retryCount": {
+      "type": "integer",
+      "default": 0,
+      "min": 0,
+      "required": true
+    },
+    "requestedAt": {
+      "type": "datetime"
+    },
+    "startedAt": {
+      "type": "datetime"
+    },
+    "completedAt": {
+      "type": "datetime"
+    },
+    "failedAt": {
+      "type": "datetime"
+    },
+    "cancelledAt": {
+      "type": "datetime"
+    },
+    "claimedAt": {
+      "type": "datetime"
+    },
+    "claimedBy": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "nextRetryAt": {
+      "type": "datetime"
+    },
+    "lastErrorCode": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "lastErrorMessage": {
+      "type": "text"
+    },
+    "metadata": {
+      "type": "json",
+      "default": {}
+    }
+  }
+}

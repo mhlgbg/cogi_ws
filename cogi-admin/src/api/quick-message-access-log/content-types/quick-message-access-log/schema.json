@@ -1,0 +1,57 @@
+{
+  "kind": "collectionType",
+  "collectionName": "quick_message_access_logs",
+  "info": {
+    "singularName": "quick-message-access-log",
+    "pluralName": "quick-message-access-logs",
+    "displayName": "Quick Message Access Log",
+    "description": "Tenant-scoped access and activity events for one quick message access code."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "quickMessageAccessLogs",
+      "required": true
+    },
+    "message": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::quick-message.quick-message",
+      "inversedBy": "accessLogs",
+      "required": true
+    },
+    "access": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::quick-message-access.quick-message-access",
+      "inversedBy": "accessLogs",
+      "required": true
+    },
+    "eventType": {
+      "type": "string",
+      "required": true,
+      "maxLength": 80
+    },
+    "success": {
+      "type": "boolean",
+      "default": true,
+      "required": true
+    },
+    "ipAddress": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "userAgent": {
+      "type": "text"
+    },
+    "metadata": {
+      "type": "json"
+    }
+  }
+}

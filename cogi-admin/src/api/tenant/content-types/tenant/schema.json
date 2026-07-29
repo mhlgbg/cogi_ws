@@ -373,6 +373,12 @@
       "target": "api::strava-activity.strava-activity",
       "mappedBy": "tenant"
     },
+    "stravaSyncJobs": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::strava-sync-job.strava-sync-job",
+      "mappedBy": "tenant"
+    },
     "fitnessChallenges": {
       "type": "relation",
       "relation": "oneToMany",
@@ -414,6 +420,48 @@
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::lucky-wheel-spin.lucky-wheel-spin",
+      "mappedBy": "tenant"
+    },
+    "registrationCampaigns": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::registration-campaign.registration-campaign",
+      "mappedBy": "tenant"
+    },
+    "campaignRegistrations": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::campaign-registration.campaign-registration",
+      "mappedBy": "tenant"
+    },
+    "quickMessages": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::quick-message.quick-message",
+      "mappedBy": "tenant"
+    },
+    "quickMessageAccesses": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::quick-message-access.quick-message-access",
+      "mappedBy": "tenant"
+    },
+    "quickMessageReplies": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::quick-message-reply.quick-message-reply",
+      "mappedBy": "tenant"
+    },
+    "quickMessageAccessLogs": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::quick-message-access-log.quick-message-access-log",
+      "mappedBy": "tenant"
+    },
+    "quickMessageMessages": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::quick-message-message.quick-message-message",
       "mappedBy": "tenant"
     }
   }

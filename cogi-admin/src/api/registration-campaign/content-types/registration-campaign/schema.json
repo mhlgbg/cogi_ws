@@ -1,0 +1,151 @@
+{
+  "kind": "collectionType",
+  "collectionName": "registration_campaigns",
+  "info": {
+    "singularName": "registration-campaign",
+    "pluralName": "registration-campaigns",
+    "displayName": "Registration Campaign",
+    "description": "Tenant-scoped campaigns for registering users into a tenant and granting access to a feature."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "registrationCampaigns",
+      "required": true
+    },
+    "name": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200
+    },
+    "code": {
+      "type": "string",
+      "required": true,
+      "maxLength": 100
+    },
+    "description": {
+      "type": "text"
+    },
+    "shortDescription": {
+      "type": "text"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["draft", "open", "paused", "closed", "cancelled"],
+      "default": "draft",
+      "required": true
+    },
+    "registrationMode": {
+      "type": "enumeration",
+      "enum": ["public_link", "public_code", "invite_only", "approval_required", "admin_only"],
+      "default": "public_code",
+      "required": true
+    },
+    "startAt": {
+      "type": "datetime"
+    },
+    "endAt": {
+      "type": "datetime"
+    },
+    "maxRegistrations": {
+      "type": "integer",
+      "min": 1
+    },
+    "targetFeature": {
+      "type": "string",
+      "required": true
+    },
+    "defaultTenantRole": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.role"
+    },
+    "verificationRequired": {
+      "type": "boolean",
+      "default": true,
+      "required": true
+    },
+    "verificationMethod": {
+      "type": "enumeration",
+      "enum": ["email_link", "email_otp", "none"],
+      "default": "email_link",
+      "required": true
+    },
+    "verificationExpireMinutes": {
+      "type": "integer",
+      "default": 1440,
+      "min": 1,
+      "required": true
+    },
+    "autoApprove": {
+      "type": "boolean",
+      "default": true,
+      "required": true
+    },
+    "formConfig": {
+      "type": "json",
+      "default": {
+        "fields": []
+      }
+    },
+    "requireTermsAcceptance": {
+      "type": "boolean",
+      "default": false,
+      "required": true
+    },
+    "termsContent": {
+      "type": "text"
+    },
+    "successMessage": {
+      "type": "text"
+    },
+    "redirectPath": {
+      "type": "string"
+    },
+    "verificationNotificationTemplate": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::notification-template.notification-template"
+    },
+    "completionNotificationTemplate": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::notification-template.notification-template"
+    },
+    "rejectionNotificationTemplate": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::notification-template.notification-template"
+    },
+    "coverImage": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": ["images"]
+    },
+    "registrations": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::campaign-registration.campaign-registration",
+      "mappedBy": "campaign"
+    },
+    "isDeleted": {
+      "type": "boolean",
+      "default": false,
+      "required": true
+    },
+    "deletedAt": {
+      "type": "datetime"
+    },
+    "deletedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}

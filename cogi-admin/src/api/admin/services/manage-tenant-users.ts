@@ -20,7 +20,7 @@ export async function getTenantEnabledRoles(tenantId: number) {
     },
     populate: {
       role: {
-        select: ['id', 'name', 'description', 'type'],
+        select: ['id', 'documentId', 'name', 'description', 'type'],
       },
     },
   });
@@ -33,12 +33,13 @@ export async function getTenantEnabledRoles(tenantId: number) {
 
       return {
         id: roleId,
+        documentId: role?.documentId || null,
         name: String(role?.name || role?.type || `Role #${roleId}`),
         description: role?.description || null,
         type: role?.type || null,
       };
     })
-    .filter(Boolean) as Array<{ id: number; name: string; description: string | null; type: string | null }>;
+    .filter(Boolean) as Array<{ id: number; documentId: string | null; name: string; description: string | null; type: string | null }>;
 }
 
 export async function listTenantUsers(options: {

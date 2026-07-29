@@ -29,6 +29,9 @@
       "type": "string",
       "required": true
     },
+    "frontendOrigin": {
+      "type": "string"
+    },
     "stateHash": {
       "type": "string",
       "required": true,

@@ -1,11 +1,14 @@
 import { toText, resolveCurrentTenantId, mergeTenantWhere, whereByParam, extractRelationRef } from '../../../utils/tenant-scope';
 import crypto from 'crypto';
 import XLSX from 'xlsx';
+import QRCode from 'qrcode';
+import { getBaseUrl } from '../../../utils/tenant-base-url';
 
 const LUCKY_WHEEL_UID = 'api::lucky-wheel.lucky-wheel';
 const PRIZE_UID = 'api::lucky-wheel-prize.lucky-wheel-prize';
 const PARTICIPANT_UID = 'api::lucky-wheel-participant.lucky-wheel-participant';
 const SPIN_UID = 'api::lucky-wheel-spin.lucky-wheel-spin';
+const TENANT_UID = 'api::tenant.tenant';
 
 function normalizeWheelCodeRaw(code) {
   if (!code) return '';
@@ -251,6 +254,154 @@ function sanitizeSpinForPublic(spin) {
   };
 }
 
+async function executeLuckyWheelSpin({ wheel, participant, tenantId, requestId, requestMeta = {}, trx }) {
+  const existingByRequest = await strapi.db.query(SPIN_UID).findOne({
+    where: mergeTenantWhere({ requestId }, tenantId),
+    transacting: trx,
+  });
+  if (existingByRequest) {
+    const sameParticipant = String(extractRelationRef(existingByRequest.participant)) === String(participant.id);
+    const sameWheel = String(extractRelationRef(existingByRequest.luckyWheel)) === String(wheel.id);
+    if (!sameParticipant || !sameWheel) {
+      const error = new Error('REQUEST_ID_CONFLICT');
+      error.status = 409;
+      throw error;
+    }
+    return {
+      replayed: true,
+      spin: existingByRequest,
+      result: buildSpinResultFromSnapshot(existingByRequest),
+      participant: {
+        id: participant.id,
+        documentId: getDocumentId(participant) || null,
+        participantCode: participant.participantCode || existingByRequest.participantCodeSnapshot || null,
+        fullName: participant.fullName || existingByRequest.participantNameSnapshot || null,
+        className: participant.className || existingByRequest.participantClassNameSnapshot || null,
+        status: participant.status || 'used',
+        usedAt: participant.usedAt || existingByRequest.spunAt || null,
+      },
+    };
+  }
+
+  const existingSpin = await strapi.db.query(SPIN_UID).findOne({
+    where: mergeTenantWhere({
+      participant: participant.id,
+      luckyWheel: wheel.id,
+      status: { $in: ['completed', 'claimed'] },
+      $or: [{ isDeleted: false }, { isDeleted: { $null: true } }],
+    }, tenantId),
+    transacting: trx,
+  });
+  if (existingSpin) {
+    return {
+      replayed: true,
+      spin: existingSpin,
+      result: buildSpinResultFromSnapshot(existingSpin),
+      participant: {
+        id: participant.id,
+        documentId: getDocumentId(participant) || null,
+        participantCode: participant.participantCode || existingSpin.participantCodeSnapshot || null,
+        fullName: participant.fullName || existingSpin.participantNameSnapshot || null,
+        className: participant.className || existingSpin.participantClassNameSnapshot || null,
+        status: 'used',
+        usedAt: participant.usedAt || existingSpin.spunAt || null,
+      },
+    };
+  }
+
+  const availablePrizes = (await getAvailablePrizes(strapi, wheel.id, tenantId, trx))
+    .filter((prize) => !(wheel.allowNoPrize === false && prize.isNoPrize));
+  if (!availablePrizes.length) {
+    const error = new Error('NO_AVAILABLE_PRIZES');
+    error.status = 409;
+    throw error;
+  }
+
+  const { prize, randomValue } = selectPrizeByWeight(availablePrizes);
+  if (!prize) {
+    const error = new Error('NO_AVAILABLE_PRIZES');
+    error.status = 409;
+    throw error;
+  }
+
+  if (!prize.isUnlimited) {
+    const currentRemaining = Number(prize.remainingQuantity || 0);
+    if (currentRemaining <= 0) {
+      const error = new Error('NO_AVAILABLE_PRIZES');
+      error.status = 409;
+      throw error;
+    }
+    await strapi.db.query(PRIZE_UID).update({
+      where: { id: prize.id },
+      data: { remainingQuantity: currentRemaining - 1 },
+      transacting: trx,
+    });
+  }
+
+  const spunAt = new Date().toISOString();
+  const verificationCode = await generateVerificationCode(strapi);
+  const claimStatus = prize.isNoPrize ? 'not_applicable' : 'unclaimed';
+  const resultData = buildSpinResultFromPrize(prize);
+  const spinData = {
+    tenant: tenantId,
+    luckyWheel: wheel.id,
+    participant: participant.id,
+    prize: prize.id,
+    requestId,
+    verificationCode,
+    status: 'completed',
+    claimStatus,
+    spunAt,
+    randomValue: String(randomValue),
+    eligiblePrizesSnapshot: availablePrizes.map((item) => ({
+      prizeId: item.id || null,
+      name: item.name || null,
+      weight: Number(item.weight || 0),
+      remainingQuantity: item.isUnlimited ? null : Number(item.remainingQuantity || 0),
+      isUnlimited: Boolean(item.isUnlimited),
+      isNoPrize: Boolean(item.isNoPrize),
+    })),
+    participantCodeSnapshot: participant.participantCode || null,
+    participantNameSnapshot: participant.fullName || null,
+    participantPhoneSnapshot: participant.phone || null,
+    participantEmailSnapshot: participant.email || null,
+    participantClassNameSnapshot: participant.className || null,
+    prizeIdSnapshot: String(resultData?.prizeId || ''),
+    prizeDocumentIdSnapshot: resultData?.prizeDocumentId || null,
+    prizeNameSnapshot: resultData?.name || null,
+    prizeDescriptionSnapshot: resultData?.description || null,
+    prizeResultMessageSnapshot: resultData?.resultMessage || null,
+    prizeIsNoPrizeSnapshot: Boolean(resultData?.isNoPrize),
+    prizeDisplayColorSnapshot: resultData?.displayColor || null,
+    prizeTextColorSnapshot: resultData?.textColor || null,
+    prizeImageSnapshot: resultData?.image || null,
+    ipAddress: requestMeta.ipAddress || null,
+    userAgent: requestMeta.userAgent || null,
+  };
+
+  const spin = await strapi.db.query(SPIN_UID).create({ data: spinData, transacting: trx });
+  await strapi.db.query(PARTICIPANT_UID).update({
+    where: { id: participant.id },
+    data: { status: 'used', usedAt: spunAt },
+    transacting: trx,
+  });
+
+  return {
+    replayed: false,
+    spin: { ...spin, claimStatus },
+    result: resultData,
+    participant: {
+      id: participant.id,
+      documentId: getDocumentId(participant) || null,
+      participantCode: participant.participantCode || null,
+      fullName: participant.fullName || null,
+      className: participant.className || null,
+      status: 'used',
+      usedAt: spunAt,
+    },
+  };
+}
+
 function sanitizeParticipantSpinState(participant) {
   if (!participant) return null;
   return {
@@ -261,8 +412,124 @@ function sanitizeParticipantSpinState(participant) {
   };
 }
 
+function readUrlParts(value) {
+  const normalizedValue = toText(value).trim();
+  if (!normalizedValue) return null;
+  try {
+    return new URL(normalizedValue);
+  } catch {
+    return null;
+  }
+}
+
+function resolveFrontendBaseUrl(ctx, tenantId) {
+  const refererUrl = readUrlParts(ctx?.request?.header?.referer || ctx?.request?.headers?.referer || '');
+  if (refererUrl) {
+    return `${refererUrl.protocol}//${refererUrl.host}`.replace(/\/+$/, '');
+  }
+  return getBaseUrl(ctx, { tenantId });
+}
+
+function buildTenantAwareLuckyWheelBasePath(tenantCode, refererUrl) {
+  const normalizedTenantCode = toText(tenantCode).trim();
+  if (!normalizedTenantCode) return '';
+
+  const parsedRefererUrl = readUrlParts(refererUrl);
+  const refererPath = toText(parsedRefererUrl?.pathname).trim();
+  const tenantPathPrefix = `/t/${encodeURIComponent(normalizedTenantCode)}`;
+  if (refererPath === tenantPathPrefix || refererPath.startsWith(`${tenantPathPrefix}/`)) {
+    return tenantPathPrefix;
+  }
+  return '';
+}
+
+function buildLuckyWheelPublicPath(tenantCode, wheelCode, refererUrl) {
+  const prefix = buildTenantAwareLuckyWheelBasePath(tenantCode, refererUrl);
+  return `${prefix}/lucky-wheel/${encodeURIComponent(toText(wheelCode))}`;
+}
+
+function buildLuckyWheelPresentationPath(tenantCode, wheelId, refererUrl) {
+  const prefix = buildTenantAwareLuckyWheelBasePath(tenantCode, refererUrl);
+  return `${prefix}/lucky-wheels/${encodeURIComponent(String(wheelId || ''))}/presentation`;
+}
+
+async function buildLuckyWheelQrCodeDataUrl(publicUrl) {
+  const normalizedUrl = toText(publicUrl).trim();
+  if (!normalizedUrl) return '';
+  return QRCode.toDataURL(normalizedUrl, {
+    width: 220,
+    margin: 1,
+    errorCorrectionLevel: 'M',
+  });
+}
+
+async function getWheelStatistics(wheelId, tenantId) {
+  const totalParticipants = await strapi.db.query(PARTICIPANT_UID).count({
+    where: mergeTenantWhere({ luckyWheel: wheelId, $or: [{ isDeleted: false }, { isDeleted: { $null: true } }] }, tenantId),
+  });
+  const eligibleParticipants = await strapi.db.query(PARTICIPANT_UID).count({
+    where: mergeTenantWhere({ luckyWheel: wheelId, status: { $eq: 'eligible' }, $or: [{ isDeleted: false }, { isDeleted: { $null: true } }] }, tenantId),
+  });
+  const usedParticipants = await strapi.db.query(PARTICIPANT_UID).count({
+    where: mergeTenantWhere({ luckyWheel: wheelId, status: { $eq: 'used' }, $or: [{ isDeleted: false }, { isDeleted: { $null: true } }] }, tenantId),
+  });
+  const totalSpins = await strapi.db.query(SPIN_UID).count({
+    where: mergeTenantWhere({ luckyWheel: wheelId, $or: [{ isDeleted: false }, { isDeleted: { $null: true } }] }, tenantId),
+  });
+  const activePrizeCount = await strapi.db.query(PRIZE_UID).count({
+    where: mergeTenantWhere({ luckyWheel: wheelId, isActive: { $eq: true }, $or: [{ isDeleted: false }, { isDeleted: { $null: true } }] }, tenantId),
+  });
+  return {
+    totalParticipants,
+    eligibleParticipants,
+    usedParticipants,
+    totalSpins,
+    activePrizeCount,
+  };
+}
+
+async function getLatestSpinForWheel(wheelId, tenantId) {
+  const latestSpinRows = await strapi.db.query(SPIN_UID).findMany({
+    where: mergeTenantWhere({ luckyWheel: wheelId, $or: [{ isDeleted: false }, { isDeleted: { $null: true } }] }, tenantId),
+    orderBy: [{ spunAt: 'desc' }, { id: 'desc' }],
+    limit: 1,
+  });
+  const latestSpin = Array.isArray(latestSpinRows) ? latestSpinRows[0] : null;
+  if (!latestSpin) return null;
+  return {
+    id: latestSpin.id,
+    documentId: getDocumentId(latestSpin) || null,
+    verificationCode: latestSpin.verificationCode || null,
+    spunAt: latestSpin.spunAt || null,
+    participant: {
+      participantCode: latestSpin.participantCodeSnapshot || null,
+      fullName: latestSpin.participantNameSnapshot || null,
+    },
+    result: buildSpinResultFromSnapshot(latestSpin),
+  };
+}
+
 function normalizeSpinRecord(record) {
   if (!record) return null;
+  const result = {
+    prizeId: record.prizeIdSnapshot || null,
+    prizeDocumentId: record.prizeDocumentIdSnapshot || null,
+    resultKey: String(record.prizeDocumentIdSnapshot || record.prizeIdSnapshot || ''),
+    name: record.prizeNameSnapshot || null,
+    description: record.prizeDescriptionSnapshot || null,
+    resultMessage: record.prizeResultMessageSnapshot || null,
+    isNoPrize: Boolean(record.prizeIsNoPrizeSnapshot),
+    displayColor: record.prizeDisplayColorSnapshot || null,
+    textColor: record.prizeTextColorSnapshot || null,
+    image: record.prizeImageSnapshot || null,
+  };
+  const participant = {
+    participantCode: record.participantCodeSnapshot || null,
+    fullName: record.participantNameSnapshot || null,
+    phone: record.participantPhoneSnapshot || null,
+    email: record.participantEmailSnapshot || null,
+    className: record.participantClassNameSnapshot || null,
+  };
   return {
     id: record.id,
     documentId: getDocumentId(record) || null,
@@ -287,25 +554,41 @@ function normalizeSpinRecord(record) {
     prizeTextColor: record.prizeTextColorSnapshot || null,
     prizeImage: record.prizeImageSnapshot || null,
     randomValue: record.randomValue || null,
-    participant: {
-      participantCode: record.participantCodeSnapshot || null,
-      fullName: record.participantNameSnapshot || null,
-      phone: record.participantPhoneSnapshot || null,
-      email: record.participantEmailSnapshot || null,
-      className: record.participantClassNameSnapshot || null,
-    },
+    participant,
+    result,
     prize: {
-      id: record.prizeIdSnapshot || null,
-      documentId: record.prizeDocumentIdSnapshot || null,
-      name: record.prizeNameSnapshot || null,
-      description: record.prizeDescriptionSnapshot || null,
-      resultMessage: record.prizeResultMessageSnapshot || null,
-      isNoPrize: Boolean(record.prizeIsNoPrizeSnapshot),
-      displayColor: record.prizeDisplayColorSnapshot || null,
-      textColor: record.prizeTextColorSnapshot || null,
-      image: record.prizeImageSnapshot || null,
+      id: result.prizeId,
+      documentId: result.prizeDocumentId,
+      name: result.name,
+      description: result.description,
+      resultMessage: result.resultMessage,
+      isNoPrize: result.isNoPrize,
+      displayColor: result.displayColor,
+      textColor: result.textColor,
+      image: result.image,
     },
   };
+}
+
+function normalizeVerificationCodeRaw(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function getClaimEligibility(spin) {
+  if (!spin) return { canClaim: false, cannotClaimReason: 'RESULT_NOT_FOUND' };
+  if (String(spin.status || '').toLowerCase() === 'cancelled') {
+    return { canClaim: false, cannotClaimReason: 'SPIN_CANCELLED' };
+  }
+  if (Boolean(spin.prizeIsNoPrize) || Boolean(spin.result?.isNoPrize)) {
+    return { canClaim: false, cannotClaimReason: 'NO_PRIZE' };
+  }
+  if (String(spin.claimStatus || '').toLowerCase() === 'claimed') {
+    return { canClaim: false, cannotClaimReason: 'ALREADY_CLAIMED' };
+  }
+  if (String(spin.claimStatus || '').toLowerCase() === 'not_applicable') {
+    return { canClaim: false, cannotClaimReason: 'NO_PRIZE' };
+  }
+  return { canClaim: true, cannotClaimReason: null };
 }
 
 function findField(cfg, key) {
@@ -514,7 +797,6 @@ async function registerParticipantForWheel({ wheel, payload, tenantId, auth = nu
     source: 'self_registered',
     status: 'eligible',
     registeredAt: new Date().toISOString(),
-    createdByUser: auth?.id || null,
   };
   const created = await strapi.db.query(PARTICIPANT_UID).create({ data, transacting: trx });
   return created;
@@ -661,142 +943,17 @@ module.exports = {
       if (participantStatus === 'used') { const error = new Error('PARTICIPANT_ALREADY_USED'); error.status = 400; throw error; }
       if (participantStatus !== 'eligible') { const error = new Error('PARTICIPANT_ALREADY_USED'); error.status = 400; throw error; }
 
-      const existingByRequest = await strapi.db.query(SPIN_UID).findOne({
-        where: mergeTenantWhere({ requestId }, tenantId),
-        transacting: trx,
-      });
-      if (existingByRequest) {
-        const sameParticipant = String(extractRelationRef(existingByRequest.participant)) === String(participant.id);
-        const sameWheel = String(extractRelationRef(existingByRequest.luckyWheel)) === String(wheel.id);
-        if (!sameParticipant || !sameWheel) {
-          const error = new Error('REQUEST_ID_CONFLICT');
-          error.status = 409;
-          throw error;
-        }
-        return {
-          replayed: true,
-          spin: existingByRequest,
-          result: buildSpinResultFromSnapshot(existingByRequest),
-          participant: {
-            participantCode: participant.participantCode || existingByRequest.participantCodeSnapshot || null,
-            fullName: participant.fullName || existingByRequest.participantNameSnapshot || null,
-            status: participant.status || 'used',
-            usedAt: participant.usedAt || existingByRequest.spunAt || null,
-          },
-        };
-      }
-
-      const existingSpin = await strapi.db.query(SPIN_UID).findOne({
-        where: mergeTenantWhere({
-          participant: participant.id,
-          luckyWheel: wheel.id,
-          status: { $in: ['completed', 'claimed'] },
-          $or: [{ isDeleted: false }, { isDeleted: { $null: true } }],
-        }, tenantId),
-        transacting: trx,
-      });
-      if (existingSpin) {
-        return {
-          replayed: true,
-          spin: existingSpin,
-          result: buildSpinResultFromSnapshot(existingSpin),
-          participant: {
-            participantCode: participant.participantCode || existingSpin.participantCodeSnapshot || null,
-            fullName: participant.fullName || existingSpin.participantNameSnapshot || null,
-            status: 'used',
-            usedAt: participant.usedAt || existingSpin.spunAt || null,
-          },
-        };
-      }
-
-      const availablePrizes = (await getAvailablePrizes(strapi, wheel.id, tenantId, trx))
-        .filter((prize) => !(wheel.allowNoPrize === false && prize.isNoPrize));
-      if (!availablePrizes.length) {
-        const error = new Error('NO_AVAILABLE_PRIZES');
-        error.status = 409;
-        throw error;
-      }
-
-      const { prize, randomValue } = selectPrizeByWeight(availablePrizes);
-      if (!prize) {
-        const error = new Error('NO_AVAILABLE_PRIZES');
-        error.status = 409;
-        throw error;
-      }
-
-      if (!prize.isUnlimited) {
-        const currentRemaining = Number(prize.remainingQuantity || 0);
-        if (currentRemaining <= 0) {
-          const error = new Error('NO_AVAILABLE_PRIZES');
-          error.status = 409;
-          throw error;
-        }
-        await strapi.db.query(PRIZE_UID).update({
-          where: { id: prize.id },
-          data: { remainingQuantity: currentRemaining - 1 },
-          transacting: trx,
-        });
-      }
-
-      const spunAt = new Date().toISOString();
-      const verificationCode = await generateVerificationCode(strapi);
-      const claimStatus = prize.isNoPrize ? 'not_applicable' : 'unclaimed';
-      const resultData = buildSpinResultFromPrize(prize);
-      const spinData = {
-        tenant: tenantId,
-        luckyWheel: wheel.id,
-        participant: participant.id,
-        prize: prize.id,
+      return executeLuckyWheelSpin({
+        wheel,
+        participant,
+        tenantId,
         requestId,
-        verificationCode,
-        status: 'completed',
-        claimStatus,
-        spunAt,
-        randomValue: String(randomValue),
-        eligiblePrizesSnapshot: availablePrizes.map((item) => ({
-          prizeId: item.id || null,
-          name: item.name || null,
-          weight: Number(item.weight || 0),
-          remainingQuantity: item.isUnlimited ? null : Number(item.remainingQuantity || 0),
-          isUnlimited: Boolean(item.isUnlimited),
-          isNoPrize: Boolean(item.isNoPrize),
-        })),
-        participantCodeSnapshot: participant.participantCode || null,
-        participantNameSnapshot: participant.fullName || null,
-        participantPhoneSnapshot: participant.phone || null,
-        participantEmailSnapshot: participant.email || null,
-        participantClassNameSnapshot: participant.className || null,
-        prizeIdSnapshot: String(resultData?.prizeId || ''),
-        prizeDocumentIdSnapshot: resultData?.prizeDocumentId || null,
-        prizeNameSnapshot: resultData?.name || null,
-        prizeDescriptionSnapshot: resultData?.description || null,
-        prizeResultMessageSnapshot: resultData?.resultMessage || null,
-        prizeIsNoPrizeSnapshot: Boolean(resultData?.isNoPrize),
-        prizeDisplayColorSnapshot: resultData?.displayColor || null,
-        prizeTextColorSnapshot: resultData?.textColor || null,
-        prizeImageSnapshot: resultData?.image || null,
-        ipAddress: ctx.request?.ip || null,
-        userAgent: ctx.request?.header?.['user-agent'] || null,
-      };
-
-      const spin = await strapi.db.query(SPIN_UID).create({ data: spinData, transacting: trx });
-      await strapi.db.query(PARTICIPANT_UID).update({
-        where: { id: participant.id },
-        data: { status: 'used', usedAt: spunAt },
-        transacting: trx,
-      });
-
-      return {
-        replayed: false,
-        spin: { ...spin, claimStatus },
-        result: resultData,
-        participant: {
-          participantCode: participant.participantCode || null,
-          fullName: participant.fullName || null,
-          status: 'used',
-          usedAt: spunAt,
+        requestMeta: {
+          ipAddress: ctx.request?.ip || null,
+          userAgent: ctx.request?.header?.['user-agent'] || null,
         },
-      };
+        trx,
+      });
     });
 
     return {
@@ -904,7 +1061,6 @@ module.exports = {
       startAt: startAt ? startAt.toISOString() : null,
       endAt: endAt ? endAt.toISOString() : null,
       isDeleted: false,
-      createdBy: auth?.id || null,
     };
 
     const created = await strapi.db.query(LUCKY_WHEEL_UID).create({ data });
@@ -1039,7 +1195,6 @@ module.exports = {
       isNoPrize: Boolean(payload.isNoPrize),
       isActive: payload.isActive === undefined ? true : Boolean(payload.isActive),
       isDeleted: false,
-      createdBy: auth?.id || null,
     };
 
     const created = await strapi.db.query(PRIZE_UID).create({ data });
@@ -1097,7 +1252,7 @@ module.exports = {
     if (!prize) { const e = new Error('PRIZE_NOT_FOUND'); e.status = 404; throw e; }
 
     const now = new Date().toISOString();
-    await strapi.db.query(PRIZE_UID).update({ where: { id: prize.id }, data: { isDeleted: true, deletedAt: now, deletedBy: auth?.id || null } });
+    await strapi.db.query(PRIZE_UID).update({ where: { id: prize.id }, data: { isDeleted: true, deletedAt: now } });
     const populated = await strapi.db.query(PRIZE_UID).findOne({ where: { id: prize.id }, populate: ['image', 'imageFile'] });
     return normalizePrizeRecord(populated);
   },
@@ -1152,7 +1307,6 @@ module.exports = {
       source: payload.source || 'admin',
       status: payload.status || 'eligible',
       registeredAt: payload.registeredAt || new Date().toISOString(),
-      createdBy: auth?.id || null,
       isDeleted: false,
     };
 
@@ -1271,7 +1425,6 @@ module.exports = {
           source: 'import',
           status: 'eligible',
           registeredAt: new Date().toISOString(),
-          createdBy: auth?.id || null,
           isDeleted: false,
         };
         const c = await strapi.db.query(PARTICIPANT_UID).create({ data, transacting: trx });
@@ -1325,7 +1478,6 @@ module.exports = {
           source: 'generated',
           status: 'eligible',
           registeredAt: new Date().toISOString(),
-          createdBy: auth?.id || null,
           isDeleted: false,
         };
         const rec = await strapi.db.query(PARTICIPANT_UID).create({ data, transacting: trx });
@@ -1375,6 +1527,10 @@ module.exports = {
     const search = toText(query.search || query.q || '');
     const claimStatus = toText(query.claimStatus || '');
     const status = toText(query.status || '');
+    const resultType = toText(query.resultType || '');
+    const dateFrom = toText(query.dateFrom || '');
+    const dateTo = toText(query.dateTo || '');
+    const sort = toText(query.sort || 'spunAt:desc');
 
     const whereClauses = [
       { luckyWheel: wheel.id },
@@ -1382,6 +1538,16 @@ module.exports = {
     ];
     if (status) whereClauses.push({ status: { $eq: status } });
     if (claimStatus) whereClauses.push({ claimStatus: { $eq: claimStatus } });
+    if (resultType === 'prize') whereClauses.push({ prizeIsNoPrizeSnapshot: { $eq: false } });
+    if (resultType === 'no_prize') whereClauses.push({ prizeIsNoPrizeSnapshot: { $eq: true } });
+    if (dateFrom) whereClauses.push({ spunAt: { $gte: new Date(dateFrom).toISOString() } });
+    if (dateTo) {
+      const endDate = new Date(dateTo);
+      if (!Number.isNaN(endDate.getTime())) {
+        endDate.setHours(23, 59, 59, 999);
+        whereClauses.push({ spunAt: { $lte: endDate.toISOString() } });
+      }
+    }
     if (search) {
       whereClauses.push({
         $or: [
@@ -1397,11 +1563,12 @@ module.exports = {
     }
 
     const baseWhere = mergeTenantWhere({ $and: whereClauses }, tenantId);
+    const orderBy = sort === 'spunAt:asc' ? [{ spunAt: 'asc' }, { id: 'asc' }] : [{ spunAt: 'desc' }, { id: 'desc' }];
     const rows = await strapi.db.query(SPIN_UID).findMany({
       where: baseWhere,
       limit: pageSize,
       offset,
-      orderBy: [{ spunAt: 'desc' }, { id: 'desc' }],
+      orderBy,
     });
     const total = await strapi.db.query(SPIN_UID).count({ where: baseWhere });
 
@@ -1414,25 +1581,320 @@ module.exports = {
   async exportResults(wheelIdParam, tenantId, params = {}) {
     const result = await this.listResults(wheelIdParam, { ...params, page: 1, pageSize: 5000 }, tenantId);
     const rows = (result.rows || []).map((record) => ({
+      stt: 0,
       spunAt: record.spunAt || null,
       verificationCode: record.verificationCode || null,
       status: record.status || null,
       claimStatus: record.claimStatus || null,
-      participantCode: record.participantCode || null,
-      fullName: record.participantFullName || null,
-      phone: record.participantPhone || null,
-      email: record.participantEmail || null,
-      className: record.participantClassName || null,
-      prizeName: record.prizeName || null,
-      prizeDescription: record.prizeDescription || null,
-      resultMessage: record.prizeResultMessage || null,
-      isNoPrize: record.prizeIsNoPrize ? 'Yes' : 'No',
-    }));
+      participantCode: record.participant?.participantCode || null,
+      fullName: record.participant?.fullName || null,
+      phone: record.participant?.phone || null,
+      email: record.participant?.email || null,
+      className: record.participant?.className || null,
+      prizeName: record.result?.name || null,
+      prizeDescription: record.result?.description || null,
+      resultMessage: record.result?.resultMessage || null,
+      hasPrize: record.result?.isNoPrize ? 'No' : 'Yes',
+      claimedAt: record.claimedAt || null,
+      claimedByName: record.claimedByName || null,
+      claimNote: record.claimNote || null,
+    })).map((row, index) => ({ ...row, stt: index + 1 }));
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(rows);
     XLSX.utils.book_append_sheet(wb, ws, 'results');
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
     return { buffer: buf, filename: `results-${wheelIdParam}.xlsx` };
+  },
+
+  async verifyResultByCode(wheelIdParam, verificationCode, tenantId) {
+    const whereWheel = whereByParam(wheelIdParam);
+    if (!whereWheel) { const e = new Error('WHEEL_NOT_FOUND'); e.status = 404; throw e; }
+    const wheel = await strapi.db.query(LUCKY_WHEEL_UID).findOne({ where: mergeTenantWhere(whereWheel, tenantId) });
+    if (!wheel) { const e = new Error('WHEEL_NOT_FOUND'); e.status = 404; throw e; }
+
+    const normalizedCode = normalizeVerificationCodeRaw(verificationCode);
+    if (!normalizedCode) { const e = new Error('RESULT_NOT_FOUND'); e.status = 404; throw e; }
+
+    const spin = await strapi.db.query(SPIN_UID).findOne({
+      where: mergeTenantWhere({
+        luckyWheel: wheel.id,
+        verificationCode: normalizedCode,
+        $or: [{ isDeleted: false }, { isDeleted: { $null: true } }],
+      }, tenantId),
+    });
+    if (!spin) { const e = new Error('RESULT_NOT_FOUND'); e.status = 404; throw e; }
+
+    const normalized = normalizeSpinRecord(spin);
+    const eligibility = getClaimEligibility(normalized);
+    return {
+      ...normalized,
+      canClaim: eligibility.canClaim,
+      cannotClaimReason: eligibility.cannotClaimReason,
+    };
+  },
+
+  async claimResult(wheelIdParam, spinIdParam, payload = {}, tenantId, auth = null) {
+    const whereWheel = whereByParam(wheelIdParam);
+    if (!whereWheel) { const e = new Error('WHEEL_NOT_FOUND'); e.status = 404; throw e; }
+    const wheel = await strapi.db.query(LUCKY_WHEEL_UID).findOne({ where: mergeTenantWhere(whereWheel, tenantId) });
+    if (!wheel) { const e = new Error('WHEEL_NOT_FOUND'); e.status = 404; throw e; }
+
+    const spinWhere = whereByParam(spinIdParam);
+    if (!spinWhere) { const e = new Error('RESULT_NOT_FOUND'); e.status = 404; throw e; }
+
+    const claimNote = toText(payload.claimNote || '') || null;
+    const claimedByName = toText(auth?.username || auth?.email || auth?.fullName || '') || 'Unknown user';
+
+    return strapi.db.transaction(async ({ trx }) => {
+      const spin = await strapi.db.query(SPIN_UID).findOne({
+        where: mergeTenantWhere({
+          $and: [spinWhere, { luckyWheel: wheel.id, $or: [{ isDeleted: false }, { isDeleted: { $null: true } }] }],
+        }, tenantId),
+        transacting: trx,
+      });
+      if (!spin) { const e = new Error('RESULT_NOT_FOUND'); e.status = 404; throw e; }
+
+      const normalized = normalizeSpinRecord(spin);
+      const eligibility = getClaimEligibility(normalized);
+      if (!eligibility.canClaim) {
+        const errorCode = eligibility.cannotClaimReason === 'NO_PRIZE' ? 'NO_PRIZE_TO_CLAIM' : eligibility.cannotClaimReason;
+        const e = new Error(errorCode || 'ALREADY_CLAIMED');
+        e.status = eligibility.cannotClaimReason === 'ALREADY_CLAIMED' ? 409 : 400;
+        e.current = normalized;
+        throw e;
+      }
+
+      const nowIso = new Date().toISOString();
+      const updatedCount = await strapi.db.connection('lucky_wheel_spins')
+        .transacting(trx)
+        .where({ id: spin.id })
+        .andWhere((qb) => qb.where('claim_status', 'unclaimed').orWhereNull('claim_status'))
+        .update({
+          claim_status: 'claimed',
+          status: 'claimed',
+          claimed_at: nowIso,
+          claimed_by_name: claimedByName,
+          claim_note: claimNote,
+          updated_at: nowIso,
+        });
+
+      if (!updatedCount) {
+        const currentSpin = await strapi.db.query(SPIN_UID).findOne({ where: { id: spin.id }, transacting: trx });
+        const currentNormalized = normalizeSpinRecord(currentSpin);
+        const e = new Error('ALREADY_CLAIMED');
+        e.status = 409;
+        e.current = currentNormalized;
+        throw e;
+      }
+
+      const updated = await strapi.db.query(SPIN_UID).findOne({ where: { id: spin.id }, transacting: trx });
+      const normalizedUpdated = normalizeSpinRecord(updated);
+      return {
+        ...normalizedUpdated,
+        canClaim: false,
+        cannotClaimReason: 'ALREADY_CLAIMED',
+      };
+    });
+  },
+
+  async getPresentationData(idParam, tenantId, ctx) {
+    const wheelWhere = whereByParam(idParam);
+    if (!wheelWhere) { const e = new Error('WHEEL_NOT_FOUND'); e.status = 404; throw e; }
+
+    const wheelRecord = await strapi.db.query(LUCKY_WHEEL_UID).findOne({
+      where: mergeTenantWhere({ $and: [wheelWhere, { $or: [{ isDeleted: false }, { isDeleted: { $null: true } }] }] }, tenantId),
+    });
+    if (!wheelRecord) { const e = new Error('WHEEL_NOT_FOUND'); e.status = 404; throw e; }
+
+    const tenantRecord = await strapi.db.query(TENANT_UID).findOne({
+      where: { id: tenantId },
+      select: ['id', 'name', 'shortName', 'code'],
+      populate: { logo: { select: ['url'] } },
+    });
+
+    const frontendBaseUrl = await resolveFrontendBaseUrl(ctx, tenantId);
+    const refererUrl = ctx?.request?.header?.referer || ctx?.request?.headers?.referer || '';
+    const tenantCode = toText(tenantRecord?.code || ctx?.state?.tenant?.code || '');
+    const publicPath = buildLuckyWheelPublicPath(tenantCode, wheelRecord.code, refererUrl);
+    const presentationPath = buildLuckyWheelPresentationPath(tenantCode, wheelRecord.id, refererUrl);
+    const publicUrl = `${frontendBaseUrl}${publicPath}`;
+    const presentationUrl = `${frontendBaseUrl}${presentationPath}`;
+    const qrCodeDataUrl = await buildLuckyWheelQrCodeDataUrl(publicUrl);
+    const statistics = await getWheelStatistics(wheelRecord.id, tenantId);
+    const latestSpin = await getLatestSpinForWheel(wheelRecord.id, tenantId);
+    const rawPrizes = await this.listPrizes(wheelRecord.id, tenantId);
+    const prizes = (rawPrizes || []).map((prize) => ({
+      id: prize.id,
+      documentId: prize.documentId || null,
+      name: prize.name || null,
+      shortLabel: prize.shortLabel || null,
+      displayColor: prize.displayColor || null,
+      textColor: prize.textColor || null,
+      displayOrder: prize.displayOrder || 0,
+      image: prize.image || null,
+      isNoPrize: Boolean(prize.isNoPrize),
+      isActive: Boolean(prize.isActive),
+    }));
+
+    return {
+      wheel: {
+        ...sanitizePublicWheel(wheelRecord),
+        documentId: getDocumentId(wheelRecord) || null,
+      },
+      publicUrl,
+      presentationUrl,
+      qrCodeDataUrl,
+      tenant: {
+        name: toText(tenantRecord?.shortName || tenantRecord?.name || ''),
+        logo: tenantRecord?.logo ? {
+          url: tenantRecord.logo.url || null,
+          resolvedUrl: resolveAbsoluteUrl(tenantRecord.logo.url || null),
+        } : null,
+      },
+      statistics,
+      prizes,
+      latestSpin,
+      updatedAt: latestSpin?.spunAt || wheelRecord.updatedAt || wheelRecord.createdAt || new Date().toISOString(),
+    };
+  },
+
+  async getPresentationStatus(idParam, tenantId) {
+    const wheelWhere = whereByParam(idParam);
+    if (!wheelWhere) { const e = new Error('WHEEL_NOT_FOUND'); e.status = 404; throw e; }
+    const wheelRecord = await strapi.db.query(LUCKY_WHEEL_UID).findOne({
+      where: mergeTenantWhere({ $and: [wheelWhere, { $or: [{ isDeleted: false }, { isDeleted: { $null: true } }] }] }, tenantId),
+      select: ['id', 'updatedAt', 'createdAt'],
+    });
+    if (!wheelRecord) { const e = new Error('WHEEL_NOT_FOUND'); e.status = 404; throw e; }
+
+    const statistics = await getWheelStatistics(wheelRecord.id, tenantId);
+    const latestSpin = await getLatestSpinForWheel(wheelRecord.id, tenantId);
+    return {
+      statistics,
+      latestSpin,
+      updatedAt: latestSpin?.spunAt || wheelRecord.updatedAt || wheelRecord.createdAt || new Date().toISOString(),
+    };
+  },
+
+  async listPresentationEligibleParticipants(idParam, query = {}, tenantId) {
+    const wheelWhere = whereByParam(idParam);
+    if (!wheelWhere) { const e = new Error('WHEEL_NOT_FOUND'); e.status = 404; throw e; }
+    const wheel = await strapi.db.query(LUCKY_WHEEL_UID).findOne({
+      where: mergeTenantWhere({ $and: [wheelWhere, { $or: [{ isDeleted: false }, { isDeleted: { $null: true } }] }] }, tenantId),
+    });
+    if (!wheel) { const e = new Error('WHEEL_NOT_FOUND'); e.status = 404; throw e; }
+
+    const page = Number(query.page) > 0 ? Number(query.page) : 1;
+    const pageSize = Number(query.pageSize) > 0 ? Number(query.pageSize) : 20;
+    const offset = (page - 1) * pageSize;
+    const search = toText(query.search || query.q || '');
+
+    const whereClauses = [
+      { luckyWheel: wheel.id },
+      { status: { $eq: 'eligible' } },
+      { $or: [{ isDeleted: false }, { isDeleted: { $null: true } }] },
+    ];
+    if (search) {
+      whereClauses.push({
+        $or: [
+          { participantCode: { $containsi: search } },
+          { fullName: { $containsi: search } },
+          { phone: { $containsi: search } },
+          { className: { $containsi: search } },
+        ],
+      });
+    }
+
+    const where = mergeTenantWhere({ $and: whereClauses }, tenantId);
+    const rows = await strapi.db.query(PARTICIPANT_UID).findMany({
+      where,
+      limit: pageSize,
+      offset,
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+    });
+    const total = await strapi.db.query(PARTICIPANT_UID).count({ where });
+
+    const ids = (rows || []).map((row) => row.id).filter(Boolean);
+    const relatedSpins = ids.length > 0
+      ? await strapi.db.query(SPIN_UID).findMany({
+        where: mergeTenantWhere({
+          participant: { id: { $in: ids } },
+          luckyWheel: wheel.id,
+          status: { $in: ['completed', 'claimed'] },
+          $or: [{ isDeleted: false }, { isDeleted: { $null: true } }],
+        }, tenantId),
+      })
+      : [];
+    const usedParticipantIds = new Set((relatedSpins || []).map((spin) => String(extractRelationRef(spin.participant) || '')));
+
+    const filtered = (rows || []).filter((row) => !usedParticipantIds.has(String(row.id)));
+
+    return {
+      rows: filtered.map((row) => ({
+        id: row.id,
+        documentId: getDocumentId(row) || null,
+        participantCode: row.participantCode || null,
+        fullName: row.fullName || null,
+        phone: row.phone || null,
+        email: row.email || null,
+        className: row.className || null,
+        status: row.status || null,
+      })),
+      pagination: { page, pageSize, pageCount: Math.ceil(total / pageSize) || 1, total },
+    };
+  },
+
+  async spinForParticipantByAdmin(idParam, payload = {}, tenantId, auth = null, ctx = null) {
+    const wheelWhere = whereByParam(idParam);
+    if (!wheelWhere) { const e = new Error('WHEEL_NOT_FOUND'); e.status = 404; throw e; }
+    const wheel = await strapi.db.query(LUCKY_WHEEL_UID).findOne({
+      where: mergeTenantWhere({ $and: [wheelWhere, { $or: [{ isDeleted: false }, { isDeleted: { $null: true } }] }] }, tenantId),
+    });
+    if (!wheel) { const e = new Error('WHEEL_NOT_FOUND'); e.status = 404; throw e; }
+
+    assertPublicWheelStatus(wheel);
+
+    const requestId = toText(payload.requestId || '');
+    if (!requestId) { const e = new Error('REQUEST_ID_REQUIRED'); e.status = 400; throw e; }
+
+    const participantRef = payload.participantDocumentId || payload.participantId;
+    const participantWhere = whereByParam(participantRef);
+    if (!participantWhere) { const e = new Error('PARTICIPANT_NOT_FOUND'); e.status = 404; throw e; }
+
+    const result = await strapi.db.transaction(async ({ trx }) => {
+      const participant = await strapi.db.query(PARTICIPANT_UID).findOne({
+        where: mergeTenantWhere({
+          $and: [participantWhere, { luckyWheel: wheel.id, $or: [{ isDeleted: false }, { isDeleted: { $null: true } }] }],
+        }, tenantId),
+        transacting: trx,
+      });
+      if (!participant) { const e = new Error('PARTICIPANT_NOT_FOUND'); e.status = 404; throw e; }
+
+      const participantStatus = String(participant.status || '').toLowerCase();
+      if (participantStatus === 'blocked') { const e = new Error('PARTICIPANT_BLOCKED'); e.status = 403; throw e; }
+      if (participantStatus === 'cancelled') { const e = new Error('PARTICIPANT_CANCELLED'); e.status = 400; throw e; }
+      if (participantStatus === 'used') { const e = new Error('PARTICIPANT_ALREADY_USED'); e.status = 400; throw e; }
+      if (participantStatus !== 'eligible') { const e = new Error('PARTICIPANT_ALREADY_USED'); e.status = 400; throw e; }
+
+      return executeLuckyWheelSpin({
+        wheel,
+        participant,
+        tenantId,
+        requestId,
+        requestMeta: {
+          ipAddress: ctx?.request?.ip || null,
+          userAgent: ctx?.request?.header?.['user-agent'] || null,
+        },
+        trx,
+      });
+    });
+
+    return {
+      replayed: Boolean(result.replayed),
+      spin: sanitizeSpinForPublic(result.spin),
+      result: result.replayed ? (result.result || buildSpinResultFromSnapshot(result.spin)) : result.result,
+      participant: result.participant,
+    };
   },
 
   async softDeleteLuckyWheel(idParam, tenantId, auth = null) {
@@ -1447,7 +1909,7 @@ module.exports = {
     if (spinCount > 0) { const e = new Error('WHEEL_HAS_SPINS'); e.status = 400; throw e; }
 
     const now = new Date().toISOString();
-    const updated = await strapi.db.query(LUCKY_WHEEL_UID).update({ where: { id: existing.id }, data: { isDeleted: true, deletedAt: now, deletedBy: auth?.id || null } });
+    const updated = await strapi.db.query(LUCKY_WHEEL_UID).update({ where: { id: existing.id }, data: { isDeleted: true, deletedAt: now } });
     return updated;
   },
 
@@ -1458,7 +1920,7 @@ module.exports = {
     const existing = await strapi.db.query(LUCKY_WHEEL_UID).findOne({ where: whereMerged });
     if (!existing) { const e = new Error('WHEEL_NOT_FOUND'); e.status = 404; throw e; }
 
-    const updated = await strapi.db.query(LUCKY_WHEEL_UID).update({ where: { id: existing.id }, data: { isDeleted: false, deletedAt: null, restoredBy: auth?.id || null } });
+    const updated = await strapi.db.query(LUCKY_WHEEL_UID).update({ where: { id: existing.id }, data: { isDeleted: false, deletedAt: null } });
     return updated;
   },
 

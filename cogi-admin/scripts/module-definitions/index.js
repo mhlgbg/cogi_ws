@@ -27,6 +27,7 @@ const storage = require('./storage');
 const learningManagement = require('./learning');
 const slider = require('./slider');
 const system = require('./system');
+const registrationCampaign = require('./registration-campaign');
 // const inventory = require('./inventory');
 
 module.exports = [
@@ -49,5 +50,6 @@ module.exports = [
   learningManagement,
   slider,
   system,
+  registrationCampaign,
   // inventory,
 ];

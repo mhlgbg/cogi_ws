@@ -1,0 +1,100 @@
+{
+  "kind": "collectionType",
+  "collectionName": "quick_messages",
+  "info": {
+    "singularName": "quick-message",
+    "pluralName": "quick-messages",
+    "displayName": "Quick Message",
+    "description": "Tenant-scoped shared quick message content for public access codes."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "quickMessages",
+      "required": true
+    },
+    "title": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200
+    },
+    "content": {
+      "type": "text"
+    },
+    "links": {
+      "type": "json"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "active",
+        "locked",
+        "expired",
+        "cancelled"
+      ],
+      "default": "active",
+      "required": true
+    },
+    "expiresAt": {
+      "type": "datetime"
+    },
+    "allowReply": {
+      "type": "boolean",
+      "default": true,
+      "required": true
+    },
+    "replyMode": {
+      "type": "enumeration",
+      "enum": [
+        "quick",
+        "text",
+        "quick_and_text"
+      ],
+      "default": "quick_and_text",
+      "required": true
+    },
+    "sender": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "senderDisplayName": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "metadata": {
+      "type": "json"
+    },
+    "accesses": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::quick-message-access.quick-message-access",
+      "mappedBy": "message"
+    },
+    "replies": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::quick-message-reply.quick-message-reply",
+      "mappedBy": "message"
+    },
+    "messages": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::quick-message-message.quick-message-message",
+      "mappedBy": "message"
+    },
+    "accessLogs": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::quick-message-access-log.quick-message-access-log",
+      "mappedBy": "message"
+    }
+  }
+}

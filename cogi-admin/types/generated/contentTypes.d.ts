@@ -977,6 +977,126 @@ export interface ApiAuthorAuthor extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiCampaignRegistrationCampaignRegistration
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'campaign_registrations';
+  info: {
+    description: 'A user registration record under a tenant registration campaign.';
+    displayName: 'Campaign Registration';
+    pluralName: 'campaign-registrations';
+    singularName: 'campaign-registration';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    approvedAt: Schema.Attribute.DateTime;
+    approvedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    campaign: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::registration-campaign.registration-campaign'
+    > &
+      Schema.Attribute.Required;
+    cancelledAt: Schema.Attribute.DateTime;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    deletedAt: Schema.Attribute.DateTime;
+    deletedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    email: Schema.Attribute.Email & Schema.Attribute.Required;
+    emailChangedAt: Schema.Attribute.DateTime;
+    formData: Schema.Attribute.JSON & Schema.Attribute.DefaultTo<{}>;
+    fullName: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    isDeleted: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    lastVerificationRequestAt: Schema.Attribute.DateTime;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::campaign-registration.campaign-registration'
+    > &
+      Schema.Attribute.Private;
+    membership: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::user-tenant.user-tenant'
+    >;
+    metadata: Schema.Attribute.JSON & Schema.Attribute.DefaultTo<{}>;
+    phone: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 30;
+      }>;
+    publishedAt: Schema.Attribute.DateTime;
+    registeredAt: Schema.Attribute.DateTime;
+    registrationSource: Schema.Attribute.Enumeration<
+      [
+        'campaign_link',
+        'manual_code',
+        'invite',
+        'admin',
+        'import',
+        'api',
+        'other',
+      ]
+    > &
+      Schema.Attribute.DefaultTo<'campaign_link'>;
+    rejectedAt: Schema.Attribute.DateTime;
+    rejectedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    rejectionReason: Schema.Attribute.Text;
+    status: Schema.Attribute.Enumeration<
+      [
+        'pending_verification',
+        'verified',
+        'approved',
+        'rejected',
+        'cancelled',
+        'expired',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending_verification'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    termsAccepted: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    termsAcceptedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    verificationExpiresAt: Schema.Attribute.DateTime;
+    verificationSendCount: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
+    verificationSentAt: Schema.Attribute.DateTime;
+    verificationTokenHash: Schema.Attribute.String & Schema.Attribute.Private;
+    verifiedAt: Schema.Attribute.DateTime;
+  };
+}
+
 export interface ApiCampaignCampaign extends Struct.CollectionTypeSchema {
   collectionName: 'campaigns';
   info: {
@@ -3961,6 +4081,498 @@ export interface ApiQuestionQuestion extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiQuickMessageAccessLogQuickMessageAccessLog
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'quick_message_access_logs';
+  info: {
+    description: 'Tenant-scoped access and activity events for one quick message access code.';
+    displayName: 'Quick Message Access Log';
+    pluralName: 'quick-message-access-logs';
+    singularName: 'quick-message-access-log';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    access: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::quick-message-access.quick-message-access'
+    > &
+      Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    eventType: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 80;
+      }>;
+    ipAddress: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::quick-message-access-log.quick-message-access-log'
+    > &
+      Schema.Attribute.Private;
+    message: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::quick-message.quick-message'
+    > &
+      Schema.Attribute.Required;
+    metadata: Schema.Attribute.JSON;
+    publishedAt: Schema.Attribute.DateTime;
+    success: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    userAgent: Schema.Attribute.Text;
+  };
+}
+
+export interface ApiQuickMessageAccessQuickMessageAccess
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'quick_message_accesses';
+  info: {
+    description: 'Tenant-scoped public access code for a quick message.';
+    displayName: 'Quick Message Access';
+    pluralName: 'quick-message-accesses';
+    singularName: 'quick-message-access';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    accessLogs: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::quick-message-access-log.quick-message-access-log'
+    >;
+    accessVersion: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<1>;
+    code: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 12;
+        minLength: 6;
+      }>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    expiresAt: Schema.Attribute.DateTime;
+    firstViewedAt: Schema.Attribute.DateTime;
+    label: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    lastViewedAt: Schema.Attribute.DateTime;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::quick-message-access.quick-message-access'
+    > &
+      Schema.Attribute.Private;
+    lockedAt: Schema.Attribute.DateTime;
+    maxViews: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      >;
+    message: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::quick-message.quick-message'
+    > &
+      Schema.Attribute.Required;
+    messages: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::quick-message-message.quick-message-message'
+    >;
+    metadata: Schema.Attribute.JSON;
+    pinHash: Schema.Attribute.String & Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    recipientName: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    replies: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::quick-message-reply.quick-message-reply'
+    >;
+    requirePin: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    status: Schema.Attribute.Enumeration<
+      ['active', 'locked', 'expired', 'cancelled']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'active'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    viewCount: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
+  };
+}
+
+export interface ApiQuickMessageMessageQuickMessageMessage
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'quick_message_messages';
+  info: {
+    description: 'Tenant-scoped admin/public conversation messages for one quick message access code.';
+    displayName: 'Quick Message Message';
+    pluralName: 'quick-message-messages';
+    singularName: 'quick-message-message';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    access: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::quick-message-access.quick-message-access'
+    > &
+      Schema.Attribute.Required;
+    content: Schema.Attribute.Text & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::quick-message-message.quick-message-message'
+    > &
+      Schema.Attribute.Private;
+    message: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::quick-message.quick-message'
+    > &
+      Schema.Attribute.Required;
+    metadata: Schema.Attribute.JSON;
+    publishedAt: Schema.Attribute.DateTime;
+    readByAdminAt: Schema.Attribute.DateTime;
+    readByPublicAt: Schema.Attribute.DateTime;
+    senderDisplayName: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    senderType: Schema.Attribute.Enumeration<['ADMIN', 'PUBLIC', 'SYSTEM']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'ADMIN'>;
+    senderUser: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiQuickMessageReplyQuickMessageReply
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'quick_message_replies';
+  info: {
+    description: 'Tenant-scoped reply submitted through a quick message access code.';
+    displayName: 'Quick Message Reply';
+    pluralName: 'quick-message-replies';
+    singularName: 'quick-message-reply';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    access: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::quick-message-access.quick-message-access'
+    > &
+      Schema.Attribute.Required;
+    clientSessionId: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    content: Schema.Attribute.Text;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    ipHash: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 128;
+      }>;
+    isRead: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::quick-message-reply.quick-message-reply'
+    > &
+      Schema.Attribute.Private;
+    message: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::quick-message.quick-message'
+    > &
+      Schema.Attribute.Required;
+    metadata: Schema.Attribute.JSON;
+    publishedAt: Schema.Attribute.DateTime;
+    quickResponse: Schema.Attribute.Enumeration<
+      [
+        'received',
+        'opened',
+        'understood',
+        'need_help',
+        'cannot_open',
+        'agree',
+        'disagree',
+      ]
+    >;
+    readAt: Schema.Attribute.DateTime;
+    replyType: Schema.Attribute.Enumeration<['quick', 'text']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'quick'>;
+    responderName: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    userAgent: Schema.Attribute.Text;
+  };
+}
+
+export interface ApiQuickMessageQuickMessage
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'quick_messages';
+  info: {
+    description: 'Tenant-scoped shared quick message content for public access codes.';
+    displayName: 'Quick Message';
+    pluralName: 'quick-messages';
+    singularName: 'quick-message';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    accesses: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::quick-message-access.quick-message-access'
+    >;
+    accessLogs: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::quick-message-access-log.quick-message-access-log'
+    >;
+    allowReply: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    content: Schema.Attribute.Text;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    expiresAt: Schema.Attribute.DateTime;
+    links: Schema.Attribute.JSON;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::quick-message.quick-message'
+    > &
+      Schema.Attribute.Private;
+    messages: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::quick-message-message.quick-message-message'
+    >;
+    metadata: Schema.Attribute.JSON;
+    publishedAt: Schema.Attribute.DateTime;
+    replies: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::quick-message-reply.quick-message-reply'
+    >;
+    replyMode: Schema.Attribute.Enumeration<
+      ['quick', 'text', 'quick_and_text']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'quick_and_text'>;
+    sender: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    senderDisplayName: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    status: Schema.Attribute.Enumeration<
+      ['draft', 'active', 'locked', 'expired', 'cancelled']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'active'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    title: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiRegistrationCampaignRegistrationCampaign
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'registration_campaigns';
+  info: {
+    description: 'Tenant-scoped campaigns for registering users into a tenant and granting access to a feature.';
+    displayName: 'Registration Campaign';
+    pluralName: 'registration-campaigns';
+    singularName: 'registration-campaign';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    autoApprove: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    code: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    completionNotificationTemplate: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::notification-template.notification-template'
+    >;
+    coverImage: Schema.Attribute.Media<'images'>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    defaultTenantRole: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.role'
+    >;
+    deletedAt: Schema.Attribute.DateTime;
+    deletedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    description: Schema.Attribute.Text;
+    endAt: Schema.Attribute.DateTime;
+    formConfig: Schema.Attribute.JSON &
+      Schema.Attribute.DefaultTo<{
+        fields: [];
+      }>;
+    isDeleted: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::registration-campaign.registration-campaign'
+    > &
+      Schema.Attribute.Private;
+    maxRegistrations: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      >;
+    name: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    publishedAt: Schema.Attribute.DateTime;
+    redirectPath: Schema.Attribute.String;
+    registrationMode: Schema.Attribute.Enumeration<
+      [
+        'public_link',
+        'public_code',
+        'invite_only',
+        'approval_required',
+        'admin_only',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'public_code'>;
+    registrations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::campaign-registration.campaign-registration'
+    >;
+    rejectionNotificationTemplate: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::notification-template.notification-template'
+    >;
+    requireTermsAcceptance: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    shortDescription: Schema.Attribute.Text;
+    startAt: Schema.Attribute.DateTime;
+    status: Schema.Attribute.Enumeration<
+      ['draft', 'open', 'paused', 'closed', 'cancelled']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+    successMessage: Schema.Attribute.Text;
+    targetFeature: Schema.Attribute.String & Schema.Attribute.Required;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    termsContent: Schema.Attribute.Text;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    verificationExpireMinutes: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<1440>;
+    verificationMethod: Schema.Attribute.Enumeration<
+      ['email_link', 'email_otp', 'none']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'email_link'>;
+    verificationNotificationTemplate: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::notification-template.notification-template'
+    >;
+    verificationRequired: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+  };
+}
+
 export interface ApiRequestAssigneeRequestAssignee
   extends Struct.CollectionTypeSchema {
   collectionName: 'request_assignees';
@@ -4769,7 +5381,7 @@ export interface ApiStravaConnectionStravaConnection
     lastSyncAt: Schema.Attribute.DateTime;
     lastSyncError: Schema.Attribute.Text;
     lastSyncStatus: Schema.Attribute.Enumeration<
-      ['NEVER', 'SUCCESS', 'FAILED', 'PARTIAL']
+      ['NEVER', 'RUNNING', 'SUCCESS', 'FAILED', 'PARTIAL']
     > &
       Schema.Attribute.Required &
       Schema.Attribute.DefaultTo<'NEVER'>;
@@ -4788,6 +5400,10 @@ export interface ApiStravaConnectionStravaConnection
       Schema.Attribute.Required &
       Schema.Attribute.DefaultTo<'ACTIVE'>;
     stravaAthleteId: Schema.Attribute.String & Schema.Attribute.Required;
+    syncJobs: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::strava-sync-job.strava-sync-job'
+    >;
     tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
       Schema.Attribute.Required;
     tokenExpiresAt: Schema.Attribute.DateTime;
@@ -4819,6 +5435,7 @@ export interface ApiStravaOauthStateStravaOauthState
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     expiresAt: Schema.Attribute.DateTime & Schema.Attribute.Required;
+    frontendOrigin: Schema.Attribute.String;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -4836,6 +5453,160 @@ export interface ApiStravaOauthStateStravaOauthState
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     usedAt: Schema.Attribute.DateTime;
+    user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    > &
+      Schema.Attribute.Required;
+  };
+}
+
+export interface ApiStravaSyncJobStravaSyncJob
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'strava_sync_jobs';
+  info: {
+    description: 'Database-backed Strava synchronization job with resumable checkpoints for a tenant-scoped internal user.';
+    displayName: 'Strava Sync Job';
+    pluralName: 'strava-sync-jobs';
+    singularName: 'strava-sync-job';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    cancelledAt: Schema.Attribute.DateTime;
+    claimedAt: Schema.Attribute.DateTime;
+    claimedBy: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    completedAt: Schema.Attribute.DateTime;
+    connection: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::strava-connection.strava-connection'
+    > &
+      Schema.Attribute.Required;
+    createdActivities: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    currentPage: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<1>;
+    failedActivities: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
+    failedAt: Schema.Attribute.DateTime;
+    heartbeatAt: Schema.Attribute.DateTime;
+    lastErrorCode: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 120;
+      }>;
+    lastErrorMessage: Schema.Attribute.Text;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::strava-sync-job.strava-sync-job'
+    > &
+      Schema.Attribute.Private;
+    metadata: Schema.Attribute.JSON & Schema.Attribute.DefaultTo<{}>;
+    newestSyncedAt: Schema.Attribute.DateTime;
+    nextRetryAt: Schema.Attribute.DateTime;
+    oldestSyncedAt: Schema.Attribute.DateTime;
+    perPage: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<100>;
+    phase: Schema.Attribute.Enumeration<
+      [
+        'preparing',
+        'syncing_recent',
+        'syncing_history',
+        'rebuilding_snapshot',
+        'finalizing',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'preparing'>;
+    processedActivities: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
+    publishedAt: Schema.Attribute.DateTime;
+    requestedAt: Schema.Attribute.DateTime;
+    retryCount: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
+    skippedActivities: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
+    startedAt: Schema.Attribute.DateTime;
+    status: Schema.Attribute.Enumeration<
+      ['queued', 'running', 'partial_ready', 'completed', 'failed', 'cancelled']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'queued'>;
+    syncMode: Schema.Attribute.Enumeration<
+      ['initial', 'incremental', 'retry']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'initial'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedActivities: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
     user: Schema.Attribute.Relation<
       'manyToOne',
       'plugin::users-permissions.user'
@@ -5685,6 +6456,10 @@ export interface ApiTenantTenant extends Struct.CollectionTypeSchema {
       'api::ai-knowledge.ai-knowledge'
     >;
     banner: Schema.Attribute.Media<'images'>;
+    campaignRegistrations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::campaign-registration.campaign-registration'
+    >;
     campaigns: Schema.Attribute.Relation<'oneToMany', 'api::campaign.campaign'>;
     challengeActivities: Schema.Attribute.Relation<
       'oneToMany',
@@ -5812,6 +6587,30 @@ export interface ApiTenantTenant extends Struct.CollectionTypeSchema {
       'api::question-option.question-option'
     >;
     questions: Schema.Attribute.Relation<'oneToMany', 'api::question.question'>;
+    quickMessageAccesses: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::quick-message-access.quick-message-access'
+    >;
+    quickMessageAccessLogs: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::quick-message-access-log.quick-message-access-log'
+    >;
+    quickMessageMessages: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::quick-message-message.quick-message-message'
+    >;
+    quickMessageReplies: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::quick-message-reply.quick-message-reply'
+    >;
+    quickMessages: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::quick-message.quick-message'
+    >;
+    registrationCampaigns: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::registration-campaign.registration-campaign'
+    >;
     settings: Schema.Attribute.JSON;
     shortName: Schema.Attribute.String;
     siteDescription: Schema.Attribute.Text;
@@ -5834,6 +6633,10 @@ export interface ApiTenantTenant extends Struct.CollectionTypeSchema {
     stravaOAuthStates: Schema.Attribute.Relation<
       'oneToMany',
       'api::strava-oauth-state.strava-oauth-state'
+    >;
+    stravaSyncJobs: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::strava-sync-job.strava-sync-job'
     >;
     studentLearningObjectProgressRecords: Schema.Attribute.Relation<
       'oneToMany',
@@ -6705,6 +7508,7 @@ declare module '@strapi/strapi' {
       'api::ai-knowledge.ai-knowledge': ApiAiKnowledgeAiKnowledge;
       'api::article.article': ApiArticleArticle;
       'api::author.author': ApiAuthorAuthor;
+      'api::campaign-registration.campaign-registration': ApiCampaignRegistrationCampaignRegistration;
       'api::campaign.campaign': ApiCampaignCampaign;
       'api::candidate-exam-log.candidate-exam-log': ApiCandidateExamLogCandidateExamLog;
       'api::candidate-exam.candidate-exam': ApiCandidateExamCandidateExam;
@@ -6759,6 +7563,12 @@ declare module '@strapi/strapi' {
       'api::public-page.public-page': ApiPublicPagePublicPage;
       'api::question-option.question-option': ApiQuestionOptionQuestionOption;
       'api::question.question': ApiQuestionQuestion;
+      'api::quick-message-access-log.quick-message-access-log': ApiQuickMessageAccessLogQuickMessageAccessLog;
+      'api::quick-message-access.quick-message-access': ApiQuickMessageAccessQuickMessageAccess;
+      'api::quick-message-message.quick-message-message': ApiQuickMessageMessageQuickMessageMessage;
+      'api::quick-message-reply.quick-message-reply': ApiQuickMessageReplyQuickMessageReply;
+      'api::quick-message.quick-message': ApiQuickMessageQuickMessage;
+      'api::registration-campaign.registration-campaign': ApiRegistrationCampaignRegistrationCampaign;
       'api::request-assignee.request-assignee': ApiRequestAssigneeRequestAssignee;
       'api::request-category.request-category': ApiRequestCategoryRequestCategory;
       'api::request-message.request-message': ApiRequestMessageRequestMessage;
@@ -6776,6 +7586,7 @@ declare module '@strapi/strapi' {
       'api::strava-activity.strava-activity': ApiStravaActivityStravaActivity;
       'api::strava-connection.strava-connection': ApiStravaConnectionStravaConnection;
       'api::strava-oauth-state.strava-oauth-state': ApiStravaOauthStateStravaOauthState;
+      'api::strava-sync-job.strava-sync-job': ApiStravaSyncJobStravaSyncJob;
       'api::student-learning-object-progress.student-learning-object-progress': ApiStudentLearningObjectProgressStudentLearningObjectProgress;
       'api::student-learning-profile.student-learning-profile': ApiStudentLearningProfileStudentLearningProfile;
       'api::student-skill-progress.student-skill-progress': ApiStudentSkillProgressStudentSkillProgress;

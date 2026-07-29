@@ -1,0 +1,143 @@
+{
+  "kind": "collectionType",
+  "collectionName": "campaign_registrations",
+  "info": {
+    "singularName": "campaign-registration",
+    "pluralName": "campaign-registrations",
+    "displayName": "Campaign Registration",
+    "description": "A user registration record under a tenant registration campaign."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "campaignRegistrations",
+      "required": true
+    },
+    "campaign": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::registration-campaign.registration-campaign",
+      "inversedBy": "registrations",
+      "required": true
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "membership": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::user-tenant.user-tenant"
+    },
+    "fullName": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200
+    },
+    "email": {
+      "type": "email",
+      "required": true
+    },
+    "phone": {
+      "type": "string",
+      "maxLength": 30
+    },
+    "formData": {
+      "type": "json",
+      "default": {}
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["pending_verification", "verified", "approved", "rejected", "cancelled", "expired"],
+      "default": "pending_verification",
+      "required": true
+    },
+    "registrationSource": {
+      "type": "enumeration",
+      "enum": ["campaign_link", "manual_code", "invite", "admin", "import", "api", "other"],
+      "default": "campaign_link"
+    },
+    "registeredAt": {
+      "type": "datetime"
+    },
+    "verifiedAt": {
+      "type": "datetime"
+    },
+    "approvedAt": {
+      "type": "datetime"
+    },
+    "approvedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "rejectedAt": {
+      "type": "datetime"
+    },
+    "rejectedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "rejectionReason": {
+      "type": "text"
+    },
+    "cancelledAt": {
+      "type": "datetime"
+    },
+    "termsAccepted": {
+      "type": "boolean",
+      "default": false,
+      "required": true
+    },
+    "termsAcceptedAt": {
+      "type": "datetime"
+    },
+    "verificationTokenHash": {
+      "type": "string",
+      "private": true
+    },
+    "verificationExpiresAt": {
+      "type": "datetime"
+    },
+    "verificationSentAt": {
+      "type": "datetime"
+    },
+    "verificationSendCount": {
+      "type": "integer",
+      "default": 0,
+      "min": 0,
+      "required": true
+    },
+    "lastVerificationRequestAt": {
+      "type": "datetime"
+    },
+    "emailChangedAt": {
+      "type": "datetime"
+    },
+    "metadata": {
+      "type": "json",
+      "default": {}
+    },
+    "isDeleted": {
+      "type": "boolean",
+      "default": false,
+      "required": true
+    },
+    "deletedAt": {
+      "type": "datetime"
+    },
+    "deletedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}

@@ -191,6 +191,72 @@ module.exports = {
     },
     {
       method: 'GET',
+      path: '/lucky-wheels/:id/results/verify/:verificationCode',
+      handler: 'lucky-wheel-admin.verifyResult',
+      config: {
+        auth: false,
+        policies: [
+          { name: 'global::has-tenant-permission', config: { key: 'lucky-wheel.manage' } },
+        ],
+      },
+    },
+    {
+      method: 'POST',
+      path: '/lucky-wheels/:id/results/:spinId/claim',
+      handler: 'lucky-wheel-admin.claimResult',
+      config: {
+        auth: false,
+        policies: [
+          { name: 'global::has-tenant-permission', config: { key: 'lucky-wheel.manage' } },
+        ],
+      },
+    },
+    {
+      method: 'GET',
+      path: '/lucky-wheels/:id/presentation',
+      handler: 'lucky-wheel-admin.presentation',
+      config: {
+        auth: false,
+        policies: [
+          { name: 'global::has-tenant-permission', config: { key: 'lucky-wheel.manage' } },
+        ],
+      },
+    },
+    {
+      method: 'GET',
+      path: '/lucky-wheels/:id/presentation/status',
+      handler: 'lucky-wheel-admin.presentationStatus',
+      config: {
+        auth: false,
+        policies: [
+          { name: 'global::has-tenant-permission', config: { key: 'lucky-wheel.manage' } },
+        ],
+      },
+    },
+    {
+      method: 'GET',
+      path: '/lucky-wheels/:id/presentation/eligible-participants',
+      handler: 'lucky-wheel-admin.presentationEligibleParticipants',
+      config: {
+        auth: false,
+        policies: [
+          { name: 'global::has-tenant-permission', config: { key: 'lucky-wheel.manage' } },
+        ],
+      },
+    },
+    {
+      method: 'POST',
+      path: '/lucky-wheels/:id/presentation/spin-for-participant',
+      handler: 'lucky-wheel-admin.presentationSpinForParticipant',
+      config: {
+        auth: false,
+        policies: [
+          { name: 'global::has-tenant-permission', config: { key: 'lucky-wheel.manage' } },
+        ],
+      },
+    },
+    {
+      method: 'GET',
       path: '/lucky-wheels/:id/participant-form-config',
       handler: 'lucky-wheel-admin.getParticipantFormConfig',
       config: {
