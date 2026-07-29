@@ -22,8 +22,15 @@ import CandidateExamScoreLookupPage from '../modules/admission-v1/pages/Candidat
 import CandidateExamRecheckLookupPage from '../modules/admission-v1/pages/CandidateExamRecheckLookupPage'
 import AdmissionPublicExamCardPage from '../modules/admission-v1/pages/AdmissionPublicExamCardPage'
 import CandidateExamCardPage from '../modules/admission-management/pages/CandidateExamCardPage'
+import LuckyWheelPresentationPage from '../modules/lucky-wheel-management/pages/LuckyWheelPresentationPage'
 import PublicPageDetailPage from '../pages/public/PublicPageDetailPage'
 import LuckyWheelPublicPage from '../pages/public/LuckyWheelPublicPage'
+import QuickMessagePublicPage from '../pages/public/QuickMessagePublicPage'
+import RegistrationCampaignJoinPage from '../modules/registration-campaign/pages/RegistrationCampaignJoinPage'
+import RegistrationCampaignCheckEmailPage from '../modules/registration-campaign/pages/RegistrationCampaignCheckEmailPage'
+import RegistrationCampaignVerifyPage from '../modules/registration-campaign/pages/RegistrationCampaignVerifyPage'
+import RegistrationCampaignCompleteAccountPage from '../modules/registration-campaign/pages/RegistrationCampaignCompleteAccountPage'
+import RegistrationCampaignCompletePage from '../modules/registration-campaign/pages/RegistrationCampaignCompletePage'
 import TenantEntryRedirect from '../components/TenantEntryRedirect'
 import PublicLayout from '../layouts/PublicLayout'
 import PublicChatShell from '../components/public/PublicChatShell'
@@ -135,6 +142,9 @@ export default function AppRouter() {
         <Route path="/dang-ky-tuyen-sinh-v1/:campaignCode/xac-minh-email" element={<TenantRoute requireAuth={false}><AdmissionV1EmailVerifyPage /></TenantRoute>} />
         <Route path="/dang-ky-tuyen-sinh-v1/:campaignCode/theo-doi" element={<TenantRoute requireAuth={false}><AdmissionV1TrackingPage /></TenantRoute>} />
         <Route path="/dang-ky-tuyen-sinh-v1/:campaignCode/ho-so" element={<TenantRoute requireAuth={false}><AdmissionV1FormPage /></TenantRoute>} />
+        <Route path="/join/verify" element={<TenantRoute requireAuth={false}><RegistrationCampaignVerifyPage /></TenantRoute>} />
+        <Route path="/join/complete-account" element={<TenantRoute requireAuth={false}><RegistrationCampaignCompleteAccountPage /></TenantRoute>} />
+        <Route path="/join/complete" element={<TenantRoute requireAuth={false}><RegistrationCampaignCompletePage /></TenantRoute>} />
         <Route path="/tra-cuu-tuyen-sinh/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionResultLookupPage /></TenantRoute>} />
         <Route path="/tra-cuu-diem/:campaignCode" element={<TenantRoute requireAuth={false}><PublicChatShell><CandidateExamScoreLookupPage /></PublicChatShell></TenantRoute>} />
         <Route path="/tra-cuu-phuc-khao/:campaignCode" element={<TenantRoute requireAuth={false}><CandidateExamRecheckLookupPage /></TenantRoute>} />
@@ -145,6 +155,9 @@ export default function AppRouter() {
         <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/xac-minh-email" element={<TenantRoute requireAuth={false}><AdmissionV1EmailVerifyPage /></TenantRoute>} />
         <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/theo-doi" element={<TenantRoute requireAuth={false}><AdmissionV1TrackingPage /></TenantRoute>} />
         <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/ho-so" element={<TenantRoute requireAuth={false}><AdmissionV1FormPage /></TenantRoute>} />
+        <Route path="/t/:tenantCode/join/verify" element={<TenantRoute requireAuth={false}><RegistrationCampaignVerifyPage /></TenantRoute>} />
+        <Route path="/t/:tenantCode/join/complete-account" element={<TenantRoute requireAuth={false}><RegistrationCampaignCompleteAccountPage /></TenantRoute>} />
+        <Route path="/t/:tenantCode/join/complete" element={<TenantRoute requireAuth={false}><RegistrationCampaignCompletePage /></TenantRoute>} />
         <Route path="/t/:tenantCode/tra-cuu-tuyen-sinh/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionResultLookupPage /></TenantRoute>} />
         <Route path="/t/:tenantCode/tra-cuu-diem/:campaignCode" element={<TenantRoute requireAuth={false}><PublicChatShell><CandidateExamScoreLookupPage /></PublicChatShell></TenantRoute>} />
         <Route path="/t/:tenantCode/tra-cuu-phuc-khao/:campaignCode" element={<TenantRoute requireAuth={false}><CandidateExamRecheckLookupPage /></TenantRoute>} />
@@ -159,6 +172,9 @@ export default function AppRouter() {
           )}
         >
           <Route path="lucky-wheel/:code" element={<LuckyWheelPublicPage />} />
+          <Route path="msg/:code" element={<QuickMessagePublicPage />} />
+          <Route path="join/:campaignCode" element={<RegistrationCampaignJoinPage />} />
+          <Route path="join/:campaignCode/check-email" element={<RegistrationCampaignCheckEmailPage />} />
           <Route path="journal" element={<JournalHomePage />} />
           <Route path="page/:slug" element={<PublicPageDetailPage />} />
           <Route path="article/:slug" element={<ArticleDetailPage />} />
@@ -178,6 +194,9 @@ export default function AppRouter() {
           )}
         >
           <Route path="lucky-wheel/:code" element={<LuckyWheelPublicPage />} />
+          <Route path="msg/:code" element={<QuickMessagePublicPage />} />
+          <Route path="join/:campaignCode" element={<RegistrationCampaignJoinPage />} />
+          <Route path="join/:campaignCode/check-email" element={<RegistrationCampaignCheckEmailPage />} />
           <Route index element={<JournalHomePage />} />
           <Route path="journal" element={<JournalHomePage />} />
           <Route path="page/:slug" element={<PublicPageDetailPage />} />
@@ -205,6 +224,28 @@ export default function AppRouter() {
           <TenantRoute>
             <FeatureRoute featureKey="admission.candidate-exam.manage">
               <CandidateExamCardPage />
+            </FeatureRoute>
+          </TenantRoute>
+        )}
+      />
+
+      <Route
+        path="/lucky-wheels/:id/presentation"
+        element={(
+          <TenantRoute>
+            <FeatureRoute featureKey="lucky-wheel.manage">
+              <LuckyWheelPresentationPage />
+            </FeatureRoute>
+          </TenantRoute>
+        )}
+      />
+
+      <Route
+        path="/t/:tenantCode/lucky-wheels/:id/presentation"
+        element={(
+          <TenantRoute>
+            <FeatureRoute featureKey="lucky-wheel.manage">
+              <LuckyWheelPresentationPage />
             </FeatureRoute>
           </TenantRoute>
         )}

@@ -35,6 +35,8 @@ import * as storage from './storage'
 import * as slider from './slider'
 import * as mailMonitor from './mail-monitor'
 import * as luckyWheel from './lucky-wheel-management'
+import * as fitness from './fitness'
+import * as registrationCampaign from './registration-campaign'
 // import * as inventory from "./inventory";
 
 export const allModules = [
@@ -61,6 +63,8 @@ export const allModules = [
   contentManagement,
   storage,
   slider,
+  fitness,
+  registrationCampaign,
   luckyWheel,
   mailMonitor,
   // inventory,

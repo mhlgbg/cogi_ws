@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   CContainer,
   CRow,
@@ -22,10 +22,35 @@ import {
   CSpinner,
   CButton,
 } from '@coreui/react'
-import { getLuckyWheel, getLuckyWheelPrizes, exportParticipants, exportResults, createLuckyWheelPrize, updateLuckyWheelPrize, updateLuckyWheel, openLuckyWheel, closeLuckyWheel, getLuckyWheelParticipants, getLuckyWheelResults, createLuckyWheelParticipant, updateLuckyWheelParticipant, blockLuckyWheelParticipant, unblockLuckyWheelParticipant, generateLuckyWheelParticipantCodes } from '../services/luckyWheelService'
+import { getLuckyWheel, getLuckyWheelPrizes, exportParticipants, exportResults, createLuckyWheelPrize, updateLuckyWheelPrize, updateLuckyWheel, openLuckyWheel, closeLuckyWheel, getLuckyWheelParticipants, getLuckyWheelResults, getLuckyWheelPresentation, verifyLuckyWheelResult, createLuckyWheelParticipant, updateLuckyWheelParticipant, blockLuckyWheelParticipant, unblockLuckyWheelParticipant, generateLuckyWheelParticipantCodes, claimLuckyWheelResult } from '../services/luckyWheelService'
 import { uploadTenantStorageFile, getApiMessage as storageApiMessage } from '../../content-management/services/tenantStorageService'
 import api from '../../../api/axios'
 import * as XLSX from 'xlsx'
+
+function resolveLuckyWheelTab(pathname = '') {
+  if (/\/slides(?:\/)?$/i.test(pathname)) return 'slides'
+  if (/\/(spins|results)(?:\/)?$/i.test(pathname)) return 'spins'
+  if (/\/participants(?:\/)?$/i.test(pathname)) return 'participants'
+  if (/\/settings(?:\/)?$/i.test(pathname)) return 'settings'
+  return 'prizes'
+}
+
+function buildLuckyWheelTabPath(id, tab, tenantCode = '') {
+  const prefix = tenantCode ? `/t/${encodeURIComponent(tenantCode)}` : ''
+  if (tab === 'participants') return `${prefix}/lucky-wheels/${id}/participants`
+  if (tab === 'settings') return `${prefix}/lucky-wheels/${id}/settings`
+  if (tab === 'spins') return `${prefix}/lucky-wheels/${id}/results`
+  if (tab === 'slides') return `${prefix}/lucky-wheels/${id}/slides`
+  return `${prefix}/lucky-wheels/${id}`
+}
+
+function getStatusMeta(status) {
+  const normalized = String(status || '').trim().toLowerCase()
+  if (normalized === 'opened') return { label: 'Đang mở', bg: '#dcfce7', color: '#166534' }
+  if (normalized === 'closed') return { label: 'Đã đóng', bg: '#e5e7eb', color: '#374151' }
+  if (normalized === 'cancelled') return { label: 'Đã hủy', bg: '#fee2e2', color: '#991b1b' }
+  return { label: 'Nháp', bg: '#fef3c7', color: '#92400e' }
+}
 
 function SpinnerCenter() {
   return (
@@ -105,13 +130,14 @@ const EditHeaderForm = ({ wheel, onClose = null, onSaved = null }) => {
 }
 
 export default function LuckyWheelDetailPage() {
-  const { id } = useParams()
+  const { id, tenantCode } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [wheel, setWheel] = useState(null)
-  const [activeTab, setActiveTab] = useState('prizes')
   const [showEditHeader, setShowEditHeader] = useState(false)
   const [editing, setEditing] = useState(false)
+  const activeTab = useMemo(() => resolveLuckyWheelTab(location.pathname), [location.pathname])
 
   useEffect(() => {
     let mounted = true
@@ -206,19 +232,19 @@ export default function LuckyWheelDetailPage() {
 
           <CNav variant="tabs">
             <CNavItem>
-              <CNavLink active={activeTab === 'prizes'} onClick={() => setActiveTab('prizes')}>Phần thưởng</CNavLink>
+              <CNavLink active={activeTab === 'prizes'} onClick={() => navigate(buildLuckyWheelTabPath(id, 'prizes', tenantCode))}>Phần thưởng</CNavLink>
             </CNavItem>
             <CNavItem>
-              <CNavLink active={activeTab === 'participants'} onClick={() => setActiveTab('participants')}>Người chơi</CNavLink>
+              <CNavLink active={activeTab === 'participants'} onClick={() => navigate(buildLuckyWheelTabPath(id, 'participants', tenantCode))}>Người chơi</CNavLink>
             </CNavItem>
             <CNavItem>
-              <CNavLink active={activeTab === 'settings'} onClick={() => setActiveTab('settings')}>Cấu hình</CNavLink>
+              <CNavLink active={activeTab === 'settings'} onClick={() => navigate(buildLuckyWheelTabPath(id, 'settings', tenantCode))}>Cấu hình</CNavLink>
             </CNavItem>
             <CNavItem>
-              <CNavLink active={activeTab === 'spins'} onClick={() => setActiveTab('spins')}>Kết quả</CNavLink>
+              <CNavLink active={activeTab === 'spins'} onClick={() => navigate(buildLuckyWheelTabPath(id, 'spins', tenantCode))}>Kết quả</CNavLink>
             </CNavItem>
             <CNavItem>
-              <CNavLink active={activeTab === 'slides'} onClick={() => setActiveTab('slides')}>Trình chiếu</CNavLink>
+              <CNavLink active={activeTab === 'slides'} onClick={() => navigate(buildLuckyWheelTabPath(id, 'slides', tenantCode))}>Trình chiếu</CNavLink>
             </CNavItem>
           </CNav>
 
@@ -261,7 +287,7 @@ export default function LuckyWheelDetailPage() {
             <CTabPane visible={activeTab === 'slides'}>
               <CCard className='mt-3'><CCardBody>
                 <h5>Trình chiếu</h5>
-                <div>Quản lý slide/hình ảnh cho vòng quay.</div>
+                <PresentationTab wheelId={id} wheel={wheel} />
               </CCardBody></CCard>
             </CTabPane>
           </CTabContent>
@@ -885,28 +911,160 @@ function ParticipantFormConfig({ wheel, onSaved = null }) {
   )
 }
 
-function ResultList({ wheelId, wheel }) {
-  const [rows, setRows] = useState(null)
+function PresentationTab({ wheelId, wheel }) {
+  const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const participantFields = useMemo(() => {
-    const source = Array.isArray(wheel?.participantFormConfig?.fields) ? wheel.participantFormConfig.fields : []
-    const enabled = source.filter((field) => field && field.enabled)
-    if (enabled.length > 0) return enabled
-    return [
-      { key: 'participantCode', label: 'Mã tham gia', enabled: true },
-      { key: 'fullName', label: 'Họ tên', enabled: true },
-    ]
-  }, [wheel])
+  const [copyState, setCopyState] = useState('')
 
   useEffect(() => {
     let mounted = true
     async function load() {
       setLoading(true)
       try {
-        const resp = await getLuckyWheelResults(wheelId, { page: 1, pageSize: 100 })
+        const resp = await getLuckyWheelPresentation(wheelId)
+        if (!mounted) return
+        setData(resp?.data || null)
+      } catch {
+        if (!mounted) return
+        setData(null)
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    load()
+    return () => { mounted = false }
+  }, [wheelId])
+
+  async function copyText(value, label) {
+    if (!value) return
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopyState(`Đã sao chép ${label}`)
+      window.setTimeout(() => setCopyState(''), 1800)
+    } catch {
+      window.alert(`Không thể sao chép ${label}`)
+    }
+  }
+
+  if (loading) return <div style={{ padding: 20 }}><CSpinner /></div>
+  if (!data) return <div className='text-muted'>Không tải được dữ liệu trình chiếu.</div>
+
+  const statusMeta = getStatusMeta(data?.wheel?.status || wheel?.status)
+  const statistics = data.statistics || {}
+
+  return (
+    <div>
+      {statusMeta.label !== 'Đang mở' ? (
+        <div className='alert alert-warning py-2'>Vòng quay hiện chưa mở. Bạn vẫn có thể xem preview trình chiếu.</div>
+      ) : null}
+
+      <div className='row g-3'>
+        <div className='col-12 col-lg-6'>
+          <div className='border rounded p-3 h-100'>
+            <div className='fw-semibold mb-2'>Thông tin truy cập public</div>
+            <div className='small text-muted mb-2'>{data.publicUrl || '—'}</div>
+            <div className='d-flex flex-wrap gap-2 mb-3'>
+              <CButton size='sm' color='secondary' variant='outline' onClick={() => copyText(data.publicUrl, 'link tham gia')}>Sao chép liên kết</CButton>
+              <CButton size='sm' color='primary' onClick={() => window.open(data.publicUrl, '_blank', 'noopener,noreferrer')}>Mở trang người tham gia</CButton>
+            </div>
+            {data.qrCodeDataUrl ? (
+              <div className='text-center'>
+                <img src={data.qrCodeDataUrl} alt='QR tham gia' style={{ width: 220, maxWidth: '100%', borderRadius: 12, border: '1px solid #e5e7eb' }} />
+                <div className='mt-2 fw-semibold'>Quét mã để tham gia</div>
+                <div className='small text-muted'>Mã vòng quay: {data?.wheel?.code || wheel?.code || '—'}</div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className='col-12 col-lg-6'>
+          <div className='border rounded p-3 h-100'>
+            <div className='fw-semibold mb-2'>Thông tin trình chiếu</div>
+            <div className='small text-muted mb-2'>{data.presentationUrl || '—'}</div>
+            <div className='d-flex flex-wrap gap-2 mb-3'>
+              <CButton size='sm' color='secondary' variant='outline' onClick={() => copyText(data.presentationUrl, 'link trình chiếu')}>Sao chép link trình chiếu</CButton>
+              <CButton size='sm' color='primary' onClick={() => window.open(data.presentationUrl, '_blank', 'noopener,noreferrer')}>Mở trình chiếu</CButton>
+            </div>
+            <div className='small text-muted'>Màn hình này dùng để hiển thị trên TV, máy chiếu hoặc màn hình lớn.</div>
+          </div>
+        </div>
+
+        <div className='col-12 col-lg-6'>
+          <div className='border rounded p-3 h-100'>
+            <div className='fw-semibold mb-2'>Trạng thái chiến dịch</div>
+            <div className='d-flex align-items-center gap-2 mb-2'>
+              <span style={{ display: 'inline-flex', padding: '4px 10px', borderRadius: 999, background: statusMeta.bg, color: statusMeta.color, fontWeight: 700, fontSize: 12 }}>{statusMeta.label}</span>
+            </div>
+            <div><strong>Tên:</strong> {data?.wheel?.name || wheel?.name || '—'}</div>
+            <div><strong>Mã:</strong> {data?.wheel?.code || wheel?.code || '—'}</div>
+            <div><strong>Bắt đầu:</strong> {data?.wheel?.startAt ? new Date(data.wheel.startAt).toLocaleString() : '—'}</div>
+            <div><strong>Kết thúc:</strong> {data?.wheel?.endAt ? new Date(data.wheel.endAt).toLocaleString() : '—'}</div>
+            <div><strong>Hình thức tham gia:</strong> {data?.wheel?.participationMode || wheel?.participationMode || '—'}</div>
+          </div>
+        </div>
+
+        <div className='col-12 col-lg-6'>
+          <div className='border rounded p-3 h-100'>
+            <div className='fw-semibold mb-2'>Thống kê nhanh</div>
+            <div className='row g-2'>
+              <div className='col-6'><div className='border rounded p-2'><div className='small text-muted'>Tổng số người tham gia</div><div className='fw-bold fs-5'>{statistics.totalParticipants ?? 0}</div></div></div>
+              <div className='col-6'><div className='border rounded p-2'><div className='small text-muted'>Chưa quay</div><div className='fw-bold fs-5'>{statistics.eligibleParticipants ?? 0}</div></div></div>
+              <div className='col-6'><div className='border rounded p-2'><div className='small text-muted'>Đã quay</div><div className='fw-bold fs-5'>{statistics.usedParticipants ?? 0}</div></div></div>
+              <div className='col-6'><div className='border rounded p-2'><div className='small text-muted'>Tổng lượt quay</div><div className='fw-bold fs-5'>{statistics.totalSpins ?? 0}</div></div></div>
+              <div className='col-12'><div className='border rounded p-2'><div className='small text-muted'>Số giải còn hiệu lực</div><div className='fw-bold fs-5'>{statistics.activePrizeCount ?? 0}</div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {copyState ? <div className='small text-success mt-3'>{copyState}</div> : null}
+    </div>
+  )
+}
+
+function ResultList({ wheelId, wheel }) {
+  const [rows, setRows] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [pagination, setPagination] = useState({ page: 1, pageSize: 20, pageCount: 1, total: 0 })
+  const [search, setSearch] = useState('')
+  const [claimStatusFilter, setClaimStatusFilter] = useState('')
+  const [resultTypeFilter, setResultTypeFilter] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [verifyCode, setVerifyCode] = useState('')
+  const [verifyLoading, setVerifyLoading] = useState(false)
+  const [verifyResult, setVerifyResult] = useState(null)
+  const [verifyError, setVerifyError] = useState('')
+  const [showVerifyModal, setShowVerifyModal] = useState(false)
+  const [claiming, setClaiming] = useState(false)
+  const [claimNote, setClaimNote] = useState('')
+  const [claimTarget, setClaimTarget] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  const participantFields = useMemo(() => ([
+    { key: 'participantCode', label: 'Mã người tham gia' },
+    { key: 'fullName', label: 'Họ tên' },
+  ]), [])
+
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      setLoading(true)
+      try {
+        const resp = await getLuckyWheelResults(wheelId, {
+          page: pagination.page,
+          pageSize: pagination.pageSize,
+          search,
+          claimStatus: claimStatusFilter,
+          resultType: resultTypeFilter,
+          dateFrom,
+          dateTo,
+          sort: 'spunAt:desc',
+        })
         if (!mounted) return
         const items = Array.isArray(resp?.data) ? resp.data : (resp?.data?.data || [])
         setRows(items)
+        setPagination(resp?.meta?.pagination || { page: 1, pageSize: 20, pageCount: 1, total: items.length })
       } catch (e) {
         if (!mounted) return
         setRows([])
@@ -916,59 +1074,256 @@ function ResultList({ wheelId, wheel }) {
     }
     load()
     return () => { mounted = false }
-  }, [wheelId])
+  }, [wheelId, pagination.page, pagination.pageSize, search, claimStatusFilter, resultTypeFilter, dateFrom, dateTo, reloadKey])
 
   function pickParticipantValue(item, key) {
     const attrs = item?.attributes || item || {}
-    if (key === 'participantCode') return attrs.participantCode || attrs.participant?.participantCode || '-'
-    if (key === 'fullName') return attrs.participantFullName || attrs.participant?.fullName || '-'
-    if (key === 'phone') return attrs.participantPhone || attrs.participant?.phone || '-'
-    if (key === 'email') return attrs.participantEmail || attrs.participant?.email || '-'
-    if (key === 'className') return attrs.participantClassName || attrs.participant?.className || '-'
+    if (key === 'participantCode') return attrs.participant?.participantCode || attrs.participantCode || '-'
+    if (key === 'fullName') return attrs.participant?.fullName || attrs.participantFullName || '-'
     return '-'
   }
 
+  function normalizeRow(row) {
+    const attrs = row?.attributes || row || {}
+    return {
+      ...attrs,
+      id: row?.id || attrs.id,
+      participant: attrs.participant || {},
+      result: attrs.result || attrs.prize || {},
+    }
+  }
+
+  function claimStatusLabel(value) {
+    if (value === 'claimed') return 'Đã trao'
+    if (value === 'not_applicable') return 'Không cần trao'
+    return 'Chưa trao'
+  }
+
+  function resultTypeLabel(isNoPrize) {
+    return isNoPrize ? 'Không có phần thưởng' : 'Có phần thưởng'
+  }
+
+  async function handleVerify(event) {
+    event?.preventDefault?.()
+    const normalizedCode = String(verifyCode || '').trim().toUpperCase()
+    if (!normalizedCode || verifyLoading) return
+    setVerifyLoading(true)
+    setVerifyError('')
+    try {
+      const resp = await verifyLuckyWheelResult(wheelId, normalizedCode)
+      setVerifyResult(resp?.data || null)
+      setVerifyCode(normalizedCode)
+    } catch (error) {
+      setVerifyResult(null)
+      setVerifyError(String(error?.response?.data?.error || error?.message || 'Không kiểm tra được mã'))
+    } finally {
+      setVerifyLoading(false)
+    }
+  }
+
+  function openClaimModal(item) {
+    setClaimTarget(item)
+    setClaimNote('')
+  }
+
+  async function handleClaim() {
+    if (!claimTarget || claiming) return
+    setClaiming(true)
+    try {
+      const resp = await claimLuckyWheelResult(wheelId, claimTarget.id, { claimNote })
+      const updated = resp?.data || null
+      if (updated) {
+        setRows((current) => (current || []).map((row) => {
+          const normalized = normalizeRow(row)
+          if (String(normalized.id) !== String(updated.id)) return row
+          return { id: updated.id, attributes: updated }
+        }))
+        setVerifyResult((current) => {
+          if (!current || String(current.id) !== String(updated.id)) return current
+          return updated
+        })
+      }
+      setClaimTarget(null)
+      setClaimNote('')
+      setReloadKey((current) => current + 1)
+    } catch (error) {
+      const currentData = error?.response?.data?.data || null
+      if (currentData) {
+        setVerifyResult(currentData)
+        setRows((current) => (current || []).map((row) => {
+          const normalized = normalizeRow(row)
+          if (String(normalized.id) !== String(currentData.id)) return row
+          return { id: currentData.id, attributes: currentData }
+        }))
+      }
+      window.alert(String(error?.response?.data?.error || error?.message || 'Không thể xác nhận đã trao'))
+    } finally {
+      setClaiming(false)
+    }
+  }
+
   if (loading) return <div style={{ padding: 20 }}><CSpinner /></div>
-  if (!rows || rows.length === 0) return <div className='text-muted'>Chưa có kết quả quay.</div>
 
   return (
-    <div className='table-responsive'>
-      <table className='table table-hover align-middle'>
-        <thead>
-          <tr>
-            <th style={{ width: 180 }}>Thời gian quay</th>
-            <th style={{ width: 160 }}>Mã xác thực</th>
-            {participantFields.map((field) => (
-              <th key={field.key}>{field.label || field.key}</th>
-            ))}
-            <th>Phần thưởng</th>
-            <th style={{ width: 140 }}>Loại kết quả</th>
-            <th style={{ width: 140 }}>Trạng thái nhận</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => {
-            const attrs = row?.attributes || row || {}
-            const prizeName = attrs.prizeName || attrs.prize?.name || '-'
-            const resultMessage = attrs.prizeResultMessage || attrs.prize?.resultMessage || ''
-            return (
-              <tr key={row.id || attrs.id}>
-                <td>{attrs.spunAt ? new Date(attrs.spunAt).toLocaleString() : '-'}</td>
-                <td><strong>{attrs.verificationCode || '-'}</strong></td>
+    <div>
+      <div className='d-flex flex-wrap gap-2 mb-3 align-items-end'>
+        <div style={{ minWidth: 260 }}>
+          <CFormLabel>Tìm kiếm</CFormLabel>
+          <CFormInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder='Mã xác thực, mã người tham gia, họ tên, phần thưởng' />
+        </div>
+        <div>
+          <CFormLabel>Trạng thái trao</CFormLabel>
+          <CFormSelect value={claimStatusFilter} onChange={(e) => setClaimStatusFilter(e.target.value)}>
+            <option value=''>Tất cả</option>
+            <option value='unclaimed'>Chưa trao</option>
+            <option value='claimed'>Đã trao</option>
+            <option value='not_applicable'>Không cần trao</option>
+          </CFormSelect>
+        </div>
+        <div>
+          <CFormLabel>Loại kết quả</CFormLabel>
+          <CFormSelect value={resultTypeFilter} onChange={(e) => setResultTypeFilter(e.target.value)}>
+            <option value=''>Tất cả</option>
+            <option value='prize'>Có phần thưởng</option>
+            <option value='no_prize'>Không có phần thưởng</option>
+          </CFormSelect>
+        </div>
+        <div>
+          <CFormLabel>Từ ngày</CFormLabel>
+          <CFormInput type='date' value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+        </div>
+        <div>
+          <CFormLabel>Đến ngày</CFormLabel>
+          <CFormInput type='date' value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        </div>
+        <div className='ms-auto d-flex gap-2'>
+          <CButton color='secondary' variant='outline' onClick={() => { setSearch(''); setClaimStatusFilter(''); setResultTypeFilter(''); setDateFrom(''); setDateTo(''); setPagination((current) => ({ ...current, page: 1 })) }}>Reset</CButton>
+          <CButton color='primary' variant='outline' onClick={() => { setShowVerifyModal(true); setVerifyError(''); setVerifyResult(null) }}>Xác minh mã</CButton>
+        </div>
+      </div>
+
+      {!rows || rows.length === 0 ? <div className='text-muted'>Chưa có kết quả quay.</div> : (
+        <div className='table-responsive'>
+          <table className='table table-hover align-middle'>
+            <thead>
+              <tr>
+                <th style={{ width: 180 }}>Thời gian quay</th>
+                <th style={{ width: 160 }}>Mã xác thực</th>
                 {participantFields.map((field) => (
-                  <td key={field.key}>{pickParticipantValue(attrs, field.key)}</td>
+                  <th key={field.key}>{field.label || field.key}</th>
                 ))}
-                <td>
-                  <div style={{ fontWeight: 600 }}>{prizeName}</div>
-                  {resultMessage ? <div className='text-muted' style={{ fontSize: 12 }}>{resultMessage}</div> : null}
-                </td>
-                <td>{attrs.prizeIsNoPrize ? 'Không trúng' : 'Trúng thưởng'}</td>
-                <td>{attrs.claimStatus || '-'}</td>
+                <th>Kết quả</th>
+                <th style={{ width: 160 }}>Loại kết quả</th>
+                <th style={{ width: 140 }}>Trạng thái trao thưởng</th>
+                <th style={{ width: 180 }}>Thời gian trao</th>
+                <th style={{ width: 160 }}>Người trao</th>
+                <th style={{ width: 160 }}>Thao tác</th>
               </tr>
-            )
-          })}
-        </tbody>
-      </table>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const item = normalizeRow(row)
+                const canClaim = item.claimStatus === 'unclaimed' && !item.result?.isNoPrize && item.status !== 'cancelled'
+                return (
+                  <tr key={item.id}>
+                    <td>{item.spunAt ? new Date(item.spunAt).toLocaleString() : '-'}</td>
+                    <td><strong>{item.verificationCode || '-'}</strong></td>
+                    {participantFields.map((field) => (
+                      <td key={field.key}>{pickParticipantValue(item, field.key)}</td>
+                    ))}
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{item.result?.name || '-'}</div>
+                      {item.result?.resultMessage ? <div className='text-muted' style={{ fontSize: 12 }}>{item.result.resultMessage}</div> : null}
+                    </td>
+                    <td>{resultTypeLabel(item.result?.isNoPrize)}</td>
+                    <td>{claimStatusLabel(item.claimStatus)}</td>
+                    <td>{item.claimedAt ? new Date(item.claimedAt).toLocaleString() : '-'}</td>
+                    <td>{item.claimedByName || '-'}</td>
+                    <td>
+                      <div className='d-flex gap-2 flex-wrap'>
+                        <CButton size='sm' color='secondary' variant='outline' onClick={() => { setShowVerifyModal(true); setVerifyCode(item.verificationCode || ''); setVerifyError(''); setVerifyResult(item) }}>Chi tiết</CButton>
+                        {canClaim ? <CButton size='sm' color='primary' onClick={() => openClaimModal(item)}>Xác nhận đã trao</CButton> : null}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className='d-flex justify-content-between align-items-center mt-3'>
+        <div className='small text-muted'>Tổng: {pagination.total || 0}</div>
+        <div className='d-flex align-items-center gap-2'>
+          <CButton size='sm' color='secondary' variant='outline' disabled={pagination.page <= 1} onClick={() => setPagination((current) => ({ ...current, page: current.page - 1 }))}>Trang trước</CButton>
+          <span className='small'>Trang {pagination.page || 1}/{pagination.pageCount || 1}</span>
+          <CButton size='sm' color='secondary' variant='outline' disabled={(pagination.page || 1) >= (pagination.pageCount || 1)} onClick={() => setPagination((current) => ({ ...current, page: current.page + 1 }))}>Trang sau</CButton>
+        </div>
+      </div>
+
+      <CModal visible={showVerifyModal} onClose={() => setShowVerifyModal(false)}>
+        <CModalHeader closeButton>Xác minh mã kết quả</CModalHeader>
+        <CModalBody>
+          <CForm onSubmit={handleVerify}>
+            <div className='mb-3'>
+              <CFormLabel>Mã xác thực</CFormLabel>
+              <CFormInput value={verifyCode} onChange={(e) => setVerifyCode(String(e.target.value || '').toUpperCase())} placeholder='Nhập mã xác thực' />
+            </div>
+            <div className='d-flex justify-content-end'>
+              <CButton type='submit' color='primary' disabled={verifyLoading || !String(verifyCode || '').trim()}>{verifyLoading ? 'Đang kiểm tra...' : 'Kiểm tra'}</CButton>
+            </div>
+          </CForm>
+
+          {verifyError ? <div className='alert alert-danger py-2 mt-3 mb-0'>{verifyError}</div> : null}
+
+          {verifyResult ? (
+            <div className='mt-3 border rounded p-3'>
+              <div><strong>Mã xác thực:</strong> {verifyResult.verificationCode || '-'}</div>
+              <div><strong>Họ tên:</strong> {verifyResult.participant?.fullName || '-'}</div>
+              <div><strong>Mã người tham gia:</strong> {verifyResult.participant?.participantCode || '-'}</div>
+              <div><strong>Lớp/đơn vị:</strong> {verifyResult.participant?.className || '-'}</div>
+              <div><strong>Kết quả:</strong> {verifyResult.result?.name || '-'}</div>
+              <div><strong>Thời gian quay:</strong> {verifyResult.spunAt ? new Date(verifyResult.spunAt).toLocaleString() : '-'}</div>
+              <div><strong>Trạng thái trao:</strong> {claimStatusLabel(verifyResult.claimStatus)}</div>
+              {verifyResult.result?.image?.resolvedUrl || verifyResult.result?.image?.url ? (
+                <div className='mt-3'>
+                  <img src={verifyResult.result.image.resolvedUrl || verifyResult.result.image.url} alt={verifyResult.result?.name || 'Prize'} style={{ width: 180, maxWidth: '100%', borderRadius: 12 }} />
+                </div>
+              ) : null}
+              {verifyResult.result?.resultMessage ? <div className='mt-2'>{verifyResult.result.resultMessage}</div> : null}
+              {verifyResult.claimNote ? <div className='mt-2'><strong>Ghi chú:</strong> {verifyResult.claimNote}</div> : null}
+              {verifyResult.canClaim ? (
+                <div className='mt-3'>
+                  <CButton color='primary' onClick={() => openClaimModal(verifyResult)}>Xác nhận đã trao</CButton>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </CModalBody>
+      </CModal>
+
+      <CModal visible={!!claimTarget} onClose={() => !claiming && setClaimTarget(null)}>
+        <CModalHeader closeButton>Xác nhận đã trao thưởng</CModalHeader>
+        <CModalBody>
+          {claimTarget ? (
+            <div>
+              <div><strong>Họ tên:</strong> {claimTarget.participant?.fullName || '-'}</div>
+              <div><strong>Mã người tham gia:</strong> {claimTarget.participant?.participantCode || '-'}</div>
+              <div><strong>Mã xác thực:</strong> {claimTarget.verificationCode || '-'}</div>
+              <div><strong>Phần thưởng:</strong> {claimTarget.result?.name || '-'}</div>
+              <div className='mt-3'>
+                <CFormLabel>Ghi chú</CFormLabel>
+                <textarea className='form-control' rows={3} value={claimNote} onChange={(e) => setClaimNote(e.target.value)} placeholder='Ghi chú trao thưởng (không bắt buộc)' />
+              </div>
+            </div>
+          ) : null}
+        </CModalBody>
+        <CModalFooter>
+          <CButton color='secondary' onClick={() => setClaimTarget(null)} disabled={claiming}>Hủy</CButton>
+          <CButton color='primary' onClick={handleClaim} disabled={claiming}>{claiming ? 'Đang xác nhận...' : 'Xác nhận đã trao'}</CButton>
+        </CModalFooter>
+      </CModal>
     </div>
   )
 }

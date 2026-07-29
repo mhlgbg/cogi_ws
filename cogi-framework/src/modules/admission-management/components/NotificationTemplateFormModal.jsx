@@ -14,6 +14,7 @@ import {
   CModalTitle,
   CRow,
 } from '@coreui/react'
+import SimpleHtmlEditor from './SimpleHtmlEditor'
 
 function stringifyVariables(value) {
   if (value === null || value === undefined) return '{\n  \n}'
@@ -73,7 +74,7 @@ export default function NotificationTemplateFormModal({
   }
 
   return (
-    <CModal visible={visible} onClose={() => !submitting && onClose?.()} size='xl'>
+    <CModal visible={visible} onClose={() => !submitting && onClose?.()} size='xl' backdrop='static'>
       <CModalHeader>
         <CModalTitle>{title}</CModalTitle>
       </CModalHeader>
@@ -104,8 +105,15 @@ export default function NotificationTemplateFormModal({
               <CFormCheck label='Đang hoạt động' checked={form.isActive} onChange={(event) => updateField('isActive', event.target.checked)} disabled={submitting} />
             </CCol>
             <CCol xs={12}>
-              <CFormLabel>Content</CFormLabel>
-              <CFormTextarea rows={12} value={form.content} onChange={(event) => updateField('content', event.target.value)} required disabled={submitting} placeholder='Xin chào {{tenantName}} ...' />
+              <SimpleHtmlEditor
+                label='Content'
+                rows={12}
+                value={form.content}
+                onChange={(nextValue) => updateField('content', nextValue)}
+                disabled={submitting}
+                placeholder='Xin chào {{tenantName}} ...'
+                helperText='Soạn nội dung HTML của email và dùng đúng cú pháp biến hiện có như {{tenantName}} hoặc {{link}}.'
+              />
             </CCol>
             <CCol xs={12}>
               <CFormLabel>Variables JSON</CFormLabel>

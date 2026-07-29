@@ -1,0 +1,352 @@
+.registration-campaign-join-page {
+  padding: 32px 0 40px;
+  background: #f8fafc;
+}
+
+.registration-campaign-join-shell {
+  max-width: 860px;
+  margin: 32px auto;
+}
+
+.registration-campaign-join-card {
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+  overflow: hidden;
+}
+
+.registration-campaign-join-card-body {
+  padding: 28px 32px 32px;
+}
+
+.registration-campaign-join-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 320px;
+}
+
+.registration-campaign-join-cover {
+  width: 100%;
+  aspect-ratio: 16 / 6;
+  object-fit: cover;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  display: block;
+}
+
+.registration-campaign-join-header {
+  margin-bottom: 20px;
+}
+
+.registration-campaign-join-title {
+  margin: 0 0 8px;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #111827;
+}
+
+.registration-campaign-join-lead {
+  margin: 0;
+  max-width: 720px;
+  font-size: 16px;
+  line-height: 1.6;
+  color: #4b5563;
+}
+
+.registration-campaign-join-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 24px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.registration-campaign-join-meta-item {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+.registration-campaign-join-meta-label {
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.registration-campaign-join-meta-value {
+  min-width: 0;
+}
+
+.registration-campaign-join-description-wrap {
+  max-width: 720px;
+  margin-bottom: 24px;
+}
+
+.registration-campaign-join-description-label {
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.registration-campaign-join-description-box {
+  width: 100%;
+  min-height: 132px;
+  max-height: 180px;
+  padding: 12px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #f9fafb;
+  color: #4b5563;
+  font-size: 15px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-y: auto;
+  resize: none;
+}
+
+.registration-campaign-join-description-box:focus {
+  outline: none;
+}
+
+.registration-campaign-join-alert {
+  margin-bottom: 18px;
+}
+
+.registration-campaign-join-form-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.registration-campaign-join-section-title {
+  margin-bottom: 18px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.registration-campaign-join-form {
+  display: block;
+}
+
+.registration-campaign-join-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 20px;
+}
+
+.registration-campaign-join-field {
+  min-width: 0;
+}
+
+.registration-campaign-join-field--full {
+  grid-column: 1 / -1;
+}
+
+.registration-campaign-join-field--phone {
+  grid-column: 1 / -1;
+}
+
+.registration-campaign-join-field--phone .registration-campaign-join-control-wrap {
+  max-width: calc(50% - 10px);
+}
+
+.registration-campaign-join-label {
+  display: inline-block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.registration-campaign-join-required {
+  color: #dc2626;
+}
+
+.registration-campaign-join-control-wrap {
+  width: 100%;
+}
+
+.registration-campaign-join-control,
+.registration-campaign-join-control.form-control,
+.registration-campaign-join-control.form-select {
+  min-height: 42px;
+  border-radius: 8px;
+  padding: 0 12px;
+  border-color: #d1d5db;
+  box-shadow: none;
+}
+
+.registration-campaign-join-control::placeholder,
+.registration-campaign-join-control.form-control::placeholder {
+  color: #9ca3af;
+}
+
+.registration-campaign-join-control:focus,
+.registration-campaign-join-control.form-control:focus,
+.registration-campaign-join-control.form-select:focus {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.registration-campaign-join-control--textarea {
+  min-height: 120px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.registration-campaign-join-checkbox-group .form-check-label,
+.registration-campaign-join-field .form-check-label {
+  color: #374151;
+}
+
+.registration-campaign-join-help {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #6b7280;
+}
+
+.registration-campaign-join-terms {
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.registration-campaign-join-terms-title {
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.registration-campaign-join-terms-content {
+  margin-bottom: 12px;
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #4b5563;
+}
+
+.registration-campaign-join-terms-check {
+  margin-bottom: 0;
+}
+
+.registration-campaign-join-terms-check .form-check-input {
+  margin-top: 0.2rem;
+}
+
+.registration-campaign-join-terms-check .form-check-label {
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.registration-campaign-join-terms-hint {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #b45309;
+}
+
+.registration-campaign-join-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.registration-campaign-join-submit {
+  min-width: 170px;
+  height: 44px;
+  font-weight: 600;
+  border-radius: 8px;
+}
+
+.registration-campaign-join-submit-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 100%;
+}
+
+.registration-campaign-join-submit-spinner {
+  flex-shrink: 0;
+}
+
+@media (max-width: 991.98px) {
+  .registration-campaign-join-shell {
+    max-width: 720px;
+  }
+
+  .registration-campaign-join-card-body {
+    padding: 24px;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .registration-campaign-join-page {
+    padding: 12px 0 24px;
+  }
+
+  .registration-campaign-join-shell {
+    margin: 12px auto;
+  }
+
+  .registration-campaign-join-card {
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+  }
+
+  .registration-campaign-join-card-body {
+    padding: 18px;
+  }
+
+  .registration-campaign-join-cover {
+    aspect-ratio: 16 / 7;
+    margin-bottom: 20px;
+  }
+
+  .registration-campaign-join-title {
+    font-size: 24px;
+  }
+
+  .registration-campaign-join-lead,
+  .registration-campaign-join-description-box {
+    font-size: 15px;
+  }
+
+  .registration-campaign-join-description-box {
+    min-height: 120px;
+    max-height: 168px;
+  }
+
+  .registration-campaign-join-meta {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .registration-campaign-join-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .registration-campaign-join-field--phone .registration-campaign-join-control-wrap {
+    max-width: none;
+  }
+
+  .registration-campaign-join-actions {
+    justify-content: stretch;
+  }
+
+  .registration-campaign-join-submit {
+    width: 100%;
+    min-width: 100%;
+  }
+}

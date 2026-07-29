@@ -65,7 +65,18 @@ export async function getTenantConfigByKey(key, options = {}) {
     })
   }
 
-  const res = await api.get(`/tenant-config/by-key/${encodeURIComponent(normalizedKey)}`, requestConfig)
+  let res = null
+  try {
+    res = await api.get(`/tenant-config/by-key/${encodeURIComponent(normalizedKey)}`, {
+      ...(requestConfig || {}),
+      suppressErrorLogging: true,
+    })
+  } catch (error) {
+    if (error?.response?.status === 404) {
+      return null
+    }
+    throw error
+  }
   const payload = res?.data
 
   if (isDev()) {

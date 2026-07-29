@@ -1,6 +1,19 @@
 import axios from 'axios'
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:1339/api'
+function resolveApiBaseUrl() {
+	const configured = String(import.meta.env.VITE_API_BASE_URL || '').trim()
+
+	if (typeof window !== 'undefined') {
+		const hostname = String(window.location.hostname || '').trim().toLowerCase()
+		if (hostname === 'localhost' || hostname === '127.0.0.1') {
+			return 'http://localhost:1339/api'
+		}
+	}
+
+	return configured || 'http://localhost:1339/api'
+}
+
+const apiBaseUrl = resolveApiBaseUrl()
 
 const CONTEXT_HEADER_EXCLUDED_PATHS = new Set([
 	'/api/auth/local',
@@ -101,7 +114,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
 	(response) => response,
 	(error) => {
-		if (import.meta.env.DEV) {
+		if (import.meta.env.DEV && error?.config?.suppressErrorLogging !== true) {
 			const method = String(error?.config?.method || 'GET').toUpperCase()
 			const baseURL = String(error?.config?.baseURL || '')
 			const urlPath = String(error?.config?.url || '')

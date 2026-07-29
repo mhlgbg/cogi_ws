@@ -45,6 +45,14 @@ const crmFeatures = {
       path: '/ai/knowledge',
       showInMenu: true,
     },
+    {
+      name: 'Chuyển nhanh',
+      key: 'crms.quick-message.manage',
+      order: 6,
+      description: 'Manage tenant quick messages',
+      path: '/quick-messages',
+      showInMenu: true,
+    },
   ],
 };
 

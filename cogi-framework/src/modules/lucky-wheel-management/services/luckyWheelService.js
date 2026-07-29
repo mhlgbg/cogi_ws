@@ -125,6 +125,32 @@ export async function getLuckyWheelResultDetail(wheelId, spinId) {
   return response?.data || null
 }
 
+export async function verifyLuckyWheelResult(wheelId, verificationCode) {
+  const normalizedCode = String(verificationCode || '').trim().toUpperCase()
+  const response = await api.get(`/lucky-wheels/${wheelId}/results/verify/${encodeURIComponent(normalizedCode)}`)
+  return response?.data || null
+}
+
+export async function getLuckyWheelPresentation(wheelId) {
+  const response = await api.get(`/lucky-wheels/${wheelId}/presentation`)
+  return response?.data || null
+}
+
+export async function getLuckyWheelPresentationStatus(wheelId) {
+  const response = await api.get(`/lucky-wheels/${wheelId}/presentation/status`)
+  return response?.data || null
+}
+
+export async function getLuckyWheelPresentationEligibleParticipants(wheelId, params = {}) {
+  const response = await api.get(`/lucky-wheels/${wheelId}/presentation/eligible-participants`, { params })
+  return response?.data || null
+}
+
+export async function spinPresentationParticipant(wheelId, payload) {
+  const response = await api.post(`/lucky-wheels/${wheelId}/presentation/spin-for-participant`, payload)
+  return response?.data || null
+}
+
 export async function claimLuckyWheelResult(wheelId, spinId, payload) {
   const response = await api.post(`/lucky-wheels/${wheelId}/results/${spinId}/claim`, payload)
   return response?.data || null
@@ -241,9 +267,14 @@ export default {
   getLuckyWheel,
   getLuckyWheelParticipants,
   getLuckyWheelResults,
+  getLuckyWheelPresentation,
+  getLuckyWheelPresentationStatus,
+  getLuckyWheelPresentationEligibleParticipants,
   getLuckyWheelPrizes,
   spinLuckyWheel,
+  spinPresentationParticipant,
   getLuckyWheelResultDetail,
+  verifyLuckyWheelResult,
   claimLuckyWheelResult,
   exportParticipants,
   exportResults,

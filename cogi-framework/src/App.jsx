@@ -2,6 +2,7 @@ import { BrowserRouter } from 'react-router-dom'
 import AuthContextProvider from './contexts/AuthContext'
 import TenantContextProvider from './contexts/TenantContext'
 import FeatureProvider from './contexts/FeatureContext'
+import TenantDocumentBranding from './components/TenantDocumentBranding'
 import AppRouter from './router/AppRouter'
 
 export default function App() {
@@ -9,6 +10,7 @@ export default function App() {
     <div className='notranslate' translate='no'>
       <AuthContextProvider>
         <TenantContextProvider>
+          <TenantDocumentBranding />
           <FeatureProvider>
             <BrowserRouter>
               <AppRouter />
