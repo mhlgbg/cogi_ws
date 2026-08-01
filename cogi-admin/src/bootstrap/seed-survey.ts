@@ -1,23 +1,46 @@
+const TENANT_UID = 'api::tenant.tenant';
+const SURVEY_TEMPLATE_UID = 'api::survey-template.survey-template';
+const SEEDED_TEMPLATE_CODES = ['TEACHING_EVALUATION', 'GRADUATION_EXIT'];
+
+async function resolveSeedTenant(strapi: any) {
+  return strapi.db.query(TENANT_UID).findOne({
+    where: {
+      tenantStatus: 'active',
+    },
+    select: ['id', 'code', 'tenantStatus'],
+    orderBy: [{ id: 'asc' }],
+  });
+}
+
 export const seedSurvey = async (strapi: any) => {
-  const tenantId = 3;
+  const tenant = await resolveSeedTenant(strapi);
 
   strapi.log.info("🚀 Seed Survey START");
+
+  if (!tenant?.id) {
+    strapi.log.warn('[bootstrap] No active tenant found, skip survey seed');
+    return;
+  }
+
+  const tenantId = tenant.id;
 
   // =========================================================
   // CHECK EXISTING
   // =========================================================
 
-  const existing = await strapi.db
-    .query("api::survey-template.survey-template")
-    .findOne({
+  const existingTemplates = await strapi.db
+    .query(SURVEY_TEMPLATE_UID)
+    .findMany({
       where: {
-        code: "TEACHING_EVALUATION",
-        tenant: tenantId,
+        code: {
+          $in: SEEDED_TEMPLATE_CODES,
+        },
       },
+      select: ['id', 'code'],
     });
 
-  if (existing) {
-    strapi.log.info("⛔ Survey đã tồn tại → skip seed");
+  if (Array.isArray(existingTemplates) && existingTemplates.length > 0) {
+    strapi.log.info(`⛔ Survey templates already exist (${existingTemplates.map((item: any) => item?.code).filter(Boolean).join(', ')}) -> skip seed`);
     return;
   }
 
@@ -26,7 +49,7 @@ export const seedSurvey = async (strapi: any) => {
   // =========================================================
 
   const createTemplate = async (data: any) =>
-    strapi.entityService.create("api::survey-template.survey-template", {
+    strapi.entityService.create(SURVEY_TEMPLATE_UID, {
       data: { ...data, tenant: tenantId },
     });
 

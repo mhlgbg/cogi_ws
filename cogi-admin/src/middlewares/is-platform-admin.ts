@@ -47,6 +47,15 @@ export default (_config: unknown, { strapi }: { strapi: any }) => {
     });
 
     if (!user?.id) {
+      if (ctx.state?.user?.id) {
+        ctx.state.user = {
+          ...ctx.state.user,
+          isPlatformAdmin: true,
+        };
+        await next();
+        return;
+      }
+
       strapi.log?.warn?.(`[is-platform-admin] user not found for auth user=${String(authUser.id)}`);
       return ctx.unauthorized('Unauthorized');
     }

@@ -361,6 +361,12 @@ async function runClaimedStravaSyncJob(options: { strapi: any, job: ClaimedJob, 
   } catch (error: any) {
     const classified = stravaService.classifyStravaSyncError(error, { phase: toText(currentJob.phase) }) as ClassifiedSyncError
 
+    if (classified.code === 'STRAVA_CONNECTION_REVOKED') {
+      await stravaService.cancelStravaSyncJobForRevokedConnection(job.id)
+      strapi.log.warn(`[strava-runner] cancelled job=${String(job.id)} code=${classified.code} phase=${toText(currentJob.phase)} page=${String(currentJob.currentPage || job.currentPage || 1)} reason=connection_revoked`)
+      return
+    }
+
     if (classified.retryable) {
       const retry = await scheduleRetryableJob(
         strapi,

@@ -5415,6 +5415,10 @@ export interface ApiStravaConnectionStravaConnection
       'plugin::users-permissions.user'
     > &
       Schema.Attribute.Required;
+    webhookEvents: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::strava-webhook-event.strava-webhook-event'
+    >;
   };
 }
 
@@ -5612,6 +5616,102 @@ export interface ApiStravaSyncJobStravaSyncJob
       'plugin::users-permissions.user'
     > &
       Schema.Attribute.Required;
+  };
+}
+
+export interface ApiStravaWebhookEventStravaWebhookEvent
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'strava_webhook_events';
+  info: {
+    description: 'Stores raw Strava webhook events for durable processing, retry, idempotency and audit.';
+    displayName: 'Strava Webhook Event';
+    pluralName: 'strava-webhook-events';
+    singularName: 'strava-webhook-event';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    aspectType: Schema.Attribute.Enumeration<
+      ['create', 'update', 'delete', 'unknown']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'unknown'>;
+    attempts: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
+    claimedAt: Schema.Attribute.DateTime;
+    claimedBy: Schema.Attribute.String &
+      Schema.Attribute.Private &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    connection: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::strava-connection.strava-connection'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    eventTime: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 32;
+      }>;
+    idempotencyKey: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 255;
+      }>;
+    lastError: Schema.Attribute.Text & Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::strava-webhook-event.strava-webhook-event'
+    > &
+      Schema.Attribute.Private;
+    nextAttemptAt: Schema.Attribute.DateTime;
+    objectId: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    objectType: Schema.Attribute.Enumeration<
+      ['activity', 'athlete', 'unknown']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'unknown'>;
+    ownerId: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    processedAt: Schema.Attribute.DateTime;
+    publishedAt: Schema.Attribute.DateTime;
+    rawPayload: Schema.Attribute.JSON &
+      Schema.Attribute.Required &
+      Schema.Attribute.Private;
+    status: Schema.Attribute.Enumeration<
+      ['pending', 'processing', 'processed', 'ignored', 'failed', 'dead_letter']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending'>;
+    subscriptionId: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    updates: Schema.Attribute.JSON;
+    user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
   };
 }
 
@@ -6638,6 +6738,10 @@ export interface ApiTenantTenant extends Struct.CollectionTypeSchema {
       'oneToMany',
       'api::strava-sync-job.strava-sync-job'
     >;
+    stravaWebhookEvents: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::strava-webhook-event.strava-webhook-event'
+    >;
     studentLearningObjectProgressRecords: Schema.Attribute.Relation<
       'oneToMany',
       'api::student-learning-object-progress.student-learning-object-progress'
@@ -7587,6 +7691,7 @@ declare module '@strapi/strapi' {
       'api::strava-connection.strava-connection': ApiStravaConnectionStravaConnection;
       'api::strava-oauth-state.strava-oauth-state': ApiStravaOauthStateStravaOauthState;
       'api::strava-sync-job.strava-sync-job': ApiStravaSyncJobStravaSyncJob;
+      'api::strava-webhook-event.strava-webhook-event': ApiStravaWebhookEventStravaWebhookEvent;
       'api::student-learning-object-progress.student-learning-object-progress': ApiStudentLearningObjectProgressStudentLearningObjectProgress;
       'api::student-learning-profile.student-learning-profile': ApiStudentLearningProfileStudentLearningProfile;
       'api::student-skill-progress.student-skill-progress': ApiStudentSkillProgressStudentSkillProgress;

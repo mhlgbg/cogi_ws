@@ -5,13 +5,32 @@ function redirectTo(url: string, ctx: any) {
   ctx.redirect(url);
 }
 
+type QueryStringReadResult = {
+  kind: 'missing' | 'string' | 'invalid';
+  value: string | null;
+};
+
+function readSingleQueryString(ctx: any, key: string): QueryStringReadResult {
+  const value = ctx?.query?.[key] ?? ctx?.request?.query?.[key];
+
+  if (typeof value === 'undefined') {
+    return { kind: 'missing', value: null };
+  }
+
+  if (typeof value === 'string') {
+    return { kind: 'string', value };
+  }
+
+  return { kind: 'invalid', value: null };
+}
+
 export default {
   async connectUrl(ctx: any) {
     try {
       const authUser = await stravaService.requireAuthenticatedUser(ctx);
       if (!authUser?.id) return;
 
-      const tenantId = stravaService.getCurrentTenantId(ctx);
+      const tenantId = await stravaService.resolveTenantIdForStravaOAuthStart(ctx);
       const frontendOrigin = await stravaService.resolveTrustedFrontendOriginForOAuthStart(ctx, tenantId);
       const state = await stravaService.createSignedOAuthState(tenantId, authUser.id, { frontendOrigin });
       const authorizeUrl = stravaService.buildStravaAuthorizeUrl(state);
@@ -35,7 +54,7 @@ export default {
       const authUser = await stravaService.requireAuthenticatedUser(ctx);
       if (!authUser?.id) return;
 
-      const tenantId = stravaService.getCurrentTenantId(ctx);
+      const tenantId = await stravaService.resolveTenantIdForStravaOAuthStart(ctx);
       const frontendOrigin = await stravaService.resolveTrustedFrontendOriginForOAuthStart(ctx, tenantId);
       const state = await stravaService.createSignedOAuthState(tenantId, authUser.id, { frontendOrigin });
       const authorizeUrl = stravaService.buildStravaAuthorizeUrl(state);
@@ -79,6 +98,167 @@ export default {
         status: error?.status || 500,
       });
       return redirectTo(await stravaService.buildFrontendErrorRedirect({ state, reason: 'strava_callback_failed' }), ctx);
+    }
+  },
+
+  async webhookVerify(ctx: any) {
+    const mode = readSingleQueryString(ctx, 'hub.mode');
+    if (mode.kind !== 'string' || mode.value !== 'subscribe') {
+      strapi.log.info('[strava.webhookVerify] verification rejected: invalid mode');
+      ctx.status = 400;
+      ctx.body = { error: 'Invalid webhook verification mode' };
+      return;
+    }
+
+    const challenge = readSingleQueryString(ctx, 'hub.challenge');
+    if (challenge.kind !== 'string' || !challenge.value || !challenge.value.trim()) {
+      strapi.log.info('[strava.webhookVerify] verification rejected: missing challenge');
+      ctx.status = 400;
+      ctx.body = { error: 'Missing webhook challenge' };
+      return;
+    }
+
+    const verifyToken = readSingleQueryString(ctx, 'hub.verify_token');
+    if (verifyToken.kind === 'invalid') {
+      strapi.log.info('[strava.webhookVerify] verification rejected: invalid verify token query');
+      ctx.status = 400;
+      ctx.body = { error: 'Invalid webhook verify token' };
+      return;
+    }
+
+    if (verifyToken.kind !== 'string' || !verifyToken.value) {
+      strapi.log.info('[strava.webhookVerify] verification rejected: missing verify token');
+      ctx.status = 403;
+      ctx.body = { error: 'Invalid webhook verify token' };
+      return;
+    }
+
+    strapi.log.info('[strava.webhookVerify] verification request received');
+
+    try {
+      const verified = stravaService.verifyStravaWebhookSubscription({
+        mode: mode.value,
+        verifyToken: verifyToken.value,
+        challenge: challenge.value,
+      });
+
+      strapi.log.info('[strava.webhookVerify] verification succeeded');
+      ctx.status = 200;
+      ctx.body = {
+        'hub.challenge': verified.challenge,
+      };
+    } catch (error: any) {
+      if (error?.status === 503) {
+        strapi.log.warn('[strava.webhookVerify] verification requested but verify token is not configured');
+        ctx.status = 503;
+        ctx.body = { error: 'Strava webhook verification is not configured' };
+        return;
+      }
+
+      if (error?.status === 403) {
+        strapi.log.info('[strava.webhookVerify] verification rejected: invalid token');
+        ctx.status = 403;
+        ctx.body = { error: 'Invalid webhook verify token' };
+        return;
+      }
+
+      strapi.log.error('[strava.webhookVerify] unexpected error', error);
+      ctx.internalServerError('Failed to verify Strava webhook');
+    }
+  },
+
+  async webhookReceive(ctx: any) {
+    const payload = ctx.request?.body;
+
+    if (typeof payload === 'undefined') {
+      strapi.log.info('[strava.webhookReceive] invalid json');
+      ctx.status = 400;
+      ctx.body = { error: 'Invalid JSON body' };
+      return;
+    }
+
+    strapi.log.info('[strava.webhookReceive] event received');
+
+    try {
+      const result = await stravaService.receiveStravaWebhookEvent(payload);
+      ctx.status = 200;
+      ctx.body = result.duplicate
+        ? { received: true, duplicate: true }
+        : { received: true };
+      return;
+    } catch (error: any) {
+      if (error?.status === 400) {
+        strapi.log.info('[strava.webhookReceive] invalid json');
+        ctx.status = 400;
+        ctx.body = { error: 'Invalid JSON body' };
+        return;
+      }
+
+      strapi.log.error('[strava.webhookReceive] unexpected error', error);
+      ctx.internalServerError('Failed to receive Strava webhook');
+    }
+  },
+
+  async subscriptionOverview(ctx: any) {
+    try {
+      const [health, subscriptions] = await Promise.all([
+        stravaService.checkWebhookHealth(),
+        stravaService.listWebhookSubscriptions(),
+      ]);
+
+      ctx.body = {
+        health,
+        subscriptions,
+      };
+    } catch (error: any) {
+      const code = stravaService.toText(error?.code) || 'STRAVA_SUBSCRIPTION_LIST_FAILED';
+      const message = stravaService.toText(error?.message) || 'Không thể tải Strava webhook subscription.';
+      ctx.status = Number(error?.status || 500) || 500;
+      ctx.body = { error: { code, message } };
+    }
+  },
+
+  async createSubscription(ctx: any) {
+    try {
+      const result = await stravaService.createWebhookSubscription();
+      const health = await stravaService.checkWebhookHealth();
+      ctx.status = result.existed ? 200 : 201;
+      ctx.body = {
+        health,
+        subscription: result.subscription,
+        existed: result.existed,
+      };
+    } catch (error: any) {
+      const code = stravaService.toText(error?.code) || 'STRAVA_SUBSCRIPTION_CREATE_FAILED';
+      const message = stravaService.toText(error?.message) || 'Không thể tạo Strava webhook subscription.';
+      ctx.status = Number(error?.status || 500) || 500;
+      ctx.body = { error: { code, message } };
+    }
+  },
+
+  async deleteSubscription(ctx: any) {
+    try {
+      const result = await stravaService.deleteWebhookSubscription(ctx.params?.id);
+      ctx.body = {
+        deleted: result.deleted,
+      };
+    } catch (error: any) {
+      const code = stravaService.toText(error?.code) || 'STRAVA_SUBSCRIPTION_DELETE_FAILED';
+      const message = stravaService.toText(error?.message) || 'Không thể xóa Strava webhook subscription.';
+      ctx.status = Number(error?.status || 500) || 500;
+      ctx.body = { error: { code, message } };
+    }
+  },
+
+  async deleteAllSubscriptions(ctx: any) {
+    try {
+      const result = await stravaService.deleteAllWebhookSubscriptions();
+      ctx.body = result;
+    } catch (error: any) {
+      const code = stravaService.toText(error?.code) || 'STRAVA_SUBSCRIPTION_DELETE_FAILED';
+      const message = stravaService.toText(error?.message) || 'Không thể xóa Strava webhook subscriptions.';
+      ctx.status = Number(error?.status || 500) || 500;
+      ctx.body = { error: { code, message } };
     }
   },
 

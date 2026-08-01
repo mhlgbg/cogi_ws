@@ -1430,6 +1430,174 @@ export default {
     }
   },
 
+  async getStravaDashboardOverview(ctx: any) {
+    try {
+      const data = await strapi.service('api::strava.strava').getStravaDashboardOverview();
+      ctx.body = {
+        ok: true,
+        data,
+      };
+    } catch (error) {
+      strapi.log.error('[platform.getStravaDashboardOverview] unexpected error', error);
+      return ctx.internalServerError('Failed to load Strava dashboard overview');
+    }
+  },
+
+  async listStravaConnections(ctx: any) {
+    try {
+      const result = await strapi.service('api::strava.strava').listPlatformStravaConnections(ctx.query || {});
+      ctx.body = {
+        ok: true,
+        data: result.data,
+        meta: result.meta,
+      };
+    } catch (error: any) {
+      if (Number(error?.status || 0) === 400) {
+        return ctx.badRequest(toText(error?.message) || 'Invalid Strava connection query');
+      }
+
+      strapi.log.error('[platform.listStravaConnections] unexpected error', error);
+      return ctx.internalServerError('Failed to load Strava connections');
+    }
+  },
+
+  async listStravaWebhookEvents(ctx: any) {
+    try {
+      const result = await strapi.service('api::strava.strava').listPlatformStravaWebhookEvents(ctx.query || {});
+      ctx.body = {
+        ok: true,
+        data: result.data,
+        meta: result.meta,
+      };
+    } catch (error: any) {
+      if (Number(error?.status || 0) === 400) {
+        return ctx.badRequest(toText(error?.message) || 'Invalid Strava webhook events query');
+      }
+
+      strapi.log.error('[platform.listStravaWebhookEvents] unexpected error', error);
+      return ctx.internalServerError('Failed to load Strava webhook events');
+    }
+  },
+
+  async getStravaWebhookEventDetail(ctx: any) {
+    try {
+      const data = await strapi.service('api::strava.strava').getPlatformStravaWebhookEventDetail(ctx.params?.id);
+      ctx.body = {
+        ok: true,
+        data,
+      };
+    } catch (error: any) {
+      if (Number(error?.status || 0) === 400) {
+        return ctx.badRequest(toText(error?.message) || 'Invalid Strava webhook event id');
+      }
+      if (Number(error?.status || 0) === 404) {
+        return ctx.notFound('Strava webhook event not found');
+      }
+
+      strapi.log.error('[platform.getStravaWebhookEventDetail] unexpected error', error);
+      return ctx.internalServerError('Failed to load Strava webhook event detail');
+    }
+  },
+
+  async listStravaSyncJobs(ctx: any) {
+    try {
+      const result = await strapi.service('api::strava.strava').listPlatformStravaSyncJobs(ctx.query || {});
+      ctx.body = {
+        ok: true,
+        data: result.data,
+        meta: result.meta,
+      };
+    } catch (error: any) {
+      if (Number(error?.status || 0) === 400) {
+        return ctx.badRequest(toText(error?.message) || 'Invalid Strava sync jobs query');
+      }
+
+      strapi.log.error('[platform.listStravaSyncJobs] unexpected error', error);
+      return ctx.internalServerError('Failed to load Strava sync jobs');
+    }
+  },
+
+  async getStravaSyncJobDetail(ctx: any) {
+    try {
+      const data = await strapi.service('api::strava.strava').getPlatformStravaSyncJobDetail(ctx.params?.id);
+      ctx.body = {
+        ok: true,
+        data,
+      };
+    } catch (error: any) {
+      if (Number(error?.status || 0) === 400) {
+        return ctx.badRequest(toText(error?.message) || 'Invalid Strava sync job id');
+      }
+      if (Number(error?.status || 0) === 404) {
+        return ctx.notFound('Strava sync job not found');
+      }
+
+      strapi.log.error('[platform.getStravaSyncJobDetail] unexpected error', error);
+      return ctx.internalServerError('Failed to load Strava sync job detail');
+    }
+  },
+
+  async getStravaSubscriptionOverview(ctx: any) {
+    try {
+      const data = await strapi.service('api::strava.strava').getPlatformStravaSubscriptionOverview();
+      ctx.body = {
+        ok: true,
+        data,
+      };
+    } catch (error: any) {
+      strapi.log.error('[platform.getStravaSubscriptionOverview] unexpected error', error);
+      return ctx.internalServerError('Failed to load Strava subscription overview');
+    }
+  },
+
+  async getStravaDiagnostics(ctx: any) {
+    try {
+      const data = await strapi.service('api::strava.strava').getPlatformStravaDiagnostics(ctx.query || {});
+      ctx.body = {
+        ok: true,
+        data,
+      };
+    } catch (error: any) {
+      if (Number(error?.status || 0) === 400) {
+        return ctx.badRequest(toText(error?.message) || 'Invalid Strava diagnostics query');
+      }
+
+      strapi.log.error('[platform.getStravaDiagnostics] unexpected error', error);
+      return ctx.internalServerError('Failed to load Strava diagnostics');
+    }
+  },
+
+  async createStravaSubscription(ctx: any) {
+    try {
+      const data = await strapi.service('api::strava.strava').createPlatformStravaSubscription();
+      ctx.status = data.existed ? 200 : 201;
+      ctx.body = {
+        ok: true,
+        data,
+      };
+    } catch (error: any) {
+      const code = toText(error?.code) || 'STRAVA_SUBSCRIPTION_CREATE_FAILED';
+      const message = toText(error?.message) || 'Failed to create Strava subscription';
+      ctx.status = Number(error?.status || 500) || 500;
+      ctx.body = { error: { code, message } };
+    }
+  },
+
+  async deleteStravaSubscription(ctx: any) {
+    try {
+      const data = await strapi.service('api::strava.strava').deletePlatformStravaSubscription();
+      ctx.body = {
+        ok: true,
+        data,
+      };
+    } catch (error: any) {
+      const code = toText(error?.code) || 'STRAVA_SUBSCRIPTION_DELETE_FAILED';
+      const message = toText(error?.message) || 'Failed to delete Strava subscription';
+      ctx.status = Number(error?.status || 500) || 500;
+      ctx.body = { error: { code, message } };
+    }
+  },
+
   async createTenant(ctx: any) {
     try {
       const payload = readTenantPayload(ctx.request?.body);

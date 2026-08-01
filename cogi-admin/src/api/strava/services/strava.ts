@@ -5,11 +5,14 @@ const STRAVA_CONNECTION_UID = 'api::strava-connection.strava-connection';
 const STRAVA_OAUTH_STATE_UID = 'api::strava-oauth-state.strava-oauth-state';
 const STRAVA_ACTIVITY_UID = 'api::strava-activity.strava-activity';
 const STRAVA_SYNC_JOB_UID = 'api::strava-sync-job.strava-sync-job';
+const STRAVA_WEBHOOK_EVENT_UID = 'api::strava-webhook-event.strava-webhook-event';
 const USER_UID = 'plugin::users-permissions.user';
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const STRAVA_AUTHORIZE_URL = 'https://www.strava.com/oauth/authorize';
 const STRAVA_TOKEN_URL = 'https://www.strava.com/oauth/token';
 const STRAVA_ACTIVITIES_URL = 'https://www.strava.com/api/v3/athlete/activities';
+const STRAVA_ACTIVITY_DETAIL_URL = 'https://www.strava.com/api/v3/activities';
+const STRAVA_PUSH_SUBSCRIPTIONS_URL = 'https://www.strava.com/api/v3/push_subscriptions';
 const ACCESS_TOKEN_REFRESH_THRESHOLD_MS = 60 * 1000;
 const INCREMENTAL_BACKTRACK_MS = 24 * 60 * 60 * 1000;
 const ACTIVITY_PAGE_SIZE = 100;
@@ -18,6 +21,16 @@ const DEFAULT_RETRY_BASE_SECONDS = 30;
 const DEFAULT_RETRY_MAX_SECONDS = 15 * 60;
 const DEFAULT_STRAVA_SUCCESS_REDIRECT_PATH = '/fitness?connected=1';
 const DEFAULT_STRAVA_ERROR_REDIRECT_PATH = '/fitness?error=1';
+const STRAVA_DIAGNOSTICS_WINDOWS = {
+  '24h': 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+  '30d': 30 * 24 * 60 * 60 * 1000,
+} as const;
+const STRAVA_DIAGNOSTICS_CONNECTION_STALE_DAYS = 7;
+const STRAVA_DIAGNOSTICS_TOKEN_EXPIRING_SOON_HOURS = 24;
+const STRAVA_DIAGNOSTICS_STALE_SAMPLE_LIMIT = 5;
+const STRAVA_DIAGNOSTICS_ERROR_LIMIT = 5;
+const STRAVA_DIAGNOSTICS_SUBSCRIPTION_TIMEOUT_MS = 4000;
 
 type JobStatus = 'queued' | 'running' | 'partial_ready' | 'completed' | 'failed' | 'cancelled';
 type JobPhase = 'preparing' | 'syncing_recent' | 'syncing_history' | 'rebuilding_snapshot' | 'finalizing';
@@ -62,6 +75,7 @@ type StravaConnectionRecord = {
   accessToken?: string | null;
   refreshToken?: string | null;
   tokenExpiresAt?: string | null;
+  disconnectedAt?: string | null;
   lastSyncAt?: string | null;
   lastSyncStatus?: string | null;
   athleteFirstname?: string | null;
@@ -131,6 +145,595 @@ type StravaSyncJobStartResult = {
   alreadyRunning: boolean;
 };
 
+type StravaWebhookVerificationInput = {
+  mode: string;
+  verifyToken: string;
+  challenge: string;
+};
+
+type StravaWebhookVerificationResult = {
+  challenge: string;
+};
+
+type StravaWebhookEventStatus = 'pending' | 'ignored';
+
+type StravaWebhookReceiveResult = {
+  duplicate: boolean;
+};
+
+type StravaWebhookPayloadRecord = Record<string, unknown>;
+
+type StravaWebhookEventInput = {
+  subscriptionId: string;
+  ownerId: string;
+  objectType: 'activity' | 'athlete' | 'unknown';
+  objectId: string;
+  aspectType: 'create' | 'update' | 'delete' | 'unknown';
+  eventTime: string;
+  updates: unknown;
+  rawPayload: unknown;
+  status: StravaWebhookEventStatus;
+  idempotencyKey: string;
+};
+
+type StravaWebhookHandlerResult = 'SUCCESS' | 'IGNORED' | 'NOT_IMPLEMENTED';
+
+type ResolvedWebhookConnection = {
+  connectionId: number;
+  tenantId: number | string;
+  userId: number;
+  ownerId: string;
+  connection: StravaConnectionRecord;
+};
+
+type ParsedWebhookAuthorized = true | false | null;
+
+type StravaWebhookSubscription = {
+  subscriptionId: number;
+  callbackUrl: string | null;
+  createdAt: string | null;
+};
+
+type StravaWebhookHealthWarning =
+  | 'NO_SUBSCRIPTION'
+  | 'MULTIPLE_SUBSCRIPTIONS'
+  | 'CALLBACK_URL_MISMATCH'
+  | 'VERIFY_TOKEN_MISSING'
+  | 'CLIENT_ID_MISSING'
+  | 'CLIENT_SECRET_MISSING'
+  | 'CALLBACK_URL_MISSING';
+
+type StravaWebhookHealthCheck = {
+  healthy: boolean;
+  subscriptionExists: boolean;
+  subscriptionCount: number;
+  callbackMatches: boolean;
+  verifyTokenConfigured: boolean;
+  clientConfigured: boolean;
+  warnings: StravaWebhookHealthWarning[];
+};
+
+type StravaDashboardOverview = {
+  subscription: {
+    exists: boolean;
+    healthy: boolean;
+    callbackUrl: string | null;
+    warningCount: number;
+  };
+  connections: {
+    total: number;
+    active: number;
+    disconnected: number;
+    error: number;
+  };
+  syncJobs: {
+    pending: number;
+    running: number;
+    completed: number;
+    failed: number;
+    cancelled: number;
+  };
+  webhookEvents: {
+    pending: number;
+    processing: number;
+    processed: number;
+    ignored: number;
+    failed: number;
+    deadLetter: number;
+  };
+  system: {
+    webhookRunnerEnabled: boolean;
+    syncRunnerEnabled: boolean;
+    webhookHandlerEnabled: boolean;
+  };
+};
+
+type PlatformStravaSubscriptionOverview = {
+  healthy: boolean;
+  subscriptionExists: boolean;
+  subscriptionCount: number;
+  subscription: {
+    id: number;
+    callbackUrl: string | null;
+    createdAt: string | null;
+  } | null;
+  callbackMatches: boolean;
+  verifyTokenConfigured: boolean;
+  clientConfigured: boolean;
+  warnings: StravaWebhookHealthWarning[];
+  system: {
+    webhookRunnerEnabled: boolean;
+    webhookHandlerEnabled: boolean;
+    webhookCheckOnBoot: boolean;
+    callbackUrlConfigured: boolean;
+  };
+};
+
+type PlatformStravaConnectionStatus = 'ACTIVE' | 'DISCONNECTED' | 'ERROR';
+type PlatformStravaConnectionSortField =
+  | 'connectedAt'
+  | 'tenantName'
+  | 'userName'
+  | 'userEmail'
+  | 'athleteName'
+  | 'status'
+  | 'lastSyncAt'
+  | 'tokenExpiresAt'
+  | 'activityCount'
+  | 'lastActivitySyncAt';
+
+type PlatformStravaConnectionItem = {
+  connectionId: number;
+  tenantId: number;
+  tenantName: string;
+  userId: number;
+  userName: string;
+  userEmail: string | null;
+  athleteId: string;
+  athleteName: string;
+  status: PlatformStravaConnectionStatus;
+  connectedAt: string | null;
+  disconnectedAt: string | null;
+  lastSyncAt: string | null;
+  lastActivitySyncAt: string | null;
+  tokenExpiresAt: string | null;
+  lastSyncError: string | null;
+  activityCount: number;
+  subscriptionId: number | null;
+};
+
+type PlatformStravaConnectionsQuery = {
+  keyword?: unknown;
+  status?: unknown;
+  tenantId?: unknown;
+  staleSync?: unknown;
+  page?: unknown;
+  pageSize?: unknown;
+  sort?: unknown;
+};
+
+type PlatformStravaConnectionsResult = {
+  data: PlatformStravaConnectionItem[];
+  meta: {
+    pagination: {
+      page: number;
+      pageSize: number;
+      pageCount: number;
+      total: number;
+    };
+    filters: {
+      keyword: string;
+      status: PlatformStravaConnectionStatus | null;
+      tenantId: number | null;
+      staleSync: boolean;
+    };
+    sort: {
+      field: PlatformStravaConnectionSortField;
+      direction: 'asc' | 'desc';
+    };
+  };
+};
+
+type PlatformStravaWebhookEventStatus = 'pending' | 'processing' | 'processed' | 'ignored' | 'failed' | 'dead_letter';
+type PlatformStravaWebhookEventObjectType = 'activity' | 'athlete' | 'unknown';
+type PlatformStravaWebhookEventAspectType = 'create' | 'update' | 'delete' | 'unknown';
+type PlatformStravaWebhookEventSortField = 'eventTime' | 'tenantName' | 'status' | 'attempts' | 'processedAt' | 'claimedAt';
+
+type PlatformStravaWebhookEventParty = {
+  id: number;
+  name: string;
+};
+
+type PlatformStravaWebhookEventConnection = {
+  id: number;
+  athleteId: string;
+  athleteName: string;
+  status: PlatformStravaConnectionStatus;
+};
+
+type PlatformStravaWebhookEventUser = {
+  id: number;
+  name: string;
+  email: string | null;
+};
+
+type PlatformStravaWebhookEventListItem = {
+  eventId: number;
+  eventTime: string | null;
+  tenant: PlatformStravaWebhookEventParty | null;
+  connection: PlatformStravaWebhookEventConnection | null;
+  user: PlatformStravaWebhookEventUser | null;
+  objectType: PlatformStravaWebhookEventObjectType;
+  objectId: string | null;
+  aspectType: PlatformStravaWebhookEventAspectType;
+  status: PlatformStravaWebhookEventStatus;
+  attempts: number;
+  processedAt: string | null;
+  claimedBy: string | null;
+  lastError: string | null;
+};
+
+type PlatformStravaWebhookEventTimelineItem = {
+  key: string;
+  label: string;
+  time: string | null;
+  note: string | null;
+};
+
+type PlatformStravaWebhookEventDetail = PlatformStravaWebhookEventListItem & {
+  receivedAt: string | null;
+  claimedAt: string | null;
+  nextAttemptAt: string | null;
+  ownerId: string | null;
+  subscriptionId: number | null;
+  updates: Record<string, unknown> | null;
+  rawPayload: unknown;
+  timeline: PlatformStravaWebhookEventTimelineItem[];
+};
+
+type PlatformStravaWebhookEventsQuery = {
+  keyword?: unknown;
+  status?: unknown;
+  objectType?: unknown;
+  aspectType?: unknown;
+  tenantId?: unknown;
+  connectionId?: unknown;
+  stale?: unknown;
+  dateFrom?: unknown;
+  dateTo?: unknown;
+  page?: unknown;
+  pageSize?: unknown;
+  sort?: unknown;
+};
+
+type PlatformStravaWebhookEventsResult = {
+  data: PlatformStravaWebhookEventListItem[];
+  meta: {
+    pagination: {
+      page: number;
+      pageSize: number;
+      pageCount: number;
+      total: number;
+    };
+    filters: {
+      keyword: string;
+      status: PlatformStravaWebhookEventStatus | null;
+      objectType: PlatformStravaWebhookEventObjectType | null;
+      aspectType: PlatformStravaWebhookEventAspectType | null;
+      tenantId: number | null;
+      connectionId: number | null;
+      stale: boolean;
+      dateFrom: string | null;
+      dateTo: string | null;
+    };
+    sort: {
+      field: PlatformStravaWebhookEventSortField;
+      direction: 'asc' | 'desc';
+    };
+  };
+};
+
+type PlatformStravaSyncJobStatus = JobStatus;
+type PlatformStravaSyncJobPhase = JobPhase;
+type PlatformStravaSyncJobMode = JobSyncMode;
+type PlatformStravaSyncJobSortField = 'requestedAt' | 'tenantName' | 'userName' | 'status' | 'syncMode' | 'startedAt' | 'finishedAt' | 'claimedAt' | 'nextRetryAt' | 'processedActivities';
+
+type PlatformStravaSyncJobTenant = {
+  id: number;
+  code: string | null;
+  name: string;
+};
+
+type PlatformStravaSyncJobConnection = {
+  id: number;
+  athleteId: string;
+  athleteName: string;
+  status: PlatformStravaConnectionStatus | null;
+};
+
+type PlatformStravaSyncJobUser = {
+  id: number;
+  name: string;
+  email: string | null;
+};
+
+type PlatformStravaSyncJobListItem = {
+  jobId: number;
+  id: number;
+  tenant: PlatformStravaSyncJobTenant | null;
+  connection: PlatformStravaSyncJobConnection | null;
+  user: PlatformStravaSyncJobUser | null;
+  status: PlatformStravaSyncJobStatus | string;
+  phase: PlatformStravaSyncJobPhase | string | null;
+  syncMode: PlatformStravaSyncJobMode | string | null;
+  requestedAt: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  claimedAt: string | null;
+  claimedBy: string | null;
+  nextRetryAt: string | null;
+  attempts: number;
+  currentPage: number;
+  perPage: number;
+  processedActivities: number;
+  createdActivities: number;
+  updatedActivities: number;
+  skippedActivities: number;
+  failedActivities: number;
+  errorCode: string | null;
+  lastError: string | null;
+  progressMessage: string | null;
+};
+
+type PlatformStravaSyncJobTimelineItem = {
+  key: string;
+  label: string;
+  time: string | null;
+  note: string | null;
+};
+
+type PlatformStravaSyncJobDetail = PlatformStravaSyncJobListItem & {
+  heartbeatAt: string | null;
+  oldestSyncedAt: string | null;
+  newestSyncedAt: string | null;
+  recentReadyAt: string | null;
+  totalActivities: number | null;
+  retryable: boolean;
+  cancellable: boolean;
+  metadataSummary: Record<string, unknown> | null;
+  timeline: PlatformStravaSyncJobTimelineItem[];
+};
+
+type PlatformStravaSyncJobsQuery = {
+  keyword?: unknown;
+  status?: unknown;
+  tenantId?: unknown;
+  connectionId?: unknown;
+  userId?: unknown;
+  syncMode?: unknown;
+  jobType?: unknown;
+  stale?: unknown;
+  dateFrom?: unknown;
+  dateTo?: unknown;
+  page?: unknown;
+  pageSize?: unknown;
+  sort?: unknown;
+};
+
+type PlatformStravaSyncJobsResult = {
+  data: PlatformStravaSyncJobListItem[];
+  meta: {
+    pagination: {
+      page: number;
+      pageSize: number;
+      pageCount: number;
+      total: number;
+    };
+    filters: {
+      keyword: string;
+      status: PlatformStravaSyncJobStatus | null;
+      tenantId: number | null;
+      connectionId: number | null;
+      userId: number | null;
+      syncMode: PlatformStravaSyncJobMode | null;
+      stale: boolean;
+      dateFrom: string | null;
+      dateTo: string | null;
+    };
+    sort: {
+      field: PlatformStravaSyncJobSortField;
+      direction: 'asc' | 'desc';
+    };
+  };
+};
+
+type PlatformStravaDiagnosticsWindow = keyof typeof STRAVA_DIAGNOSTICS_WINDOWS;
+type PlatformStravaDiagnosticsSeverity = 'info' | 'warning' | 'critical';
+type PlatformStravaDiagnosticsHealthStatus = 'healthy' | 'warning' | 'critical' | 'unknown';
+type PlatformStravaRunnerObservedStatus = 'disabled' | 'active' | 'recent_activity' | 'no_recent_activity' | 'unknown_runtime_state';
+
+type PlatformStravaDiagnosticsQuery = {
+  tenantId?: unknown;
+  window?: unknown;
+};
+
+type PlatformStravaDiagnosticsRule = {
+  code: string;
+  severity: PlatformStravaDiagnosticsSeverity;
+  message: string;
+};
+
+type PlatformStravaDiagnosticsRunner = {
+  configured: boolean;
+  enabled: boolean;
+  alive: boolean | null;
+  observedStatus: PlatformStravaRunnerObservedStatus;
+  lastObservedActivityAt: string | null;
+  activeItems: number;
+  staleItems: number;
+  warnings: PlatformStravaDiagnosticsRule[];
+};
+
+type PlatformStravaDiagnostics = {
+  generatedAt: string;
+  window: PlatformStravaDiagnosticsWindow;
+  tenantId: number | null;
+  health: {
+    status: PlatformStravaDiagnosticsHealthStatus;
+    score: null;
+    reasons: PlatformStravaDiagnosticsRule[];
+  };
+  thresholds: {
+    tokenExpiringSoonHours: number;
+    staleConnectionDays: number;
+    webhookStaleMinutes: number;
+    syncStaleMinutes: number;
+  };
+  runners: {
+    webhookRunner: PlatformStravaDiagnosticsRunner;
+    webhookHandler: PlatformStravaDiagnosticsRunner;
+    syncRunner: PlatformStravaDiagnosticsRunner;
+    subscriptionCheckOnBoot: PlatformStravaDiagnosticsRunner;
+  };
+  subscription: {
+    status: PlatformStravaDiagnosticsHealthStatus;
+    configured: boolean;
+    clientConfigured: boolean;
+    verifyTokenConfigured: boolean;
+    callbackUrlConfigured: boolean;
+    subscriptionExists: boolean;
+    subscriptionCount: number;
+    callbackMatches: boolean;
+    healthy: boolean | null;
+    lastCheckedAt: string;
+    warnings: PlatformStravaDiagnosticsRule[];
+    error: { code: string; message: string } | null;
+  };
+  connections: {
+    total: number;
+    active: number;
+    disconnected: number;
+    revokedOrDisconnected: number;
+    error: number;
+    tokenExpired: number;
+    tokenExpiringSoon: number;
+    neverSynced: number;
+    staleSync: number;
+    withRecentFailure: number;
+    reconnectRecommended: number;
+  };
+  webhookQueue: {
+    pending: number;
+    processing: number;
+    failed: number;
+    ignored: number;
+    processed: number;
+    deadLetter: number;
+    retryWaiting: number;
+    staleProcessing: number;
+    oldestPendingAt: string | null;
+    oldestRetryAt: string | null;
+    latestReceivedAt: string | null;
+    latestProcessedAt: string | null;
+    processedLastWindow: number;
+    failedLastWindow: number;
+    deadLetterLastWindow: number;
+  };
+  webhookStats: {
+    total: number;
+    create: number;
+    update: number;
+    delete: number;
+    processed: number;
+    ignored: number;
+    failed: number;
+    deadLetter: number;
+    averageProcessingDurationSeconds: number | null;
+    maxProcessingDurationSeconds: number | null;
+    latestEventAt: string | null;
+  };
+  syncQueue: {
+    queued: number;
+    running: number;
+    partialReady: number;
+    completed: number;
+    failed: number;
+    cancelled: number;
+    retryWaiting: number;
+    staleRunning: number;
+    oldestQueuedAt: string | null;
+    oldestRunningAt: string | null;
+    latestRequestedAt: string | null;
+    latestCompletedAt: string | null;
+  };
+  syncStats: {
+    requested: number;
+    completed: number;
+    partialReady: number;
+    failed: number;
+    cancelled: number;
+    averageDurationSeconds: number | null;
+    maxDurationSeconds: number | null;
+    processedActivities: number;
+    createdActivities: number;
+    updatedActivities: number;
+    skippedActivities: number;
+    failedActivities: number;
+    latestCompletedAt: string | null;
+  };
+  staleItems: {
+    webhookEvents: {
+      count: number;
+      items: Array<{
+        id: number;
+        status: string;
+        objectType: string;
+        aspectType: string;
+        claimedAt: string | null;
+        claimedBy: string | null;
+        tenant: PlatformStravaWebhookEventParty | null;
+        connection: PlatformStravaWebhookEventConnection | null;
+        ageSeconds: number | null;
+        detailUrl: string;
+      }>;
+    };
+    syncJobs: {
+      count: number;
+      items: Array<{
+        id: number;
+        status: string;
+        phase: string | null;
+        claimedAt: string | null;
+        heartbeatAt: string | null;
+        claimedBy: string | null;
+        tenant: PlatformStravaWebhookEventParty | null;
+        connection: PlatformStravaWebhookEventConnection | null;
+        ageSeconds: number | null;
+        detailUrl: string;
+      }>;
+    };
+  };
+  errors: {
+    webhook: {
+      topLastErrorSummaries: Array<{ summary: string; count: number }>;
+      topStatusFailureCounts: Array<{ status: string; count: number }>;
+      deadLetterCount: number;
+    };
+    syncJobs: {
+      topErrorCodes: Array<{ code: string; count: number }>;
+      topLastErrorSummaries: Array<{ summary: string; count: number }>;
+      failedCount: number;
+      retryWaitingCount: number;
+    };
+    connections: {
+      topFailureReasons: Array<{ summary: string; count: number }>;
+      refreshTokenFailureCount: number;
+    };
+  };
+  warnings: PlatformStravaDiagnosticsRule[];
+  links: Record<string, string>;
+};
+
 type AnalyticsSyncState = {
   status: JobStatus | 'idle';
   phase: JobPhase | null;
@@ -173,17 +776,1945 @@ export function toText(value: unknown): string {
   return normalizeTenantText(value);
 }
 
+function toBoolean(value: unknown, fallback: boolean): boolean {
+  const text = toText(value).toLowerCase();
+  if (!text) return fallback;
+  if (['1', 'true', 'yes', 'on'].includes(text)) return true;
+  if (['0', 'false', 'no', 'off'].includes(text)) return false;
+  return fallback;
+}
+
 function toPositiveInt(value: unknown): number | null {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function toPositiveIntOrDefault(value: unknown, fallback: number): number {
+  const parsed = toPositiveInt(value);
+  return parsed || fallback;
+}
+
+function clampInt(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
+function normalizePlatformStravaConnectionStatus(value: unknown): PlatformStravaConnectionStatus | null {
+  const normalized = toText(value).toUpperCase();
+  if (normalized === 'ACTIVE' || normalized === 'DISCONNECTED' || normalized === 'ERROR') {
+    return normalized;
+  }
+  return null;
+}
+
+function normalizePlatformStravaWebhookEventStatus(value: unknown): PlatformStravaWebhookEventStatus | null {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === 'pending' || normalized === 'processing' || normalized === 'processed' || normalized === 'ignored' || normalized === 'failed' || normalized === 'dead_letter') {
+    return normalized;
+  }
+  return null;
+}
+
+function normalizePlatformStravaWebhookEventObjectType(value: unknown): PlatformStravaWebhookEventObjectType | null {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === 'activity' || normalized === 'athlete' || normalized === 'unknown') {
+    return normalized;
+  }
+  return null;
+}
+
+function normalizePlatformStravaWebhookEventAspectType(value: unknown): PlatformStravaWebhookEventAspectType | null {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === 'create' || normalized === 'update' || normalized === 'delete' || normalized === 'unknown') {
+    return normalized;
+  }
+  return null;
+}
+
+function normalizePlatformStravaWebhookEventSortField(value: unknown): PlatformStravaWebhookEventSortField {
+  const normalized = toText(value);
+  const allowed: PlatformStravaWebhookEventSortField[] = ['eventTime', 'tenantName', 'status', 'attempts', 'processedAt', 'claimedAt'];
+  return allowed.includes(normalized as PlatformStravaWebhookEventSortField)
+    ? normalized as PlatformStravaWebhookEventSortField
+    : 'eventTime';
+}
+
+function normalizePlatformStravaSyncJobStatus(value: unknown): PlatformStravaSyncJobStatus | null {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === 'queued' || normalized === 'running' || normalized === 'partial_ready' || normalized === 'completed' || normalized === 'failed' || normalized === 'cancelled') {
+    return normalized as PlatformStravaSyncJobStatus;
+  }
+  return null;
+}
+
+function normalizePlatformStravaSyncJobMode(value: unknown): PlatformStravaSyncJobMode | null {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === 'initial' || normalized === 'incremental' || normalized === 'retry') {
+    return normalized as PlatformStravaSyncJobMode;
+  }
+  return null;
+}
+
+function normalizePlatformStravaSyncJobSortField(value: unknown): PlatformStravaSyncJobSortField {
+  const normalized = toText(value);
+  const allowed: PlatformStravaSyncJobSortField[] = ['requestedAt', 'tenantName', 'userName', 'status', 'syncMode', 'startedAt', 'finishedAt', 'claimedAt', 'nextRetryAt', 'processedActivities'];
+  return allowed.includes(normalized as PlatformStravaSyncJobSortField)
+    ? normalized as PlatformStravaSyncJobSortField
+    : 'requestedAt';
+}
+
+function parsePlatformStravaSyncJobSort(value: unknown): {
+  field: PlatformStravaSyncJobSortField;
+  direction: 'asc' | 'desc';
+} {
+  const raw = toText(value);
+  if (!raw) {
+    return { field: 'requestedAt', direction: 'desc' };
+  }
+
+  const [fieldPart, directionPart] = raw.split(':');
+  return {
+    field: normalizePlatformStravaSyncJobSortField(fieldPart),
+    direction: normalizeSortDirection(directionPart),
+  };
+}
+
+function parsePlatformStravaWebhookEventSort(value: unknown): {
+  field: PlatformStravaWebhookEventSortField;
+  direction: 'asc' | 'desc';
+} {
+  const raw = toText(value);
+  if (!raw) {
+    return { field: 'eventTime', direction: 'desc' };
+  }
+
+  const [fieldPart, directionPart] = raw.split(':');
+  return {
+    field: normalizePlatformStravaWebhookEventSortField(fieldPart),
+    direction: normalizeSortDirection(directionPart),
+  };
+}
+
+function normalizeDateInput(value: unknown, endOfDay = false): string | null {
+  const text = toText(value);
+  if (!text) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return `${text}${endOfDay ? 'T23:59:59.999Z' : 'T00:00:00.000Z'}`;
+  }
+
+  const timestamp = Date.parse(text);
+  if (Number.isNaN(timestamp)) return null;
+  return new Date(timestamp).toISOString();
+}
+
+function summarizePlatformStravaWebhookError(value: unknown): string | null {
+  const text = toText(value);
+  if (!text) return null;
+  const firstLine = text.split(/\r?\n/).map((item) => item.trim()).find(Boolean) || text;
+  return firstLine.length > 160 ? `${firstLine.slice(0, 157)}...` : firstLine;
+}
+
+function parseJsonValue(value: unknown): unknown {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') {
+    const text = value.trim();
+    if (!text) return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
+function parseJsonRecord(value: unknown): Record<string, unknown> | null {
+  const parsed = parseJsonValue(value);
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+    ? parsed as Record<string, unknown>
+    : null;
+}
+
+function normalizePlatformStravaConnectionSortField(value: unknown): PlatformStravaConnectionSortField {
+  const normalized = toText(value);
+  const allowed: PlatformStravaConnectionSortField[] = [
+    'connectedAt',
+    'tenantName',
+    'userName',
+    'userEmail',
+    'athleteName',
+    'status',
+    'lastSyncAt',
+    'tokenExpiresAt',
+    'activityCount',
+    'lastActivitySyncAt',
+  ];
+  return allowed.includes(normalized as PlatformStravaConnectionSortField)
+    ? normalized as PlatformStravaConnectionSortField
+    : 'connectedAt';
+}
+
+function normalizeSortDirection(value: unknown): 'asc' | 'desc' {
+  return toText(value).toLowerCase() === 'asc' ? 'asc' : 'desc';
+}
+
+function normalizeBooleanFlag(value: unknown): boolean {
+  return toBoolean(value, false);
+}
+
+function normalizePlatformStravaDiagnosticsWindow(value: unknown): PlatformStravaDiagnosticsWindow {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === '7d' || normalized === '30d') return normalized;
+  return '24h';
+}
+
+function getDiagnosticsWindowStart(window: PlatformStravaDiagnosticsWindow, nowMs = Date.now()): string {
+  return new Date(nowMs - STRAVA_DIAGNOSTICS_WINDOWS[window]).toISOString();
+}
+
+function getDiagnosticsConnectionStaleBefore(nowMs = Date.now()): string {
+  return new Date(nowMs - (STRAVA_DIAGNOSTICS_CONNECTION_STALE_DAYS * 24 * 60 * 60 * 1000)).toISOString();
+}
+
+function resolveDiagnosticsWebhookStaleMs(): number {
+  const staleMinutes = toPositiveIntOrDefault(process.env.STRAVA_WEBHOOK_STALE_MINUTES, 10);
+  return staleMinutes * 60 * 1000;
+}
+
+function resolveDiagnosticsSyncStaleMs(): number {
+  const staleMinutes = toPositiveIntOrDefault(process.env.STRAVA_SYNC_JOB_STALE_MINUTES, 10);
+  return staleMinutes * 60 * 1000;
+}
+
+function summarizeDiagnosticsText(value: unknown, maxLength = 160): string | null {
+  const text = toText(value);
+  if (!text) return null;
+
+  const firstLine = text.split(/\r?\n/).map((item) => item.trim()).find(Boolean) || text;
+  const sanitized = firstLine
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [redacted]')
+    .replace(/access[_\s-]*token/gi, 'redacted-token')
+    .replace(/refresh[_\s-]*token/gi, 'redacted-token')
+    .replace(/client[_\s-]*secret/gi, 'redacted-secret')
+    .replace(/verify[_\s-]*token/gi, 'redacted-token');
+
+  return sanitized.length > maxLength ? `${sanitized.slice(0, maxLength - 3)}...` : sanitized;
+}
+
+function makeDiagnosticsRule(code: string, severity: PlatformStravaDiagnosticsSeverity, message: string): PlatformStravaDiagnosticsRule {
+  return { code, severity, message };
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, code: string, message: string): Promise<T> {
+  let timer: NodeJS.Timeout | null = null;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(Object.assign(new Error(message), { code, status: 504 }));
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function parsePlatformStravaConnectionsSort(value: unknown): {
+  field: PlatformStravaConnectionSortField;
+  direction: 'asc' | 'desc';
+} {
+  const raw = toText(value);
+  if (!raw) {
+    return { field: 'connectedAt', direction: 'desc' };
+  }
+
+  const [fieldPart, directionPart] = raw.split(':');
+  return {
+    field: normalizePlatformStravaConnectionSortField(fieldPart),
+    direction: normalizeSortDirection(directionPart),
+  };
+}
+
+function buildPlatformStravaUserName(row: any): string {
+  return toText(row?.userFullName) || toText(row?.userUsername) || toText(row?.userEmail) || `User #${toPositiveInt(row?.userId) || 0}`;
+}
+
+function buildPlatformStravaAthleteName(row: any): string {
+  const fullName = [toText(row?.athleteFirstname), toText(row?.athleteLastname)].filter(Boolean).join(' ').trim();
+  return fullName || toText(row?.athleteUsername) || toText(row?.athleteId) || 'Unknown athlete';
+}
+
+function buildPlatformStravaEventTime(value: unknown, fallback?: unknown): string | null {
+  const raw = toText(value);
+  if (/^\d+$/.test(raw)) {
+    const epochMs = Number(raw) * 1000;
+    if (Number.isFinite(epochMs)) {
+      return new Date(epochMs).toISOString();
+    }
+  }
+
+  const fallbackText = toText(fallback);
+  if (fallbackText) return fallbackText;
+  return null;
+}
+
+function buildPlatformStravaWebhookEventParty(row: any): PlatformStravaWebhookEventParty | null {
+  const id = toPositiveInt(row?.tenantId);
+  const name = toText(row?.tenantName);
+  if (!id && !name) return null;
+  return {
+    id: id || 0,
+    name: name || `Tenant #${id || 0}`,
+  };
+}
+
+function buildPlatformStravaWebhookEventUser(row: any): PlatformStravaWebhookEventUser | null {
+  const id = toPositiveInt(row?.userId);
+  const name = buildPlatformStravaUserName(row);
+  const email = toText(row?.userEmail) || null;
+  if (!id && !name && !email) return null;
+  return {
+    id: id || 0,
+    name,
+    email,
+  };
+}
+
+function buildPlatformStravaWebhookEventConnection(row: any): PlatformStravaWebhookEventConnection | null {
+  const id = toPositiveInt(row?.connectionId);
+  const athleteId = toText(row?.connectionAthleteId);
+  const athleteName = buildPlatformStravaAthleteName({
+    athleteFirstname: row?.connectionAthleteFirstname,
+    athleteLastname: row?.connectionAthleteLastname,
+    athleteUsername: row?.connectionAthleteUsername,
+    athleteId,
+  });
+  const status = normalizePlatformStravaConnectionStatus(row?.connectionStatus);
+  if (!id && !athleteId && !athleteName) return null;
+  return {
+    id: id || 0,
+    athleteId,
+    athleteName,
+    status: status || 'ERROR',
+  };
+}
+
+function buildPlatformStravaWebhookEventListItem(row: any): PlatformStravaWebhookEventListItem {
+  return {
+    eventId: toPositiveInt(row?.eventId) || 0,
+    eventTime: buildPlatformStravaEventTime(row?.eventTime, row?.receivedAt),
+    tenant: buildPlatformStravaWebhookEventParty(row),
+    connection: buildPlatformStravaWebhookEventConnection(row),
+    user: buildPlatformStravaWebhookEventUser(row),
+    objectType: normalizePlatformStravaWebhookEventObjectType(row?.objectType) || 'unknown',
+    objectId: toText(row?.objectId) || null,
+    aspectType: normalizePlatformStravaWebhookEventAspectType(row?.aspectType) || 'unknown',
+    status: normalizePlatformStravaWebhookEventStatus(row?.status) || 'failed',
+    attempts: Number(row?.attempts || 0) || 0,
+    processedAt: row?.processedAt || null,
+    claimedBy: toText(row?.claimedBy) || null,
+    lastError: summarizePlatformStravaWebhookError(row?.lastError),
+  };
+}
+
+function buildPlatformStravaWebhookTimeline(detail: {
+  receivedAt?: string | null;
+  claimedAt?: string | null;
+  processedAt?: string | null;
+  nextAttemptAt?: string | null;
+  status?: PlatformStravaWebhookEventStatus | null;
+  attempts?: number;
+  lastError?: string | null;
+}): PlatformStravaWebhookEventTimelineItem[] {
+  const items: PlatformStravaWebhookEventTimelineItem[] = [];
+  const attempts = Number(detail.attempts || 0) || 0;
+
+  if (detail.receivedAt) {
+    items.push({ key: 'received', label: 'Received', time: detail.receivedAt, note: null });
+  }
+  if (detail.claimedAt) {
+    items.push({ key: 'claimed', label: 'Claimed', time: detail.claimedAt, note: detail.status === 'processing' ? 'Processing' : null });
+  }
+  if (attempts > 1) {
+    items.push({ key: 'retry', label: 'Retry', time: detail.nextAttemptAt || detail.processedAt || detail.claimedAt || detail.receivedAt || null, note: `Attempts: ${attempts}` });
+  }
+  if (detail.status === 'processed') {
+    items.push({ key: 'processed', label: 'Processed', time: detail.processedAt || null, note: null });
+  }
+  if (detail.status === 'ignored') {
+    items.push({ key: 'ignored', label: 'Ignored', time: detail.processedAt || null, note: detail.lastError || null });
+  }
+  if (detail.status === 'failed') {
+    items.push({ key: 'failed', label: 'Failed', time: detail.processedAt || null, note: detail.lastError || null });
+  }
+  if (detail.status === 'dead_letter') {
+    items.push({ key: 'dead_letter', label: 'Dead Letter', time: detail.processedAt || null, note: detail.lastError || null });
+  }
+
+  return items.filter((item) => item.time || item.note);
+}
+
+function buildPlatformStravaSyncJobTenant(row: any): PlatformStravaSyncJobTenant | null {
+  const id = toPositiveInt(row?.tenantId);
+  const name = toText(row?.tenantName);
+  const code = toText(row?.tenantCode) || null;
+  if (!id && !name && !code) return null;
+  return {
+    id: id || 0,
+    code,
+    name: name || code || `Tenant #${id || 0}`,
+  };
+}
+
+function buildPlatformStravaSyncJobConnection(row: any): PlatformStravaSyncJobConnection | null {
+  const id = toPositiveInt(row?.connectionId);
+  const athleteId = toText(row?.connectionAthleteId);
+  const athleteName = buildPlatformStravaAthleteName({
+    athleteFirstname: row?.connectionAthleteFirstname,
+    athleteLastname: row?.connectionAthleteLastname,
+    athleteUsername: row?.connectionAthleteUsername,
+    athleteId,
+  });
+  const status = normalizePlatformStravaConnectionStatus(row?.connectionStatus);
+  if (!id && !athleteId && !athleteName) return null;
+  return {
+    id: id || 0,
+    athleteId,
+    athleteName,
+    status,
+  };
+}
+
+function buildPlatformStravaSyncJobUser(row: any): PlatformStravaSyncJobUser | null {
+  const id = toPositiveInt(row?.userId);
+  const name = buildPlatformStravaUserName(row);
+  const email = toText(row?.userEmail) || null;
+  if (!id && !name && !email) return null;
+  return {
+    id: id || 0,
+    name,
+    email,
+  };
+}
+
+function buildPlatformStravaSyncJobPseudoRecord(row: any): StravaSyncJobRecord {
+  return {
+    id: toPositiveInt(row?.jobId) || 0,
+    status: normalizeJobStatus(row?.status) || toText(row?.status) || null,
+    phase: normalizeJobPhase(row?.phase) || toText(row?.phase) || null,
+    syncMode: normalizeJobSyncMode(row?.syncMode) || toText(row?.syncMode) || null,
+    currentPage: Number(row?.currentPage || 1) || 1,
+    perPage: Number(row?.perPage || 0) || null,
+    oldestSyncedAt: row?.oldestSyncedAt || null,
+    newestSyncedAt: row?.newestSyncedAt || null,
+    processedActivities: Number(row?.processedActivities || 0) || 0,
+    createdActivities: Number(row?.createdActivities || 0) || 0,
+    updatedActivities: Number(row?.updatedActivities || 0) || 0,
+    skippedActivities: Number(row?.skippedActivities || 0) || 0,
+    failedActivities: Number(row?.failedActivities || 0) || 0,
+    heartbeatAt: row?.heartbeatAt || null,
+    retryCount: Number(row?.retryCount || 0) || 0,
+    requestedAt: row?.requestedAt || null,
+    startedAt: row?.startedAt || null,
+    completedAt: row?.completedAt || null,
+    failedAt: row?.failedAt || null,
+    cancelledAt: row?.cancelledAt || null,
+    claimedAt: row?.claimedAt || null,
+    claimedBy: toText(row?.claimedBy) || null,
+    nextRetryAt: row?.nextRetryAt || null,
+    lastErrorCode: toText(row?.lastErrorCode) || null,
+    lastErrorMessage: toText(row?.lastErrorMessage) || null,
+    metadata: parseJsonRecord(row?.metadata),
+  };
+}
+
+function buildPlatformStravaSyncJobListItem(row: any): PlatformStravaSyncJobListItem {
+  const pseudo = buildPlatformStravaSyncJobPseudoRecord(row);
+  const serialized = serializeStravaSyncJob(pseudo);
+
+  return {
+    jobId: Number(serialized?.jobId || pseudo.id || 0),
+    id: Number(serialized?.jobId || pseudo.id || 0),
+    tenant: buildPlatformStravaSyncJobTenant(row),
+    connection: buildPlatformStravaSyncJobConnection(row),
+    user: buildPlatformStravaSyncJobUser(row),
+    status: serialized?.status || normalizeJobStatus(pseudo.status) || toText(pseudo.status) || 'failed',
+    phase: serialized?.phase || normalizeJobPhase(pseudo.phase) || toText(pseudo.phase) || null,
+    syncMode: serialized?.syncMode || normalizeJobSyncMode(pseudo.syncMode) || toText(pseudo.syncMode) || null,
+    requestedAt: pseudo.requestedAt || null,
+    startedAt: pseudo.startedAt || null,
+    finishedAt: serialized?.finishedAt || toFinishedAt(pseudo),
+    claimedAt: pseudo.claimedAt || null,
+    claimedBy: pseudo.claimedBy || null,
+    nextRetryAt: pseudo.nextRetryAt || null,
+    attempts: Number(pseudo.retryCount || 0) || 0,
+    currentPage: Number(pseudo.currentPage || 1) || 1,
+    perPage: Number(pseudo.perPage || 0) || 0,
+    processedActivities: Number(pseudo.processedActivities || 0) || 0,
+    createdActivities: Number(pseudo.createdActivities || 0) || 0,
+    updatedActivities: Number(pseudo.updatedActivities || 0) || 0,
+    skippedActivities: Number(pseudo.skippedActivities || 0) || 0,
+    failedActivities: Number(pseudo.failedActivities || 0) || 0,
+    errorCode: serialized?.lastErrorCode || pseudo.lastErrorCode || null,
+    lastError: serialized?.lastErrorMessage || summarizePlatformStravaWebhookError(pseudo.lastErrorMessage) || null,
+    progressMessage: serialized?.progressMessage || null,
+  };
+}
+
+function buildPlatformStravaSyncJobTimeline(detail: {
+  requestedAt?: string | null;
+  claimedAt?: string | null;
+  startedAt?: string | null;
+  nextRetryAt?: string | null;
+  completedAt?: string | null;
+  failedAt?: string | null;
+  cancelledAt?: string | null;
+  status?: string | null;
+  lastError?: string | null;
+}): PlatformStravaSyncJobTimelineItem[] {
+  const items: PlatformStravaSyncJobTimelineItem[] = [];
+  if (detail.requestedAt) items.push({ key: 'requested', label: 'Requested', time: detail.requestedAt, note: null });
+  if (detail.claimedAt) items.push({ key: 'claimed', label: 'Claimed', time: detail.claimedAt, note: null });
+  if (detail.startedAt) items.push({ key: 'started', label: 'Started', time: detail.startedAt, note: null });
+  if (detail.nextRetryAt && ['queued', 'running', 'partial_ready', 'failed'].includes(toText(detail.status).toLowerCase())) {
+    items.push({ key: 'retry_scheduled', label: 'Retry scheduled', time: detail.nextRetryAt, note: detail.lastError || null });
+  }
+  if (detail.completedAt) items.push({ key: 'completed', label: 'Completed', time: detail.completedAt, note: null });
+  if (detail.failedAt) items.push({ key: 'failed', label: 'Failed', time: detail.failedAt, note: detail.lastError || null });
+  if (detail.cancelledAt) items.push({ key: 'cancelled', label: 'Cancelled', time: detail.cancelledAt, note: null });
+  return items.filter((item) => item.time || item.note);
+}
+
+function buildPlatformStravaConnectionItem(row: any): PlatformStravaConnectionItem {
+  return {
+    connectionId: toPositiveInt(row?.connectionId) || 0,
+    tenantId: toPositiveInt(row?.tenantId) || 0,
+    tenantName: toText(row?.tenantName) || `Tenant #${toPositiveInt(row?.tenantId) || 0}`,
+    userId: toPositiveInt(row?.userId) || 0,
+    userName: buildPlatformStravaUserName(row),
+    userEmail: toText(row?.userEmail) || null,
+    athleteId: toText(row?.athleteId),
+    athleteName: buildPlatformStravaAthleteName(row),
+    status: normalizePlatformStravaConnectionStatus(row?.status) || 'ERROR',
+    connectedAt: row?.connectedAt || null,
+    disconnectedAt: row?.disconnectedAt || null,
+    lastSyncAt: row?.lastSyncAt || null,
+    lastActivitySyncAt: row?.lastActivitySyncAt || null,
+    tokenExpiresAt: row?.tokenExpiresAt || null,
+    lastSyncError: toText(row?.lastSyncError) || null,
+    activityCount: Number(row?.activityCount || 0) || 0,
+    subscriptionId: toPositiveInt(row?.subscriptionId),
+  };
+}
+
+function applyPlatformStravaConnectionsSort(query: any, sort: { field: PlatformStravaConnectionSortField; direction: 'asc' | 'desc' }) {
+  const direction = sort.direction;
+
+  if (sort.field === 'tenantName') {
+    query.orderBy('t.name', direction).orderBy('sc.id', direction);
+    return;
+  }
+
+  if (sort.field === 'userName') {
+    query.orderByRaw(`coalesce(nullif(u.full_name, ''), u.username, u.email) ${direction}, sc.id ${direction}`);
+    return;
+  }
+
+  if (sort.field === 'userEmail') {
+    query.orderBy('u.email', direction).orderBy('sc.id', direction);
+    return;
+  }
+
+  if (sort.field === 'athleteName') {
+    query.orderByRaw(`coalesce(nullif(trim(concat_ws(' ', coalesce(sc.athlete_firstname, ''), coalesce(sc.athlete_lastname, ''))), ''), sc.athlete_username, sc.strava_athlete_id) ${direction}, sc.id ${direction}`);
+    return;
+  }
+
+  if (sort.field === 'status') {
+    query.orderBy('sc.status', direction).orderBy('sc.id', direction);
+    return;
+  }
+
+  if (sort.field === 'lastSyncAt') {
+    query.orderBy('sc.last_sync_at', direction).orderBy('sc.id', direction);
+    return;
+  }
+
+  if (sort.field === 'tokenExpiresAt') {
+    query.orderBy('sc.token_expires_at', direction).orderBy('sc.id', direction);
+    return;
+  }
+
+  if (sort.field === 'activityCount') {
+    query.orderByRaw(`coalesce(activity_stats.activity_count, 0) ${direction}, sc.id ${direction}`);
+    return;
+  }
+
+  if (sort.field === 'lastActivitySyncAt') {
+    query.orderBy('activity_stats.last_activity_sync_at', direction).orderBy('sc.id', direction);
+    return;
+  }
+
+  query.orderBy('sc.created_at', direction).orderBy('sc.id', direction);
+}
+
+function buildPlatformStravaConnectionsBaseQuery(filters: {
+  keyword: string;
+  status: PlatformStravaConnectionStatus | null;
+  tenantId: number | null;
+  staleSync: boolean;
+}) {
+  const knex = strapi.db.connection;
+  const staleSyncBefore = getDiagnosticsConnectionStaleBefore();
+
+  const activityStatsSubquery = knex('strava_activities_connection_lnk as sacl')
+    .leftJoin('strava_activities as sa', 'sa.id', 'sacl.strava_activity_id')
+    .groupBy('sacl.strava_connection_id')
+    .select('sacl.strava_connection_id as connection_id')
+    .select(knex.raw(`sum(case when coalesce(sa.sync_status, '') = 'DELETED_ON_STRAVA' then 0 else 1 end) as activity_count`))
+    .select(knex.raw('max(sa.updated_at) as last_activity_sync_at'));
+
+  const webhookStatsSubquery = knex('strava_webhook_events_connection_lnk as swecl')
+    .leftJoin('strava_webhook_events as swe', 'swe.id', 'swecl.strava_webhook_event_id')
+    .whereNotNull('swe.subscription_id')
+    .groupBy('swecl.strava_connection_id')
+    .select('swecl.strava_connection_id as connection_id')
+    .select(knex.raw('max(swe.subscription_id) as subscription_id'));
+
+  const query = knex('strava_connections as sc')
+    .join('strava_connections_tenant_lnk as sctl', 'sctl.strava_connection_id', 'sc.id')
+    .join('tenants as t', 't.id', 'sctl.tenant_id')
+    .join('strava_connections_user_lnk as scul', 'scul.strava_connection_id', 'sc.id')
+    .join('up_users as u', 'u.id', 'scul.user_id')
+    .leftJoin(activityStatsSubquery.as('activity_stats'), 'activity_stats.connection_id', 'sc.id')
+    .leftJoin(webhookStatsSubquery.as('webhook_stats'), 'webhook_stats.connection_id', 'sc.id');
+
+  if (filters.status) {
+    query.where('sc.status', filters.status);
+  }
+
+  if (filters.tenantId) {
+    query.where('t.id', filters.tenantId);
+  }
+
+  if (filters.staleSync) {
+    query
+      .where('sc.status', 'ACTIVE')
+      .whereNot('sc.last_sync_status', 'NEVER')
+      .andWhere((builder: any) => {
+        builder.whereNull('sc.last_sync_at').orWhere('sc.last_sync_at', '<=', staleSyncBefore);
+      });
+  }
+
+  if (filters.keyword) {
+    const pattern = `%${filters.keyword}%`;
+    query.andWhere((builder: any) => {
+      builder
+        .whereILike('t.name', pattern)
+        .orWhereILike('u.full_name', pattern)
+        .orWhereILike('u.username', pattern)
+        .orWhereILike('u.email', pattern)
+        .orWhereILike('sc.strava_athlete_id', pattern)
+        .orWhereILike('sc.athlete_username', pattern)
+        .orWhereILike('sc.athlete_firstname', pattern)
+        .orWhereILike('sc.athlete_lastname', pattern)
+        .orWhereRaw(`concat_ws(' ', coalesce(sc.athlete_firstname, ''), coalesce(sc.athlete_lastname, '')) ilike ?`, [pattern]);
+    });
+  }
+
+  return query;
+}
+
+export async function listPlatformStravaConnections(query: PlatformStravaConnectionsQuery = {}): Promise<PlatformStravaConnectionsResult> {
+  const page = toPositiveIntOrDefault(query.page, 1);
+  const pageSize = clampInt(toPositiveIntOrDefault(query.pageSize, 20), 1, 100);
+  const keyword = toText(query.keyword);
+  const status = normalizePlatformStravaConnectionStatus(query.status);
+  const tenantId = toPositiveInt(query.tenantId);
+  const staleSync = normalizeBooleanFlag(query.staleSync);
+  const sort = parsePlatformStravaConnectionsSort(query.sort);
+  const offset = (page - 1) * pageSize;
+
+  const baseQuery = buildPlatformStravaConnectionsBaseQuery({ keyword, status, tenantId, staleSync });
+
+  const totalRow = await baseQuery.clone().clearSelect().clearOrder().countDistinct({ total: 'sc.id' }).first();
+  const total = Number((totalRow as any)?.total || 0) || 0;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+
+  const pageRows = await baseQuery
+    .clone()
+    .select([
+      'sc.id as connectionId',
+      't.id as tenantId',
+      't.name as tenantName',
+      'u.id as userId',
+      'u.username as userUsername',
+      'u.full_name as userFullName',
+      'u.email as userEmail',
+      'sc.strava_athlete_id as athleteId',
+      'sc.athlete_username as athleteUsername',
+      'sc.athlete_firstname as athleteFirstname',
+      'sc.athlete_lastname as athleteLastname',
+      'sc.status as status',
+      'sc.created_at as connectedAt',
+      'sc.disconnected_at as disconnectedAt',
+      'sc.last_sync_at as lastSyncAt',
+      'sc.token_expires_at as tokenExpiresAt',
+      'sc.last_sync_error as lastSyncError',
+      'activity_stats.activity_count as activityCount',
+      'activity_stats.last_activity_sync_at as lastActivitySyncAt',
+      'webhook_stats.subscription_id as subscriptionId',
+    ])
+    .modify((builder: any) => applyPlatformStravaConnectionsSort(builder, sort))
+    .limit(pageSize)
+    .offset(offset);
+
+  return {
+    data: (pageRows || []).map(buildPlatformStravaConnectionItem),
+    meta: {
+      pagination: {
+        page,
+        pageSize,
+        pageCount,
+        total,
+      },
+      filters: {
+        keyword,
+        status,
+        tenantId,
+        staleSync,
+      },
+      sort,
+    },
+  };
+}
+
+function buildPlatformStravaWebhookEventsBaseQuery(filters: {
+  keyword: string;
+  status: PlatformStravaWebhookEventStatus | null;
+  objectType: PlatformStravaWebhookEventObjectType | null;
+  aspectType: PlatformStravaWebhookEventAspectType | null;
+  tenantId: number | null;
+  connectionId: number | null;
+  stale: boolean;
+  dateFrom: string | null;
+  dateTo: string | null;
+}) {
+  const knex = strapi.db.connection;
+  const webhookStaleBefore = new Date(Date.now() - resolveDiagnosticsWebhookStaleMs()).toISOString();
+  const eventTimeExpr = `case when swe.event_time ~ '^[0-9]+$' then to_timestamp(cast(swe.event_time as double precision)) else swe.created_at end`;
+  const resolvedConnectionIdExpr = `coalesce(sc.id, fallback_conn.connection_id)`;
+  const resolvedTenantIdExpr = `coalesce(t.id, fallback_conn.tenant_id)`;
+  const resolvedTenantNameExpr = `coalesce(t.name, fallback_conn.tenant_name)`;
+  const resolvedUserIdExpr = `coalesce(u.id, fallback_conn.user_id)`;
+  const resolvedUserFullNameExpr = `coalesce(u.full_name, fallback_conn.user_full_name)`;
+  const resolvedUserUsernameExpr = `coalesce(u.username, fallback_conn.user_username)`;
+  const resolvedUserEmailExpr = `coalesce(u.email, fallback_conn.user_email)`;
+  const resolvedAthleteIdExpr = `coalesce(sc.strava_athlete_id, fallback_conn.connection_athlete_id)`;
+  const resolvedAthleteUsernameExpr = `coalesce(sc.athlete_username, fallback_conn.connection_athlete_username)`;
+  const resolvedAthleteFirstnameExpr = `coalesce(sc.athlete_firstname, fallback_conn.connection_athlete_firstname)`;
+  const resolvedAthleteLastnameExpr = `coalesce(sc.athlete_lastname, fallback_conn.connection_athlete_lastname)`;
+  const resolvedConnectionStatusExpr = `coalesce(sc.status, fallback_conn.connection_status)`;
+
+  const query = knex('strava_webhook_events as swe')
+    .leftJoin('strava_webhook_events_tenant_lnk as swetl', 'swetl.strava_webhook_event_id', 'swe.id')
+    .leftJoin('tenants as t', 't.id', 'swetl.tenant_id')
+    .leftJoin('strava_webhook_events_connection_lnk as swecl', 'swecl.strava_webhook_event_id', 'swe.id')
+    .leftJoin('strava_connections as sc', 'sc.id', 'swecl.strava_connection_id')
+    .leftJoin('strava_webhook_events_user_lnk as sweul', 'sweul.strava_webhook_event_id', 'swe.id')
+    .leftJoin('up_users as u', 'u.id', 'sweul.user_id')
+    .leftJoin(
+      knex.raw(`lateral (
+        select
+          scf.id as connection_id,
+          scf.strava_athlete_id as connection_athlete_id,
+          scf.athlete_username as connection_athlete_username,
+          scf.athlete_firstname as connection_athlete_firstname,
+          scf.athlete_lastname as connection_athlete_lastname,
+          scf.status as connection_status,
+          tf.id as tenant_id,
+          tf.name as tenant_name,
+          uf.id as user_id,
+          uf.full_name as user_full_name,
+          uf.username as user_username,
+          uf.email as user_email
+        from strava_connections scf
+        join strava_connections_tenant_lnk sctlf on sctlf.strava_connection_id = scf.id
+        join tenants tf on tf.id = sctlf.tenant_id
+        join strava_connections_user_lnk sculf on sculf.strava_connection_id = scf.id
+        join up_users uf on uf.id = sculf.user_id
+        where scf.strava_athlete_id = swe.owner_id
+        order by case when scf.status = 'ACTIVE' then 0 else 1 end, scf.id asc
+        limit 1
+      ) as fallback_conn on true`),
+    );
+
+  if (filters.status) {
+    query.where('swe.status', filters.status);
+  }
+  if (filters.objectType) {
+    query.where('swe.object_type', filters.objectType);
+  }
+  if (filters.aspectType) {
+    query.where('swe.aspect_type', filters.aspectType);
+  }
+  if (filters.tenantId) {
+    query.whereRaw(`${resolvedTenantIdExpr} = ?`, [filters.tenantId]);
+  }
+  if (filters.connectionId) {
+    query.whereRaw(`${resolvedConnectionIdExpr} = ?`, [filters.connectionId]);
+  }
+  if (filters.stale) {
+    query.where('swe.status', 'processing').whereRaw(`swe.claimed_at <= ?::timestamptz`, [webhookStaleBefore]);
+  }
+  if (filters.dateFrom) {
+    query.whereRaw(`${eventTimeExpr} >= ?::timestamptz`, [filters.dateFrom]);
+  }
+  if (filters.dateTo) {
+    query.whereRaw(`${eventTimeExpr} <= ?::timestamptz`, [filters.dateTo]);
+  }
+  if (filters.keyword) {
+    const pattern = `%${filters.keyword}%`;
+    query.andWhere((builder: any) => {
+      builder
+        .whereRaw(`${resolvedTenantNameExpr} ilike ?`, [pattern])
+        .orWhereRaw(`${resolvedUserFullNameExpr} ilike ?`, [pattern])
+        .orWhereRaw(`${resolvedUserUsernameExpr} ilike ?`, [pattern])
+        .orWhereRaw(`${resolvedUserEmailExpr} ilike ?`, [pattern])
+        .orWhereILike('swe.object_id', pattern)
+        .orWhereILike('swe.owner_id', pattern)
+        .orWhereRaw(`${resolvedAthleteIdExpr} ilike ?`, [pattern])
+        .orWhereRaw(`${resolvedAthleteUsernameExpr} ilike ?`, [pattern])
+        .orWhereRaw(`${resolvedAthleteFirstnameExpr} ilike ?`, [pattern])
+        .orWhereRaw(`${resolvedAthleteLastnameExpr} ilike ?`, [pattern])
+        .orWhereRaw(`concat_ws(' ', coalesce(${resolvedAthleteFirstnameExpr}, ''), coalesce(${resolvedAthleteLastnameExpr}, '')) ilike ?`, [pattern]);
+    });
+  }
+
+  return {
+    query,
+    eventTimeExpr,
+    resolvedConnectionIdExpr,
+    resolvedTenantIdExpr,
+    resolvedTenantNameExpr,
+    resolvedUserIdExpr,
+    resolvedUserFullNameExpr,
+    resolvedUserUsernameExpr,
+    resolvedUserEmailExpr,
+    resolvedAthleteIdExpr,
+    resolvedAthleteUsernameExpr,
+    resolvedAthleteFirstnameExpr,
+    resolvedAthleteLastnameExpr,
+    resolvedConnectionStatusExpr,
+  };
+}
+
+function applyPlatformStravaWebhookEventsSort(
+  query: any,
+  sort: { field: PlatformStravaWebhookEventSortField; direction: 'asc' | 'desc' },
+  eventTimeExpr: string,
+  resolvedTenantNameExpr: string,
+) {
+  const direction = sort.direction;
+  if (sort.field === 'tenantName') {
+    query.orderByRaw(`${resolvedTenantNameExpr} ${direction}, swe.id ${direction}`);
+    return;
+  }
+  if (sort.field === 'status') {
+    query.orderBy('swe.status', direction).orderBy('swe.id', direction);
+    return;
+  }
+  if (sort.field === 'attempts') {
+    query.orderBy('swe.attempts', direction).orderBy('swe.id', direction);
+    return;
+  }
+  if (sort.field === 'processedAt') {
+    query.orderBy('swe.processed_at', direction).orderBy('swe.id', direction);
+    return;
+  }
+  if (sort.field === 'claimedAt') {
+    query.orderBy('swe.claimed_at', direction).orderBy('swe.id', direction);
+    return;
+  }
+
+  query.orderByRaw(`${eventTimeExpr} ${direction}, swe.id ${direction}`);
+}
+
+export async function listPlatformStravaWebhookEvents(query: PlatformStravaWebhookEventsQuery = {}): Promise<PlatformStravaWebhookEventsResult> {
+  const page = toPositiveIntOrDefault(query.page, 1);
+  const pageSize = clampInt(toPositiveIntOrDefault(query.pageSize, 20), 1, 100);
+  const keyword = toText(query.keyword);
+  const status = normalizePlatformStravaWebhookEventStatus(query.status);
+  const objectType = normalizePlatformStravaWebhookEventObjectType(query.objectType);
+  const aspectType = normalizePlatformStravaWebhookEventAspectType(query.aspectType);
+  const tenantId = toPositiveInt(query.tenantId);
+  const connectionId = toPositiveInt(query.connectionId);
+  const stale = normalizeBooleanFlag(query.stale);
+  const dateFrom = normalizeDateInput(query.dateFrom, false);
+  const dateTo = normalizeDateInput(query.dateTo, true);
+  const sort = parsePlatformStravaWebhookEventSort(query.sort);
+  const offset = (page - 1) * pageSize;
+
+  const {
+    query: baseQuery,
+    eventTimeExpr,
+    resolvedConnectionIdExpr,
+    resolvedTenantIdExpr,
+    resolvedTenantNameExpr,
+    resolvedUserIdExpr,
+    resolvedUserFullNameExpr,
+    resolvedUserUsernameExpr,
+    resolvedUserEmailExpr,
+    resolvedAthleteIdExpr,
+    resolvedAthleteUsernameExpr,
+    resolvedAthleteFirstnameExpr,
+    resolvedAthleteLastnameExpr,
+    resolvedConnectionStatusExpr,
+  } = buildPlatformStravaWebhookEventsBaseQuery({
+    keyword,
+    status,
+    objectType,
+    aspectType,
+    tenantId,
+    connectionId,
+    stale,
+    dateFrom,
+    dateTo,
+  });
+
+  const totalRow = await baseQuery.clone().clearSelect().clearOrder().countDistinct({ total: 'swe.id' }).first();
+  const total = Number((totalRow as any)?.total || 0) || 0;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+
+  const rows = await baseQuery
+    .clone()
+    .select([
+      'swe.id as eventId',
+      'swe.event_time as eventTime',
+      'swe.object_type as objectType',
+      'swe.object_id as objectId',
+      'swe.aspect_type as aspectType',
+      'swe.status as status',
+      'swe.attempts as attempts',
+      'swe.processed_at as processedAt',
+      'swe.claimed_by as claimedBy',
+      'swe.last_error as lastError',
+      'swe.created_at as receivedAt',
+      strapi.db.connection.raw(`${resolvedTenantIdExpr} as "tenantId"`),
+      strapi.db.connection.raw(`${resolvedTenantNameExpr} as "tenantName"`),
+      strapi.db.connection.raw(`${resolvedConnectionIdExpr} as "connectionId"`),
+      strapi.db.connection.raw(`${resolvedAthleteIdExpr} as "connectionAthleteId"`),
+      strapi.db.connection.raw(`${resolvedAthleteUsernameExpr} as "connectionAthleteUsername"`),
+      strapi.db.connection.raw(`${resolvedAthleteFirstnameExpr} as "connectionAthleteFirstname"`),
+      strapi.db.connection.raw(`${resolvedAthleteLastnameExpr} as "connectionAthleteLastname"`),
+      strapi.db.connection.raw(`${resolvedConnectionStatusExpr} as "connectionStatus"`),
+      strapi.db.connection.raw(`${resolvedUserIdExpr} as "userId"`),
+      strapi.db.connection.raw(`${resolvedUserUsernameExpr} as "userUsername"`),
+      strapi.db.connection.raw(`${resolvedUserFullNameExpr} as "userFullName"`),
+      strapi.db.connection.raw(`${resolvedUserEmailExpr} as "userEmail"`),
+    ])
+    .modify((builder: any) => applyPlatformStravaWebhookEventsSort(builder, sort, eventTimeExpr, resolvedTenantNameExpr))
+    .limit(pageSize)
+    .offset(offset);
+
+  return {
+    data: (rows || []).map(buildPlatformStravaWebhookEventListItem),
+    meta: {
+      pagination: {
+        page,
+        pageSize,
+        pageCount,
+        total,
+      },
+      filters: {
+        keyword,
+        status,
+        objectType,
+        aspectType,
+        tenantId,
+        connectionId,
+        stale,
+        dateFrom,
+        dateTo,
+      },
+      sort,
+    },
+  };
+}
+
+export async function getPlatformStravaWebhookEventDetail(eventId: unknown): Promise<PlatformStravaWebhookEventDetail> {
+  const resolvedEventId = toPositiveInt(eventId);
+  if (!resolvedEventId) {
+    throw Object.assign(new Error('Invalid webhook event id'), { status: 400 });
+  }
+
+  const rowResult = await strapi.db.connection('strava_webhook_events as swe')
+    .leftJoin('strava_webhook_events_tenant_lnk as swetl', 'swetl.strava_webhook_event_id', 'swe.id')
+    .leftJoin('tenants as t', 't.id', 'swetl.tenant_id')
+    .leftJoin('strava_webhook_events_connection_lnk as swecl', 'swecl.strava_webhook_event_id', 'swe.id')
+    .leftJoin('strava_connections as sc', 'sc.id', 'swecl.strava_connection_id')
+    .leftJoin('strava_webhook_events_user_lnk as sweul', 'sweul.strava_webhook_event_id', 'swe.id')
+    .leftJoin('up_users as u', 'u.id', 'sweul.user_id')
+    .leftJoin(
+      strapi.db.connection.raw(`lateral (
+        select
+          scf.id as connection_id,
+          scf.strava_athlete_id as connection_athlete_id,
+          scf.athlete_username as connection_athlete_username,
+          scf.athlete_firstname as connection_athlete_firstname,
+          scf.athlete_lastname as connection_athlete_lastname,
+          scf.status as connection_status,
+          tf.id as tenant_id,
+          tf.name as tenant_name,
+          uf.id as user_id,
+          uf.full_name as user_full_name,
+          uf.username as user_username,
+          uf.email as user_email
+        from strava_connections scf
+        join strava_connections_tenant_lnk sctlf on sctlf.strava_connection_id = scf.id
+        join tenants tf on tf.id = sctlf.tenant_id
+        join strava_connections_user_lnk sculf on sculf.strava_connection_id = scf.id
+        join up_users uf on uf.id = sculf.user_id
+        where scf.strava_athlete_id = swe.owner_id
+        order by case when scf.status = 'ACTIVE' then 0 else 1 end, scf.id asc
+        limit 1
+      ) as fallback_conn on true`),
+    )
+    .select([
+      'swe.id as eventId',
+      'swe.event_time as eventTime',
+      'swe.created_at as receivedAt',
+      'swe.claimed_at as claimedAt',
+      'swe.next_attempt_at as nextAttemptAt',
+      'swe.processed_at as processedAt',
+      'swe.object_type as objectType',
+      'swe.object_id as objectId',
+      'swe.aspect_type as aspectType',
+      'swe.status as status',
+      'swe.attempts as attempts',
+      'swe.claimed_by as claimedBy',
+      'swe.last_error as lastError',
+      'swe.owner_id as ownerId',
+      'swe.subscription_id as subscriptionId',
+      'swe.updates as updates',
+      'swe.raw_payload as rawPayload',
+      strapi.db.connection.raw(`coalesce(t.id, fallback_conn.tenant_id) as "tenantId"`),
+      strapi.db.connection.raw(`coalesce(t.name, fallback_conn.tenant_name) as "tenantName"`),
+      strapi.db.connection.raw(`coalesce(sc.id, fallback_conn.connection_id) as "connectionId"`),
+      strapi.db.connection.raw(`coalesce(sc.strava_athlete_id, fallback_conn.connection_athlete_id) as "connectionAthleteId"`),
+      strapi.db.connection.raw(`coalesce(sc.athlete_username, fallback_conn.connection_athlete_username) as "connectionAthleteUsername"`),
+      strapi.db.connection.raw(`coalesce(sc.athlete_firstname, fallback_conn.connection_athlete_firstname) as "connectionAthleteFirstname"`),
+      strapi.db.connection.raw(`coalesce(sc.athlete_lastname, fallback_conn.connection_athlete_lastname) as "connectionAthleteLastname"`),
+      strapi.db.connection.raw(`coalesce(sc.status, fallback_conn.connection_status) as "connectionStatus"`),
+      strapi.db.connection.raw(`coalesce(u.id, fallback_conn.user_id) as "userId"`),
+      strapi.db.connection.raw(`coalesce(u.username, fallback_conn.user_username) as "userUsername"`),
+      strapi.db.connection.raw(`coalesce(u.full_name, fallback_conn.user_full_name) as "userFullName"`),
+      strapi.db.connection.raw(`coalesce(u.email, fallback_conn.user_email) as "userEmail"`),
+    ])
+    .where('swe.id', resolvedEventId)
+    .first();
+
+  const row = rowResult as any;
+
+  if (!row) {
+    throw Object.assign(new Error('Webhook event not found'), { status: 404 });
+  }
+
+  const baseItem = buildPlatformStravaWebhookEventListItem(row);
+  const detail: PlatformStravaWebhookEventDetail = {
+    ...baseItem,
+    receivedAt: row?.receivedAt || null,
+    claimedAt: row?.claimedAt || null,
+    nextAttemptAt: row?.nextAttemptAt || null,
+    ownerId: toText(row?.ownerId) || null,
+    subscriptionId: toPositiveInt(row?.subscriptionId),
+    updates: parseJsonRecord(row?.updates),
+    rawPayload: parseJsonValue(row?.rawPayload),
+    timeline: [],
+  };
+
+  detail.timeline = buildPlatformStravaWebhookTimeline(detail);
+  return detail;
+}
+
+function buildPlatformStravaSyncJobsBaseQuery(filters: {
+  keyword: string;
+  status: PlatformStravaSyncJobStatus | null;
+  tenantId: number | null;
+  connectionId: number | null;
+  userId: number | null;
+  syncMode: PlatformStravaSyncJobMode | null;
+  stale: boolean;
+  dateFrom: string | null;
+  dateTo: string | null;
+}) {
+  const knex = strapi.db.connection;
+  const syncStaleBefore = new Date(Date.now() - resolveDiagnosticsSyncStaleMs()).toISOString();
+  const requestedAtExpr = `coalesce(sj.requested_at, sj.created_at)`;
+  const finishedAtExpr = `coalesce(sj.completed_at, sj.failed_at, sj.cancelled_at)`;
+
+  const query = knex('strava_sync_jobs as sj')
+    .leftJoin('strava_sync_jobs_tenant_lnk as sjtl', 'sjtl.strava_sync_job_id', 'sj.id')
+    .leftJoin('tenants as t', 't.id', 'sjtl.tenant_id')
+    .leftJoin('strava_sync_jobs_connection_lnk as sjcl', 'sjcl.strava_sync_job_id', 'sj.id')
+    .leftJoin('strava_connections as sc', 'sc.id', 'sjcl.strava_connection_id')
+    .leftJoin('strava_sync_jobs_user_lnk as sjul', 'sjul.strava_sync_job_id', 'sj.id')
+    .leftJoin('up_users as u', 'u.id', 'sjul.user_id');
+
+  if (filters.status) {
+    query.where('sj.status', filters.status);
+  }
+  if (filters.tenantId) {
+    query.where('t.id', filters.tenantId);
+  }
+  if (filters.connectionId) {
+    query.where('sc.id', filters.connectionId);
+  }
+  if (filters.userId) {
+    query.where('u.id', filters.userId);
+  }
+  if (filters.syncMode) {
+    query.where('sj.sync_mode', filters.syncMode);
+  }
+  if (filters.stale) {
+    query
+      .where('sj.status', 'running')
+      .whereRaw(`coalesce(sj.heartbeat_at, sj.claimed_at, sj.started_at, sj.requested_at) <= ?::timestamptz`, [syncStaleBefore]);
+  }
+  if (filters.dateFrom) {
+    query.whereRaw(`${requestedAtExpr} >= ?::timestamptz`, [filters.dateFrom]);
+  }
+  if (filters.dateTo) {
+    query.whereRaw(`${requestedAtExpr} <= ?::timestamptz`, [filters.dateTo]);
+  }
+  if (filters.keyword) {
+    const pattern = `%${filters.keyword}%`;
+    query.andWhere((builder: any) => {
+      builder
+        .whereILike('t.name', pattern)
+        .orWhereILike('t.code', pattern)
+        .orWhereILike('u.full_name', pattern)
+        .orWhereILike('u.username', pattern)
+        .orWhereILike('u.email', pattern)
+        .orWhereILike('sc.strava_athlete_id', pattern)
+        .orWhereILike('sc.athlete_username', pattern)
+        .orWhereILike('sc.athlete_firstname', pattern)
+        .orWhereILike('sc.athlete_lastname', pattern)
+        .orWhereILike('sj.claimed_by', pattern)
+        .orWhereILike('sj.last_error_code', pattern)
+        .orWhereILike('sj.last_error_message', pattern)
+        .orWhereRaw(`cast(sj.id as text) ilike ?`, [pattern])
+        .orWhereRaw(`concat_ws(' ', coalesce(sc.athlete_firstname, ''), coalesce(sc.athlete_lastname, '')) ilike ?`, [pattern]);
+    });
+  }
+
+  return { query, requestedAtExpr, finishedAtExpr };
+}
+
+function applyPlatformStravaSyncJobsSort(
+  query: any,
+  sort: { field: PlatformStravaSyncJobSortField; direction: 'asc' | 'desc' },
+  requestedAtExpr: string,
+  finishedAtExpr: string,
+) {
+  const direction = sort.direction;
+  if (sort.field === 'tenantName') {
+    query.orderBy('t.name', direction).orderBy('sj.id', direction);
+    return;
+  }
+  if (sort.field === 'userName') {
+    query.orderByRaw(`coalesce(nullif(u.full_name, ''), u.username, u.email) ${direction}, sj.id ${direction}`);
+    return;
+  }
+  if (sort.field === 'status') {
+    query.orderBy('sj.status', direction).orderBy('sj.id', direction);
+    return;
+  }
+  if (sort.field === 'syncMode') {
+    query.orderBy('sj.sync_mode', direction).orderBy('sj.id', direction);
+    return;
+  }
+  if (sort.field === 'startedAt') {
+    query.orderBy('sj.started_at', direction).orderBy('sj.id', direction);
+    return;
+  }
+  if (sort.field === 'finishedAt') {
+    query.orderByRaw(`${finishedAtExpr} ${direction}, sj.id ${direction}`);
+    return;
+  }
+  if (sort.field === 'claimedAt') {
+    query.orderBy('sj.claimed_at', direction).orderBy('sj.id', direction);
+    return;
+  }
+  if (sort.field === 'nextRetryAt') {
+    query.orderBy('sj.next_retry_at', direction).orderBy('sj.id', direction);
+    return;
+  }
+  if (sort.field === 'processedActivities') {
+    query.orderBy('sj.processed_activities', direction).orderBy('sj.id', direction);
+    return;
+  }
+
+  query.orderByRaw(`${requestedAtExpr} ${direction}, sj.id ${direction}`);
+}
+
+export async function listPlatformStravaSyncJobs(query: PlatformStravaSyncJobsQuery = {}): Promise<PlatformStravaSyncJobsResult> {
+  const page = toPositiveIntOrDefault(query.page, 1);
+  const pageSize = clampInt(toPositiveIntOrDefault(query.pageSize, 20), 1, 100);
+  const keyword = toText(query.keyword);
+  const status = normalizePlatformStravaSyncJobStatus(query.status);
+  const tenantId = toPositiveInt(query.tenantId);
+  const connectionId = toPositiveInt(query.connectionId);
+  const userId = toPositiveInt(query.userId);
+  const syncMode = normalizePlatformStravaSyncJobMode(query.syncMode ?? query.jobType);
+  const stale = normalizeBooleanFlag(query.stale);
+  const dateFrom = normalizeDateInput(query.dateFrom, false);
+  const dateTo = normalizeDateInput(query.dateTo, true);
+  const sort = parsePlatformStravaSyncJobSort(query.sort);
+  const offset = (page - 1) * pageSize;
+
+  const { query: baseQuery, requestedAtExpr, finishedAtExpr } = buildPlatformStravaSyncJobsBaseQuery({
+    keyword,
+    status,
+    tenantId,
+    connectionId,
+    userId,
+    syncMode,
+    stale,
+    dateFrom,
+    dateTo,
+  });
+
+  const totalRow = await baseQuery.clone().clearSelect().clearOrder().countDistinct({ total: 'sj.id' }).first();
+  const total = Number((totalRow as any)?.total || 0) || 0;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+
+  const rows = await baseQuery
+    .clone()
+    .select([
+      'sj.id as jobId',
+      'sj.status as status',
+      'sj.phase as phase',
+      'sj.sync_mode as syncMode',
+      'sj.current_page as currentPage',
+      'sj.per_page as perPage',
+      'sj.oldest_synced_at as oldestSyncedAt',
+      'sj.newest_synced_at as newestSyncedAt',
+      'sj.processed_activities as processedActivities',
+      'sj.created_activities as createdActivities',
+      'sj.updated_activities as updatedActivities',
+      'sj.skipped_activities as skippedActivities',
+      'sj.failed_activities as failedActivities',
+      'sj.heartbeat_at as heartbeatAt',
+      'sj.retry_count as retryCount',
+      'sj.requested_at as requestedAt',
+      'sj.started_at as startedAt',
+      'sj.completed_at as completedAt',
+      'sj.failed_at as failedAt',
+      'sj.cancelled_at as cancelledAt',
+      'sj.claimed_at as claimedAt',
+      'sj.claimed_by as claimedBy',
+      'sj.next_retry_at as nextRetryAt',
+      'sj.last_error_code as lastErrorCode',
+      'sj.last_error_message as lastErrorMessage',
+      'sj.metadata as metadata',
+      't.id as tenantId',
+      't.code as tenantCode',
+      't.name as tenantName',
+      'sc.id as connectionId',
+      'sc.strava_athlete_id as connectionAthleteId',
+      'sc.athlete_username as connectionAthleteUsername',
+      'sc.athlete_firstname as connectionAthleteFirstname',
+      'sc.athlete_lastname as connectionAthleteLastname',
+      'sc.status as connectionStatus',
+      'u.id as userId',
+      'u.username as userUsername',
+      'u.full_name as userFullName',
+      'u.email as userEmail',
+    ])
+    .modify((builder: any) => applyPlatformStravaSyncJobsSort(builder, sort, requestedAtExpr, finishedAtExpr))
+    .limit(pageSize)
+    .offset(offset);
+
+  return {
+    data: (rows || []).map(buildPlatformStravaSyncJobListItem),
+    meta: {
+      pagination: {
+        page,
+        pageSize,
+        pageCount,
+        total,
+      },
+      filters: {
+        keyword,
+        status,
+        tenantId,
+        connectionId,
+        userId,
+        syncMode,
+        stale,
+        dateFrom,
+        dateTo,
+      },
+      sort,
+    },
+  };
+}
+
+export async function getPlatformStravaSyncJobDetail(jobId: unknown): Promise<PlatformStravaSyncJobDetail> {
+  const resolvedJobId = toPositiveInt(jobId);
+  if (!resolvedJobId) {
+    throw Object.assign(new Error('Invalid sync job id'), { status: 400 });
+  }
+
+  const row = await strapi.db.connection('strava_sync_jobs as sj')
+    .leftJoin('strava_sync_jobs_tenant_lnk as sjtl', 'sjtl.strava_sync_job_id', 'sj.id')
+    .leftJoin('tenants as t', 't.id', 'sjtl.tenant_id')
+    .leftJoin('strava_sync_jobs_connection_lnk as sjcl', 'sjcl.strava_sync_job_id', 'sj.id')
+    .leftJoin('strava_connections as sc', 'sc.id', 'sjcl.strava_connection_id')
+    .leftJoin('strava_sync_jobs_user_lnk as sjul', 'sjul.strava_sync_job_id', 'sj.id')
+    .leftJoin('up_users as u', 'u.id', 'sjul.user_id')
+    .select([
+      'sj.id as jobId',
+      'sj.status as status',
+      'sj.phase as phase',
+      'sj.sync_mode as syncMode',
+      'sj.current_page as currentPage',
+      'sj.per_page as perPage',
+      'sj.oldest_synced_at as oldestSyncedAt',
+      'sj.newest_synced_at as newestSyncedAt',
+      'sj.processed_activities as processedActivities',
+      'sj.created_activities as createdActivities',
+      'sj.updated_activities as updatedActivities',
+      'sj.skipped_activities as skippedActivities',
+      'sj.failed_activities as failedActivities',
+      'sj.heartbeat_at as heartbeatAt',
+      'sj.retry_count as retryCount',
+      'sj.requested_at as requestedAt',
+      'sj.started_at as startedAt',
+      'sj.completed_at as completedAt',
+      'sj.failed_at as failedAt',
+      'sj.cancelled_at as cancelledAt',
+      'sj.claimed_at as claimedAt',
+      'sj.claimed_by as claimedBy',
+      'sj.next_retry_at as nextRetryAt',
+      'sj.last_error_code as lastErrorCode',
+      'sj.last_error_message as lastErrorMessage',
+      'sj.metadata as metadata',
+      't.id as tenantId',
+      't.code as tenantCode',
+      't.name as tenantName',
+      'sc.id as connectionId',
+      'sc.strava_athlete_id as connectionAthleteId',
+      'sc.athlete_username as connectionAthleteUsername',
+      'sc.athlete_firstname as connectionAthleteFirstname',
+      'sc.athlete_lastname as connectionAthleteLastname',
+      'sc.status as connectionStatus',
+      'u.id as userId',
+      'u.username as userUsername',
+      'u.full_name as userFullName',
+      'u.email as userEmail',
+    ])
+    .where('sj.id', resolvedJobId)
+    .first() as any;
+
+  if (!row) {
+    throw Object.assign(new Error('Sync job not found'), { status: 404 });
+  }
+
+  const pseudo = buildPlatformStravaSyncJobPseudoRecord(row);
+  const serialized = serializeStravaSyncJob(pseudo);
+  const metadata = parseJsonRecord(row?.metadata);
+
+  const detail: PlatformStravaSyncJobDetail = {
+    ...buildPlatformStravaSyncJobListItem(row),
+    heartbeatAt: pseudo.heartbeatAt || null,
+    oldestSyncedAt: pseudo.oldestSyncedAt || null,
+    newestSyncedAt: pseudo.newestSyncedAt || null,
+    recentReadyAt: toText((metadata || {}).recentReadyAt) || null,
+    totalActivities: typeof serialized?.totalActivities === 'number' ? serialized.totalActivities : null,
+    retryable: Boolean(serialized?.canRetry),
+    cancellable: Boolean(serialized?.canCancel),
+    metadataSummary: metadata
+      ? {
+        recentActivityLimit: metadata.recentActivityLimit ?? null,
+        recentProcessed: metadata.recentProcessed ?? null,
+        recentPagesProcessed: metadata.recentPagesProcessed ?? null,
+        pagesProcessed: metadata.pagesProcessed ?? null,
+        lastCompletedPage: metadata.lastCompletedPage ?? null,
+        lastCompletedPhase: metadata.lastCompletedPhase ?? null,
+        lastProcessedActivityId: metadata.lastProcessedActivityId ?? null,
+        snapshotIsComplete: metadata.snapshotIsComplete ?? null,
+        snapshotRebuiltAt: metadata.snapshotRebuiltAt ?? null,
+        afterTimestamp: metadata.afterTimestamp ?? null,
+        historyExhausted: metadata.historyExhausted ?? null,
+        rateLimitResetAt: metadata.rateLimitResetAt ?? null,
+      }
+      : null,
+    timeline: [],
+  };
+
+  detail.timeline = buildPlatformStravaSyncJobTimeline({
+    requestedAt: pseudo.requestedAt || null,
+    claimedAt: pseudo.claimedAt || null,
+    startedAt: pseudo.startedAt || null,
+    nextRetryAt: pseudo.nextRetryAt || null,
+    completedAt: pseudo.completedAt || null,
+    failedAt: pseudo.failedAt || null,
+    cancelledAt: pseudo.cancelledAt || null,
+    status: detail.status,
+    lastError: detail.lastError,
+  });
+
+  return detail;
+}
+
 function isNonProductionEnvironment() {
   return toText(process.env.NODE_ENV).toLowerCase() !== 'production';
+}
+
+function readStravaWebhookVerifyToken(): string {
+  return process.env.STRAVA_WEBHOOK_VERIFY_TOKEN?.trim() || '';
+}
+
+function timingSafeEqualText(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+
+  if (leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+
+  try {
+    return crypto.timingSafeEqual(leftBuffer, rightBuffer);
+  } catch {
+    return false;
+  }
+}
+
+function toWebhookScalarText(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value === 'bigint') return String(value);
+  return '';
+}
+
+function normalizeWebhookObjectType(value: unknown): 'activity' | 'athlete' | 'unknown' {
+  const normalized = toWebhookScalarText(value).toLowerCase();
+  return normalized === 'activity' || normalized === 'athlete' ? normalized : 'unknown';
+}
+
+function normalizeWebhookAspectType(value: unknown): 'create' | 'update' | 'delete' | 'unknown' {
+  const normalized = toWebhookScalarText(value).toLowerCase();
+  return normalized === 'create' || normalized === 'update' || normalized === 'delete' ? normalized : 'unknown';
+}
+
+function isWebhookPayloadRecord(value: unknown): value is StravaWebhookPayloadRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function buildStravaWebhookIdempotencyKey(parts: {
+  subscriptionId: string;
+  ownerId: string;
+  objectType: string;
+  objectId: string;
+  aspectType: string;
+  eventTime: string;
+}): string {
+  const raw = [
+    parts.subscriptionId,
+    parts.ownerId,
+    parts.objectType,
+    parts.objectId,
+    parts.aspectType,
+    parts.eventTime,
+  ].join(':');
+
+  return crypto.createHash('sha256').update(raw).digest('hex');
+}
+
+function normalizeStravaWebhookPayload(rawPayload: unknown): StravaWebhookEventInput {
+  const payload = isWebhookPayloadRecord(rawPayload) ? rawPayload : {};
+  const subscriptionId = toWebhookScalarText(payload.subscription_id);
+  const ownerId = toWebhookScalarText(payload.owner_id);
+  const objectType = normalizeWebhookObjectType(payload.object_type);
+  const objectId = toWebhookScalarText(payload.object_id);
+  const aspectType = normalizeWebhookAspectType(payload.aspect_type);
+  const eventTime = toWebhookScalarText(payload.event_time);
+  const status: StravaWebhookEventStatus = objectType === 'unknown' || aspectType === 'unknown'
+    ? 'ignored'
+    : 'pending';
+
+  return {
+    subscriptionId,
+    ownerId,
+    objectType,
+    objectId,
+    aspectType,
+    eventTime,
+    updates: payload.updates,
+    rawPayload,
+    status,
+    idempotencyKey: buildStravaWebhookIdempotencyKey({
+      subscriptionId,
+      ownerId,
+      objectType,
+      objectId,
+      aspectType,
+      eventTime,
+    }),
+  };
+}
+
+function isStravaWebhookDuplicateError(error: any): boolean {
+  const code = toText(error?.code);
+  const constraint = toText(error?.constraint);
+  const detail = toText(error?.detail);
+  const message = toText(error?.message);
+
+  return code === '23505'
+    && (
+      constraint === 'strava_webhook_events_idempotency_key_uq'
+      || detail.includes('strava_webhook_events_idempotency_key_uq')
+      || detail.includes('(idempotency_key)')
+      || message.includes('idempotency_key')
+    );
+}
+
+function isNotFoundActivityFetchError(error: any): boolean {
+  const code = toText(error?.code).toUpperCase();
+  const status = Number(error?.status || 0);
+  return status === 404 || code === 'STRAVA_ACTIVITY_NOT_FOUND';
+}
+
+function isRetryableWebhookError(error: any): boolean {
+  const code = toText(error?.code).toUpperCase();
+  const status = Number(error?.status || 0);
+  return code === 'STRAVA_RATE_LIMITED'
+    || code === 'STRAVA_NETWORK_ERROR'
+    || code === 'STRAVA_SERVICE_UNAVAILABLE'
+    || code === 'STRAVA_TOKEN_REFRESH_FAILED'
+    || code === 'STRAVA_CONNECTION_REVOKED'
+    || code === 'AMBIGUOUS_CONNECTION'
+    || status === 429
+    || [500, 502, 503, 504].includes(status);
+}
+
+function parseWebhookAuthorizedValue(value: unknown): ParsedWebhookAuthorized {
+  if (value === false || value === 0) return false;
+  if (value === true || value === 1) return true;
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'false' || normalized === '0') return false;
+    if (normalized === 'true' || normalized === '1') return true;
+  }
+
+  return null;
+}
+
+function isConnectionRevoked(connection: StravaConnectionRecord | null | undefined): boolean {
+  if (!connection?.id) return false;
+  if (toText(connection.status).toUpperCase() !== 'ACTIVE') return true;
+  return Boolean(toText(connection.disconnectedAt));
+}
+
+function assertConnectionUsable(connection: StravaConnectionRecord | null | undefined) {
+  if (!connection?.id || isConnectionRevoked(connection)) {
+    throw Object.assign(new Error('Strava connection is revoked or inactive.'), {
+      code: 'STRAVA_CONNECTION_REVOKED',
+      status: 409,
+    });
+  }
+}
+
+async function updateWebhookEventRelations(options: {
+  eventId: number;
+  tenantId?: number | string | null;
+  userId?: number | null;
+  connectionId?: number | null;
+}) {
+  const data: Record<string, unknown> = {}
+  if (options.tenantId) data.tenant = options.tenantId
+  if (options.userId) data.user = options.userId
+  if (options.connectionId) data.connection = options.connectionId
+  if (Object.keys(data).length === 0) return
+
+  await strapi.db.query(STRAVA_WEBHOOK_EVENT_UID).update({
+    where: { id: options.eventId },
+    data,
+  })
+}
+
+async function annotateWebhookEventIgnored(eventId: number, reason: string, relations: {
+  tenantId?: number | string | null;
+  userId?: number | null;
+  connectionId?: number | null;
+} = {}) {
+  const data: Record<string, unknown> = {
+    lastError: reason,
+  }
+
+  if (relations.tenantId) data.tenant = relations.tenantId
+  if (relations.userId) data.user = relations.userId
+  if (relations.connectionId) data.connection = relations.connectionId
+
+  await strapi.db.query(STRAVA_WEBHOOK_EVENT_UID).update({
+    where: { id: eventId },
+    data,
+  })
+}
+
+async function findWebhookConnectionCandidates(ownerId: string) {
+  if (!ownerId) return []
+
+  const rows = await strapi.db.query(STRAVA_CONNECTION_UID).findMany({
+    where: {
+      stravaAthleteId: ownerId,
+    },
+    select: ['id', 'status', 'accessToken', 'refreshToken', 'tokenExpiresAt', 'disconnectedAt', 'lastSyncAt', 'lastSyncStatus', 'athleteFirstname', 'athleteLastname', 'athleteUsername', 'profileUrl'],
+    populate: {
+      tenant: { select: ['id'] },
+      user: { select: ['id'] },
+    },
+  })
+
+  return Array.isArray(rows) ? rows : []
+}
+
+async function resolveWebhookConnection(event: { id: number; ownerId?: string | null }) : Promise<ResolvedWebhookConnection | null> {
+  const ownerId = toText(event.ownerId)
+  const candidates = await findWebhookConnectionCandidates(ownerId)
+  if (candidates.length === 0) {
+    await annotateWebhookEventIgnored(event.id, 'CONNECTION_NOT_FOUND')
+    return null
+  }
+
+  const activeCandidates = candidates.filter((candidate: any) => toText(candidate?.status).toUpperCase() === 'ACTIVE')
+  const selectedPool = activeCandidates.length > 0 ? activeCandidates : candidates
+  if (selectedPool.length > 1) {
+    throw Object.assign(new Error('Multiple active Strava connections match this webhook owner.'), {
+      code: 'AMBIGUOUS_CONNECTION',
+      status: 409,
+    })
+  }
+
+  const selected = selectedPool[0] as any
+  const tenantId = selected?.tenant?.id || selected?.tenant
+  const userId = toPositiveInt(selected?.user?.id || selected?.user)
+  const connectionId = toPositiveInt(selected?.id)
+
+  if (!tenantId || !userId || !connectionId) {
+    throw Object.assign(new Error('Resolved Strava connection is incomplete.'), {
+      code: 'STRAVA_CONNECTION_INCOMPLETE',
+      status: 409,
+    })
+  }
+
+  await updateWebhookEventRelations({
+    eventId: event.id,
+    tenantId,
+    userId,
+    connectionId,
+  })
+
+  return {
+    connectionId,
+    tenantId,
+    userId,
+    ownerId,
+    connection: selected as StravaConnectionRecord,
+  }
+}
+
+async function fetchStravaActivityDetail(accessToken: string, activityId: string) {
+  const url = `${STRAVA_ACTIVITY_DETAIL_URL}/${encodeURIComponent(activityId)}`
+
+  let response: Response
+  try {
+    response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+  } catch (error) {
+    throw Object.assign(new Error('Strava network request failed'), {
+      code: 'STRAVA_NETWORK_ERROR',
+      status: 503,
+      cause: error,
+    })
+  }
+
+  const retryAfter = toPositiveInt(response.headers.get('retry-after'))
+  const rateLimitResetAtHeader = toText(response.headers.get('x-ratelimit-reset') || response.headers.get('x-readratelimit-reset') || '')
+  const rateLimitResetAt = retryAfter
+    ? new Date(Date.now() + retryAfter * 1000).toISOString()
+    : (rateLimitResetAtHeader ? new Date(Date.now() + Number(rateLimitResetAtHeader) * 1000).toISOString() : null)
+
+  if (response.status === 404) {
+    throw Object.assign(new Error('Strava activity not found.'), {
+      code: 'STRAVA_ACTIVITY_NOT_FOUND',
+      status: 404,
+    })
+  }
+
+  if (response.status === 429) {
+    throw Object.assign(new Error('Strava rate limit reached. Please try again later.'), {
+      code: 'STRAVA_RATE_LIMITED',
+      status: 429,
+      nextRetryAt: rateLimitResetAt,
+      rateLimitResetAt,
+    })
+  }
+
+  if (response.status === 401) {
+    throw Object.assign(new Error('Strava access token is no longer valid.'), {
+      code: 'STRAVA_AUTH_EXPIRED',
+      status: 401,
+    })
+  }
+
+  if (response.status === 403) {
+    const bodyText = await response.text().catch(() => '')
+    throw Object.assign(new Error('Strava permission denied.'), {
+      code: 'STRAVA_SYNC_PERMISSION_DENIED',
+      status: 403,
+      body: bodyText,
+    })
+  }
+
+  if ([500, 502, 503, 504].includes(response.status)) {
+    throw Object.assign(new Error(`Strava service unavailable (${response.status})`), {
+      code: 'STRAVA_SERVICE_UNAVAILABLE',
+      status: response.status,
+    })
+  }
+
+  if (!response.ok) {
+    throw Object.assign(new Error(`Failed to fetch Strava activity (${response.status})`), {
+      code: 'STRAVA_ACTIVITY_FETCH_FAILED',
+      status: response.status,
+    })
+  }
+
+  const parsed = await response.json()
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw Object.assign(new Error('Strava activity detail response is invalid'), {
+      code: 'STRAVA_ACTIVITY_FETCH_FAILED',
+      status: 502,
+    })
+  }
+
+  return parsed as Record<string, any>
+}
+
+async function fetchStravaActivityDetailWithRecovery(connection: StravaConnectionRecord, activityId: string) {
+  assertConnectionUsable(connection)
+  let accessToken = await refreshStravaTokenIfNeeded(connection)
+
+  try {
+    return await fetchStravaActivityDetail(accessToken, activityId)
+  } catch (error: any) {
+    const classification = classifyStravaSyncError(error, { phase: 'syncing_recent' })
+    if (classification.httpStatus !== 401 && classification.code !== 'STRAVA_AUTH_EXPIRED') {
+      throw error
+    }
+
+    try {
+      const refreshed = await refreshStravaToken(connection)
+      accessToken = toText(refreshed?.accessToken)
+      if (!accessToken) {
+        throw Object.assign(new Error('Strava token refresh failed'), { code: 'STRAVA_TOKEN_REFRESH_FAILED', status: 401 })
+      }
+    } catch (refreshError) {
+      throw Object.assign(new Error('Strava connection revoked after token refresh failed.'), {
+        code: 'STRAVA_TOKEN_REFRESH_FAILED',
+        status: 401,
+        cause: refreshError,
+      })
+    }
+
+    try {
+      return await fetchStravaActivityDetail(accessToken, activityId)
+    } catch (retryError: any) {
+      const retryClassification = classifyStravaSyncError(retryError, { phase: 'syncing_recent' })
+      if (retryClassification.httpStatus === 401 || retryClassification.code === 'STRAVA_AUTH_EXPIRED') {
+        throw Object.assign(new Error('Strava connection is no longer valid.'), {
+          code: 'STRAVA_CONNECTION_REVOKED',
+          status: 401,
+          cause: retryError,
+        })
+      }
+      throw retryError
+    }
+  }
+}
+
+async function findWebhookActivityRecord(tenantId: number | string, connectionId: number, activityId: string) {
+  return strapi.db.query(STRAVA_ACTIVITY_UID).findOne({
+    where: mergeTenantWhere({ connection: { id: connectionId }, stravaActivityId: activityId }, tenantId),
+    select: ['id', 'syncStatus'],
+  } as any)
+}
+
+async function cancelOpenStravaSyncJobsForConnection(connectionId: number) {
+  const nowIso = new Date().toISOString()
+  await strapi.db.connection('strava_sync_jobs as j')
+    .whereIn('j.status', ['queued', 'running', 'partial_ready', 'failed'])
+    .whereExists(function existsConnection(this: any) {
+      this.select(strapi.db.connection.raw('1'))
+        .from('strava_sync_jobs_connection_lnk as lnk')
+        .whereRaw('lnk.strava_sync_job_id = j.id')
+        .andWhere('lnk.strava_connection_id', connectionId)
+    })
+    .update({
+      status: 'cancelled',
+      cancelled_at: nowIso,
+      heartbeat_at: nowIso,
+      next_retry_at: null,
+      claimed_at: null,
+      claimed_by: null,
+      last_error_code: 'STRAVA_CONNECTION_REVOKED',
+      last_error_message: 'Kết nối Strava đã bị thu hồi quyền truy cập.',
+    })
+}
+
+async function revokeStravaConnectionForWebhook(resolved: ResolvedWebhookConnection) {
+  const nowIso = new Date().toISOString()
+  await strapi.db.query(STRAVA_CONNECTION_UID).update({
+    where: { id: resolved.connectionId },
+    data: {
+      status: 'DISCONNECTED',
+      disconnectedAt: resolved.connection.disconnectedAt || nowIso,
+      accessToken: null,
+      refreshToken: null,
+      tokenExpiresAt: null,
+      lastSyncError: 'Strava connection revoked by athlete deauthorization.',
+    },
+  })
+
+  await cancelOpenStravaSyncJobsForConnection(resolved.connectionId)
+}
+
+async function deleteWebhookActivityRecord(tenantId: number | string, connectionId: number, activityId: string) {
+  const existing = await findWebhookActivityRecord(tenantId, connectionId, activityId)
+  if (!existing?.id) return { deleted: false }
+
+  await strapi.db.query(STRAVA_ACTIVITY_UID).update({
+    where: { id: existing.id },
+    data: {
+      syncStatus: 'DELETED_ON_STRAVA',
+    },
+  } as any)
+
+  return { deleted: true }
+}
+
+export async function processActivityWebhookEvent(event: { id: number; objectId?: string | null; ownerId?: string | null; aspectType?: string | null }): Promise<StravaWebhookHandlerResult> {
+  const resolved = await resolveWebhookConnection(event)
+  if (!resolved) return 'IGNORED'
+
+  const objectId = toText(event.objectId)
+  const aspectType = toText(event.aspectType).toLowerCase()
+  const scopedRelations = {
+    tenantId: resolved.tenantId,
+    userId: resolved.userId,
+    connectionId: resolved.connectionId,
+  }
+
+  if (isConnectionRevoked(resolved.connection)) {
+    await annotateWebhookEventIgnored(event.id, 'CONNECTION_REVOKED', scopedRelations)
+    return 'IGNORED'
+  }
+
+  if (!objectId) {
+    await annotateWebhookEventIgnored(event.id, 'ACTIVITY_ID_MISSING', scopedRelations)
+    return 'IGNORED'
+  }
+
+  if (aspectType === 'delete') {
+    await deleteWebhookActivityRecord(resolved.tenantId, resolved.connectionId, objectId)
+    return 'SUCCESS'
+  }
+
+  if (!['create', 'update'].includes(aspectType)) {
+    return 'NOT_IMPLEMENTED'
+  }
+
+  try {
+    const activity = await fetchStravaActivityDetailWithRecovery(resolved.connection, objectId)
+    await upsertStravaActivity(resolved.tenantId, resolved.userId, resolved.connectionId, activity)
+    return 'SUCCESS'
+  } catch (error: any) {
+    if (isNotFoundActivityFetchError(error)) {
+      await annotateWebhookEventIgnored(event.id, 'ACTIVITY_NOT_FOUND', scopedRelations)
+      return 'IGNORED'
+    }
+
+    if (toText(error?.code).toUpperCase() === 'STRAVA_SYNC_PERMISSION_DENIED') {
+      throw Object.assign(new Error('Strava permission denied.'), {
+        code: 'STRAVA_SYNC_PERMISSION_DENIED',
+        status: 403,
+      })
+    }
+
+    if (isRetryableWebhookError(error)) {
+      throw error
+    }
+
+    throw Object.assign(new Error('Failed to process Strava activity webhook.'), {
+      code: toText(error?.code).toUpperCase() || 'STRAVA_ACTIVITY_WEBHOOK_FAILED',
+      status: Number(error?.status || 500) || 500,
+      cause: error,
+    })
+  }
+}
+
+export async function processAthleteWebhookEvent(event: { id: number; ownerId?: string | null; aspectType?: string | null; rawPayload?: unknown }): Promise<StravaWebhookHandlerResult> {
+  const aspectType = toText(event.aspectType).toLowerCase()
+  const resolved = await resolveWebhookConnection(event)
+  if (!resolved) return 'IGNORED'
+
+  const scopedRelations = {
+    tenantId: resolved.tenantId,
+    userId: resolved.userId,
+    connectionId: resolved.connectionId,
+  }
+
+  if (aspectType !== 'update') {
+    await annotateWebhookEventIgnored(event.id, 'UNSUPPORTED_ATHLETE_UPDATE', scopedRelations)
+    return 'IGNORED'
+  }
+
+  const payload = isWebhookPayloadRecord(event.rawPayload) ? event.rawPayload : {}
+  const updates = isWebhookPayloadRecord(payload.updates) ? payload.updates : {}
+  const authorized = parseWebhookAuthorizedValue(updates.authorized)
+
+  if (authorized !== false) {
+    await annotateWebhookEventIgnored(event.id, 'UNSUPPORTED_ATHLETE_UPDATE', scopedRelations)
+    return 'IGNORED'
+  }
+
+  if (isConnectionRevoked(resolved.connection)
+    && !toText(resolved.connection.accessToken)
+    && !toText(resolved.connection.refreshToken)) {
+    return 'SUCCESS'
+  }
+
+  await revokeStravaConnectionForWebhook(resolved)
+  return 'SUCCESS'
+}
+
+function getConfiguredMainDomainHost(): string {
+  return normalizeHost(process.env.MAIN_DOMAIN || '');
 }
 
 function normalizeAbsoluteOrigin(value: unknown): string | null {
@@ -239,8 +2770,20 @@ function isLocalHost(value: unknown) {
   return host === 'localhost' || host === '127.0.0.1' || host === '::1';
 }
 
+function isManagedTenantSubdomainHost(value: unknown): boolean {
+  const host = normalizeHost(value);
+  const mainDomainHost = getConfiguredMainDomainHost();
+  if (!host || !mainDomainHost) return false;
+  if (host === mainDomainHost) return false;
+  return host.endsWith(`.${mainDomainHost}`);
+}
+
 function readRequestOrigin(ctx: any): string {
   return toText(ctx?.request?.header?.origin || ctx?.request?.headers?.origin || '');
+}
+
+function readExplicitFrontendOrigin(ctx: any): string {
+  return toText(ctx?.request?.header?.['x-frontend-origin'] || ctx?.request?.headers?.['x-frontend-origin'] || '');
 }
 
 function readRequestReferer(ctx: any): string {
@@ -283,6 +2826,25 @@ async function listActiveTenantDomains(tenantId: number | string): Promise<Array
   })).filter((row: { domain: string }) => Boolean(row.domain));
 }
 
+async function findActiveTenantIdByDomainHost(host: unknown): Promise<string | null> {
+  const normalizedHost = normalizeHost(host);
+  if (!normalizedHost) return null;
+
+  const tenantDomain = await strapi.db.query('api::tenant-domain.tenant-domain').findOne({
+    where: {
+      domain: normalizedHost,
+      tenantDomainStatus: 'active',
+    },
+    populate: {
+      tenant: {
+        select: ['id'],
+      },
+    },
+  });
+
+  return toText(tenantDomain?.tenant?.id || tenantDomain?.tenant || '') || null;
+}
+
 function buildOriginFromDomain(domain: string): string | null {
   const host = normalizeHost(domain);
   if (!host) return null;
@@ -302,6 +2864,8 @@ async function isTrustedTenantFrontendOrigin(frontendOrigin: unknown, tenantId: 
   const host = normalizeHost(normalizedOrigin);
   if (!host) return false;
 
+  if (isManagedTenantSubdomainHost(host)) return true;
+
   const domains = await listActiveTenantDomains(tenantId);
   if (domains.some((item) => item.domain === host)) return true;
 
@@ -315,6 +2879,7 @@ async function isTrustedTenantFrontendOrigin(frontendOrigin: unknown, tenantId: 
 
 function collectPotentialFrontendOrigins(ctx: any): string[] {
   const candidates = [
+    normalizeAbsoluteOrigin(readExplicitFrontendOrigin(ctx)),
     normalizeAbsoluteOrigin(readRequestOrigin(ctx)),
     normalizeAbsoluteOrigin(readRequestReferer(ctx)),
   ].filter(Boolean) as string[];
@@ -341,6 +2906,10 @@ export async function resolveTrustedFrontendOriginForOAuthStart(ctx: any, tenant
       return trimTrailingSlash(candidateOrigin);
     }
 
+    if (isManagedTenantSubdomainHost(candidateHost)) {
+      return trimTrailingSlash(candidateOrigin);
+    }
+
     if (isNonProductionEnvironment() && frontendFallbackOrigin && candidateOrigin === frontendFallbackOrigin) {
       return trimTrailingSlash(candidateOrigin);
     }
@@ -361,6 +2930,20 @@ export async function resolveTrustedFrontendOriginForOAuthStart(ctx: any, tenant
     code: 'STRAVA_FRONTEND_ORIGIN_UNRESOLVED',
     status: 500,
   });
+}
+
+export async function resolveTenantIdForStravaOAuthStart(ctx: any): Promise<number | string> {
+  for (const candidate of collectPotentialFrontendOrigins(ctx)) {
+    const candidateHost = normalizeHost(candidate);
+    if (!candidateHost) continue;
+
+    const tenantId = await findActiveTenantIdByDomainHost(candidateHost);
+    if (tenantId) {
+      return tenantId;
+    }
+  }
+
+  return resolveCurrentTenantId(ctx);
 }
 
 function validateInternalRedirectPath(path: unknown, fallback: string): string {
@@ -490,6 +3073,1110 @@ function resolveStravaRedirectUri(): string {
   }
 
   return value;
+}
+
+function resolveStravaWebhookCallbackUrl(required = true): string {
+  const value = toText(process.env.STRAVA_WEBHOOK_CALLBACK_URL);
+  if (!value) {
+    if (!required) return '';
+    throw Object.assign(new Error('STRAVA_WEBHOOK_CALLBACK_URL is not configured'), {
+      code: 'STRAVA_WEBHOOK_CALLBACK_URL_MISSING',
+      status: 500,
+    });
+  }
+
+  try {
+    const parsed = new URL(value);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      throw new Error('invalid protocol');
+    }
+    return parsed.toString();
+  } catch {
+    throw Object.assign(new Error('STRAVA_WEBHOOK_CALLBACK_URL is invalid'), {
+      code: 'STRAVA_WEBHOOK_CALLBACK_URL_INVALID',
+      status: 500,
+    });
+  }
+}
+
+function shouldCheckStravaWebhookOnBoot(): boolean {
+  return toBoolean(process.env.STRAVA_WEBHOOK_CHECK_ON_BOOT, false);
+}
+
+function normalizeWebhookSubscription(item: any): StravaWebhookSubscription {
+  const rawCreatedAt = item?.created_at;
+  let createdAt: string | null = null;
+
+  if (rawCreatedAt !== null && rawCreatedAt !== undefined && rawCreatedAt !== '') {
+    const numeric = typeof rawCreatedAt === 'number'
+      ? rawCreatedAt
+      : (/^\d+(\.\d+)?$/.test(String(rawCreatedAt).trim()) ? Number(rawCreatedAt) : NaN);
+
+    if (Number.isFinite(numeric)) {
+      const millis = numeric > 1e12 ? numeric : numeric * 1000;
+      const timestamp = new Date(millis).getTime();
+      createdAt = Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+    } else {
+      const timestamp = Date.parse(String(rawCreatedAt));
+      createdAt = Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+    }
+  }
+
+  return {
+    subscriptionId: Number(item?.id || 0) || 0,
+    callbackUrl: toText(item?.callback_url) || null,
+    createdAt,
+  };
+}
+
+async function requestStravaWebhookSubscriptions(options: {
+  method: 'GET' | 'POST' | 'DELETE';
+  subscriptionId?: number | null;
+  body?: Record<string, unknown> | null;
+  operation: 'list' | 'create' | 'delete';
+}) {
+  const clientId = resolveStravaClientId();
+  const clientSecret = resolveStravaClientSecret();
+  const url = new URL(options.subscriptionId
+    ? `${STRAVA_PUSH_SUBSCRIPTIONS_URL}/${String(options.subscriptionId)}`
+    : STRAVA_PUSH_SUBSCRIPTIONS_URL);
+
+  if (options.method === 'GET' || options.method === 'DELETE') {
+    url.searchParams.set('client_id', clientId);
+    url.searchParams.set('client_secret', clientSecret);
+  }
+
+  const startedAt = Date.now();
+  const headers: Record<string, string> = {};
+  let body: string | undefined;
+  if (options.method === 'POST') {
+    headers['content-type'] = 'application/json';
+    body = JSON.stringify({
+      client_id: clientId,
+      client_secret: clientSecret,
+      ...(options.body || {}),
+    });
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(url.toString(), {
+      method: options.method,
+      headers,
+      body,
+    });
+  } catch (error) {
+    const code = options.operation === 'delete'
+      ? 'STRAVA_SUBSCRIPTION_DELETE_FAILED'
+      : options.operation === 'create'
+        ? 'STRAVA_SUBSCRIPTION_CREATE_FAILED'
+        : 'STRAVA_SUBSCRIPTION_LIST_FAILED';
+    throw Object.assign(new Error('Strava subscription request failed'), {
+      code,
+      status: 503,
+      cause: error,
+    });
+  }
+
+  const durationMs = Date.now() - startedAt;
+  const subscriptionId = options.subscriptionId ? String(options.subscriptionId) : '-';
+  strapi.log.info(`[strava.subscription] operation=${options.operation} method=${options.method} subscriptionId=${subscriptionId} callbackUrl=${options.body?.callback_url ? String(options.body.callback_url) : '-'} status=${String(response.status)} duration=${String(durationMs)}ms`);
+
+  if (options.method === 'GET' && response.status === 404) {
+    return { ok: true, status: 404, data: [] };
+  }
+
+  if (options.method === 'DELETE' && response.status === 404) {
+    return { ok: true, status: 404, data: null };
+  }
+
+  if (!response.ok) {
+    const code = options.operation === 'delete'
+      ? 'STRAVA_SUBSCRIPTION_DELETE_FAILED'
+      : options.operation === 'create'
+        ? 'STRAVA_SUBSCRIPTION_CREATE_FAILED'
+        : 'STRAVA_SUBSCRIPTION_LIST_FAILED';
+    throw Object.assign(new Error(`Strava subscription ${options.operation} failed`), {
+      code,
+      status: response.status,
+    });
+  }
+
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+  return { ok: true, status: response.status, data };
+}
+
+export async function listWebhookSubscriptions(): Promise<StravaWebhookSubscription[]> {
+  const result = await requestStravaWebhookSubscriptions({ method: 'GET', operation: 'list' });
+  return Array.isArray(result.data) ? result.data.map(normalizeWebhookSubscription).filter((item) => item.subscriptionId > 0) : [];
+}
+
+export async function getWebhookSubscription(): Promise<StravaWebhookSubscription | null> {
+  const callbackUrl = resolveStravaWebhookCallbackUrl(false);
+  const subscriptions = await listWebhookSubscriptions();
+  if (!callbackUrl) return subscriptions[0] || null;
+  return subscriptions.find((item) => item.callbackUrl === callbackUrl) || subscriptions[0] || null;
+}
+
+export async function createWebhookSubscription(): Promise<{ subscription: StravaWebhookSubscription; existed: boolean }> {
+  const callbackUrl = resolveStravaWebhookCallbackUrl(true);
+  const verifyToken = readStravaWebhookVerifyToken();
+  if (!verifyToken) {
+    throw Object.assign(new Error('Strava webhook verify token is not configured'), {
+      code: 'STRAVA_SUBSCRIPTION_CREATE_FAILED',
+      status: 500,
+    });
+  }
+
+  const existing = await listWebhookSubscriptions();
+  const matched = existing.find((item) => item.callbackUrl === callbackUrl);
+  if (matched) {
+    return { subscription: matched, existed: true };
+  }
+
+  const result = await requestStravaWebhookSubscriptions({
+    method: 'POST',
+    operation: 'create',
+    body: {
+      callback_url: callbackUrl,
+      verify_token: verifyToken,
+    },
+  });
+
+  const subscription = normalizeWebhookSubscription(result.data || {});
+  if (!subscription.subscriptionId) {
+    throw Object.assign(new Error('Strava subscription create returned invalid payload'), {
+      code: 'STRAVA_SUBSCRIPTION_CREATE_FAILED',
+      status: 502,
+    });
+  }
+
+  return { subscription, existed: false };
+}
+
+export async function deleteWebhookSubscription(subscriptionId: number | string): Promise<{ deleted: boolean }> {
+  const normalizedId = toPositiveInt(subscriptionId);
+  if (!normalizedId) {
+    return { deleted: false };
+  }
+
+  const result = await requestStravaWebhookSubscriptions({
+    method: 'DELETE',
+    operation: 'delete',
+    subscriptionId: normalizedId,
+  });
+
+  return { deleted: result.status !== 404 };
+}
+
+export async function deleteAllWebhookSubscriptions(): Promise<{ deletedIds: number[] }> {
+  const subscriptions = await listWebhookSubscriptions();
+  const deletedIds: number[] = [];
+  for (const subscription of subscriptions) {
+    const result = await deleteWebhookSubscription(subscription.subscriptionId);
+    if (result.deleted) {
+      deletedIds.push(subscription.subscriptionId);
+    }
+  }
+  return { deletedIds };
+}
+
+export async function checkWebhookHealth(): Promise<StravaWebhookHealthCheck> {
+  const warnings: StravaWebhookHealthWarning[] = [];
+  const callbackUrl = resolveStravaWebhookCallbackUrl(false);
+  const verifyTokenConfigured = Boolean(readStravaWebhookVerifyToken());
+  const clientIdConfigured = Boolean(toText(process.env.STRAVA_CLIENT_ID));
+  const clientSecretConfigured = Boolean(toText(process.env.STRAVA_CLIENT_SECRET));
+  const clientConfigured = clientIdConfigured && clientSecretConfigured;
+
+  if (!callbackUrl) warnings.push('CALLBACK_URL_MISSING');
+  if (!verifyTokenConfigured) warnings.push('VERIFY_TOKEN_MISSING');
+  if (!clientIdConfigured) warnings.push('CLIENT_ID_MISSING');
+  if (!clientSecretConfigured) warnings.push('CLIENT_SECRET_MISSING');
+
+  let subscriptions: StravaWebhookSubscription[] = [];
+  if (clientConfigured) {
+    try {
+      subscriptions = await listWebhookSubscriptions();
+    } catch {
+      subscriptions = [];
+    }
+  }
+
+  const subscriptionCount = subscriptions.length;
+  const subscriptionExists = subscriptionCount > 0;
+  const callbackMatches = Boolean(callbackUrl) && subscriptions.some((item) => item.callbackUrl === callbackUrl);
+
+  if (!subscriptionExists) warnings.push('NO_SUBSCRIPTION');
+  if (subscriptionCount > 1) warnings.push('MULTIPLE_SUBSCRIPTIONS');
+  if (subscriptionExists && callbackUrl && !callbackMatches) warnings.push('CALLBACK_URL_MISMATCH');
+
+  return {
+    healthy: warnings.length === 0,
+    subscriptionExists,
+    subscriptionCount,
+    callbackMatches,
+    verifyTokenConfigured,
+    clientConfigured,
+    warnings,
+  };
+}
+
+export async function getStravaDashboardOverview(): Promise<StravaDashboardOverview> {
+  const [health, subscriptions, connectionRows, syncJobRows, webhookEventRows] = await Promise.all([
+    checkWebhookHealth(),
+    listWebhookSubscriptions(),
+    strapi.db.connection('strava_connections')
+      .select('status')
+      .count('* as count')
+      .groupBy('status'),
+    strapi.db.connection('strava_sync_jobs')
+      .select('status')
+      .count('* as count')
+      .groupBy('status'),
+    strapi.db.connection('strava_webhook_events')
+      .select('status')
+      .count('* as count')
+      .groupBy('status'),
+  ]);
+
+  const connectionCounts = new Map<string, number>();
+  for (const row of connectionRows || []) {
+    connectionCounts.set(toText((row as any)?.status).toUpperCase(), Number((row as any)?.count || 0));
+  }
+
+  const syncJobCounts = new Map<string, number>();
+  for (const row of syncJobRows || []) {
+    syncJobCounts.set(toText((row as any)?.status).toLowerCase(), Number((row as any)?.count || 0));
+  }
+
+  const webhookEventCounts = new Map<string, number>();
+  for (const row of webhookEventRows || []) {
+    webhookEventCounts.set(toText((row as any)?.status).toLowerCase(), Number((row as any)?.count || 0));
+  }
+
+  const matchedSubscription = subscriptions.find((item) => item.callbackUrl === resolveStravaWebhookCallbackUrl(false)) || subscriptions[0] || null;
+
+  return {
+    subscription: {
+      exists: health.subscriptionExists,
+      healthy: health.healthy,
+      callbackUrl: matchedSubscription?.callbackUrl || null,
+      warningCount: health.warnings.length,
+    },
+    connections: {
+      total: Array.from(connectionCounts.values()).reduce((sum, value) => sum + value, 0),
+      active: connectionCounts.get('ACTIVE') || 0,
+      disconnected: connectionCounts.get('DISCONNECTED') || 0,
+      error: connectionCounts.get('ERROR') || 0,
+    },
+    syncJobs: {
+      pending: syncJobCounts.get('queued') || 0,
+      running: (syncJobCounts.get('running') || 0) + (syncJobCounts.get('partial_ready') || 0),
+      completed: syncJobCounts.get('completed') || 0,
+      failed: syncJobCounts.get('failed') || 0,
+      cancelled: syncJobCounts.get('cancelled') || 0,
+    },
+    webhookEvents: {
+      pending: webhookEventCounts.get('pending') || 0,
+      processing: webhookEventCounts.get('processing') || 0,
+      processed: webhookEventCounts.get('processed') || 0,
+      ignored: webhookEventCounts.get('ignored') || 0,
+      failed: webhookEventCounts.get('failed') || 0,
+      deadLetter: webhookEventCounts.get('dead_letter') || 0,
+    },
+    system: {
+      webhookRunnerEnabled: toBoolean(process.env.STRAVA_WEBHOOK_RUNNER_ENABLED, false),
+      syncRunnerEnabled: toBoolean(process.env.STRAVA_SYNC_RUNNER_ENABLED, false),
+      webhookHandlerEnabled: toBoolean(process.env.STRAVA_WEBHOOK_HANDLER_ENABLED, false),
+    },
+  };
+}
+
+export async function getPlatformStravaSubscriptionOverview(): Promise<PlatformStravaSubscriptionOverview> {
+  const [health, subscription] = await Promise.all([
+    checkWebhookHealth(),
+    getWebhookSubscription(),
+  ]);
+
+  return {
+    healthy: health.healthy,
+    subscriptionExists: health.subscriptionExists,
+    subscriptionCount: health.subscriptionCount,
+    subscription: subscription?.subscriptionId
+      ? {
+        id: subscription.subscriptionId,
+        callbackUrl: subscription.callbackUrl || null,
+        createdAt: subscription.createdAt || null,
+      }
+      : null,
+    callbackMatches: health.callbackMatches,
+    verifyTokenConfigured: health.verifyTokenConfigured,
+    clientConfigured: health.clientConfigured,
+    warnings: health.warnings,
+    system: {
+      webhookRunnerEnabled: toBoolean(process.env.STRAVA_WEBHOOK_RUNNER_ENABLED, false),
+      webhookHandlerEnabled: toBoolean(process.env.STRAVA_WEBHOOK_HANDLER_ENABLED, false),
+      webhookCheckOnBoot: shouldCheckStravaWebhookOnBoot(),
+      callbackUrlConfigured: Boolean(resolveStravaWebhookCallbackUrl(false)),
+    },
+  };
+}
+
+async function getPlatformStravaSubscriptionDiagnostics(generatedAt: string): Promise<PlatformStravaDiagnostics['subscription']> {
+  const callbackUrl = resolveStravaWebhookCallbackUrl(false);
+  const verifyTokenConfigured = Boolean(readStravaWebhookVerifyToken());
+  const clientConfigured = Boolean(toText(process.env.STRAVA_CLIENT_ID)) && Boolean(toText(process.env.STRAVA_CLIENT_SECRET));
+  const callbackUrlConfigured = Boolean(callbackUrl);
+  const configured = clientConfigured && verifyTokenConfigured && callbackUrlConfigured;
+  const warnings: PlatformStravaDiagnosticsRule[] = [];
+
+  if (!verifyTokenConfigured) warnings.push(makeDiagnosticsRule('VERIFY_TOKEN_MISSING', 'warning', 'Thiếu verify token cho Strava webhook.'));
+  if (!clientConfigured) warnings.push(makeDiagnosticsRule('STRAVA_CLIENT_NOT_CONFIGURED', 'warning', 'Thiếu cấu hình Strava client cho subscription check.'));
+  if (!callbackUrlConfigured) warnings.push(makeDiagnosticsRule('CALLBACK_URL_MISSING', 'warning', 'Thiếu callback URL cho Strava webhook subscription.'));
+
+  try {
+    const subscriptions = clientConfigured
+      ? await withTimeout(listWebhookSubscriptions(), STRAVA_DIAGNOSTICS_SUBSCRIPTION_TIMEOUT_MS, 'STRAVA_SUBSCRIPTION_TIMEOUT', 'Strava subscription check timed out.')
+      : [];
+
+    const subscriptionCount = subscriptions.length;
+    const subscriptionExists = subscriptionCount > 0;
+    const callbackMatches = Boolean(callbackUrl) && subscriptions.some((item) => item.callbackUrl === callbackUrl);
+
+    if (!subscriptionExists) warnings.push(makeDiagnosticsRule('SUBSCRIPTION_MISSING', 'warning', 'Chưa có Strava webhook subscription.'));
+    if (subscriptionCount > 1) warnings.push(makeDiagnosticsRule('MULTIPLE_SUBSCRIPTIONS', 'warning', 'Có nhiều Strava webhook subscription đang tồn tại.'));
+    if (subscriptionExists && callbackUrl && !callbackMatches) warnings.push(makeDiagnosticsRule('SUBSCRIPTION_CALLBACK_MISMATCH', 'critical', 'Callback URL của Strava subscription không khớp cấu hình hiện tại.'));
+
+    const status: PlatformStravaDiagnosticsHealthStatus = warnings.some((item) => item.severity === 'critical')
+      ? 'critical'
+      : warnings.length > 0
+        ? 'warning'
+        : 'healthy';
+
+    return {
+      status,
+      configured,
+      clientConfigured,
+      verifyTokenConfigured,
+      callbackUrlConfigured,
+      subscriptionExists,
+      subscriptionCount,
+      callbackMatches,
+      healthy: warnings.length === 0,
+      lastCheckedAt: generatedAt,
+      warnings,
+      error: null,
+    };
+  } catch (error: any) {
+    warnings.push(makeDiagnosticsRule('SUBSCRIPTION_CHECK_ERROR', 'warning', 'Không thể xác minh Strava subscription từ endpoint ngoài.'));
+
+    return {
+      status: configured ? 'warning' : 'unknown',
+      configured,
+      clientConfigured,
+      verifyTokenConfigured,
+      callbackUrlConfigured,
+      subscriptionExists: false,
+      subscriptionCount: 0,
+      callbackMatches: false,
+      healthy: null,
+      lastCheckedAt: generatedAt,
+      warnings,
+      error: {
+        code: toText(error?.code) || 'STRAVA_SUBSCRIPTION_CHECK_FAILED',
+        message: summarizeDiagnosticsText(error?.message || 'Không thể kiểm tra Strava subscription.') || 'Không thể kiểm tra Strava subscription.',
+      },
+    };
+  }
+}
+
+function buildDiagnosticsLinks(): Record<string, string> {
+  return {
+    failedSyncJobs: '/platform/integrations/strava?tab=sync-jobs&status=failed',
+    runningSyncJobs: '/platform/integrations/strava?tab=sync-jobs&status=running',
+    staleSyncJobs: '/platform/integrations/strava?tab=sync-jobs&status=running&stale=1',
+    deadLetterWebhooks: '/platform/integrations/strava?tab=webhook-events&status=dead_letter',
+    failedWebhooks: '/platform/integrations/strava?tab=webhook-events&status=failed',
+    processingWebhooks: '/platform/integrations/strava?tab=webhook-events&status=processing',
+    revokedConnections: '/platform/integrations/strava?tab=connections&status=DISCONNECTED',
+    staleConnections: '/platform/integrations/strava?tab=connections&staleSync=1',
+    subscription: '/platform/integrations/strava?tab=subscription',
+  };
+}
+
+function buildDiagnosticsRunner(options: {
+  configured: boolean;
+  enabled: boolean;
+  lastObservedActivityAt: string | null;
+  activeItems: number;
+  staleItems: number;
+  staleMs: number;
+  warnings?: PlatformStravaDiagnosticsRule[];
+}): PlatformStravaDiagnosticsRunner {
+  const warnings = Array.isArray(options.warnings) ? options.warnings : [];
+  const lastObservedMs = Date.parse(String(options.lastObservedActivityAt || ''));
+  const hasRecentActivity = Number.isFinite(lastObservedMs) && lastObservedMs >= (Date.now() - options.staleMs);
+  let observedStatus: PlatformStravaRunnerObservedStatus = 'unknown_runtime_state';
+  let alive: boolean | null = null;
+
+  if (!options.enabled) {
+    observedStatus = 'disabled';
+    alive = false;
+  } else if (options.activeItems > 0) {
+    observedStatus = 'active';
+    alive = true;
+  } else if (hasRecentActivity) {
+    observedStatus = 'recent_activity';
+    alive = true;
+  } else if (options.lastObservedActivityAt) {
+    observedStatus = 'no_recent_activity';
+  }
+
+  return {
+    configured: options.configured,
+    enabled: options.enabled,
+    alive,
+    observedStatus,
+    lastObservedActivityAt: options.lastObservedActivityAt,
+    activeItems: options.activeItems,
+    staleItems: options.staleItems,
+    warnings,
+  };
+}
+
+function getHealthStatusFromRules(rules: PlatformStravaDiagnosticsRule[]): PlatformStravaDiagnosticsHealthStatus {
+  if (rules.some((item) => item.severity === 'critical')) return 'critical';
+  if (rules.some((item) => item.severity === 'warning')) return 'warning';
+  if (rules.some((item) => item.severity === 'info')) return 'healthy';
+  return 'healthy';
+}
+
+export async function getPlatformStravaDiagnostics(query: PlatformStravaDiagnosticsQuery = {}): Promise<PlatformStravaDiagnostics> {
+  const knex = strapi.db.connection;
+  const nowMs = Date.now();
+  const generatedAt = new Date(nowMs).toISOString();
+  const window = normalizePlatformStravaDiagnosticsWindow(query.window);
+  const tenantId = toPositiveInt(query.tenantId);
+  const windowStart = getDiagnosticsWindowStart(window, nowMs);
+  const webhookStaleMs = resolveDiagnosticsWebhookStaleMs();
+  const webhookStaleBefore = new Date(nowMs - webhookStaleMs).toISOString();
+  const syncStaleMs = resolveDiagnosticsSyncStaleMs();
+  const syncStaleBefore = new Date(nowMs - syncStaleMs).toISOString();
+  const staleConnectionBefore = getDiagnosticsConnectionStaleBefore(nowMs);
+  const tokenExpiringSoonBefore = new Date(nowMs + (STRAVA_DIAGNOSTICS_TOKEN_EXPIRING_SOON_HOURS * 60 * 60 * 1000)).toISOString();
+
+  const applyConnectionTenantFilter = (builder: any) => {
+    if (tenantId) builder.where('sctl.tenant_id', tenantId);
+  };
+  const applySyncTenantFilter = (builder: any) => {
+    if (tenantId) builder.where('sjtl.tenant_id', tenantId);
+  };
+  const applyWebhookTenantFilter = (builder: any) => {
+    if (tenantId) {
+      builder.where((inner: any) => {
+        inner.where('swetl.tenant_id', tenantId).orWhere('sctl.tenant_id', tenantId);
+      });
+    }
+  };
+
+  const [
+    connectionSummaryRow,
+    webhookQueueRow,
+    webhookStatsRow,
+    syncQueueRow,
+    syncStatsRow,
+    staleWebhookCountRow,
+    staleWebhookRows,
+    staleSyncCountRow,
+    staleSyncRows,
+    webhookErrorRows,
+    webhookFailureStatusRows,
+    syncErrorCodeRows,
+    syncErrorMessageRows,
+    syncFailureCountsRow,
+    connectionErrorSummaryRows,
+    connectionRefreshFailureCountRow,
+    subscription,
+  ] = await Promise.all([
+    knex('strava_connections as sc')
+      .join('strava_connections_tenant_lnk as sctl', 'sctl.strava_connection_id', 'sc.id')
+      .modify(applyConnectionTenantFilter)
+      .select(knex.raw(`
+        count(distinct sc.id) as total,
+        count(distinct sc.id) filter (where sc.status = 'ACTIVE') as active,
+        count(distinct sc.id) filter (where sc.status = 'DISCONNECTED') as disconnected,
+        count(distinct sc.id) filter (where sc.status = 'ERROR') as error,
+        count(distinct sc.id) filter (where sc.token_expires_at is not null and sc.token_expires_at <= ?::timestamptz) as token_expired,
+        count(distinct sc.id) filter (where sc.token_expires_at is not null and sc.token_expires_at > ?::timestamptz and sc.token_expires_at <= ?::timestamptz) as token_expiring_soon,
+        count(distinct sc.id) filter (where coalesce(sc.last_sync_status, 'NEVER') = 'NEVER') as never_synced,
+        count(distinct sc.id) filter (where sc.status = 'ACTIVE' and coalesce(sc.last_sync_status, 'NEVER') <> 'NEVER' and (sc.last_sync_at is null or sc.last_sync_at <= ?::timestamptz)) as stale_sync,
+        count(distinct sc.id) filter (where sc.last_sync_status = 'FAILED' and coalesce(sc.last_sync_at, sc.updated_at, sc.created_at) >= ?::timestamptz) as with_recent_failure,
+        count(distinct sc.id) filter (where sc.status = 'DISCONNECTED' or sc.last_sync_error ilike '%reconnect%' or sc.last_sync_error ilike '%revoked%' or sc.last_sync_error ilike '%refresh token%') as reconnect_recommended
+      `, [generatedAt, generatedAt, tokenExpiringSoonBefore, staleConnectionBefore, windowStart]))
+      .first(),
+    knex('strava_webhook_events as swe')
+      .leftJoin('strava_webhook_events_tenant_lnk as swetl', 'swetl.strava_webhook_event_id', 'swe.id')
+      .leftJoin('strava_webhook_events_connection_lnk as swecl', 'swecl.strava_webhook_event_id', 'swe.id')
+      .leftJoin('strava_connections_tenant_lnk as sctl', 'sctl.strava_connection_id', 'swecl.strava_connection_id')
+      .modify(applyWebhookTenantFilter)
+      .select(knex.raw(`
+        count(distinct swe.id) filter (where swe.status = 'pending') as pending,
+        count(distinct swe.id) filter (where swe.status = 'processing') as processing,
+        count(distinct swe.id) filter (where swe.status = 'failed') as failed,
+        count(distinct swe.id) filter (where swe.status = 'ignored') as ignored,
+        count(distinct swe.id) filter (where swe.status = 'processed') as processed,
+        count(distinct swe.id) filter (where swe.status = 'dead_letter') as dead_letter,
+        count(distinct swe.id) filter (where swe.status = 'failed' and swe.next_attempt_at is not null and swe.next_attempt_at > ?::timestamptz) as retry_waiting,
+        count(distinct swe.id) filter (where swe.status = 'processing' and swe.claimed_at is not null and swe.claimed_at <= ?::timestamptz) as stale_processing,
+        min(case when swe.status = 'pending' then swe.created_at end) as oldest_pending_at,
+        min(case when swe.status = 'failed' and swe.next_attempt_at is not null and swe.next_attempt_at > ?::timestamptz then swe.next_attempt_at end) as oldest_retry_at,
+        max(swe.created_at) as latest_received_at,
+        max(swe.processed_at) as latest_processed_at,
+        count(distinct swe.id) filter (where swe.status = 'processed' and swe.processed_at is not null and swe.processed_at >= ?::timestamptz) as processed_last_window,
+        count(distinct swe.id) filter (where swe.status = 'failed' and coalesce(swe.next_attempt_at, swe.updated_at, swe.created_at) >= ?::timestamptz) as failed_last_window,
+        count(distinct swe.id) filter (where swe.status = 'dead_letter' and swe.processed_at is not null and swe.processed_at >= ?::timestamptz) as dead_letter_last_window
+      `, [generatedAt, webhookStaleBefore, generatedAt, windowStart, windowStart, windowStart]))
+      .first(),
+    knex('strava_webhook_events as swe')
+      .leftJoin('strava_webhook_events_tenant_lnk as swetl', 'swetl.strava_webhook_event_id', 'swe.id')
+      .leftJoin('strava_webhook_events_connection_lnk as swecl', 'swecl.strava_webhook_event_id', 'swe.id')
+      .leftJoin('strava_connections_tenant_lnk as sctl', 'sctl.strava_connection_id', 'swecl.strava_connection_id')
+      .modify(applyWebhookTenantFilter)
+      .where('swe.created_at', '>=', windowStart)
+      .select(knex.raw(`
+        count(distinct swe.id) as total,
+        count(distinct swe.id) filter (where swe.aspect_type = 'create') as create_count,
+        count(distinct swe.id) filter (where swe.aspect_type = 'update') as update_count,
+        count(distinct swe.id) filter (where swe.aspect_type = 'delete') as delete_count,
+        count(distinct swe.id) filter (where swe.status = 'processed') as processed,
+        count(distinct swe.id) filter (where swe.status = 'ignored') as ignored,
+        count(distinct swe.id) filter (where swe.status = 'failed') as failed,
+        count(distinct swe.id) filter (where swe.status = 'dead_letter') as dead_letter,
+        avg(extract(epoch from (swe.processed_at - swe.created_at))) filter (where swe.processed_at is not null and swe.processed_at >= swe.created_at) as avg_processing_seconds,
+        max(extract(epoch from (swe.processed_at - swe.created_at))) filter (where swe.processed_at is not null and swe.processed_at >= swe.created_at) as max_processing_seconds,
+        max(swe.created_at) as latest_event_at
+      `))
+      .first(),
+    knex('strava_sync_jobs as sj')
+      .join('strava_sync_jobs_tenant_lnk as sjtl', 'sjtl.strava_sync_job_id', 'sj.id')
+      .modify(applySyncTenantFilter)
+      .select(knex.raw(`
+        count(distinct sj.id) filter (where sj.status = 'queued') as queued,
+        count(distinct sj.id) filter (where sj.status = 'running') as running,
+        count(distinct sj.id) filter (where sj.status = 'partial_ready') as partial_ready,
+        count(distinct sj.id) filter (where sj.status = 'completed') as completed,
+        count(distinct sj.id) filter (where sj.status = 'failed') as failed,
+        count(distinct sj.id) filter (where sj.status = 'cancelled') as cancelled,
+        count(distinct sj.id) filter (where sj.status in ('queued', 'partial_ready') and sj.next_retry_at is not null and sj.next_retry_at > ?::timestamptz) as retry_waiting,
+        count(distinct sj.id) filter (where sj.status = 'running' and coalesce(sj.heartbeat_at, sj.claimed_at, sj.started_at, sj.requested_at) <= ?::timestamptz) as stale_running,
+        min(case when sj.status = 'queued' then coalesce(sj.requested_at, sj.created_at) end) as oldest_queued_at,
+        min(case when sj.status = 'running' then coalesce(sj.heartbeat_at, sj.claimed_at, sj.started_at, sj.requested_at) end) as oldest_running_at,
+        max(coalesce(sj.requested_at, sj.created_at)) as latest_requested_at,
+        max(sj.completed_at) filter (where sj.status = 'completed') as latest_completed_at
+      `, [generatedAt, syncStaleBefore]))
+      .first(),
+    knex('strava_sync_jobs as sj')
+      .join('strava_sync_jobs_tenant_lnk as sjtl', 'sjtl.strava_sync_job_id', 'sj.id')
+      .modify(applySyncTenantFilter)
+      .whereRaw(`coalesce(sj.requested_at, sj.created_at) >= ?::timestamptz`, [windowStart])
+      .select(knex.raw(`
+        count(distinct sj.id) as requested,
+        count(distinct sj.id) filter (where sj.status = 'completed') as completed,
+        count(distinct sj.id) filter (where sj.status = 'partial_ready') as partial_ready,
+        count(distinct sj.id) filter (where sj.status = 'failed') as failed,
+        count(distinct sj.id) filter (where sj.status = 'cancelled') as cancelled,
+        avg(extract(epoch from (coalesce(sj.completed_at, sj.failed_at) - sj.started_at))) filter (where sj.started_at is not null and ((sj.status = 'completed' and sj.completed_at is not null and sj.completed_at >= sj.started_at) or (sj.status = 'failed' and sj.failed_at is not null and sj.failed_at >= sj.started_at))) as avg_duration_seconds,
+        max(extract(epoch from (coalesce(sj.completed_at, sj.failed_at) - sj.started_at))) filter (where sj.started_at is not null and ((sj.status = 'completed' and sj.completed_at is not null and sj.completed_at >= sj.started_at) or (sj.status = 'failed' and sj.failed_at is not null and sj.failed_at >= sj.started_at))) as max_duration_seconds,
+        sum(coalesce(sj.processed_activities, 0)) as processed_activities,
+        sum(coalesce(sj.created_activities, 0)) as created_activities,
+        sum(coalesce(sj.updated_activities, 0)) as updated_activities,
+        sum(coalesce(sj.skipped_activities, 0)) as skipped_activities,
+        sum(coalesce(sj.failed_activities, 0)) as failed_activities,
+        max(sj.completed_at) filter (where sj.status = 'completed') as latest_completed_at
+      `))
+      .first(),
+    knex('strava_webhook_events as swe')
+      .leftJoin('strava_webhook_events_tenant_lnk as swetl', 'swetl.strava_webhook_event_id', 'swe.id')
+      .leftJoin('strava_webhook_events_connection_lnk as swecl', 'swecl.strava_webhook_event_id', 'swe.id')
+      .leftJoin('strava_connections_tenant_lnk as sctl', 'sctl.strava_connection_id', 'swecl.strava_connection_id')
+      .modify(applyWebhookTenantFilter)
+      .where('swe.status', 'processing')
+      .whereRaw(`swe.claimed_at <= ?::timestamptz`, [webhookStaleBefore])
+      .countDistinct({ total: 'swe.id' })
+      .first(),
+    knex('strava_webhook_events as swe')
+      .leftJoin('strava_webhook_events_tenant_lnk as swetl', 'swetl.strava_webhook_event_id', 'swe.id')
+      .leftJoin('tenants as t', 't.id', 'swetl.tenant_id')
+      .leftJoin('strava_webhook_events_connection_lnk as swecl', 'swecl.strava_webhook_event_id', 'swe.id')
+      .leftJoin('strava_connections as sc', 'sc.id', 'swecl.strava_connection_id')
+      .leftJoin('strava_connections_tenant_lnk as sctl', 'sctl.strava_connection_id', 'sc.id')
+      .modify(applyWebhookTenantFilter)
+      .where('swe.status', 'processing')
+      .whereRaw(`swe.claimed_at <= ?::timestamptz`, [webhookStaleBefore])
+      .select([
+        'swe.id as id',
+        'swe.status as status',
+        'swe.object_type as objectType',
+        'swe.aspect_type as aspectType',
+        'swe.claimed_at as claimedAt',
+        'swe.claimed_by as claimedBy',
+        't.id as tenantId',
+        't.name as tenantName',
+        'sc.id as connectionId',
+        'sc.strava_athlete_id as connectionAthleteId',
+        'sc.athlete_username as connectionAthleteUsername',
+        'sc.athlete_firstname as connectionAthleteFirstname',
+        'sc.athlete_lastname as connectionAthleteLastname',
+        'sc.status as connectionStatus',
+        knex.raw(`extract(epoch from (?::timestamptz - swe.claimed_at)) as age_seconds`, [generatedAt]),
+      ])
+      .orderBy('swe.claimed_at', 'asc')
+      .limit(STRAVA_DIAGNOSTICS_STALE_SAMPLE_LIMIT),
+    knex('strava_sync_jobs as sj')
+      .join('strava_sync_jobs_tenant_lnk as sjtl', 'sjtl.strava_sync_job_id', 'sj.id')
+      .modify(applySyncTenantFilter)
+      .where('sj.status', 'running')
+      .whereRaw(`coalesce(sj.heartbeat_at, sj.claimed_at, sj.started_at, sj.requested_at) <= ?::timestamptz`, [syncStaleBefore])
+      .countDistinct({ total: 'sj.id' })
+      .first(),
+    knex('strava_sync_jobs as sj')
+      .join('strava_sync_jobs_tenant_lnk as sjtl', 'sjtl.strava_sync_job_id', 'sj.id')
+      .leftJoin('tenants as t', 't.id', 'sjtl.tenant_id')
+      .leftJoin('strava_sync_jobs_connection_lnk as sjcl', 'sjcl.strava_sync_job_id', 'sj.id')
+      .leftJoin('strava_connections as sc', 'sc.id', 'sjcl.strava_connection_id')
+      .modify(applySyncTenantFilter)
+      .where('sj.status', 'running')
+      .whereRaw(`coalesce(sj.heartbeat_at, sj.claimed_at, sj.started_at, sj.requested_at) <= ?::timestamptz`, [syncStaleBefore])
+      .select([
+        'sj.id as id',
+        'sj.status as status',
+        'sj.phase as phase',
+        'sj.claimed_at as claimedAt',
+        'sj.heartbeat_at as heartbeatAt',
+        'sj.claimed_by as claimedBy',
+        't.id as tenantId',
+        't.name as tenantName',
+        'sc.id as connectionId',
+        'sc.strava_athlete_id as connectionAthleteId',
+        'sc.athlete_username as connectionAthleteUsername',
+        'sc.athlete_firstname as connectionAthleteFirstname',
+        'sc.athlete_lastname as connectionAthleteLastname',
+        'sc.status as connectionStatus',
+        knex.raw(`extract(epoch from (?::timestamptz - coalesce(sj.heartbeat_at, sj.claimed_at, sj.started_at, sj.requested_at))) as age_seconds`, [generatedAt]),
+      ])
+      .orderByRaw(`coalesce(sj.heartbeat_at, sj.claimed_at, sj.started_at, sj.requested_at) asc`)
+      .limit(STRAVA_DIAGNOSTICS_STALE_SAMPLE_LIMIT),
+    knex('strava_webhook_events as swe')
+      .leftJoin('strava_webhook_events_tenant_lnk as swetl', 'swetl.strava_webhook_event_id', 'swe.id')
+      .leftJoin('strava_webhook_events_connection_lnk as swecl', 'swecl.strava_webhook_event_id', 'swe.id')
+      .leftJoin('strava_connections_tenant_lnk as sctl', 'sctl.strava_connection_id', 'swecl.strava_connection_id')
+      .modify(applyWebhookTenantFilter)
+      .where('swe.created_at', '>=', windowStart)
+      .whereIn('swe.status', ['failed', 'dead_letter'])
+      .whereNotNull('swe.last_error')
+      .select('swe.last_error as lastError')
+      .countDistinct({ count: 'swe.id' })
+      .groupBy('swe.last_error')
+      .orderBy('count', 'desc')
+      .limit(STRAVA_DIAGNOSTICS_ERROR_LIMIT),
+    knex('strava_webhook_events as swe')
+      .leftJoin('strava_webhook_events_tenant_lnk as swetl', 'swetl.strava_webhook_event_id', 'swe.id')
+      .leftJoin('strava_webhook_events_connection_lnk as swecl', 'swecl.strava_webhook_event_id', 'swe.id')
+      .leftJoin('strava_connections_tenant_lnk as sctl', 'sctl.strava_connection_id', 'swecl.strava_connection_id')
+      .modify(applyWebhookTenantFilter)
+      .where('swe.created_at', '>=', windowStart)
+      .whereIn('swe.status', ['failed', 'dead_letter', 'ignored'])
+      .select('swe.status as status')
+      .countDistinct({ count: 'swe.id' })
+      .groupBy('swe.status')
+      .orderBy('count', 'desc')
+      .limit(STRAVA_DIAGNOSTICS_ERROR_LIMIT),
+    knex('strava_sync_jobs as sj')
+      .join('strava_sync_jobs_tenant_lnk as sjtl', 'sjtl.strava_sync_job_id', 'sj.id')
+      .modify(applySyncTenantFilter)
+      .whereRaw(`coalesce(sj.requested_at, sj.created_at) >= ?::timestamptz`, [windowStart])
+      .whereNotNull('sj.last_error_code')
+      .select('sj.last_error_code as code')
+      .countDistinct({ count: 'sj.id' })
+      .groupBy('sj.last_error_code')
+      .orderBy('count', 'desc')
+      .limit(STRAVA_DIAGNOSTICS_ERROR_LIMIT),
+    knex('strava_sync_jobs as sj')
+      .join('strava_sync_jobs_tenant_lnk as sjtl', 'sjtl.strava_sync_job_id', 'sj.id')
+      .modify(applySyncTenantFilter)
+      .whereRaw(`coalesce(sj.requested_at, sj.created_at) >= ?::timestamptz`, [windowStart])
+      .whereNotNull('sj.last_error_message')
+      .select('sj.last_error_message as message')
+      .countDistinct({ count: 'sj.id' })
+      .groupBy('sj.last_error_message')
+      .orderBy('count', 'desc')
+      .limit(STRAVA_DIAGNOSTICS_ERROR_LIMIT),
+    knex('strava_sync_jobs as sj')
+      .join('strava_sync_jobs_tenant_lnk as sjtl', 'sjtl.strava_sync_job_id', 'sj.id')
+      .modify(applySyncTenantFilter)
+      .whereRaw(`coalesce(sj.requested_at, sj.created_at) >= ?::timestamptz`, [windowStart])
+      .select(knex.raw(`
+        count(distinct sj.id) filter (where sj.status = 'failed') as failed_count,
+        count(distinct sj.id) filter (where sj.status in ('queued', 'partial_ready') and sj.next_retry_at is not null and sj.next_retry_at > ?::timestamptz) as retry_waiting_count
+      `, [generatedAt]))
+      .first(),
+    knex('strava_connections as sc')
+      .join('strava_connections_tenant_lnk as sctl', 'sctl.strava_connection_id', 'sc.id')
+      .modify(applyConnectionTenantFilter)
+      .whereNotNull('sc.last_sync_error')
+      .select('sc.last_sync_error as error')
+      .countDistinct({ count: 'sc.id' })
+      .groupBy('sc.last_sync_error')
+      .orderBy('count', 'desc')
+      .limit(STRAVA_DIAGNOSTICS_ERROR_LIMIT),
+    knex('strava_connections as sc')
+      .join('strava_connections_tenant_lnk as sctl', 'sctl.strava_connection_id', 'sc.id')
+      .modify(applyConnectionTenantFilter)
+      .where((builder: any) => {
+        builder.whereILike('sc.last_sync_error', '%refresh token%').orWhereILike('sc.last_sync_error', '%reconnect%');
+      })
+      .countDistinct({ total: 'sc.id' })
+      .first(),
+    getPlatformStravaSubscriptionDiagnostics(generatedAt),
+  ]);
+
+  const connections = {
+    total: Number((connectionSummaryRow as any)?.total || 0),
+    active: Number((connectionSummaryRow as any)?.active || 0),
+    disconnected: Number((connectionSummaryRow as any)?.disconnected || 0),
+    revokedOrDisconnected: Number((connectionSummaryRow as any)?.disconnected || 0),
+    error: Number((connectionSummaryRow as any)?.error || 0),
+    tokenExpired: Number((connectionSummaryRow as any)?.token_expired || 0),
+    tokenExpiringSoon: Number((connectionSummaryRow as any)?.token_expiring_soon || 0),
+    neverSynced: Number((connectionSummaryRow as any)?.never_synced || 0),
+    staleSync: Number((connectionSummaryRow as any)?.stale_sync || 0),
+    withRecentFailure: Number((connectionSummaryRow as any)?.with_recent_failure || 0),
+    reconnectRecommended: Number((connectionSummaryRow as any)?.reconnect_recommended || 0),
+  };
+
+  const webhookQueue = {
+    pending: Number((webhookQueueRow as any)?.pending || 0),
+    processing: Number((webhookQueueRow as any)?.processing || 0),
+    failed: Number((webhookQueueRow as any)?.failed || 0),
+    ignored: Number((webhookQueueRow as any)?.ignored || 0),
+    processed: Number((webhookQueueRow as any)?.processed || 0),
+    deadLetter: Number((webhookQueueRow as any)?.dead_letter || 0),
+    retryWaiting: Number((webhookQueueRow as any)?.retry_waiting || 0),
+    staleProcessing: Number((webhookQueueRow as any)?.stale_processing || 0),
+    oldestPendingAt: (webhookQueueRow as any)?.oldest_pending_at || null,
+    oldestRetryAt: (webhookQueueRow as any)?.oldest_retry_at || null,
+    latestReceivedAt: (webhookQueueRow as any)?.latest_received_at || null,
+    latestProcessedAt: (webhookQueueRow as any)?.latest_processed_at || null,
+    processedLastWindow: Number((webhookQueueRow as any)?.processed_last_window || 0),
+    failedLastWindow: Number((webhookQueueRow as any)?.failed_last_window || 0),
+    deadLetterLastWindow: Number((webhookQueueRow as any)?.dead_letter_last_window || 0),
+  };
+
+  const webhookStats = {
+    total: Number((webhookStatsRow as any)?.total || 0),
+    create: Number((webhookStatsRow as any)?.create_count || 0),
+    update: Number((webhookStatsRow as any)?.update_count || 0),
+    delete: Number((webhookStatsRow as any)?.delete_count || 0),
+    processed: Number((webhookStatsRow as any)?.processed || 0),
+    ignored: Number((webhookStatsRow as any)?.ignored || 0),
+    failed: Number((webhookStatsRow as any)?.failed || 0),
+    deadLetter: Number((webhookStatsRow as any)?.dead_letter || 0),
+    averageProcessingDurationSeconds: (webhookStatsRow as any)?.avg_processing_seconds !== null ? Number((webhookStatsRow as any)?.avg_processing_seconds || 0) : null,
+    maxProcessingDurationSeconds: (webhookStatsRow as any)?.max_processing_seconds !== null ? Number((webhookStatsRow as any)?.max_processing_seconds || 0) : null,
+    latestEventAt: (webhookStatsRow as any)?.latest_event_at || null,
+  };
+
+  const syncQueue = {
+    queued: Number((syncQueueRow as any)?.queued || 0),
+    running: Number((syncQueueRow as any)?.running || 0),
+    partialReady: Number((syncQueueRow as any)?.partial_ready || 0),
+    completed: Number((syncQueueRow as any)?.completed || 0),
+    failed: Number((syncQueueRow as any)?.failed || 0),
+    cancelled: Number((syncQueueRow as any)?.cancelled || 0),
+    retryWaiting: Number((syncQueueRow as any)?.retry_waiting || 0),
+    staleRunning: Number((syncQueueRow as any)?.stale_running || 0),
+    oldestQueuedAt: (syncQueueRow as any)?.oldest_queued_at || null,
+    oldestRunningAt: (syncQueueRow as any)?.oldest_running_at || null,
+    latestRequestedAt: (syncQueueRow as any)?.latest_requested_at || null,
+    latestCompletedAt: (syncQueueRow as any)?.latest_completed_at || null,
+  };
+
+  const syncStats = {
+    requested: Number((syncStatsRow as any)?.requested || 0),
+    completed: Number((syncStatsRow as any)?.completed || 0),
+    partialReady: Number((syncStatsRow as any)?.partial_ready || 0),
+    failed: Number((syncStatsRow as any)?.failed || 0),
+    cancelled: Number((syncStatsRow as any)?.cancelled || 0),
+    averageDurationSeconds: (syncStatsRow as any)?.avg_duration_seconds !== null ? Number((syncStatsRow as any)?.avg_duration_seconds || 0) : null,
+    maxDurationSeconds: (syncStatsRow as any)?.max_duration_seconds !== null ? Number((syncStatsRow as any)?.max_duration_seconds || 0) : null,
+    processedActivities: Number((syncStatsRow as any)?.processed_activities || 0),
+    createdActivities: Number((syncStatsRow as any)?.created_activities || 0),
+    updatedActivities: Number((syncStatsRow as any)?.updated_activities || 0),
+    skippedActivities: Number((syncStatsRow as any)?.skipped_activities || 0),
+    failedActivities: Number((syncStatsRow as any)?.failed_activities || 0),
+    latestCompletedAt: (syncStatsRow as any)?.latest_completed_at || null,
+  };
+
+  let staleWebhookItems = (staleWebhookRows || []).map((row: any) => ({
+    id: Number(row?.id || 0),
+    status: toText(row?.status) || 'processing',
+    objectType: toText(row?.objectType) || 'unknown',
+    aspectType: toText(row?.aspectType) || 'unknown',
+    claimedAt: row?.claimedAt || null,
+    claimedBy: summarizeDiagnosticsText(row?.claimedBy, 120),
+    tenant: row?.tenantId ? { id: Number(row.tenantId), name: toText(row?.tenantName) || `Tenant ${String(row.tenantId)}` } : null,
+    connection: row?.connectionId ? {
+      id: Number(row.connectionId),
+      athleteId: toText(row?.connectionAthleteId) || '-',
+      athleteName: buildPlatformStravaAthleteName({ athleteFirstname: row?.connectionAthleteFirstname, athleteLastname: row?.connectionAthleteLastname, athleteUsername: row?.connectionAthleteUsername, athleteId: row?.connectionAthleteId }),
+      status: normalizePlatformStravaConnectionStatus(row?.connectionStatus) || 'ERROR',
+    } : null,
+    ageSeconds: row?.age_seconds !== null && row?.age_seconds !== undefined ? Math.max(0, Math.round(Number(row.age_seconds || 0))) : null,
+    detailUrl: `/platform/integrations/strava/webhook-events/${String(row?.id || '')}`,
+  }));
+
+  if (staleWebhookItems.length === 0 && webhookQueue.staleProcessing > 0) {
+    const fallbackWebhookIds = await knex('strava_webhook_events as swe')
+      .leftJoin('strava_webhook_events_tenant_lnk as swetl', 'swetl.strava_webhook_event_id', 'swe.id')
+      .leftJoin('strava_webhook_events_connection_lnk as swecl', 'swecl.strava_webhook_event_id', 'swe.id')
+      .modify((builder: any) => {
+        if (!tenantId) return;
+        builder.where((inner: any) => {
+          inner
+            .whereExists(function existsEventTenant(this: any) {
+              this.select(knex.raw('1'))
+                .from({ evtl: 'strava_webhook_events_tenant_lnk' })
+                .whereRaw('evtl.strava_webhook_event_id = swe.id')
+                .andWhere('evtl.tenant_id', tenantId);
+            })
+            .orWhereExists(function existsConnectionTenant(this: any) {
+              this.select(knex.raw('1'))
+                .from({ evcl: 'strava_webhook_events_connection_lnk' })
+                .join({ ctl: 'strava_connections_tenant_lnk' }, 'ctl.strava_connection_id', 'evcl.strava_connection_id')
+                .whereRaw('evcl.strava_webhook_event_id = swe.id')
+                .andWhere('ctl.tenant_id', tenantId);
+            });
+        });
+      })
+      .where('swe.status', 'processing')
+      .whereRaw(`swe.claimed_at <= ?::timestamptz`, [webhookStaleBefore])
+      .select('swe.id as id')
+      .orderBy('swe.claimed_at', 'asc')
+      .limit(STRAVA_DIAGNOSTICS_STALE_SAMPLE_LIMIT);
+
+    const fallbackDetails = await Promise.all(
+      (fallbackWebhookIds || []).map((row: any) => getPlatformStravaWebhookEventDetail(row?.id)),
+    );
+
+    staleWebhookItems = fallbackDetails.map((detail) => {
+      const claimedAtMs = Date.parse(String(detail?.claimedAt || ''));
+      return {
+        id: Number(detail?.eventId || 0),
+        status: toText(detail?.status) || 'processing',
+        objectType: toText(detail?.objectType) || 'unknown',
+        aspectType: toText(detail?.aspectType) || 'unknown',
+        claimedAt: detail?.claimedAt || null,
+        claimedBy: summarizeDiagnosticsText(detail?.claimedBy, 120),
+        tenant: detail?.tenant || null,
+        connection: detail?.connection || null,
+        ageSeconds: Number.isFinite(claimedAtMs) ? Math.max(0, Math.round((Date.parse(generatedAt) - claimedAtMs) / 1000)) : null,
+        detailUrl: `/platform/integrations/strava/webhook-events/${String(detail?.eventId || '')}`,
+      };
+    });
+  }
+
+  const staleSyncItems = (staleSyncRows || []).map((row: any) => ({
+    id: Number(row?.id || 0),
+    status: toText(row?.status) || 'running',
+    phase: toText(row?.phase) || null,
+    claimedAt: row?.claimedAt || null,
+    heartbeatAt: row?.heartbeatAt || null,
+    claimedBy: summarizeDiagnosticsText(row?.claimedBy, 120),
+    tenant: row?.tenantId ? { id: Number(row.tenantId), name: toText(row?.tenantName) || `Tenant ${String(row.tenantId)}` } : null,
+    connection: row?.connectionId ? {
+      id: Number(row.connectionId),
+      athleteId: toText(row?.connectionAthleteId) || '-',
+      athleteName: buildPlatformStravaAthleteName({ athleteFirstname: row?.connectionAthleteFirstname, athleteLastname: row?.connectionAthleteLastname, athleteUsername: row?.connectionAthleteUsername, athleteId: row?.connectionAthleteId }),
+      status: normalizePlatformStravaConnectionStatus(row?.connectionStatus) || 'ERROR',
+    } : null,
+    ageSeconds: row?.age_seconds !== null && row?.age_seconds !== undefined ? Math.max(0, Math.round(Number(row.age_seconds || 0))) : null,
+    detailUrl: `/platform/integrations/strava/sync-jobs/${String(row?.id || '')}`,
+  }));
+
+  const errors = {
+    webhook: {
+      topLastErrorSummaries: (webhookErrorRows || []).map((row: any) => ({
+        summary: summarizePlatformStravaWebhookError(row?.lastError) || 'Unknown webhook error',
+        count: Number(row?.count || 0),
+      })),
+      topStatusFailureCounts: (webhookFailureStatusRows || []).map((row: any) => ({
+        status: toText(row?.status) || 'unknown',
+        count: Number(row?.count || 0),
+      })),
+      deadLetterCount: webhookQueue.deadLetter,
+    },
+    syncJobs: {
+      topErrorCodes: (syncErrorCodeRows || []).map((row: any) => ({
+        code: toText(row?.code) || 'UNKNOWN',
+        count: Number(row?.count || 0),
+      })),
+      topLastErrorSummaries: (syncErrorMessageRows || []).map((row: any) => ({
+        summary: summarizeDiagnosticsText(row?.message) || 'Unknown sync error',
+        count: Number(row?.count || 0),
+      })),
+      failedCount: Number((syncFailureCountsRow as any)?.failed_count || 0),
+      retryWaitingCount: Number((syncFailureCountsRow as any)?.retry_waiting_count || 0),
+    },
+    connections: {
+      topFailureReasons: (connectionErrorSummaryRows || []).map((row: any) => ({
+        summary: summarizeDiagnosticsText(row?.error) || 'Unknown connection issue',
+        count: Number(row?.count || 0),
+      })),
+      refreshTokenFailureCount: Number((connectionRefreshFailureCountRow as any)?.total || 0),
+    },
+  };
+
+  const warnings: PlatformStravaDiagnosticsRule[] = [
+    ...subscription.warnings,
+  ];
+
+  if (!toBoolean(process.env.STRAVA_WEBHOOK_RUNNER_ENABLED, false)) {
+    warnings.push(makeDiagnosticsRule('WEBHOOK_RUNNER_DISABLED', 'warning', 'Webhook runner hiện đang tắt theo cấu hình môi trường.'));
+  }
+  if (!toBoolean(process.env.STRAVA_SYNC_RUNNER_ENABLED, false)) {
+    warnings.push(makeDiagnosticsRule('SYNC_RUNNER_DISABLED', 'warning', 'Sync runner hiện đang tắt theo cấu hình môi trường.'));
+  }
+  if (webhookQueue.staleProcessing > 0) {
+    warnings.push(makeDiagnosticsRule('WEBHOOK_STALE_PROCESSING', 'critical', 'Có webhook event đang processing quá thời hạn stale.'));
+  }
+  if (syncQueue.staleRunning > 0) {
+    warnings.push(makeDiagnosticsRule('SYNC_STALE_RUNNING', 'critical', 'Có sync job đang running quá thời hạn stale.'));
+  }
+  if (webhookQueue.deadLetter > 0) {
+    warnings.push(makeDiagnosticsRule('WEBHOOK_DEAD_LETTER_PRESENT', 'warning', 'Có webhook event đang ở dead letter.'));
+  }
+  if (errors.syncJobs.failedCount > 0) {
+    warnings.push(makeDiagnosticsRule('SYNC_FAILED_PRESENT', 'warning', 'Có sync job failed trong cửa sổ đã chọn.'));
+  }
+  if (connections.revokedOrDisconnected > 0) {
+    warnings.push(makeDiagnosticsRule('CONNECTION_REVOKED_PRESENT', 'warning', 'Có Strava connection đã disconnected hoặc bị thu hồi quyền.'));
+  }
+  if (connections.staleSync > 0) {
+    warnings.push(makeDiagnosticsRule('CONNECTION_SYNC_STALE', 'warning', 'Có Strava connection không sync trong thời gian stale đã khai báo.'));
+  }
+  if (errors.connections.refreshTokenFailureCount > 0) {
+    warnings.push(makeDiagnosticsRule('TOKEN_REFRESH_FAILURE_PRESENT', 'warning', 'Có Strava connection gặp lỗi refresh token hoặc cần reconnect.'));
+  }
+  if (connections.active > 0 && subscription.subscriptionExists && subscription.callbackMatches && !webhookQueue.latestReceivedAt) {
+    warnings.push(makeDiagnosticsRule('NO_RECENT_WEBHOOK_ACTIVITY', 'info', 'Không có webhook activity gần đây trong hệ thống hiện tại.'));
+  }
+
+  const runners = {
+    webhookRunner: buildDiagnosticsRunner({
+      configured: true,
+      enabled: toBoolean(process.env.STRAVA_WEBHOOK_RUNNER_ENABLED, false),
+      lastObservedActivityAt: webhookQueue.latestProcessedAt || webhookQueue.latestReceivedAt,
+      activeItems: webhookQueue.processing,
+      staleItems: webhookQueue.staleProcessing,
+      staleMs: webhookStaleMs,
+      warnings: warnings.filter((item) => ['WEBHOOK_RUNNER_DISABLED', 'WEBHOOK_STALE_PROCESSING', 'WEBHOOK_DEAD_LETTER_PRESENT', 'NO_RECENT_WEBHOOK_ACTIVITY'].includes(item.code)),
+    }),
+    webhookHandler: buildDiagnosticsRunner({
+      configured: true,
+      enabled: toBoolean(process.env.STRAVA_WEBHOOK_HANDLER_ENABLED, false),
+      lastObservedActivityAt: webhookQueue.latestProcessedAt,
+      activeItems: 0,
+      staleItems: webhookQueue.staleProcessing,
+      staleMs: webhookStaleMs,
+      warnings: warnings.filter((item) => ['WEBHOOK_RUNNER_DISABLED', 'NO_RECENT_WEBHOOK_ACTIVITY'].includes(item.code)),
+    }),
+    syncRunner: buildDiagnosticsRunner({
+      configured: true,
+      enabled: toBoolean(process.env.STRAVA_SYNC_RUNNER_ENABLED, false),
+      lastObservedActivityAt: syncQueue.latestCompletedAt || syncQueue.latestRequestedAt,
+      activeItems: syncQueue.running + syncQueue.partialReady,
+      staleItems: syncQueue.staleRunning,
+      staleMs: syncStaleMs,
+      warnings: warnings.filter((item) => ['SYNC_RUNNER_DISABLED', 'SYNC_STALE_RUNNING', 'SYNC_FAILED_PRESENT'].includes(item.code)),
+    }),
+    subscriptionCheckOnBoot: buildDiagnosticsRunner({
+      configured: true,
+      enabled: shouldCheckStravaWebhookOnBoot(),
+      lastObservedActivityAt: null,
+      activeItems: 0,
+      staleItems: 0,
+      staleMs: webhookStaleMs,
+      warnings: subscription.warnings,
+    }),
+  };
+
+  return {
+    generatedAt,
+    window,
+    tenantId,
+    health: {
+      status: getHealthStatusFromRules(warnings),
+      score: null,
+      reasons: warnings.filter((item) => item.severity !== 'info'),
+    },
+    thresholds: {
+      tokenExpiringSoonHours: STRAVA_DIAGNOSTICS_TOKEN_EXPIRING_SOON_HOURS,
+      staleConnectionDays: STRAVA_DIAGNOSTICS_CONNECTION_STALE_DAYS,
+      webhookStaleMinutes: Math.round(webhookStaleMs / 60000),
+      syncStaleMinutes: Math.round(syncStaleMs / 60000),
+    },
+    runners,
+    subscription,
+    connections,
+    webhookQueue,
+    webhookStats,
+    syncQueue,
+    syncStats,
+    staleItems: {
+      webhookEvents: {
+        count: Math.max(webhookQueue.staleProcessing, Number((staleWebhookCountRow as any)?.total || 0)),
+        items: staleWebhookItems,
+      },
+      syncJobs: {
+        count: Number((staleSyncCountRow as any)?.total || 0),
+        items: staleSyncItems,
+      },
+    },
+    errors,
+    warnings,
+    links: buildDiagnosticsLinks(),
+  };
+}
+
+export async function createPlatformStravaSubscription(): Promise<PlatformStravaSubscriptionOverview & { existed: boolean }> {
+  const result = await createWebhookSubscription();
+  const overview = await getPlatformStravaSubscriptionOverview();
+  return {
+    ...overview,
+    existed: result.existed,
+  };
+}
+
+export async function deletePlatformStravaSubscription(): Promise<PlatformStravaSubscriptionOverview & { deleted: boolean; deletedSubscriptionId: number | null }> {
+  const current = await getWebhookSubscription();
+  if (!current?.subscriptionId) {
+    const overview = await getPlatformStravaSubscriptionOverview();
+    return {
+      ...overview,
+      deleted: false,
+      deletedSubscriptionId: null,
+    };
+  }
+
+  const result = await deleteWebhookSubscription(current.subscriptionId);
+  const overview = await getPlatformStravaSubscriptionOverview();
+  return {
+    ...overview,
+    deleted: result.deleted,
+    deletedSubscriptionId: current.subscriptionId,
+  };
 }
 
 function resolveStateSigningSecret(): string {
@@ -1385,8 +5072,8 @@ export async function startCurrentUserStravaSync(tenantId: number | string, user
     throw Object.assign(new Error('Bạn chưa kết nối tài khoản Strava.'), { code: 'STRAVA_NOT_CONNECTED', status: 400 });
   }
 
-  if (toText(connection.status).toUpperCase() !== 'ACTIVE') {
-    throw Object.assign(new Error('Kết nối Strava hiện không hoạt động.'), { code: 'STRAVA_CONNECTION_INACTIVE', status: 409 });
+  if (isConnectionRevoked(connection)) {
+    throw Object.assign(new Error('Kết nối Strava đã bị thu hồi quyền truy cập.'), { code: 'STRAVA_CONNECTION_REVOKED', status: 409 });
   }
 
   const syncMode = await determineStravaJobSyncMode(tenantId, userId, connection);
@@ -1608,6 +5295,20 @@ function validateStravaSyncJob(job: StravaSyncJobRecord | null) {
   };
 }
 
+async function cancelStravaSyncJobForRevokedConnection(jobId: number) {
+  const nowIso = new Date().toISOString()
+  await updateStravaSyncJobCheckpoint(jobId, {
+    status: 'cancelled',
+    cancelledAt: nowIso,
+    heartbeatAt: nowIso,
+    nextRetryAt: null,
+    claimedAt: null,
+    claimedBy: null,
+    lastErrorCode: 'STRAVA_CONNECTION_REVOKED',
+    lastErrorMessage: buildStravaSyncClientMessage('STRAVA_CONNECTION_REVOKED'),
+  })
+}
+
 async function getStravaConnectionForJob(job: StravaSyncJobRecord) {
   const tenantId = resolveJobTenantId(job);
   const userId = resolveJobUserId(job);
@@ -1615,11 +5316,18 @@ async function getStravaConnectionForJob(job: StravaSyncJobRecord) {
 
   const connection = await strapi.db.query(STRAVA_CONNECTION_UID).findOne({
     where: mergeTenantWhere({ id: connectionId, user: { id: userId } }, tenantId),
-    select: ['id', 'status', 'accessToken', 'refreshToken', 'tokenExpiresAt', 'lastSyncAt', 'lastSyncStatus', 'athleteFirstname', 'athleteLastname', 'athleteUsername', 'profileUrl'],
+    select: ['id', 'status', 'accessToken', 'refreshToken', 'tokenExpiresAt', 'disconnectedAt', 'lastSyncAt', 'lastSyncStatus', 'athleteFirstname', 'athleteLastname', 'athleteUsername', 'profileUrl'],
   });
 
   if (!connection?.id) {
     throw Object.assign(new Error('Strava connection not found'), { code: 'STRAVA_CONNECTION_NOT_FOUND', status: 404 });
+  }
+
+  if (isConnectionRevoked(connection as StravaConnectionRecord)) {
+    throw Object.assign(new Error('Strava connection is revoked or inactive.'), {
+      code: 'STRAVA_CONNECTION_REVOKED',
+      status: 409,
+    })
   }
 
   return connection as StravaConnectionRecord;
@@ -1659,12 +5367,15 @@ async function markConnectionSyncRunning(connectionId: number): Promise<boolean>
 async function getCurrentStravaConnection(tenantId: number | string, userId: number, requireActive = false): Promise<StravaConnectionRecord | null> {
   const connection = await strapi.db.query(STRAVA_CONNECTION_UID).findOne({
     where: mergeTenantWhere({ user: { id: userId } }, tenantId),
-    select: ['id', 'status', 'accessToken', 'refreshToken', 'tokenExpiresAt', 'lastSyncAt', 'lastSyncStatus', 'athleteFirstname', 'athleteLastname', 'athleteUsername', 'profileUrl'],
+    select: ['id', 'status', 'accessToken', 'refreshToken', 'tokenExpiresAt', 'disconnectedAt', 'lastSyncAt', 'lastSyncStatus', 'athleteFirstname', 'athleteLastname', 'athleteUsername', 'profileUrl'],
   });
 
   if (!connection?.id) return null;
-  if (requireActive && toText(connection.status) !== 'ACTIVE') {
-    throw Object.assign(new Error('Strava connection is not active'), { status: 400 });
+  if (requireActive && isConnectionRevoked(connection as StravaConnectionRecord)) {
+    throw Object.assign(new Error('Strava connection is revoked or inactive.'), {
+      code: 'STRAVA_CONNECTION_REVOKED',
+      status: 409,
+    });
   }
   return connection as StravaConnectionRecord;
 }
@@ -1821,6 +5532,62 @@ export async function verifySignedOAuthState(state: string): Promise<VerifiedOAu
   };
 }
 
+export function verifyStravaWebhookSubscription(
+  input: StravaWebhookVerificationInput,
+): StravaWebhookVerificationResult {
+  const configuredVerifyToken = readStravaWebhookVerifyToken();
+  if (!configuredVerifyToken) {
+    throw Object.assign(new Error('Strava webhook verification is not configured'), { status: 503 });
+  }
+
+  if (input.mode !== 'subscribe') {
+    throw Object.assign(new Error('Invalid webhook verification mode'), { status: 400 });
+  }
+
+  if (!input.challenge || !input.challenge.trim()) {
+    throw Object.assign(new Error('Missing webhook challenge'), { status: 400 });
+  }
+
+  if (!timingSafeEqualText(input.verifyToken, configuredVerifyToken)) {
+    throw Object.assign(new Error('Invalid webhook verify token'), { status: 403 });
+  }
+
+  return {
+    challenge: input.challenge,
+  };
+}
+
+export async function receiveStravaWebhookEvent(rawPayload: unknown): Promise<StravaWebhookReceiveResult> {
+  const normalized = normalizeStravaWebhookPayload(rawPayload);
+
+  try {
+    await strapi.db.query(STRAVA_WEBHOOK_EVENT_UID).create({
+      data: {
+        subscriptionId: normalized.subscriptionId,
+        ownerId: normalized.ownerId,
+        objectType: normalized.objectType,
+        objectId: normalized.objectId,
+        aspectType: normalized.aspectType,
+        eventTime: normalized.eventTime,
+        updates: normalized.updates,
+        rawPayload: normalized.rawPayload,
+        status: normalized.status,
+        attempts: 0,
+        idempotencyKey: normalized.idempotencyKey,
+      },
+    });
+
+    return { duplicate: false };
+  } catch (error: any) {
+    if (isStravaWebhookDuplicateError(error)) {
+      strapi.log.info('[strava.webhookReceive] duplicate ignored');
+      return { duplicate: true };
+    }
+
+    throw error;
+  }
+}
+
 export async function consumeOAuthState(recordId: number): Promise<void> {
   const nowIso = new Date().toISOString();
   const updatedCount = await strapi.db.connection('strava_oauth_states')
@@ -1861,6 +5628,7 @@ export async function exchangeCodeForToken(code: string): Promise<StravaTokenRes
 }
 
 export async function refreshStravaToken(connection: StravaConnectionRecord): Promise<StravaConnectionRecord> {
+  assertConnectionUsable(connection)
   const refreshToken = toText(connection?.refreshToken);
   if (!refreshToken) {
     await updateConnectionSyncState(connection.id, {
@@ -1925,6 +5693,7 @@ export async function refreshStravaToken(connection: StravaConnectionRecord): Pr
 }
 
 export async function getValidAccessToken(connection: StravaConnectionRecord): Promise<string> {
+  assertConnectionUsable(connection)
   const accessToken = toText(connection?.accessToken);
   const tokenExpiresAt = connection?.tokenExpiresAt ? new Date(connection.tokenExpiresAt).getTime() : 0;
 
@@ -3923,10 +7692,12 @@ export async function buildFrontendSuccessRedirect(options: {
     });
   }
 
-  return buildTenantFrontendRedirect({
+  const redirectUrl = buildTenantFrontendRedirect({
     frontendOrigin,
     path: target.path || DEFAULT_STRAVA_SUCCESS_REDIRECT_PATH,
   });
+
+  return redirectUrl;
 }
 
 export async function buildFrontendErrorRedirect(options: {
@@ -3984,14 +7755,37 @@ export async function buildFrontendErrorRedirect(options: {
 
 export default {
   toText,
+  shouldCheckStravaWebhookOnBoot,
+  getStravaDashboardOverview,
+  getPlatformStravaDiagnostics,
+  getPlatformStravaSubscriptionOverview,
+  createPlatformStravaSubscription,
+  deletePlatformStravaSubscription,
+  listPlatformStravaConnections,
+  listPlatformStravaWebhookEvents,
+  getPlatformStravaWebhookEventDetail,
+  listPlatformStravaSyncJobs,
+  getPlatformStravaSyncJobDetail,
+  getWebhookSubscription,
+  listWebhookSubscriptions,
+  createWebhookSubscription,
+  deleteWebhookSubscription,
+  deleteAllWebhookSubscriptions,
+  checkWebhookHealth,
   classifyStravaSyncError,
   calculateStravaRetryDelay,
   getRetryJobStatus,
+  processActivityWebhookEvent,
+  processAthleteWebhookEvent,
+  cancelStravaSyncJobForRevokedConnection,
   requireAuthenticatedUser,
   getCurrentTenantId,
+  resolveTenantIdForStravaOAuthStart,
   resolveTrustedFrontendOriginForOAuthStart,
   buildStravaAuthorizeUrl,
   createSignedOAuthState,
+  receiveStravaWebhookEvent,
+  verifyStravaWebhookSubscription,
   verifySignedOAuthState,
   consumeOAuthState,
   exchangeCodeForToken,

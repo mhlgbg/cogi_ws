@@ -32,6 +32,58 @@ export default {
     },
     {
       method: 'GET',
+      path: '/strava/webhook',
+      handler: 'strava.webhookVerify',
+      config: {
+        auth: false,
+      },
+    },
+    {
+      method: 'POST',
+      path: '/strava/webhook',
+      handler: 'strava.webhookReceive',
+      config: {
+        auth: false,
+      },
+    },
+    {
+      method: 'GET',
+      path: '/admin/strava/subscription',
+      handler: 'strava.subscriptionOverview',
+      config: {
+        auth: false,
+        middlewares: ['global::is-platform-admin'],
+      },
+    },
+    {
+      method: 'POST',
+      path: '/admin/strava/subscription',
+      handler: 'strava.createSubscription',
+      config: {
+        auth: false,
+        middlewares: ['global::is-platform-admin'],
+      },
+    },
+    {
+      method: 'DELETE',
+      path: '/admin/strava/subscription/:id',
+      handler: 'strava.deleteSubscription',
+      config: {
+        auth: false,
+        middlewares: ['global::is-platform-admin'],
+      },
+    },
+    {
+      method: 'DELETE',
+      path: '/admin/strava/subscription',
+      handler: 'strava.deleteAllSubscriptions',
+      config: {
+        auth: false,
+        middlewares: ['global::is-platform-admin'],
+      },
+    },
+    {
+      method: 'GET',
       path: '/strava/status',
       handler: 'strava.status',
       config: {

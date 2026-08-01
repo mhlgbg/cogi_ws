@@ -103,6 +103,12 @@
       "relation": "oneToMany",
       "target": "api::strava-sync-job.strava-sync-job",
       "mappedBy": "connection"
+    },
+    "webhookEvents": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::strava-webhook-event.strava-webhook-event",
+      "mappedBy": "connection"
     }
   }
 }

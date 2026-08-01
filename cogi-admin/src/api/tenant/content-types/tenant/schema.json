@@ -379,6 +379,12 @@
       "target": "api::strava-sync-job.strava-sync-job",
       "mappedBy": "tenant"
     },
+    "stravaWebhookEvents": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::strava-webhook-event.strava-webhook-event",
+      "mappedBy": "tenant"
+    },
     "fitnessChallenges": {
       "type": "relation",
       "relation": "oneToMany",

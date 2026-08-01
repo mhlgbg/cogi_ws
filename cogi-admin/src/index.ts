@@ -1,6 +1,8 @@
 // import type { Core } from '@strapi/strapi';
 import { initServiceSalesMasterData } from './bootstrap/init-service-sales-master-data';
 import { seedSurvey } from './bootstrap/seed-survey';
+import stravaService from './api/strava/services/strava';
+import { startStravaWebhookRunner, stopStravaWebhookRunner } from './bootstrap/strava-webhook-runner';
 import { startStravaSyncRunner, stopStravaSyncRunner } from './bootstrap/strava-sync-runner';
 
 const WINDOWS_TEMP_UNLINK_EPERM =
@@ -88,10 +90,26 @@ export default {
 
     await initServiceSalesMasterData(strapi);
     await seedSurvey(strapi);
+
+    if (stravaService.shouldCheckStravaWebhookOnBoot()) {
+      try {
+        const health = await stravaService.checkWebhookHealth();
+        if (health.healthy) {
+          strapi.log.info(`[strava.subscription] health healthy=true subscriptionCount=${String(health.subscriptionCount)} callbackMatches=${String(health.callbackMatches)}`);
+        } else {
+          strapi.log.warn(`[strava.subscription] health healthy=false warnings=${health.warnings.join(',') || '-'} subscriptionCount=${String(health.subscriptionCount)} callbackMatches=${String(health.callbackMatches)}`);
+        }
+      } catch (error: any) {
+        strapi.log.warn(`[strava.subscription] health check failed code=${String(error?.code || 'UNKNOWN')} status=${String(error?.status || 500)}`);
+      }
+    }
+
     await startStravaSyncRunner(strapi);
+    await startStravaWebhookRunner(strapi);
   },
 
   async destroy({ strapi } /* : { strapi: Core.Strapi } */) {
+    await stopStravaWebhookRunner(strapi);
     await stopStravaSyncRunner(strapi);
   },
 };

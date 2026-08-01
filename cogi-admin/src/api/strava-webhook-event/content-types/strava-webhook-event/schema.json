@@ -1,0 +1,166 @@
+{
+  "kind": "collectionType",
+  "collectionName": "strava_webhook_events",
+  "info": {
+    "singularName": "strava-webhook-event",
+    "pluralName": "strava-webhook-events",
+    "displayName": "Strava Webhook Event",
+    "description": "Stores raw Strava webhook events for durable processing, retry, idempotency and audit."
+  },
+  "indexes": [
+    {
+      "name": "strava_webhook_events_idempotency_key_uq",
+      "columns": [
+        "idempotency_key"
+      ],
+      "type": "unique"
+    },
+    {
+      "name": "strava_webhook_events_claim_idx",
+      "columns": [
+        "status",
+        "next_attempt_at",
+        "created_at"
+      ]
+    },
+    {
+      "name": "strava_webhook_events_owner_event_idx",
+      "columns": [
+        "owner_id",
+        "event_time"
+      ]
+    },
+    {
+      "name": "strava_webhook_events_object_idx",
+      "columns": [
+        "object_type",
+        "object_id"
+      ]
+    },
+    {
+      "name": "strava_webhook_events_subscription_idx",
+      "columns": [
+        "subscription_id"
+      ]
+    },
+    {
+      "name": "strava_webhook_events_stale_processing_idx",
+      "columns": [
+        "status",
+        "claimed_at"
+      ]
+    }
+  ],
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "stravaWebhookEvents"
+    },
+    "connection": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::strava-connection.strava-connection",
+      "inversedBy": "webhookEvents"
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "subscriptionId": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "ownerId": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "objectType": {
+      "type": "enumeration",
+      "enum": [
+        "activity",
+        "athlete",
+        "unknown"
+      ],
+      "default": "unknown",
+      "required": true
+    },
+    "objectId": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "aspectType": {
+      "type": "enumeration",
+      "enum": [
+        "create",
+        "update",
+        "delete",
+        "unknown"
+      ],
+      "default": "unknown",
+      "required": true
+    },
+    "eventTime": {
+      "type": "string",
+      "maxLength": 32
+    },
+    "updates": {
+      "type": "json"
+    },
+    "rawPayload": {
+      "type": "json",
+      "required": true,
+      "private": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "processing",
+        "processed",
+        "ignored",
+        "failed",
+        "dead_letter"
+      ],
+      "default": "pending",
+      "required": true
+    },
+    "attempts": {
+      "type": "integer",
+      "default": 0,
+      "min": 0,
+      "required": true
+    },
+    "nextAttemptAt": {
+      "type": "datetime"
+    },
+    "claimedAt": {
+      "type": "datetime"
+    },
+    "claimedBy": {
+      "type": "string",
+      "maxLength": 200,
+      "private": true,
+      "searchable": false
+    },
+    "processedAt": {
+      "type": "datetime"
+    },
+    "lastError": {
+      "type": "text",
+      "private": true,
+      "searchable": false
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "maxLength": 255,
+      "required": true
+    }
+  }
+}

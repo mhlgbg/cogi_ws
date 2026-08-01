@@ -65,6 +65,96 @@ export default {
     },
     {
       method: 'GET',
+      path: '/platform/strava/dashboard/overview',
+      handler: 'platform.getStravaDashboardOverview',
+      config: {
+        auth: false,
+        middlewares: ['global::is-platform-admin'],
+      },
+    },
+    {
+      method: 'GET',
+      path: '/platform/strava/connections',
+      handler: 'platform.listStravaConnections',
+      config: {
+        auth: false,
+        middlewares: ['global::is-platform-admin'],
+      },
+    },
+    {
+      method: 'GET',
+      path: '/platform/strava/webhook-events',
+      handler: 'platform.listStravaWebhookEvents',
+      config: {
+        auth: false,
+        middlewares: ['global::is-platform-admin'],
+      },
+    },
+    {
+      method: 'GET',
+      path: '/platform/strava/webhook-events/:id',
+      handler: 'platform.getStravaWebhookEventDetail',
+      config: {
+        auth: false,
+        middlewares: ['global::is-platform-admin'],
+      },
+    },
+    {
+      method: 'GET',
+      path: '/platform/strava/sync-jobs',
+      handler: 'platform.listStravaSyncJobs',
+      config: {
+        auth: false,
+        middlewares: ['global::is-platform-admin'],
+      },
+    },
+    {
+      method: 'GET',
+      path: '/platform/strava/sync-jobs/:id',
+      handler: 'platform.getStravaSyncJobDetail',
+      config: {
+        auth: false,
+        middlewares: ['global::is-platform-admin'],
+      },
+    },
+    {
+      method: 'GET',
+      path: '/platform/strava/subscription',
+      handler: 'platform.getStravaSubscriptionOverview',
+      config: {
+        auth: false,
+        middlewares: ['global::is-platform-admin'],
+      },
+    },
+    {
+      method: 'GET',
+      path: '/platform/strava/diagnostics',
+      handler: 'platform.getStravaDiagnostics',
+      config: {
+        auth: false,
+        middlewares: ['global::is-platform-admin'],
+      },
+    },
+    {
+      method: 'POST',
+      path: '/platform/strava/subscription',
+      handler: 'platform.createStravaSubscription',
+      config: {
+        auth: false,
+        middlewares: ['global::is-platform-admin'],
+      },
+    },
+    {
+      method: 'DELETE',
+      path: '/platform/strava/subscription',
+      handler: 'platform.deleteStravaSubscription',
+      config: {
+        auth: false,
+        middlewares: ['global::is-platform-admin'],
+      },
+    },
+    {
+      method: 'GET',
       path: '/platform/settings/:key',
       handler: 'platform.getSettingByKey',
       config: {
