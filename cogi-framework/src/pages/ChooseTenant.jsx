@@ -251,6 +251,17 @@ export default function ChooseTenant() {
   }
 
   const displayUserName = resolvedUser?.username || resolvedUser?.email || auth?.user?.username || auth?.user?.email || 'bạn'
+  const canOpenPlatform = auth?.user?.isPlatformAdmin === true
+
+  function handleUseAnotherAccount() {
+    auth?.logout?.()
+    tenantContext?.clearTenant?.()
+    navigate(buildLoginPath('', redirectPath, false), { replace: true })
+  }
+
+  function handleOpenPlatform() {
+    navigate('/platform', { replace: true })
+  }
 
   return (
     <div
@@ -343,7 +354,56 @@ export default function ChooseTenant() {
         )}
 
         {!loading && !error && tenants.length === 0 && (
-          <p>Tài khoản của bạn chưa được cấp tenant nào</p>
+          <div
+            style={{
+              border: '1px solid #e1e4ea',
+              borderRadius: '10px',
+              padding: '16px',
+              background: '#f8fafc',
+            }}
+          >
+            <p style={{ marginTop: 0, marginBottom: '8px', fontWeight: 600 }}>
+              Tài khoản hiện tại chưa được cấp tenant nào
+            </p>
+            <p style={{ marginTop: 0, marginBottom: '16px', color: '#475467' }}>
+              Bạn đang đăng nhập với tài khoản <strong>{displayUserName}</strong>.
+              Nếu đây không phải tài khoản cần dùng, hãy đăng nhập lại bằng tài khoản khác.
+            </p>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <button
+                type='button'
+                onClick={handleUseAnotherAccount}
+                style={{
+                  border: '1px solid #0d6efd',
+                  background: '#0d6efd',
+                  color: '#fff',
+                  borderRadius: '8px',
+                  padding: '10px 14px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                Đăng nhập bằng tài khoản khác
+              </button>
+              {canOpenPlatform ? (
+                <button
+                  type='button'
+                  onClick={handleOpenPlatform}
+                  style={{
+                    border: '1px solid #cbd5e1',
+                    background: '#fff',
+                    color: '#0f172a',
+                    borderRadius: '8px',
+                    padding: '10px 14px',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                  }}
+                >
+                  Vào Platform Workspace
+                </button>
+              ) : null}
+            </div>
+          </div>
         )}
 
         {!loading && !error && tenants.length > 1 && (

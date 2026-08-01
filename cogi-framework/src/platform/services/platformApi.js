@@ -122,6 +122,224 @@ export async function getPlatformSettings() {
   }
 }
 
+export async function getPlatformStravaDashboardOverview() {
+  const response = await platformApi.get('/platform/strava/dashboard/overview')
+  return response?.data?.data || {
+    subscription: {
+      exists: false,
+      healthy: false,
+      callbackUrl: null,
+      warningCount: 0,
+    },
+    connections: {
+      total: 0,
+      active: 0,
+      disconnected: 0,
+      error: 0,
+    },
+    syncJobs: {
+      pending: 0,
+      running: 0,
+      completed: 0,
+      failed: 0,
+      cancelled: 0,
+    },
+    webhookEvents: {
+      pending: 0,
+      processing: 0,
+      processed: 0,
+      ignored: 0,
+      failed: 0,
+      deadLetter: 0,
+    },
+    system: {
+      webhookRunnerEnabled: false,
+      syncRunnerEnabled: false,
+      webhookHandlerEnabled: false,
+    },
+  }
+}
+
+export async function getPlatformStravaConnections(params = {}) {
+  const response = await platformApi.get('/platform/strava/connections', {
+    params: {
+      ...(params?.keyword ? { keyword: params.keyword } : {}),
+      ...(params?.status ? { status: params.status } : {}),
+      ...(params?.tenantId ? { tenantId: params.tenantId } : {}),
+      ...(params?.staleSync ? { staleSync: 1 } : {}),
+      ...(params?.page ? { page: params.page } : {}),
+      ...(params?.pageSize ? { pageSize: params.pageSize } : {}),
+      ...(params?.sort ? { sort: params.sort } : {}),
+    },
+  })
+
+  return {
+    data: Array.isArray(response?.data?.data) ? response.data.data : [],
+    meta: response?.data?.meta || {
+      pagination: {
+        page: 1,
+        pageSize: 20,
+        pageCount: 1,
+        total: 0,
+      },
+      filters: {
+        keyword: '',
+        status: null,
+        tenantId: null,
+        staleSync: false,
+      },
+      sort: {
+        field: 'connectedAt',
+        direction: 'desc',
+      },
+    },
+  }
+}
+
+export async function getPlatformStravaWebhookEvents(params = {}) {
+  const response = await platformApi.get('/platform/strava/webhook-events', {
+    params: {
+      ...(params?.keyword ? { keyword: params.keyword } : {}),
+      ...(params?.status ? { status: params.status } : {}),
+      ...(params?.objectType ? { objectType: params.objectType } : {}),
+      ...(params?.aspectType ? { aspectType: params.aspectType } : {}),
+      ...(params?.tenantId ? { tenantId: params.tenantId } : {}),
+      ...(params?.connectionId ? { connectionId: params.connectionId } : {}),
+      ...(params?.stale ? { stale: 1 } : {}),
+      ...(params?.dateFrom ? { dateFrom: params.dateFrom } : {}),
+      ...(params?.dateTo ? { dateTo: params.dateTo } : {}),
+      ...(params?.page ? { page: params.page } : {}),
+      ...(params?.pageSize ? { pageSize: params.pageSize } : {}),
+      ...(params?.sort ? { sort: params.sort } : {}),
+    },
+  })
+
+  return {
+    data: Array.isArray(response?.data?.data) ? response.data.data : [],
+    meta: response?.data?.meta || {
+      pagination: {
+        page: 1,
+        pageSize: 20,
+        pageCount: 1,
+        total: 0,
+      },
+      filters: {
+        keyword: '',
+        status: null,
+        objectType: null,
+        aspectType: null,
+        tenantId: null,
+        connectionId: null,
+        stale: false,
+        dateFrom: null,
+        dateTo: null,
+      },
+      sort: {
+        field: 'eventTime',
+        direction: 'desc',
+      },
+    },
+  }
+}
+
+export async function getPlatformStravaWebhookEventDetail(eventId) {
+  const response = await platformApi.get(`/platform/strava/webhook-events/${eventId}`)
+  return response?.data?.data || null
+}
+
+export async function getPlatformStravaSyncJobs(params = {}) {
+  const response = await platformApi.get('/platform/strava/sync-jobs', {
+    params: {
+      ...(params?.keyword ? { keyword: params.keyword } : {}),
+      ...(params?.status ? { status: params.status } : {}),
+      ...(params?.tenantId ? { tenantId: params.tenantId } : {}),
+      ...(params?.connectionId ? { connectionId: params.connectionId } : {}),
+      ...(params?.userId ? { userId: params.userId } : {}),
+      ...(params?.syncMode ? { syncMode: params.syncMode } : {}),
+      ...(params?.jobType ? { jobType: params.jobType } : {}),
+      ...(params?.stale ? { stale: 1 } : {}),
+      ...(params?.dateFrom ? { dateFrom: params.dateFrom } : {}),
+      ...(params?.dateTo ? { dateTo: params.dateTo } : {}),
+      ...(params?.page ? { page: params.page } : {}),
+      ...(params?.pageSize ? { pageSize: params.pageSize } : {}),
+      ...(params?.sort ? { sort: params.sort } : {}),
+    },
+  })
+
+  return {
+    data: Array.isArray(response?.data?.data) ? response.data.data : [],
+    meta: response?.data?.meta || {
+      pagination: {
+        page: 1,
+        pageSize: 20,
+        pageCount: 1,
+        total: 0,
+      },
+      filters: {
+        keyword: '',
+        status: null,
+        tenantId: null,
+        connectionId: null,
+        userId: null,
+        syncMode: null,
+        stale: false,
+        dateFrom: null,
+        dateTo: null,
+      },
+      sort: {
+        field: 'requestedAt',
+        direction: 'desc',
+      },
+    },
+  }
+}
+
+export async function getPlatformStravaSyncJobDetail(jobId) {
+  const response = await platformApi.get(`/platform/strava/sync-jobs/${jobId}`)
+  return response?.data?.data || null
+}
+
+export async function getPlatformStravaSubscriptionOverview() {
+  const response = await platformApi.get('/platform/strava/subscription')
+  return response?.data?.data || {
+    healthy: false,
+    subscriptionExists: false,
+    subscriptionCount: 0,
+    subscription: null,
+    callbackMatches: false,
+    verifyTokenConfigured: false,
+    clientConfigured: false,
+    warnings: [],
+    system: {
+      webhookRunnerEnabled: false,
+      webhookHandlerEnabled: false,
+      webhookCheckOnBoot: false,
+      callbackUrlConfigured: false,
+    },
+  }
+}
+
+export async function getPlatformStravaDiagnostics(params = {}) {
+  const response = await platformApi.get('/platform/strava/diagnostics', {
+    params: {
+      ...(params?.window ? { window: params.window } : {}),
+      ...(params?.tenantId ? { tenantId: params.tenantId } : {}),
+    },
+  })
+
+  return response?.data?.data || null
+}
+
+export async function createPlatformStravaSubscription() {
+  const response = await platformApi.post('/platform/strava/subscription')
+  return response?.data?.data || null
+}
+
+export async function deletePlatformStravaSubscription() {
+  const response = await platformApi.delete('/platform/strava/subscription')
+  return response?.data?.data || null
+}
+
 export async function updatePlatformSetting(key, payload) {
   const response = await platformApi.put(`/platform/settings/${encodeURIComponent(key)}`, payload)
   return response?.data?.data || null

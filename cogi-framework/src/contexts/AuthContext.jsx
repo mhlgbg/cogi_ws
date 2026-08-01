@@ -6,7 +6,11 @@ const TENANT_STORAGE_KEYS = [
   'tenantName',
   'tenantShortName',
   'tenantLogoUrl',
+  'tenantFaviconUrl',
+  'tenantChatAvatarUrl',
   'tenantLogo',
+  'tenantSiteTitle',
+  'tenantTitleSuffix',
   'tenantId',
   'userTenantId',
   'tenantRoles',
@@ -47,6 +51,7 @@ export default function AuthContextProvider({ children }) {
   const login = (jwt, user) => {
     if (!jwt || !user) return
 
+    TENANT_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key))
     localStorage.setItem('authJwt', jwt)
     localStorage.setItem('authUser', JSON.stringify(user))
     setAuthState({ token: jwt, user })

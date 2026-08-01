@@ -6,6 +6,9 @@ import TenantManager from '../pages/TenantManager.jsx'
 import PlatformFeatureManager from '../pages/PlatformFeatureManager.jsx'
 import PlatformSettingsPage from '../pages/PlatformSettingsPage.jsx'
 import PermissionDebugger from '../pages/PermissionDebugger.jsx'
+import StravaOperationsPage from '../pages/StravaOperationsPage.jsx'
+import StravaWebhookEventDetailPage from '../pages/StravaWebhookEventDetailPage.jsx'
+import StravaSyncJobDetailPage from '../pages/StravaSyncJobDetailPage.jsx'
 
 export const platformNavGroups = [
   {
@@ -37,10 +40,17 @@ export const platformNavGroups = [
       },
       {
         type: 'item',
+        name: 'Strava Operations',
+        key: 'platform.integrations.strava',
+        path: '/platform/integrations/strava',
+        order: 4,
+      },
+      {
+        type: 'item',
         name: 'Permission Debugger',
         key: 'platform.permission-debug',
         path: '/platform/permission-debug',
-        order: 4,
+        order: 5,
       },
     ],
   },
@@ -72,6 +82,18 @@ const platformRoutes = [
   {
     path: 'settings',
     element: createElement(PlatformSettingsPage),
+  },
+  {
+    path: 'integrations/strava',
+    element: createElement(StravaOperationsPage),
+  },
+  {
+    path: 'integrations/strava/webhook-events/:id',
+    element: createElement(StravaWebhookEventDetailPage),
+  },
+  {
+    path: 'integrations/strava/sync-jobs/:id',
+    element: createElement(StravaSyncJobDetailPage),
   },
   {
     path: 'permission-debug',

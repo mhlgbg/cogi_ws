@@ -49,6 +49,12 @@ function resolveApiOrigin() {
   return 'http://localhost:1339'
 }
 
+function isLocalhostBrowser() {
+  if (typeof window === 'undefined') return false
+  const hostname = String(window.location.hostname || '').trim().toLowerCase()
+  return hostname === 'localhost' || hostname === '127.0.0.1'
+}
+
 function toAbsoluteUrl(url) {
   return resolveMediaUrl(url)
 }
@@ -289,6 +295,14 @@ export default function TenantContextProvider({ children }) {
 
     try {
       const requestedTenantCode = String(options?.tenantCode || '').trim()
+      const knownTenantCode = String(requestedTenantCode || currentTenant?.tenantCode || resolvedTenant?.tenantCode || '').trim()
+
+      if (!knownTenantCode && isLocalhostBrowser()) {
+        setResolvedTenant((previous) => previous || currentTenant || null)
+        setIsMainDomain(isBrowserOnMainDomain())
+        return null
+      }
+
       const requestConfig = requestedTenantCode
         ? {
           headers: {

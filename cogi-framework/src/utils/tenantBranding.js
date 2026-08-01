@@ -1,6 +1,25 @@
 import api from '../api/axios'
 import { resolveMediaUrl } from './mediaUrl'
 
+function isLocalhostBrowser() {
+  if (typeof window === 'undefined') return false
+  const hostname = String(window.location.hostname || '').trim().toLowerCase()
+  return hostname === 'localhost' || hostname === '127.0.0.1'
+}
+
+function readTenantCodeFromPath() {
+  if (typeof window === 'undefined') return ''
+
+  const pathname = String(window.location.pathname || '').trim()
+  const match = pathname.match(/^\/t\/([^/]+)/i)
+  return match?.[1] ? decodeURIComponent(match[1]).trim() : ''
+}
+
+function readKnownTenantCode() {
+  if (typeof window === 'undefined') return ''
+  return String(localStorage.getItem('tenantCode') || '').trim() || readTenantCodeFromPath()
+}
+
 function toAbsoluteUrl(url) {
   return resolveMediaUrl(url)
 }
@@ -201,6 +220,20 @@ export async function applyTenantFavicon(tenant, options = {}) {
 }
 
 export async function fetchTenantBranding() {
+  if (!readKnownTenantCode() && isLocalhostBrowser()) {
+    return {
+      displayName: '',
+      domain: '',
+      logo: '',
+      logoUrl: '',
+      favicon: '',
+      faviconUrl: '',
+      siteTitle: '',
+      defaultPageTitle: '',
+      titleSuffix: '',
+    }
+  }
+
   const response = await api.get('/tenant/me')
   const payload = response?.data || {}
 
