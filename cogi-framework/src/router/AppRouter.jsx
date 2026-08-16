@@ -41,6 +41,13 @@ import CategoryArchiveTreePage from '../pages/journal/CategoryArchiveTreePage'
 import JournalIssueCategoryPage from '../pages/journal/JournalIssueCategoryPage'
 import JournalIssueArchiveTreePage from '../pages/journal/JournalIssueArchiveTreePage'
 import JournalIssueDetailPage from '../pages/journal/JournalIssueDetailPage'
+import AssessmentPublicLayout from '../features/public-assessment/components/AssessmentPublicLayout'
+import AssessmentRegistrationPage from '../features/public-assessment/pages/AssessmentRegistrationPage'
+import AssessmentResultPlaceholderPage from '../features/public-assessment/pages/AssessmentResultPlaceholderPage'
+import AssessmentSoundCheckPage from '../features/public-assessment/pages/AssessmentSoundCheckPage'
+import AssessmentTestRunnerPage from '../features/public-assessment/pages/AssessmentTestRunnerPage'
+import AssessmentVerifyPage from '../features/public-assessment/pages/AssessmentVerifyPage'
+import AssessmentWelcomePage from '../features/public-assessment/pages/AssessmentWelcomePage'
 import platformRoutes, { PlatformAccessGuard } from '../platform/routes/platformRoutes'
 import { allModuleRoutes } from '../modules'
 import PublicAnalyticsBoundary from './PublicAnalyticsBoundary'
@@ -206,6 +213,22 @@ export default function AppRouter() {
           <Route path="journal-archive/:slug" element={<JournalIssueArchiveTreePage />} />
           <Route path="journal-issue/:slug" element={<JournalIssueDetailPage />} />
           <Route path="archive/:slug" element={<CategoryArchiveTreePage />} />
+        </Route>
+
+        <Route
+          path="/t/:tenantCode/campaign/:campaignCode"
+          element={(
+            <TenantRoute requireAuth={false}>
+              <AssessmentPublicLayout />
+            </TenantRoute>
+          )}
+        >
+          <Route index element={<AssessmentWelcomePage />} />
+          <Route path="register" element={<AssessmentRegistrationPage />} />
+          <Route path="verify" element={<AssessmentVerifyPage />} />
+          <Route path="sound-check" element={<AssessmentSoundCheckPage />} />
+          <Route path="test" element={<AssessmentTestRunnerPage />} />
+          <Route path="result" element={<AssessmentResultPlaceholderPage />} />
         </Route>
       </Route>
 

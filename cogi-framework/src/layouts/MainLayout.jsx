@@ -11,6 +11,78 @@ import { platformNavGroups } from '../platform/routes/platformRoutes'
 import { resolveTenantRouteTitle, setTenantPageTitle } from '../utils/tenantPageTitle'
 import './main-layout.css'
 
+function injectExamConfigurationNav(navGroups = [], hasFeature) {
+  if (typeof hasFeature !== 'function') return navGroups
+  if (!hasFeature('exam-round.manage') && !hasFeature('exam-round.approve')) return navGroups
+
+  const groups = Array.isArray(navGroups) ? navGroups.map((group) => ({ ...group, items: Array.isArray(group?.items) ? [...group.items] : [] })) : []
+  const targetGroupIndex = groups.findIndex((group) => String(group?.code || '').trim().toLowerCase() === 'exam' || String(group?.name || '').trim().toLowerCase() === 'exam')
+  const item = {
+    type: 'item',
+    name: 'Cấu hình thi',
+    key: 'exam-round.manage:config-shell',
+    path: '/exam-configurations',
+    order: 0,
+    description: 'Khung cấu hình thi chuẩn đầu ra',
+  }
+
+  if (targetGroupIndex >= 0) {
+    const existingItems = groups[targetGroupIndex].items || []
+    const exists = existingItems.some((entry) => entry?.path === item.path)
+    if (!exists) {
+      groups[targetGroupIndex].items = [item, ...existingItems]
+    }
+    return groups
+  }
+
+  return [
+    ...groups,
+    {
+      type: 'group',
+      name: 'Quản lý thi chuẩn đầu ra',
+      code: 'exam-configurations',
+      icon: 'cilEducation',
+      order: 21,
+      items: [item],
+    },
+  ]
+}
+
+function injectSportsSelfNav(navGroups = [], options = {}) {
+  const groups = Array.isArray(navGroups) ? navGroups.map((group) => ({ ...group, items: Array.isArray(group?.items) ? [...group.items] : [] })) : []
+  const item = {
+    type: 'item',
+    name: 'Hồ sơ thể thao của tôi',
+    key: 'sports:me-self-service',
+    path: '/sports/me',
+    order: -1,
+    description: 'Khu vực self-service để xem hồ sơ thể thao, CLB và thành tích của chính bạn.',
+  }
+
+  if (!options?.isAuthenticated || !options?.tenantCode) return groups
+
+  const targetGroupIndex = groups.findIndex((group) => String(group?.code || '').trim().toLowerCase() === 'sports')
+  if (targetGroupIndex >= 0) {
+    const items = groups[targetGroupIndex].items || []
+    if (!items.some((entry) => entry?.path === item.path)) {
+      groups[targetGroupIndex].items = [item, ...items]
+    }
+    return groups
+  }
+
+  return [
+    ...groups,
+    {
+      type: 'group',
+      name: 'COGI Sports',
+      code: 'sports',
+      icon: 'cilChartLine',
+      order: 22,
+      items: [item],
+    },
+  ]
+}
+
 export default function MainLayout() {
   const auth = useAuth()
   const feature = useFeature()
@@ -31,7 +103,10 @@ export default function MainLayout() {
 
   const navItems = useMemo(
     () => {
-      const tenantNavItems = buildNav(feature?.featureGroups || [])
+      const tenantNavItems = injectSportsSelfNav(
+        injectExamConfigurationNav(buildNav(feature?.featureGroups || []), feature?.hasFeature),
+        { isAuthenticated: auth?.isAuthenticated, tenantCode: tenant?.currentTenant?.tenantCode },
+      )
       if (auth?.user?.isPlatformAdmin !== true) {
         return tenantNavItems
       }
@@ -40,7 +115,7 @@ export default function MainLayout() {
         ? [...platformNavGroups, ...tenantNavItems]
         : [...tenantNavItems, ...platformNavGroups]
     },
-    [auth?.user?.isPlatformAdmin, feature?.featureGroups, isPlatformWorkspaceRoute],
+    [auth?.isAuthenticated, auth?.user?.isPlatformAdmin, feature?.featureGroups, isPlatformWorkspaceRoute, tenant?.currentTenant?.tenantCode],
   )
 
   useEffect(() => {

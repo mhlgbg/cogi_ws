@@ -39,11 +39,11 @@ const contentManagementFeatures = {
       showInMenu: true,
     },
     {
-      name: 'Quan ly tenant setting',
+      name: 'Cấu hình tenant',
       key: 'tenant-setting.manage',
       order: 5,
-      description: 'Tenant quan ly website setting va SEO cua minh',
-      path: '/tenant/settings/website',
+      description: 'Quản lý các cấu hình dùng chung của tenant hiện tại',
+      path: '/tenant/settings',
       showInMenu: true,
     },
     {

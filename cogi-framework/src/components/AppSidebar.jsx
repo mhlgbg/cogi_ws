@@ -100,7 +100,7 @@ export default function AppSidebar({
 
               <div className="tenant-sidebar-item-list">
                 {group.items.map((item) => (
-                  <SidebarItem key={item.key} item={item} onNavigate={handleNavigate} />
+                  <SidebarItem key={item.path || `${group.code || group.name}:${item.key}`} item={item} onNavigate={handleNavigate} />
                 ))}
               </div>
             </div>

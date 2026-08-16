@@ -62,6 +62,18 @@ function slugifyVietnamese(value) {
     .replace(/-+$/g, '')
 }
 
+function sanitizeSlugInput(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, (char) => (char === 'Đ' ? 'D' : 'd'))
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]+/g, '')
+    .replace(/-{2,}/g, '-')
+    .slice(0, 160)
+}
+
 export default function PublicPageFormModal({
   visible,
   initialValues,
@@ -108,7 +120,7 @@ export default function PublicPageFormModal({
 
   function handleSlugChange(nextValue) {
     setIsSlugManuallyEdited(true)
-    updateField('slug', slugifyVietnamese(nextValue))
+    updateField('slug', sanitizeSlugInput(nextValue))
   }
 
   function handleSubmit(event) {

@@ -51,7 +51,7 @@ function readTenantCodeFromPath() {
 }
 
 function readStoredTenantCode() {
-	return String(localStorage.getItem('tenantCode') || '').trim() || readTenantCodeFromPath()
+	return readTenantCodeFromPath() || String(localStorage.getItem('tenantCode') || '').trim()
 }
 
 function shouldSkipContextHeaders(url) {

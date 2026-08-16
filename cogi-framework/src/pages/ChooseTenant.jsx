@@ -151,6 +151,7 @@ export default function ChooseTenant() {
     return tenantContext?.resolveProtectedRoutePath?.({
       tenantCode: selectedTenant?.tenantCode,
       isMainDomain: tenantContext?.isMainDomain,
+      forceTenantPath: true,
     }) || resolveTenantLandingPath(selectedTenant)
   }
 

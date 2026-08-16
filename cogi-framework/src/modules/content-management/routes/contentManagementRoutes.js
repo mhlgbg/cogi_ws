@@ -4,7 +4,11 @@ import AuthorManagementPage from '../pages/AuthorManagementPage'
 import JournalCategoryManagementPage from '../pages/JournalCategoryManagementPage'
 import JournalIssueManagementPage from '../pages/JournalIssueManagementPage'
 import PublicPageManagementPage from '../pages/PublicPageManagementPage'
+import TenantPaymentProfileCreatePage from '../pages/TenantPaymentProfileCreatePage'
+import TenantPaymentProfileDetailPage from '../pages/TenantPaymentProfileDetailPage'
 import TenantConfigManagementPage from '../pages/TenantConfigManagementPage'
+import TenantPaymentProfilesPage from '../pages/TenantPaymentProfilesPage'
+import TenantSettingsPage from '../pages/TenantSettingsPage'
 import TenantWebsiteSettingsPage from '../pages/TenantWebsiteSettingsPage'
 
 const contentManagementRoutes = [
@@ -33,10 +37,34 @@ const contentManagementRoutes = [
     component: TenantConfigManagementPage,
   },
   {
+    path: '/tenant/settings',
+    title: 'Cấu hình tenant',
+    featureKey: 'tenant-setting.manage',
+    component: TenantSettingsPage,
+  },
+  {
     path: '/tenant/settings/website',
-    title: 'Tenant settings',
+    title: 'Cấu hình tenant / Website',
     featureKey: 'tenant-setting.manage',
     component: TenantWebsiteSettingsPage,
+  },
+  {
+    path: '/tenant/settings/payment-profiles',
+    title: 'Cấu hình tenant / Hồ sơ thanh toán',
+    featureKey: 'tenant-setting.manage',
+    component: TenantPaymentProfilesPage,
+  },
+  {
+    path: '/tenant/settings/payment-profiles/new',
+    title: 'Cấu hình tenant / Hồ sơ thanh toán / Thêm mới',
+    featureKey: 'tenant-setting.manage',
+    component: TenantPaymentProfileCreatePage,
+  },
+  {
+    path: '/tenant/settings/payment-profiles/:id',
+    title: 'Cấu hình tenant / Hồ sơ thanh toán / Chi tiết',
+    featureKey: 'tenant-setting.manage',
+    component: TenantPaymentProfileDetailPage,
   },
   {
     path: '/journal-categories',

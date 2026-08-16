@@ -106,6 +106,7 @@ export default function Login() {
         : tenant?.resolveProtectedRoutePath?.({
           tenantCode: resolvedTenantCode,
           isMainDomain: tenant?.isMainDomain,
+          forceTenantPath: true,
         }) || '/dashboard'
 
       return <Navigate to={authenticatedTarget} replace />
