@@ -1,0 +1,97 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_components",
+  "info": {
+    "singularName": "exam-component",
+    "pluralName": "exam-components",
+    "displayName": "Exam Component",
+    "description": "Tenant-scoped skill or exam part catalog."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true,
+      "maxLength": 100,
+      "index": true
+    },
+    "name": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200
+    },
+    "componentType": {
+      "type": "enumeration",
+      "enum": [
+        "skill",
+        "part"
+      ],
+      "required": true,
+      "default": "skill"
+    },
+    "minimumScore": {
+      "type": "decimal",
+      "required": true,
+      "default": 0
+    },
+    "maximumScore": {
+      "type": "decimal",
+      "required": true
+    },
+    "passingScore": {
+      "type": "decimal"
+    },
+    "eliminationScore": {
+      "type": "decimal"
+    },
+    "defaultDurationMinutes": {
+      "type": "integer",
+      "min": 0
+    },
+    "examMethod": {
+      "type": "enumeration",
+      "enum": [
+        "computer",
+        "paper",
+        "oral",
+        "practical",
+        "mixed",
+        "other"
+      ],
+      "default": "other"
+    },
+    "displayOrder": {
+      "type": "integer",
+      "default": 0
+    },
+    "isActive": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "subjectComponents": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-subject-component.exam-subject-component",
+      "mappedBy": "examComponent"
+    },
+    "examRoundComponents": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-round-component.exam-round-component",
+      "mappedBy": "examComponent"
+    }
+  }
+}

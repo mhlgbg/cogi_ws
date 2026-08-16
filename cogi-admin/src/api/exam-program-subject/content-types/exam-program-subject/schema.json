@@ -1,0 +1,54 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_program_subjects",
+  "info": {
+    "singularName": "exam-program-subject",
+    "pluralName": "exam-program-subjects",
+    "displayName": "Exam Program Subject",
+    "description": "Tenant-scoped subject membership for an exam program."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "examProgram": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-program.exam-program",
+      "inversedBy": "programSubjects",
+      "required": true
+    },
+    "examSubject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-subject.exam-subject",
+      "inversedBy": "programSubjects",
+      "required": true
+    },
+    "displayOrder": {
+      "type": "integer",
+      "default": 0
+    },
+    "isRequired": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
+    "feeOverride": {
+      "type": "decimal"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "examRoundSubjects": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-round-subject.exam-round-subject",
+      "mappedBy": "sourceProgramSubject"
+    }
+  }
+}

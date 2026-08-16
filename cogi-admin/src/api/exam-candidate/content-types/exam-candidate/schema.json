@@ -1,0 +1,134 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_candidates",
+  "info": {
+    "singularName": "exam-candidate",
+    "pluralName": "exam-candidates",
+    "displayName": "Exam Candidate",
+    "description": "Tenant-scoped scheduled candidates in an exam candidate list."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "examCandidateList": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-candidate-list.exam-candidate-list",
+      "inversedBy": "examCandidates",
+      "required": true
+    },
+    "examRegistration": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-registration.exam-registration",
+      "inversedBy": "examCandidates",
+      "required": true
+    },
+    "examRegistrationSubject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-registration-subject.exam-registration-subject",
+      "inversedBy": "examCandidates",
+      "required": true
+    },
+    "examRegistrationComponent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-registration-component.exam-registration-component",
+      "inversedBy": "examCandidates",
+      "required": true
+    },
+    "learner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::learner.learner",
+      "required": true
+    },
+    "candidateNumber": {
+      "type": "string",
+      "maxLength": 100,
+      "index": true
+    },
+    "sequenceNumber": {
+      "type": "integer",
+      "min": 1,
+      "index": true
+    },
+    "seatNumber": {
+      "type": "string",
+      "maxLength": 100,
+      "index": true
+    },
+    "examAccount": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "externalCandidateId": {
+      "type": "string",
+      "maxLength": 100,
+      "index": true
+    },
+    "synchronizationStatus": {
+      "type": "enumeration",
+      "enum": [
+        "not_required",
+        "pending",
+        "synced",
+        "failed",
+        "resync_required",
+        "cancelled"
+      ],
+      "required": true,
+      "default": "not_required"
+    },
+    "attendanceStatus": {
+      "type": "enumeration",
+      "enum": [
+        "not_checked_in",
+        "present",
+        "late",
+        "absent_excused",
+        "absent_unexcused",
+        "suspended",
+        "technical_issue",
+        "rescheduled",
+        "completed"
+      ],
+      "required": true,
+      "default": "not_checked_in"
+    },
+    "candidateStatus": {
+      "type": "enumeration",
+      "enum": [
+        "scheduled",
+        "present",
+        "late",
+        "absent",
+        "suspended",
+        "technical_issue",
+        "rescheduled",
+        "completed",
+        "cancelled"
+      ],
+      "required": true,
+      "default": "scheduled"
+    },
+    "note": {
+      "type": "text"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "componentResults": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-component-result.exam-component-result",
+      "mappedBy": "examCandidate"
+    }
+  }
+}

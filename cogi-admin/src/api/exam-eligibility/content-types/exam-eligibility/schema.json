@@ -1,0 +1,71 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_eligibilities",
+  "info": {
+    "singularName": "exam-eligibility",
+    "pluralName": "exam-eligibilities",
+    "displayName": "Exam Eligibility",
+    "description": "Tenant-scoped learner eligibility records for an exam round."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "examRound": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-round.exam-round",
+      "inversedBy": "eligibilities",
+      "required": true
+    },
+    "learner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::learner.learner",
+      "required": true
+    },
+    "source": {
+      "type": "enumeration",
+      "enum": [
+        "synchronized",
+        "imported",
+        "manual",
+        "rule_based"
+      ],
+      "required": true,
+      "default": "manual"
+    },
+    "eligibilityStatus": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "eligible",
+        "temporarily_ineligible",
+        "ineligible"
+      ],
+      "required": true,
+      "default": "pending"
+    },
+    "reason": {
+      "type": "text"
+    },
+    "note": {
+      "type": "text"
+    },
+    "reviewedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "reviewedAt": {
+      "type": "datetime"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_subject_results",
+  "info": {
+    "singularName": "exam-subject-result",
+    "pluralName": "exam-subject-results",
+    "displayName": "Exam Subject Result",
+    "description": "Tenant-scoped subject-level result aggregation for learners."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "learner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::learner.learner",
+      "required": true
+    },
+    "examRound": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-round.exam-round",
+      "inversedBy": "subjectResults"
+    },
+    "examRoundSubject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-round-subject.exam-round-subject",
+      "inversedBy": "subjectResults",
+      "required": true
+    },
+    "examRegistrationSubject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-registration-subject.exam-registration-subject",
+      "inversedBy": "subjectResults"
+    },
+    "totalScore": {
+      "type": "decimal"
+    },
+    "averageScore": {
+      "type": "decimal"
+    },
+    "resultStatus": {
+      "type": "enumeration",
+      "enum": [
+        "not_evaluated",
+        "insufficient_data",
+        "passed",
+        "failed",
+        "cancelled"
+      ],
+      "required": true,
+      "default": "not_evaluated"
+    },
+    "calculationRuleSnapshot": {
+      "type": "json",
+      "default": {}
+    },
+    "calculatedAt": {
+      "type": "datetime"
+    },
+    "approvalStatus": {
+      "type": "enumeration",
+      "enum": [
+        "pending_review",
+        "approved",
+        "rejected"
+      ],
+      "required": true,
+      "default": "pending_review"
+    },
+    "approvedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "approvedAt": {
+      "type": "datetime"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "subjectResultComponents": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-subject-result-component.exam-subject-result-component",
+      "mappedBy": "examSubjectResult"
+    },
+    "programResultLinks": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-program-result-subject.exam-program-result-subject",
+      "mappedBy": "examSubjectResult"
+    }
+  }
+}

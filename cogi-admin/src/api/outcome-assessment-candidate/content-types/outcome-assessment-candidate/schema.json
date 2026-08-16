@@ -1,0 +1,128 @@
+{
+  "kind": "collectionType",
+  "collectionName": "outcome_assessment_candidates",
+  "info": {
+    "singularName": "outcome-assessment-candidate",
+    "pluralName": "outcome-assessment-candidates",
+    "displayName": "Outcome Assessment Candidate",
+    "description": "Tenant-scoped learner assessment dossiers for outcome recognition."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "outcomeAssessmentRound": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::outcome-assessment-round.outcome-assessment-round",
+      "inversedBy": "assessmentCandidates",
+      "required": true
+    },
+    "learner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::learner.learner",
+      "required": true
+    },
+    "examProgramResult": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-program-result.exam-program-result",
+      "inversedBy": "outcomeAssessmentCandidates"
+    },
+    "recognitionSource": {
+      "type": "enumeration",
+      "enum": [
+        "exam",
+        "preserved_result",
+        "certificate",
+        "exemption",
+        "equivalent_result"
+      ],
+      "required": true,
+      "default": "exam"
+    },
+    "automatedResultStatus": {
+      "type": "enumeration",
+      "enum": [
+        "not_evaluated",
+        "insufficient_data",
+        "eligible",
+        "ineligible",
+        "pending_verification"
+      ],
+      "required": true,
+      "default": "not_evaluated"
+    },
+    "reviewStatus": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "verified",
+        "need_supplement",
+        "rejected"
+      ],
+      "required": true,
+      "default": "pending"
+    },
+    "approvalStatus": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected"
+      ],
+      "required": true,
+      "default": "pending"
+    },
+    "recognitionStatus": {
+      "type": "enumeration",
+      "enum": [
+        "not_recognized",
+        "recognized",
+        "revoked"
+      ],
+      "required": true,
+      "default": "not_recognized"
+    },
+    "reason": {
+      "type": "text"
+    },
+    "recognizedAt": {
+      "type": "datetime"
+    },
+    "decisionNumber": {
+      "type": "string",
+      "maxLength": 100,
+      "index": true
+    },
+    "decisionDate": {
+      "type": "date"
+    },
+    "synchronizationStatus": {
+      "type": "enumeration",
+      "enum": [
+        "not_synced",
+        "pending",
+        "synced",
+        "failed",
+        "resync_required"
+      ],
+      "required": true,
+      "default": "not_synced"
+    },
+    "synchronizedAt": {
+      "type": "datetime"
+    },
+    "note": {
+      "type": "text"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "kind": "collectionType",
+  "collectionName": "club_memberships",
+  "info": {
+    "singularName": "club-membership",
+    "pluralName": "club-memberships",
+    "displayName": "Club Membership",
+    "description": "Tenant-scoped current membership relation between one sports profile and one sports club."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "clubMemberships",
+      "required": true
+    },
+    "sportsProfile": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::sports-profile.sports-profile",
+      "required": true
+    },
+    "club": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::sports-club.sports-club",
+      "required": true
+    },
+    "memberCode": {
+      "type": "string",
+      "maxLength": 100,
+      "index": true
+    },
+    "oldMemberCode": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "active",
+        "inactive",
+        "left",
+        "suspended",
+        "rejected"
+      ],
+      "required": true,
+      "default": "active",
+      "index": true
+    },
+    "role": {
+      "type": "enumeration",
+      "enum": [
+        "member",
+        "manager",
+        "admin",
+        "owner"
+      ],
+      "required": true,
+      "default": "member",
+      "index": true
+    },
+    "positionTitle": {
+      "type": "string",
+      "maxLength": 150
+    },
+    "joinedAt": {
+      "type": "date"
+    },
+    "leftAt": {
+      "type": "date"
+    },
+    "source": {
+      "type": "enumeration",
+      "enum": [
+        "manual_import",
+        "self_registration",
+        "campaign",
+        "invite",
+        "admin_created",
+        "other"
+      ]
+    },
+    "sourceReference": {
+      "type": "string",
+      "maxLength": 255
+    },
+    "joinMessage": {
+      "type": "text"
+    },
+    "note": {
+      "type": "text"
+    },
+    "approvedAt": {
+      "type": "datetime"
+    },
+    "approvedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}

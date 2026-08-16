@@ -1,0 +1,151 @@
+{
+  "kind": "collectionType",
+  "collectionName": "sports_achievements",
+  "info": {
+    "singularName": "sports-achievement",
+    "pluralName": "sports-achievements",
+    "displayName": "Sports Achievement",
+    "description": "Tenant-scoped recognized sports achievements that have already been verified or officially recorded."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "sportsAchievements",
+      "required": true
+    },
+    "sportsProfile": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::sports-profile.sports-profile",
+      "required": true
+    },
+    "club": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::sports-club.sports-club"
+    },
+    "achievementType": {
+      "type": "enumeration",
+      "enum": [
+        "personal_best",
+        "race_result",
+        "champion",
+        "podium",
+        "finisher",
+        "distance_milestone",
+        "streak",
+        "club_award",
+        "system_award",
+        "other"
+      ],
+      "required": true,
+      "default": "other",
+      "index": true
+    },
+    "sportType": {
+      "type": "enumeration",
+      "enum": [
+        "running",
+        "cycling",
+        "badminton",
+        "football",
+        "swimming",
+        "multisport",
+        "other"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200,
+      "index": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "achievedAt": {
+      "type": "datetime",
+      "index": true
+    },
+    "resultValue": {
+      "type": "decimal"
+    },
+    "resultUnit": {
+      "type": "string",
+      "maxLength": 50
+    },
+    "resultText": {
+      "type": "string",
+      "maxLength": 255
+    },
+    "source": {
+      "type": "enumeration",
+      "enum": [
+        "club",
+        "event",
+        "manual",
+        "system",
+        "strava",
+        "import",
+        "other"
+      ],
+      "required": true,
+      "default": "manual",
+      "index": true
+    },
+    "sourceReference": {
+      "type": "string",
+      "maxLength": 255
+    },
+    "evidence": {
+      "type": "media",
+      "multiple": true,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "note": {
+      "type": "text"
+    },
+    "verifiedAt": {
+      "type": "datetime",
+      "index": true
+    },
+    "verifiedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "revokedAt": {
+      "type": "datetime",
+      "index": true
+    },
+    "revokedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "revokeReason": {
+      "type": "text"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "revoked"
+      ],
+      "required": true,
+      "default": "active",
+      "index": true
+    }
+  }
+}

@@ -1,0 +1,40 @@
+const CLUB_MANAGEMENT_POLICY = {
+	name: 'global::has-tenant-permission',
+	config: {
+		key: 'sports-club.management',
+	},
+};
+
+export default {
+	routes: [
+		{ method: 'GET', path: '/sports/my-managed-clubs', handler: 'sports-club-management.listMyManagedClubs', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'GET', path: '/sports/my-managed-clubs/:clubId', handler: 'sports-club-management.getMyManagedClubDetail', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'GET', path: '/sports/my-managed-clubs/:clubId/profile-options', handler: 'sports-club-management.listProfileOptions', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'POST', path: '/sports/my-managed-clubs/:clubId/profiles', handler: 'sports-club-management.createProfile', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'GET', path: '/sports/my-managed-clubs/:clubId/members', handler: 'sports-club-management.listMembers', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'POST', path: '/sports/my-managed-clubs/:clubId/members', handler: 'sports-club-management.createMember', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'GET', path: '/sports/my-managed-clubs/:clubId/members/:membershipId', handler: 'sports-club-management.getMemberDetail', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'PUT', path: '/sports/my-managed-clubs/:clubId/members/:membershipId', handler: 'sports-club-management.updateMember', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'POST', path: '/sports/my-managed-clubs/:clubId/members/:membershipId/activate', handler: 'sports-club-management.activateMember', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'POST', path: '/sports/my-managed-clubs/:clubId/members/:membershipId/deactivate', handler: 'sports-club-management.deactivateMember', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'POST', path: '/sports/my-managed-clubs/:clubId/members/:membershipId/leave', handler: 'sports-club-management.leaveMember', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'GET', path: '/sports/my-managed-clubs/:clubId/members/:membershipId/history', handler: 'sports-club-management.listMemberHistory', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'POST', path: '/sports/my-managed-clubs/:clubId/members/:membershipId/history', handler: 'sports-club-management.createMemberHistory', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'PUT', path: '/sports/my-managed-clubs/:clubId/members/:membershipId/history/:historyId', handler: 'sports-club-management.updateMemberHistory', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'DELETE', path: '/sports/my-managed-clubs/:clubId/members/:membershipId/history/:historyId', handler: 'sports-club-management.deleteMemberHistory', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'POST', path: '/sports/my-managed-clubs/:clubId/members/:membershipId/reactivate', handler: 'sports-club-management.reactivateMember', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'POST', path: '/sports/my-managed-clubs/:clubId/members/:membershipId/rejoin', handler: 'sports-club-management.rejoinMember', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'GET', path: '/sports/my-managed-clubs/:clubId/achievement-profile-options', handler: 'sports-club-management.listAchievementProfileOptions', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'GET', path: '/sports/my-managed-clubs/:clubId/achievement-submissions', handler: 'sports-club-management.listAchievementSubmissions', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'GET', path: '/sports/my-managed-clubs/:clubId/achievement-submissions/:id', handler: 'sports-club-management.getAchievementSubmissionDetail', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'POST', path: '/sports/my-managed-clubs/:clubId/achievement-submissions', handler: 'sports-club-management.createAchievementSubmission', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'PUT', path: '/sports/my-managed-clubs/:clubId/achievement-submissions/:id', handler: 'sports-club-management.updateAchievementSubmission', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'POST', path: '/sports/my-managed-clubs/:clubId/achievement-submissions/:id/submit', handler: 'sports-club-management.submitAchievementSubmission', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'POST', path: '/sports/my-managed-clubs/:clubId/achievement-submissions/:id/verify', handler: 'sports-club-management.verifyAchievementSubmission', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'POST', path: '/sports/my-managed-clubs/:clubId/achievement-submissions/:id/reject', handler: 'sports-club-management.rejectAchievementSubmission', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'GET', path: '/sports/my-managed-clubs/:clubId/achievements', handler: 'sports-club-management.listAchievements', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'GET', path: '/sports/my-managed-clubs/:clubId/achievements/:id', handler: 'sports-club-management.getAchievementDetail', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'POST', path: '/sports/my-managed-clubs/:clubId/achievements/:achievementId/revoke', handler: 'sports-club-management.revokeAchievement', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+		{ method: 'POST', path: '/sports/my-managed-clubs/:clubId/achievements/:achievementId/create-correction-submission', handler: 'sports-club-management.createAchievementCorrectionSubmission', config: { auth: false, policies: [CLUB_MANAGEMENT_POLICY] } },
+	],
+};

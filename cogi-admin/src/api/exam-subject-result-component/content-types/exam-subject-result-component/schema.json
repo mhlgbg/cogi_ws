@@ -1,0 +1,36 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_subject_result_components",
+  "info": {
+    "singularName": "exam-subject-result-component",
+    "pluralName": "exam-subject-result-components",
+    "displayName": "Exam Subject Result Component",
+    "description": "Tenant-scoped bridge between subject results and component results."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "examSubjectResult": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-subject-result.exam-subject-result",
+      "inversedBy": "subjectResultComponents",
+      "required": true
+    },
+    "examComponentResult": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-component-result.exam-component-result",
+      "inversedBy": "subjectResultLinks",
+      "required": true
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

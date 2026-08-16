@@ -1,0 +1,71 @@
+{
+  "kind": "collectionType",
+  "collectionName": "outcome_standards",
+  "info": {
+    "singularName": "outcome-standard",
+    "pluralName": "outcome-standards",
+    "displayName": "Outcome Standard",
+    "description": "Tenant-scoped outcome standard catalog."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true,
+      "maxLength": 100,
+      "index": true
+    },
+    "name": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200
+    },
+    "examProgram": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-program.exam-program",
+      "inversedBy": "outcomeStandards"
+    },
+    "applicableDescription": {
+      "type": "text"
+    },
+    "recognitionMethod": {
+      "type": "enumeration",
+      "enum": [
+        "exam_program",
+        "certificate",
+        "exemption",
+        "equivalent_result",
+        "multiple_methods"
+      ],
+      "required": true,
+      "default": "exam_program"
+    },
+    "validFrom": {
+      "type": "date"
+    },
+    "validTo": {
+      "type": "date"
+    },
+    "isActive": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "assessmentRounds": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::outcome-assessment-round.outcome-assessment-round",
+      "mappedBy": "outcomeStandard"
+    }
+  }
+}

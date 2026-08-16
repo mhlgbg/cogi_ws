@@ -1,0 +1,117 @@
+{
+  "kind": "collectionType",
+  "collectionName": "outcome_assessment_rounds",
+  "info": {
+    "singularName": "outcome-assessment-round",
+    "pluralName": "outcome-assessment-rounds",
+    "displayName": "Outcome Assessment Round",
+    "description": "Tenant-scoped assessment rounds for graduation outcome decisions."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true,
+      "maxLength": 100,
+      "index": true
+    },
+    "name": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200
+    },
+    "outcomeStandard": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::outcome-standard.outcome-standard",
+      "inversedBy": "assessmentRounds",
+      "required": true
+    },
+    "examProgram": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-program.exam-program",
+      "inversedBy": "outcomeAssessmentRounds"
+    },
+    "examRounds": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::exam-round.exam-round",
+      "inversedBy": "outcomeAssessmentRounds"
+    },
+    "academicYear": {
+      "type": "string",
+      "maxLength": 50
+    },
+    "applicableDescription": {
+      "type": "text"
+    },
+    "assessmentStartAt": {
+      "type": "datetime"
+    },
+    "assessmentEndAt": {
+      "type": "datetime"
+    },
+    "ruleSnapshot": {
+      "type": "json",
+      "default": {}
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "collecting",
+        "pending_review",
+        "pending_approval",
+        "approved",
+        "published",
+        "synced",
+        "completed",
+        "cancelled"
+      ],
+      "required": true,
+      "default": "draft"
+    },
+    "preparedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "submittedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "approvedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "approvedAt": {
+      "type": "datetime"
+    },
+    "decisionNumber": {
+      "type": "string",
+      "maxLength": 100,
+      "index": true
+    },
+    "decisionDate": {
+      "type": "date"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "assessmentCandidates": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::outcome-assessment-candidate.outcome-assessment-candidate",
+      "mappedBy": "outcomeAssessmentRound"
+    }
+  }
+}

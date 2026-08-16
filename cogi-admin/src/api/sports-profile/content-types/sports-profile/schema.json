@@ -1,0 +1,108 @@
+{
+  "kind": "collectionType",
+  "collectionName": "sports_profiles",
+  "info": {
+    "singularName": "sports-profile",
+    "pluralName": "sports-profiles",
+    "displayName": "Sports Profile",
+    "description": "Tenant-scoped sports identity profile that may exist before a linked user account."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "sportsProfiles",
+      "required": true
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "code": {
+      "type": "string",
+      "required": true,
+      "maxLength": 100,
+      "index": true
+    },
+    "fullName": {
+      "type": "string",
+      "required": true,
+      "maxLength": 150
+    },
+    "displayName": {
+      "type": "string",
+      "maxLength": 150
+    },
+    "avatar": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "gender": {
+      "type": "enumeration",
+      "enum": [
+        "male",
+        "female",
+        "other",
+        "unspecified"
+      ],
+      "default": "unspecified"
+    },
+    "dateOfBirth": {
+      "type": "date"
+    },
+    "birthYear": {
+      "type": "integer",
+      "min": 1900,
+      "max": 2100,
+      "index": true
+    },
+    "hometown": {
+      "type": "string",
+      "maxLength": 150
+    },
+    "bio": {
+      "type": "text"
+    },
+    "contactPhone": {
+      "type": "string",
+      "maxLength": 30
+    },
+    "contactEmail": {
+      "type": "email"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "inactive",
+        "merged"
+      ],
+      "required": true,
+      "default": "active",
+      "index": true
+    },
+    "source": {
+      "type": "enumeration",
+      "enum": [
+        "manual_import",
+        "self_registration",
+        "campaign",
+        "admin_created",
+        "other"
+      ]
+    },
+    "sourceReference": {
+      "type": "string",
+      "maxLength": 255
+    }
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_integration_jobs",
+  "info": {
+    "singularName": "exam-integration-job",
+    "pluralName": "exam-integration-jobs",
+    "displayName": "Exam Integration Job",
+    "description": "Tenant-scoped integration jobs for exam data exchange."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "integrationType": {
+      "type": "enumeration",
+      "enum": [
+        "student_import",
+        "candidate_export",
+        "candidate_update",
+        "candidate_cancel",
+        "score_import",
+        "recognition_export"
+      ],
+      "required": true,
+      "default": "student_import"
+    },
+    "sourceSystem": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "targetSystem": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "examRound": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-round.exam-round",
+      "inversedBy": "integrationJobs"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "processing",
+        "completed",
+        "partially_completed",
+        "failed",
+        "cancelled"
+      ],
+      "required": true,
+      "default": "pending"
+    },
+    "totalItems": {
+      "type": "integer",
+      "required": true,
+      "default": 0,
+      "min": 0
+    },
+    "successItems": {
+      "type": "integer",
+      "required": true,
+      "default": 0,
+      "min": 0
+    },
+    "failedItems": {
+      "type": "integer",
+      "required": true,
+      "default": 0,
+      "min": 0
+    },
+    "startedAt": {
+      "type": "datetime"
+    },
+    "completedAt": {
+      "type": "datetime"
+    },
+    "initiatedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "requestMetadata": {
+      "type": "json",
+      "default": {}
+    },
+    "responseMetadata": {
+      "type": "json",
+      "default": {}
+    },
+    "lastError": {
+      "type": "text"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "integrationItems": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-integration-item.exam-integration-item",
+      "mappedBy": "integrationJob"
+    }
+  }
+}

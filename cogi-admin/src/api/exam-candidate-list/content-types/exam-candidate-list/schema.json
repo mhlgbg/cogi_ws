@@ -1,0 +1,136 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_candidate_lists",
+  "info": {
+    "singularName": "exam-candidate-list",
+    "pluralName": "exam-candidate-lists",
+    "displayName": "Exam Candidate List",
+    "description": "Tenant-scoped candidate lists for exam schedules."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true,
+      "maxLength": 100,
+      "index": true
+    },
+    "name": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200
+    },
+    "examRound": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-round.exam-round",
+      "inversedBy": "examCandidateLists",
+      "required": true
+    },
+    "examSchedule": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-schedule.exam-schedule",
+      "inversedBy": "examCandidateLists",
+      "required": true
+    },
+    "version": {
+      "type": "integer",
+      "required": true,
+      "default": 1,
+      "min": 1
+    },
+    "approvalStatus": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "pending_approval",
+        "approved",
+        "rejected"
+      ],
+      "required": true,
+      "default": "draft"
+    },
+    "lockStatus": {
+      "type": "enumeration",
+      "enum": [
+        "unlocked",
+        "locked"
+      ],
+      "required": true,
+      "default": "unlocked"
+    },
+    "preparedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "submittedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "submittedAt": {
+      "type": "datetime"
+    },
+    "approvedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "approvedAt": {
+      "type": "datetime"
+    },
+    "returnedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "returnedAt": {
+      "type": "datetime"
+    },
+    "returnReason": {
+      "type": "text"
+    },
+    "lockedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "lockedAt": {
+      "type": "datetime"
+    },
+    "unlockedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "unlockedAt": {
+      "type": "datetime"
+    },
+    "unlockReason": {
+      "type": "text"
+    },
+    "publishedAt": {
+      "type": "datetime"
+    },
+    "note": {
+      "type": "text"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "examCandidates": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-candidate.exam-candidate",
+      "mappedBy": "examCandidateList"
+    }
+  }
+}

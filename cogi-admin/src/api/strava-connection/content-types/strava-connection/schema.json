@@ -26,8 +26,7 @@
       "required": true
     },
     "stravaAthleteId": {
-      "type": "string",
-      "required": true
+      "type": "string"
     },
     "athleteUsername": {
       "type": "string"
@@ -56,6 +55,31 @@
     },
     "scope": {
       "type": "string"
+    },
+    "cleanupStatus": {
+      "type": "enumeration",
+      "enum": [
+        "NOT_REQUIRED",
+        "PENDING",
+        "RUNNING",
+        "COMPLETED",
+        "FAILED"
+      ],
+      "default": "NOT_REQUIRED",
+      "required": true
+    },
+    "cleanupRequestedAt": {
+      "type": "datetime"
+    },
+    "cleanupCompletedAt": {
+      "type": "datetime"
+    },
+    "cleanupError": {
+      "type": "text"
+    },
+    "terminationReason": {
+      "type": "string",
+      "maxLength": 120
     },
     "status": {
       "type": "enumeration",
@@ -89,6 +113,10 @@
       "type": "datetime"
     },
     "rawAthlete": {
+      "type": "json",
+      "private": true
+    },
+    "activityDeleteMarkers": {
       "type": "json",
       "private": true
     },

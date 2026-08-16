@@ -1,0 +1,90 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_integration_items",
+  "info": {
+    "singularName": "exam-integration-item",
+    "pluralName": "exam-integration-items",
+    "displayName": "Exam Integration Item",
+    "description": "Tenant-scoped integration item records for exam data exchange."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "integrationJob": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-integration-job.exam-integration-job",
+      "inversedBy": "integrationItems",
+      "required": true
+    },
+    "actionType": {
+      "type": "enumeration",
+      "enum": [
+        "create",
+        "update",
+        "cancel",
+        "import"
+      ],
+      "required": true,
+      "default": "create"
+    },
+    "entityType": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "entityId": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "externalId": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "maxLength": 255,
+      "index": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "processing",
+        "success",
+        "failed",
+        "retry_required",
+        "cancelled"
+      ],
+      "required": true,
+      "default": "pending"
+    },
+    "attempts": {
+      "type": "integer",
+      "required": true,
+      "default": 0,
+      "min": 0
+    },
+    "requestPayload": {
+      "type": "json",
+      "default": {}
+    },
+    "responsePayload": {
+      "type": "json",
+      "default": {}
+    },
+    "lastError": {
+      "type": "text"
+    },
+    "processedAt": {
+      "type": "datetime"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

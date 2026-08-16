@@ -1,0 +1,112 @@
+{
+  "kind": "collectionType",
+  "collectionName": "payment_profiles",
+  "info": {
+    "singularName": "payment-profile",
+    "pluralName": "payment-profiles",
+    "displayName": "Payment Profile",
+    "description": "Hồ sơ thông tin nhận thanh toán dùng chung của từng tenant."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true,
+      "maxLength": 150
+    },
+    "code": {
+      "type": "string",
+      "required": true,
+      "maxLength": 100,
+      "index": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "paymentMethod": {
+      "type": "enumeration",
+      "enum": [
+        "bank_transfer",
+        "cash",
+        "other"
+      ],
+      "required": true,
+      "default": "bank_transfer"
+    },
+    "bankCode": {
+      "type": "string",
+      "maxLength": 20
+    },
+    "bankName": {
+      "type": "string",
+      "maxLength": 150
+    },
+    "accountNumber": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "accountHolder": {
+      "type": "string",
+      "maxLength": 150
+    },
+    "bankBranch": {
+      "type": "string",
+      "maxLength": 150
+    },
+    "currency": {
+      "type": "string",
+      "required": true,
+      "default": "VND",
+      "maxLength": 10
+    },
+    "transferContentTemplate": {
+      "type": "string",
+      "maxLength": 255
+    },
+    "paymentInstruction": {
+      "type": "richtext"
+    },
+    "supportPhone": {
+      "type": "string",
+      "maxLength": 30
+    },
+    "supportEmail": {
+      "type": "email"
+    },
+    "qrImage": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "isActive": {
+      "type": "boolean",
+      "required": true,
+      "default": true,
+      "index": true
+    },
+    "isDefault": {
+      "type": "boolean",
+      "required": true,
+      "default": false,
+      "index": true
+    },
+    "sortOrder": {
+      "type": "integer",
+      "required": true,
+      "default": 0,
+      "index": true
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "paymentProfiles",
+      "required": true
+    }
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_rooms",
+  "info": {
+    "singularName": "exam-room",
+    "pluralName": "exam-rooms",
+    "displayName": "Exam Room",
+    "description": "Tenant-scoped exam room catalog."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true,
+      "maxLength": 100,
+      "index": true
+    },
+    "name": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200
+    },
+    "floor": {
+      "type": "string",
+      "maxLength": 50
+    },
+    "examVenue": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-venue.exam-venue",
+      "inversedBy": "examRooms",
+      "required": true
+    },
+    "capacity": {
+      "type": "integer",
+      "min": 0
+    },
+    "roomType": {
+      "type": "enumeration",
+      "enum": [
+        "computer",
+        "standard",
+        "oral",
+        "practical",
+        "other"
+      ],
+      "required": true,
+      "default": "standard"
+    },
+    "isActive": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "sortOrder": {
+      "type": "integer",
+      "default": 0
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "examSchedules": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-schedule.exam-schedule",
+      "mappedBy": "examRoom"
+    },
+    "examRounds": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::exam-round.exam-round",
+      "mappedBy": "examRooms"
+    }
+  }
+}

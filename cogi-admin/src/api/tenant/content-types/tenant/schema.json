@@ -404,6 +404,55 @@
       "mappedBy": "tenant"
     }
     ,
+    "sportsProfiles": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::sports-profile.sports-profile",
+      "mappedBy": "tenant"
+    }
+    ,
+    "sportsClubs": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::sports-club.sports-club",
+      "mappedBy": "tenant"
+    }
+    ,
+    "clubMemberships": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::club-membership.club-membership",
+      "mappedBy": "tenant"
+    }
+    ,
+    "clubMembershipHistories": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::club-membership-history.club-membership-history",
+      "mappedBy": "tenant"
+    }
+    ,
+    "sportsAchievements": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::sports-achievement.sports-achievement",
+      "mappedBy": "tenant"
+    }
+    ,
+    "sportsAchievementSubmissions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::sports-achievement-submission.sports-achievement-submission",
+      "mappedBy": "tenant"
+    }
+    ,
+    "sportsClubUserAssignments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::sports-club-user-assignment.sports-club-user-assignment",
+      "mappedBy": "tenant"
+    }
+    ,
     "luckyWheels": {
       "type": "relation",
       "relation": "oneToMany",
@@ -468,6 +517,12 @@
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::quick-message-message.quick-message-message",
+      "mappedBy": "tenant"
+    },
+    "paymentProfiles": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::payment-profile.payment-profile",
       "mappedBy": "tenant"
     }
   }

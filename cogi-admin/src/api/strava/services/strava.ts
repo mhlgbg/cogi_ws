@@ -10,6 +10,7 @@ const USER_UID = 'plugin::users-permissions.user';
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const STRAVA_AUTHORIZE_URL = 'https://www.strava.com/oauth/authorize';
 const STRAVA_TOKEN_URL = 'https://www.strava.com/oauth/token';
+const STRAVA_REVOKE_URL = 'https://www.strava.com/oauth/revoke';
 const STRAVA_ACTIVITIES_URL = 'https://www.strava.com/api/v3/athlete/activities';
 const STRAVA_ACTIVITY_DETAIL_URL = 'https://www.strava.com/api/v3/activities';
 const STRAVA_PUSH_SUBSCRIPTIONS_URL = 'https://www.strava.com/api/v3/push_subscriptions';
@@ -71,17 +72,57 @@ type StravaTokenResponse = {
 
 type StravaConnectionRecord = {
   id: number;
+  stravaAthleteId?: string | null;
   status?: string | null;
   accessToken?: string | null;
   refreshToken?: string | null;
   tokenExpiresAt?: string | null;
   disconnectedAt?: string | null;
+  cleanupStatus?: string | null;
+  cleanupRequestedAt?: string | null;
+  cleanupCompletedAt?: string | null;
+  cleanupError?: string | null;
+  terminationReason?: string | null;
+  scope?: string | null;
+  rawAthlete?: Record<string, any> | null;
+  activityDeleteMarkers?: Array<Record<string, any>> | null;
   lastSyncAt?: string | null;
   lastSyncStatus?: string | null;
   athleteFirstname?: string | null;
   athleteLastname?: string | null;
   athleteUsername?: string | null;
   profileUrl?: string | null;
+  createdAt?: string | null;
+  tenant?: { id?: number | string } | number | string | null;
+  user?: { id?: number } | number | null;
+};
+
+type StravaConnectionCleanupStatus = 'NOT_REQUIRED' | 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+type StravaTerminationReason = 'manual_disconnect' | 'athlete_deauthorized' | 'user_deletion_request';
+
+type StravaConnectionTerminationResult = {
+  connectionId: number;
+  status: 'DISCONNECTED';
+  cleanupStatus: StravaConnectionCleanupStatus;
+  terminationReason: StravaTerminationReason;
+  alreadyCompleted: boolean;
+  deletedActivities: number;
+  deletedChallengeActivities: number;
+  cleanedWebhookEvents: number;
+  scrubbedSyncJobs: number;
+};
+
+type StravaRemoteRevokeResult = {
+  attempted: boolean;
+  success: boolean;
+  warning: string | null;
+  httpStatus: number | null;
+};
+
+type StravaActivityDeleteMarker = {
+  stravaActivityId: string;
+  deletedEventTime: string;
+  deletedAt: string;
 };
 
 type StravaSyncJobRecord = {
@@ -832,6 +873,22 @@ function normalizePlatformStravaWebhookEventAspectType(value: unknown): Platform
     return normalized;
   }
   return null;
+}
+
+function normalizeStravaConnectionCleanupStatus(value: unknown): StravaConnectionCleanupStatus {
+  const normalized = toText(value).toUpperCase();
+  if (normalized === 'PENDING' || normalized === 'RUNNING' || normalized === 'COMPLETED' || normalized === 'FAILED') {
+    return normalized as StravaConnectionCleanupStatus;
+  }
+  return 'NOT_REQUIRED';
+}
+
+function normalizeTerminationReason(value: unknown): StravaTerminationReason {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === 'athlete_deauthorized' || normalized === 'user_deletion_request') {
+    return normalized as StravaTerminationReason;
+  }
+  return 'manual_disconnect';
 }
 
 function normalizePlatformStravaWebhookEventSortField(value: unknown): PlatformStravaWebhookEventSortField {
@@ -2379,7 +2436,7 @@ async function findWebhookConnectionCandidates(ownerId: string) {
     where: {
       stravaAthleteId: ownerId,
     },
-    select: ['id', 'status', 'accessToken', 'refreshToken', 'tokenExpiresAt', 'disconnectedAt', 'lastSyncAt', 'lastSyncStatus', 'athleteFirstname', 'athleteLastname', 'athleteUsername', 'profileUrl'],
+    select: ['id', 'status', 'accessToken', 'refreshToken', 'tokenExpiresAt', 'disconnectedAt', 'cleanupStatus', 'cleanupRequestedAt', 'cleanupCompletedAt', 'cleanupError', 'terminationReason', 'lastSyncAt', 'lastSyncStatus', 'athleteFirstname', 'athleteLastname', 'athleteUsername', 'profileUrl'],
     populate: {
       tenant: { select: ['id'] },
       user: { select: ['id'] },
@@ -2587,42 +2644,626 @@ async function cancelOpenStravaSyncJobsForConnection(connectionId: number) {
     })
 }
 
-async function revokeStravaConnectionForWebhook(resolved: ResolvedWebhookConnection) {
-  const nowIso = new Date().toISOString()
-  await strapi.db.query(STRAVA_CONNECTION_UID).update({
-    where: { id: resolved.connectionId },
-    data: {
-      status: 'DISCONNECTED',
-      disconnectedAt: resolved.connection.disconnectedAt || nowIso,
-      accessToken: null,
-      refreshToken: null,
-      tokenExpiresAt: null,
-      lastSyncError: 'Strava connection revoked by athlete deauthorization.',
+async function getStravaConnectionForTermination(connectionRef: number | { id?: number | null } | null | undefined): Promise<StravaConnectionRecord | null> {
+  const connectionId = toPositiveInt(typeof connectionRef === 'number' ? connectionRef : connectionRef?.id)
+  if (!connectionId) return null
+
+  const connection = await strapi.db.query(STRAVA_CONNECTION_UID).findOne({
+    where: { id: connectionId },
+    select: [
+      'id',
+      'stravaAthleteId',
+      'status',
+      'accessToken',
+      'refreshToken',
+      'tokenExpiresAt',
+      'scope',
+      'disconnectedAt',
+      'cleanupStatus',
+      'cleanupRequestedAt',
+      'cleanupCompletedAt',
+      'cleanupError',
+      'terminationReason',
+      'lastSyncAt',
+      'lastSyncStatus',
+      'athleteFirstname',
+      'athleteLastname',
+      'athleteUsername',
+      'profileUrl',
+      'rawAthlete',
+      'createdAt',
+    ],
+    populate: {
+      tenant: { select: ['id'] },
+      user: { select: ['id'] },
     },
   })
 
-  await cancelOpenStravaSyncJobsForConnection(resolved.connectionId)
+  return (connection as StravaConnectionRecord | null) || null
 }
 
-async function deleteWebhookActivityRecord(tenantId: number | string, connectionId: number, activityId: string) {
+async function markStravaConnectionCleanupState(connectionId: number, data: Record<string, unknown>) {
+  await strapi.db.query(STRAVA_CONNECTION_UID).update({
+    where: { id: connectionId },
+    data,
+  })
+}
+
+async function getCurrentStravaConnectionForTermination(tenantId: number | string, userId: number): Promise<StravaConnectionRecord | null> {
+  const connection = await strapi.db.query(STRAVA_CONNECTION_UID).findOne({
+    where: mergeTenantWhere({ user: { id: userId } }, tenantId),
+    select: [
+      'id',
+      'stravaAthleteId',
+      'status',
+      'accessToken',
+      'refreshToken',
+      'tokenExpiresAt',
+      'scope',
+      'disconnectedAt',
+      'cleanupStatus',
+      'cleanupRequestedAt',
+      'cleanupCompletedAt',
+      'cleanupError',
+      'terminationReason',
+      'lastSyncAt',
+      'lastSyncStatus',
+      'athleteFirstname',
+      'athleteLastname',
+      'athleteUsername',
+      'profileUrl',
+      'rawAthlete',
+      'createdAt',
+    ],
+    populate: {
+      tenant: { select: ['id'] },
+      user: { select: ['id'] },
+    },
+  })
+
+  return (connection as StravaConnectionRecord | null) || null
+}
+
+async function blockStravaConnectionAccessForTermination(connection: StravaConnectionRecord, terminationReason: StravaTerminationReason | string) {
+  const normalizedReason = normalizeTerminationReason(terminationReason)
+  const nowIso = new Date().toISOString()
+  const currentCleanupStatus = normalizeStravaConnectionCleanupStatus(connection.cleanupStatus)
+  if (currentCleanupStatus === 'COMPLETED' && toText(connection.status).toUpperCase() === 'DISCONNECTED') {
+    return {
+      disconnectedAt: toText(connection.disconnectedAt) || nowIso,
+      cleanupRequestedAt: toText(connection.cleanupRequestedAt) || nowIso,
+    }
+  }
+
+  const disconnectedAt = toText(connection.disconnectedAt) || nowIso
+  const cleanupRequestedAt = toText(connection.cleanupRequestedAt) || nowIso
+  await markStravaConnectionCleanupState(connection.id, {
+    status: 'DISCONNECTED',
+    disconnectedAt,
+    cleanupStatus: currentCleanupStatus === 'COMPLETED' ? 'COMPLETED' : 'PENDING',
+    cleanupRequestedAt,
+    cleanupCompletedAt: currentCleanupStatus === 'COMPLETED' ? connection.cleanupCompletedAt || null : null,
+    terminationReason: toText(connection.terminationReason) || normalizedReason,
+  })
+  await cancelOpenStravaSyncJobsForConnection(connection.id)
+
+  return {
+    disconnectedAt,
+    cleanupRequestedAt,
+  }
+}
+
+async function revokeStravaAuthorizationRemotely(connection: StravaConnectionRecord): Promise<StravaRemoteRevokeResult> {
+  const refreshToken = toText(connection?.refreshToken)
+  const accessToken = toText(connection?.accessToken)
+  const token = refreshToken || accessToken
+  const tokenTypeHint = refreshToken ? 'refresh_token' : (accessToken ? 'access_token' : '')
+  if (!token) {
+    return {
+      attempted: false,
+      success: true,
+      warning: null,
+      httpStatus: null,
+    }
+  }
+
+  let authValue = ''
+  try {
+    authValue = Buffer.from(`${resolveStravaClientId()}:${resolveStravaClientSecret()}`, 'utf8').toString('base64')
+  } catch {
+    return {
+      attempted: false,
+      success: false,
+      warning: 'Remote Strava revoke could not be attempted because Strava API credentials are not configured.',
+      httpStatus: null,
+    }
+  }
+  const body = new URLSearchParams()
+  body.set('token', token)
+  if (tokenTypeHint) body.set('token_type_hint', tokenTypeHint)
+
+  let response: Response
+  try {
+    response = await fetch(STRAVA_REVOKE_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${authValue}`,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body,
+    })
+  } catch {
+    return {
+      attempted: true,
+      success: false,
+      warning: 'Remote Strava revoke failed because Strava was unreachable.',
+      httpStatus: null,
+    }
+  }
+
+  if (response.status === 200) {
+    return {
+      attempted: true,
+      success: true,
+      warning: null,
+      httpStatus: 200,
+    }
+  }
+
+  if ([500, 502, 503, 504].includes(response.status)) {
+    return {
+      attempted: true,
+      success: false,
+      warning: `Remote Strava revoke failed with status ${response.status}.`,
+      httpStatus: response.status,
+    }
+  }
+
+  return {
+    attempted: true,
+    success: false,
+    warning: `Remote Strava revoke returned status ${response.status}.`,
+    httpStatus: response.status,
+  }
+}
+
+function sanitizeStravaSyncJobMetadataForTermination(metadata: Record<string, any> | null | undefined) {
+  const next = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? { ...metadata }
+    : {}
+
+  next.lastProcessedActivityId = null
+  next.snapshotSummary = null
+  return next
+}
+
+function normalizeDeleteEventTime(value: unknown): string {
+  const text = toText(value)
+  if (!text) return ''
+  const numeric = Number(text)
+  if (Number.isFinite(numeric) && numeric > 0) return String(Math.floor(numeric))
+  const parsedMs = Date.parse(text)
+  if (!Number.isNaN(parsedMs)) return String(Math.floor(parsedMs / 1000))
+  return ''
+}
+
+function normalizeActivityDeleteMarkers(value: unknown): StravaActivityDeleteMarker[] {
+  let source = value
+  if (typeof source === 'string') {
+    try {
+      source = JSON.parse(source)
+    } catch {
+      source = []
+    }
+  }
+  if (!Array.isArray(source)) return []
+
+  const next = source
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null
+      const stravaActivityId = toText((entry as any).stravaActivityId)
+      const deletedEventTime = normalizeDeleteEventTime((entry as any).deletedEventTime)
+      const deletedAt = toText((entry as any).deletedAt) || new Date().toISOString()
+      if (!stravaActivityId || !deletedEventTime) return null
+      const numericEventTime = Number(deletedEventTime)
+        if (!Number.isFinite(numericEventTime) || numericEventTime <= 0) return null
+      return {
+        stravaActivityId,
+        deletedEventTime,
+        deletedAt,
+      }
+    })
+    .filter(Boolean) as StravaActivityDeleteMarker[]
+
+  const deduped = new Map<string, StravaActivityDeleteMarker>()
+  for (const marker of next) {
+    const existing = deduped.get(marker.stravaActivityId)
+    if (!existing || Number(marker.deletedEventTime) >= Number(existing.deletedEventTime)) {
+      deduped.set(marker.stravaActivityId, marker)
+    }
+  }
+
+  return Array.from(deduped.values())
+    .sort((left, right) => Number(right.deletedEventTime) - Number(left.deletedEventTime))
+    .slice(0, 200)
+}
+
+async function getActivityDeleteMarkers(connectionId: number): Promise<StravaActivityDeleteMarker[]> {
+  const row = await strapi.db.connection('strava_connections')
+    .select('activity_delete_markers as activityDeleteMarkers')
+    .where({ id: connectionId })
+    .first() as any
+
+  return normalizeActivityDeleteMarkers(row?.activityDeleteMarkers)
+}
+
+async function storeActivityDeleteMarker(connectionId: number, stravaActivityId: string, deletedEventTime: unknown) {
+  const normalizedActivityId = toText(stravaActivityId)
+  const normalizedEventTime = normalizeDeleteEventTime(deletedEventTime) || String(Math.floor(Date.now() / 1000))
+  if (!normalizedActivityId) return
+
+  const existing = await strapi.db.connection('strava_connections')
+    .select('activity_delete_markers as activityDeleteMarkers')
+    .where({ id: connectionId })
+    .first() as any
+
+  const markers = normalizeActivityDeleteMarkers(existing?.activityDeleteMarkers)
+    .filter((entry) => entry.stravaActivityId !== normalizedActivityId)
+  markers.unshift({
+    stravaActivityId: normalizedActivityId,
+    deletedEventTime: normalizedEventTime,
+    deletedAt: new Date().toISOString(),
+  })
+
+  await strapi.db.connection('strava_connections')
+    .where({ id: connectionId })
+    .update({
+      activity_delete_markers: strapi.db.connection.raw('?::jsonb', [JSON.stringify(normalizeActivityDeleteMarkers(markers))]),
+      updated_at: new Date().toISOString(),
+    })
+}
+
+function shouldIgnoreActivityEventAfterDeleteMarker(markers: StravaActivityDeleteMarker[], stravaActivityId: string, eventTime: unknown) {
+  const normalizedActivityId = toText(stravaActivityId)
+  if (!normalizedActivityId) return false
+  const marker = markers.find((entry) => entry.stravaActivityId === normalizedActivityId)
+  if (!marker) return false
+
+  const normalizedEventTime = normalizeDeleteEventTime(eventTime)
+  if (!normalizedEventTime) return true
+  return true
+}
+
+async function invalidateConnectionSnapshotSummariesForDeletedActivity(tenantId: number | string, userId: number, connectionId: number, deletedStravaActivityId: string) {
+  const rows = await strapi.db.query(STRAVA_SYNC_JOB_UID).findMany({
+    where: mergeTenantWhere({ user: { id: userId }, connection: { id: connectionId } }, tenantId),
+    select: ['id', 'metadata'],
+  } as any)
+
+  const jobs = Array.isArray(rows) ? rows : []
+  for (const job of jobs) {
+    const metadata = job?.metadata && typeof job.metadata === 'object' && !Array.isArray(job.metadata)
+      ? { ...job.metadata }
+      : {}
+    metadata.snapshotSummary = null
+    if (toText(metadata.lastProcessedActivityId) === toText(deletedStravaActivityId)) {
+      metadata.lastProcessedActivityId = null
+    }
+
+    await strapi.db.query(STRAVA_SYNC_JOB_UID).update({
+      where: { id: job.id },
+      data: { metadata },
+    } as any)
+  }
+}
+
+async function listStravaActivitiesForConnection(tenantId: number | string, connectionId: number) {
+  const rows = await strapi.db.query(STRAVA_ACTIVITY_UID).findMany({
+    where: mergeTenantWhere({ connection: { id: connectionId } }, tenantId),
+    select: ['id'],
+  } as any)
+  return Array.isArray(rows) ? rows : []
+}
+
+async function listChallengeActivitiesForStravaActivities(tenantId: number | string, activityIds: number[]) {
+  if (activityIds.length === 0) return []
+  const rows = await strapi.db.query('api::challenge-activity.challenge-activity').findMany({
+    where: mergeTenantWhere({ activity: { id: { $in: activityIds } } }, tenantId),
+    select: ['id', 'status', 'countedDistance', 'countedMovingTime', 'countedElevationGain', 'countedActivityCount'],
+    populate: {
+      participant: { select: ['id'] },
+    },
+  } as any)
+  return Array.isArray(rows) ? rows : []
+}
+
+async function recalculateChallengeParticipantAggregates(tenantId: number | string, participantIds: number[]) {
+  const uniqueParticipantIds = Array.from(new Set(participantIds.map((value) => toPositiveInt(value)).filter(Boolean)))
+  const nowIso = new Date().toISOString()
+
+  for (const participantId of uniqueParticipantIds) {
+    const rows = await strapi.db.query('api::challenge-activity.challenge-activity').findMany({
+      where: mergeTenantWhere({ participant: { id: participantId }, status: 'ACCEPTED' }, tenantId),
+      select: ['countedDistance', 'countedMovingTime', 'countedElevationGain', 'countedActivityCount'],
+    } as any)
+
+    const totalDistance = (rows || []).reduce((sum: number, row: Record<string, any>) => sum + Number(row?.countedDistance || 0), 0)
+    const totalMovingTime = (rows || []).reduce((sum: number, row: Record<string, any>) => sum + Number(row?.countedMovingTime || 0), 0)
+    const totalElevationGain = (rows || []).reduce((sum: number, row: Record<string, any>) => sum + Number(row?.countedElevationGain || 0), 0)
+    const activityCount = (rows || []).reduce((sum: number, row: Record<string, any>) => sum + Number(row?.countedActivityCount || 0), 0)
+
+    await strapi.db.query('api::challenge-participant.challenge-participant').update({
+      where: { id: participantId },
+      data: {
+        totalDistance,
+        totalMovingTime,
+        totalElevationGain,
+        activityCount,
+        lastCalculatedAt: nowIso,
+      },
+    } as any)
+  }
+}
+
+async function cleanupChallengeDerivedDataForActivities(tenantId: number | string, activityIds: number[]) {
+  const challengeActivities = await listChallengeActivitiesForStravaActivities(tenantId, activityIds)
+  if (challengeActivities.length === 0) {
+    return {
+      deletedChallengeActivities: 0,
+    }
+  }
+
+  const participantIds = Array.from(new Set(challengeActivities.map((row: any) => toPositiveInt(row?.participant?.id || row?.participant)).filter(Boolean)))
+  for (const row of challengeActivities) {
+    const id = toPositiveInt((row as any)?.id)
+    if (!id) continue
+    await strapi.db.query('api::challenge-activity.challenge-activity').delete({ where: { id } } as any)
+  }
+
+  await recalculateChallengeParticipantAggregates(tenantId, participantIds)
+
+  return {
+    deletedChallengeActivities: challengeActivities.length,
+  }
+}
+
+async function cleanupStravaActivitiesForConnection(tenantId: number | string, connectionId: number) {
+  const activities = await listStravaActivitiesForConnection(tenantId, connectionId)
+  const activityIds = activities.map((row: any) => toPositiveInt(row?.id)).filter(Boolean)
+  const challengeCleanup = await cleanupChallengeDerivedDataForActivities(tenantId, activityIds)
+
+  for (const activityId of activityIds) {
+    await strapi.db.query(STRAVA_ACTIVITY_UID).delete({ where: { id: activityId } } as any)
+  }
+
+  return {
+    deletedActivities: activityIds.length,
+    deletedChallengeActivities: challengeCleanup.deletedChallengeActivities,
+  }
+}
+
+async function cleanupStravaWebhookEventsForConnection(tenantId: number | string, userId: number, connectionId: number) {
+  const rows = await strapi.db.query(STRAVA_WEBHOOK_EVENT_UID).findMany({
+    where: mergeTenantWhere({
+      $or: [
+        { connection: { id: connectionId } },
+        { user: { id: userId } },
+      ],
+    }, tenantId),
+    select: ['id'],
+  } as any)
+
+  const eventIds = Array.isArray(rows) ? rows.map((row: any) => toPositiveInt(row?.id)).filter(Boolean) : []
+  for (const eventId of eventIds) {
+    await strapi.db.query(STRAVA_WEBHOOK_EVENT_UID).update({
+      where: { id: eventId },
+      data: {
+        rawPayload: null,
+        updates: null,
+        ownerId: null,
+        objectId: null,
+      },
+    })
+  }
+
+  return {
+    cleanedWebhookEvents: eventIds.length,
+  }
+}
+
+async function scrubWebhookEventPayload(eventId: number) {
+  await strapi.db.query(STRAVA_WEBHOOK_EVENT_UID).update({
+    where: { id: eventId },
+    data: {
+      rawPayload: null,
+      updates: null,
+      ownerId: null,
+      objectId: null,
+    },
+  })
+}
+
+async function cleanupStravaSyncJobsForConnection(tenantId: number | string, userId: number, connectionId: number) {
+  const rows = await strapi.db.query(STRAVA_SYNC_JOB_UID).findMany({
+    where: mergeTenantWhere({ user: { id: userId }, connection: { id: connectionId } }, tenantId),
+    select: ['id', 'metadata'],
+  } as any)
+
+  const jobs = Array.isArray(rows) ? rows : []
+  for (const job of jobs) {
+    const jobId = toPositiveInt((job as any)?.id)
+    if (!jobId) continue
+    await strapi.db.query(STRAVA_SYNC_JOB_UID).update({
+      where: { id: jobId },
+      data: {
+        metadata: sanitizeStravaSyncJobMetadataForTermination((job as any)?.metadata),
+      },
+    })
+  }
+
+  return {
+    scrubbedSyncJobs: jobs.length,
+  }
+}
+
+async function terminateStravaConnection(options: {
+  connection: number | { id?: number | null } | null | undefined;
+  terminationReason: StravaTerminationReason | string;
+  source?: string;
+  skipRemoteRevoke?: boolean;
+  completionCleanupError?: string | null;
+}): Promise<StravaConnectionTerminationResult> {
+  const reason = normalizeTerminationReason(options.terminationReason)
+  const skipRemoteRevoke = options.skipRemoteRevoke === true
+  if (!skipRemoteRevoke) {
+    throw Object.assign(new Error('Remote Strava revoke is not implemented in this patch.'), {
+      code: 'STRAVA_REMOTE_REVOKE_NOT_IMPLEMENTED',
+      status: 501,
+    })
+  }
+
+  const connection = await getStravaConnectionForTermination(options.connection)
+  if (!connection?.id) {
+    throw Object.assign(new Error('Strava connection not found.'), {
+      code: 'STRAVA_CONNECTION_NOT_FOUND',
+      status: 404,
+    })
+  }
+
+  const cleanupStatus = normalizeStravaConnectionCleanupStatus(connection.cleanupStatus)
+  if (cleanupStatus === 'COMPLETED' && toText(connection.status).toUpperCase() === 'DISCONNECTED') {
+    return {
+      connectionId: connection.id,
+      status: 'DISCONNECTED',
+      cleanupStatus,
+      terminationReason: normalizeTerminationReason(connection.terminationReason || reason),
+      alreadyCompleted: true,
+      deletedActivities: 0,
+      deletedChallengeActivities: 0,
+      cleanedWebhookEvents: 0,
+      scrubbedSyncJobs: 0,
+    }
+  }
+
+  const tenantId = connection?.tenant && typeof connection.tenant === 'object' ? connection.tenant.id : connection?.tenant
+  const userId = connection?.user && typeof connection.user === 'object' ? connection.user.id : connection?.user
+  const resolvedTenantId = tenantId ? String(tenantId) : ''
+  const resolvedUserId = toPositiveInt(userId)
+  if (!resolvedTenantId || !resolvedUserId) {
+    throw Object.assign(new Error('Strava connection relations are incomplete.'), {
+      code: 'STRAVA_CONNECTION_INCOMPLETE',
+      status: 409,
+    })
+  }
+
+  const requestedAt = toText(connection.cleanupRequestedAt) || new Date().toISOString()
+  const disconnectedAt = toText(connection.disconnectedAt) || new Date().toISOString()
+  const persistedReason = toText(connection.terminationReason) || reason
+
+  await markStravaConnectionCleanupState(connection.id, {
+    status: 'DISCONNECTED',
+    disconnectedAt,
+    accessToken: null,
+    refreshToken: null,
+    tokenExpiresAt: null,
+    stravaAthleteId: null,
+    athleteUsername: null,
+    athleteFirstname: null,
+    athleteLastname: null,
+    profileUrl: null,
+    rawAthlete: null,
+    scope: null,
+    cleanupStatus: 'RUNNING',
+    cleanupRequestedAt: requestedAt,
+    cleanupCompletedAt: null,
+    cleanupError: null,
+    terminationReason: persistedReason,
+  })
+
+  try {
+    await cancelOpenStravaSyncJobsForConnection(connection.id)
+    const activityCleanup = await cleanupStravaActivitiesForConnection(resolvedTenantId, connection.id)
+    const syncJobCleanup = await cleanupStravaSyncJobsForConnection(resolvedTenantId, resolvedUserId, connection.id)
+    const webhookCleanup = await cleanupStravaWebhookEventsForConnection(resolvedTenantId, resolvedUserId, connection.id)
+    const completedAt = new Date().toISOString()
+
+    await markStravaConnectionCleanupState(connection.id, {
+      cleanupStatus: 'COMPLETED',
+      cleanupCompletedAt: completedAt,
+      cleanupError: options.completionCleanupError ? sanitizeTerminationErrorMessage(options.completionCleanupError) : null,
+      terminationReason: persistedReason,
+    })
+
+    return {
+      connectionId: connection.id,
+      status: 'DISCONNECTED',
+      cleanupStatus: 'COMPLETED',
+      terminationReason: reason,
+      alreadyCompleted: false,
+      deletedActivities: activityCleanup.deletedActivities,
+      deletedChallengeActivities: activityCleanup.deletedChallengeActivities,
+      cleanedWebhookEvents: webhookCleanup.cleanedWebhookEvents,
+      scrubbedSyncJobs: syncJobCleanup.scrubbedSyncJobs,
+    }
+  } catch (error: any) {
+    await markStravaConnectionCleanupState(connection.id, {
+      status: 'DISCONNECTED',
+      disconnectedAt,
+      accessToken: null,
+      refreshToken: null,
+      tokenExpiresAt: null,
+      stravaAthleteId: null,
+      athleteUsername: null,
+      athleteFirstname: null,
+      athleteLastname: null,
+      profileUrl: null,
+      rawAthlete: null,
+      scope: null,
+      cleanupStatus: 'FAILED',
+      cleanupRequestedAt: requestedAt,
+      cleanupCompletedAt: null,
+      cleanupError: sanitizeTerminationErrorMessage(error),
+      terminationReason: persistedReason,
+    })
+
+    throw Object.assign(new Error('Failed to terminate Strava connection.'), {
+      code: 'STRAVA_CONNECTION_TERMINATION_FAILED',
+      status: Number(error?.status || 500) || 500,
+      cause: error,
+    })
+  }
+}
+
+async function revokeStravaConnectionForWebhook(resolved: ResolvedWebhookConnection) {
+  await terminateStravaConnection({
+    connection: resolved.connectionId,
+    terminationReason: 'athlete_deauthorized',
+    source: 'athlete_deauthorization',
+    skipRemoteRevoke: true,
+  })
+}
+
+async function deleteWebhookActivityRecord(tenantId: number | string, userId: number, connectionId: number, activityId: string, eventTime?: unknown) {
+  await storeActivityDeleteMarker(connectionId, activityId, eventTime)
   const existing = await findWebhookActivityRecord(tenantId, connectionId, activityId)
   if (!existing?.id) return { deleted: false }
 
-  await strapi.db.query(STRAVA_ACTIVITY_UID).update({
+  const activityIdList = [toPositiveInt(existing.id)].filter(Boolean)
+  await cleanupChallengeDerivedDataForActivities(tenantId, activityIdList)
+  await strapi.db.query(STRAVA_ACTIVITY_UID).delete({
     where: { id: existing.id },
-    data: {
-      syncStatus: 'DELETED_ON_STRAVA',
-    },
   } as any)
+  await invalidateConnectionSnapshotSummariesForDeletedActivity(tenantId, userId, connectionId, activityId)
 
   return { deleted: true }
 }
 
-export async function processActivityWebhookEvent(event: { id: number; objectId?: string | null; ownerId?: string | null; aspectType?: string | null }): Promise<StravaWebhookHandlerResult> {
+export async function processActivityWebhookEvent(event: { id: number; objectId?: string | null; ownerId?: string | null; aspectType?: string | null; eventTime?: string | null }): Promise<StravaWebhookHandlerResult> {
   const resolved = await resolveWebhookConnection(event)
   if (!resolved) return 'IGNORED'
 
   const objectId = toText(event.objectId)
+  const eventTime = toText(event.eventTime)
   const aspectType = toText(event.aspectType).toLowerCase()
   const scopedRelations = {
     tenantId: resolved.tenantId,
@@ -2641,12 +3282,19 @@ export async function processActivityWebhookEvent(event: { id: number; objectId?
   }
 
   if (aspectType === 'delete') {
-    await deleteWebhookActivityRecord(resolved.tenantId, resolved.connectionId, objectId)
+    await deleteWebhookActivityRecord(resolved.tenantId, resolved.userId, resolved.connectionId, objectId, eventTime)
+    await scrubWebhookEventPayload(event.id)
     return 'SUCCESS'
   }
 
   if (!['create', 'update'].includes(aspectType)) {
     return 'NOT_IMPLEMENTED'
+  }
+
+  const deleteMarkers = await getActivityDeleteMarkers(resolved.connectionId)
+  if (shouldIgnoreActivityEventAfterDeleteMarker(deleteMarkers, objectId, eventTime)) {
+    await scrubWebhookEventPayload(event.id)
+    return 'SUCCESS'
   }
 
   try {
@@ -2705,7 +3353,8 @@ export async function processAthleteWebhookEvent(event: { id: number; ownerId?: 
 
   if (isConnectionRevoked(resolved.connection)
     && !toText(resolved.connection.accessToken)
-    && !toText(resolved.connection.refreshToken)) {
+    && !toText(resolved.connection.refreshToken)
+    && normalizeStravaConnectionCleanupStatus(resolved.connection.cleanupStatus) === 'COMPLETED') {
     return 'SUCCESS'
   }
 
@@ -4581,6 +5230,13 @@ function sanitizeSyncErrorMessage(error: unknown, fallback = 'Strava sync batch 
     .replace(/access_token=[^&\s]+/gi, 'access_token=[redacted]')
     .replace(/authorization[^\n]*/gi, 'authorization=[redacted]')
     .slice(0, 300);
+}
+
+function sanitizeTerminationErrorMessage(error: unknown, fallback = 'Strava cleanup failed'): string {
+  if (typeof error === 'string') {
+    return sanitizeSyncErrorMessage({ message: error }, fallback);
+  }
+  return sanitizeSyncErrorMessage(error, fallback);
 }
 
 function getSyncErrorCode(error: unknown, fallback = 'STRAVA_SYNC_BATCH_FAILED') {
@@ -6475,6 +7131,11 @@ export async function upsertStravaConnection(
     refreshToken: toText(tokenResponse?.refresh_token),
     tokenExpiresAt: new Date(Number(tokenResponse?.expires_at) * 1000).toISOString(),
     scope: toText(tokenResponse?.scope) || toText(callbackScope) || resolveStravaScopes(),
+    cleanupStatus: 'NOT_REQUIRED',
+    cleanupRequestedAt: null,
+    cleanupCompletedAt: null,
+    cleanupError: null,
+    terminationReason: null,
     status: 'ACTIVE',
     disconnectedAt: null,
     rawAthlete: athlete,
@@ -6523,22 +7184,29 @@ export async function getCurrentUserStravaStatus(tenantId: number | string, user
 }
 
 export async function disconnectCurrentUser(tenantId: number | string, userId: number) {
-  const connection = await strapi.db.query(STRAVA_CONNECTION_UID).findOne({
-    where: mergeTenantWhere({ user: { id: userId } }, tenantId),
-    select: ['id'],
-  });
-
-  if (connection?.id) {
-    await strapi.db.query(STRAVA_CONNECTION_UID).update({
-      where: { id: connection.id },
-      data: {
-        status: 'DISCONNECTED',
-        disconnectedAt: new Date().toISOString(),
-        accessToken: null,
-        refreshToken: null,
-      },
-    });
+  const connection = await getCurrentStravaConnectionForTermination(tenantId, userId)
+  if (!connection?.id) {
+    return {
+      success: true,
+    }
   }
+
+  const cleanupStatus = normalizeStravaConnectionCleanupStatus(connection.cleanupStatus)
+  if (cleanupStatus === 'COMPLETED' && toText(connection.status).toUpperCase() === 'DISCONNECTED') {
+    return {
+      success: true,
+    }
+  }
+
+  await blockStravaConnectionAccessForTermination(connection, 'manual_disconnect')
+  const remoteRevoke = await revokeStravaAuthorizationRemotely(connection)
+  await terminateStravaConnection({
+    connection: connection.id,
+    terminationReason: 'manual_disconnect',
+    source: 'manual_disconnect',
+    skipRemoteRevoke: true,
+    completionCleanupError: remoteRevoke.success ? null : remoteRevoke.warning,
+  })
 
   return {
     success: true,
@@ -7790,6 +8458,7 @@ export default {
   consumeOAuthState,
   exchangeCodeForToken,
   upsertStravaConnection,
+  terminateStravaConnection,
   getCurrentUserStravaStatus,
   disconnectCurrentUser,
   refreshStravaToken,

@@ -1,0 +1,180 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_registration_components",
+  "info": {
+    "singularName": "exam-registration-component",
+    "pluralName": "exam-registration-components",
+    "displayName": "Exam Registration Component",
+    "description": "Tenant-scoped component registrations within an exam registration."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "examRegistration": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-registration.exam-registration",
+      "inversedBy": "componentRegistrations",
+      "required": true
+    },
+    "examRegistrationSubject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-registration-subject.exam-registration-subject",
+      "inversedBy": "componentRegistrations",
+      "required": true
+    },
+    "examRoundComponent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-round-component.exam-round-component",
+      "inversedBy": "registrationComponents",
+      "required": true
+    },
+    "participationType": {
+      "type": "enumeration",
+      "enum": [
+        "new_exam",
+        "preserved_result",
+        "equivalent_result",
+        "exempted",
+        "not_required"
+      ],
+      "required": true,
+      "default": "new_exam"
+    },
+    "registrationStatus": {
+      "type": "enumeration",
+      "enum": [
+        "registered",
+        "accepted",
+        "cancelled",
+        "completed"
+      ],
+      "required": true,
+      "default": "registered"
+    },
+    "eligibilityStatus": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "eligible",
+        "ineligible"
+      ],
+      "required": true,
+      "default": "pending"
+    },
+    "schedulingStatus": {
+      "type": "enumeration",
+      "enum": [
+        "not_scheduled",
+        "scheduled",
+        "reschedule_required"
+      ],
+      "required": true,
+      "default": "not_scheduled"
+    },
+    "attendanceStatus": {
+      "type": "enumeration",
+      "enum": [
+        "not_checked_in",
+        "present",
+        "late",
+        "absent_excused",
+        "absent_unexcused",
+        "suspended",
+        "technical_issue",
+        "rescheduled",
+        "completed"
+      ],
+      "required": true,
+      "default": "not_checked_in"
+    },
+    "resultStatus": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "available",
+        "insufficient_data",
+        "passed",
+        "failed",
+        "cancelled"
+      ],
+      "required": true,
+      "default": "pending"
+    },
+    "feeAmount": {
+      "type": "decimal",
+      "required": true,
+      "default": 0
+    },
+    "componentCodeSnapshot": {
+      "type": "string",
+      "maxLength": 100,
+      "index": true
+    },
+    "nameSnapshot": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "isRequiredSnapshot": {
+      "type": "boolean",
+      "default": true
+    },
+    "allowSeparateRegistrationSnapshot": {
+      "type": "boolean",
+      "default": false
+    },
+    "durationMinutesSnapshot": {
+      "type": "integer",
+      "min": 0
+    },
+    "examMethodSnapshot": {
+      "type": "enumeration",
+      "enum": [
+        "computer",
+        "paper",
+        "oral",
+        "practical",
+        "mixed",
+        "other"
+      ],
+      "default": "other"
+    },
+    "sourceResult": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-component-result.exam-component-result",
+      "inversedBy": "sourceRegistrations"
+    },
+    "examSchedule": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-schedule.exam-schedule",
+      "inversedBy": "registrationComponents"
+    },
+    "note": {
+      "type": "text"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "examCandidates": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-candidate.exam-candidate",
+      "mappedBy": "examRegistrationComponent"
+    },
+    "componentResults": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-component-result.exam-component-result",
+      "mappedBy": "examRegistrationComponent"
+    }
+  }
+}

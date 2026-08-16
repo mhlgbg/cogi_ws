@@ -1,0 +1,198 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_component_results",
+  "info": {
+    "singularName": "exam-component-result",
+    "pluralName": "exam-component-results",
+    "displayName": "Exam Component Result",
+    "description": "Tenant-scoped component-level exam results for learners."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "learner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::learner.learner",
+      "required": true
+    },
+    "examRound": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-round.exam-round",
+      "inversedBy": "componentResults"
+    },
+    "examRoundSubject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-round-subject.exam-round-subject",
+      "inversedBy": "componentResults"
+    },
+    "examRoundComponent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-round-component.exam-round-component",
+      "inversedBy": "componentResults"
+    },
+    "examRegistration": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-registration.exam-registration",
+      "inversedBy": "componentResults"
+    },
+    "examRegistrationComponent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-registration-component.exam-registration-component",
+      "inversedBy": "componentResults"
+    },
+    "examCandidate": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-candidate.exam-candidate",
+      "inversedBy": "componentResults"
+    },
+    "attemptNumber": {
+      "type": "integer",
+      "required": true,
+      "default": 1,
+      "min": 1
+    },
+    "score": {
+      "type": "decimal"
+    },
+    "minimumScoreSnapshot": {
+      "type": "decimal"
+    },
+    "maximumScoreSnapshot": {
+      "type": "decimal"
+    },
+    "sourceType": {
+      "type": "enumeration",
+      "enum": [
+        "itest",
+        "manual",
+        "import",
+        "preserved_result",
+        "equivalent_result",
+        "exemption"
+      ],
+      "required": true,
+      "default": "manual"
+    },
+    "sourceResult": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-component-result.exam-component-result",
+      "inversedBy": "derivedResults"
+    },
+    "reconciliationStatus": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "matched",
+        "unmatched",
+        "invalid",
+        "duplicate",
+        "reconciliation_required"
+      ],
+      "required": true,
+      "default": "pending"
+    },
+    "approvalStatus": {
+      "type": "enumeration",
+      "enum": [
+        "pending_review",
+        "verified",
+        "approved",
+        "rejected"
+      ],
+      "required": true,
+      "default": "pending_review"
+    },
+    "lockStatus": {
+      "type": "enumeration",
+      "enum": [
+        "unlocked",
+        "locked"
+      ],
+      "required": true,
+      "default": "unlocked"
+    },
+    "validityStatus": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "expired",
+        "replaced",
+        "cancelled"
+      ],
+      "required": true,
+      "default": "active"
+    },
+    "effectiveFrom": {
+      "type": "datetime"
+    },
+    "effectiveUntil": {
+      "type": "datetime"
+    },
+    "enteredBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "verifiedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "approvedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "approvedAt": {
+      "type": "datetime"
+    },
+    "lockedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "lockedAt": {
+      "type": "datetime"
+    },
+    "adjustmentReason": {
+      "type": "text"
+    },
+    "note": {
+      "type": "text"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "derivedResults": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-component-result.exam-component-result",
+      "mappedBy": "sourceResult"
+    },
+    "subjectResultLinks": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-subject-result-component.exam-subject-result-component",
+      "mappedBy": "examComponentResult"
+    },
+    "sourceRegistrations": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-registration-component.exam-registration-component",
+      "mappedBy": "sourceResult"
+    }
+  }
+}

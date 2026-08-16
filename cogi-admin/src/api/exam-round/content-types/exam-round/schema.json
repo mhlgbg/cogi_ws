@@ -1,0 +1,372 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_rounds",
+  "info": {
+    "singularName": "exam-round",
+    "pluralName": "exam-rounds",
+    "displayName": "Exam Round",
+    "description": "Tenant-scoped exam round and registration window configuration."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true,
+      "maxLength": 100,
+      "index": true
+    },
+    "name": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200
+    },
+    "examProgram": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-program.exam-program",
+      "inversedBy": "examRounds",
+      "required": true
+    },
+    "academicYear": {
+      "type": "string",
+      "maxLength": 50
+    },
+    "semester": {
+      "type": "string",
+      "maxLength": 50
+    },
+    "registrationMode": {
+      "type": "enumeration",
+      "enum": [
+        "open",
+        "restricted"
+      ],
+      "required": true,
+      "default": "open"
+    },
+    "registrationStartAt": {
+      "type": "datetime"
+    },
+    "registrationEndAt": {
+      "type": "datetime"
+    },
+    "paymentStartAt": {
+      "type": "datetime"
+    },
+    "paymentEndAt": {
+      "type": "datetime"
+    },
+    "candidateListClosingAt": {
+      "type": "datetime"
+    },
+    "examStartAt": {
+      "type": "datetime"
+    },
+    "examEndAt": {
+      "type": "datetime"
+    },
+    "paymentCalculationMethod": {
+      "type": "enumeration",
+      "enum": [
+        "program_fee",
+        "subject_fee",
+        "component_fee",
+        "fixed"
+      ],
+      "required": true,
+      "default": "program_fee"
+    },
+    "fixedFee": {
+      "type": "decimal"
+    },
+    "allowSubjectSelection": {
+      "type": "boolean",
+      "required": true,
+      "default": false
+    },
+    "allowComponentSelection": {
+      "type": "boolean",
+      "required": true,
+      "default": false
+    },
+    "requireConfirmedPayment": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
+    "allowCancellation": {
+      "type": "boolean",
+      "required": true,
+      "default": false
+    },
+    "cancellationDeadline": {
+      "type": "datetime"
+    },
+    "instructions": {
+      "type": "richtext"
+    },
+    "paymentInstructions": {
+      "type": "richtext"
+    },
+    "paymentProfile": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::payment-profile.payment-profile"
+    },
+    "paymentMethodSnapshot": {
+      "type": "enumeration",
+      "enum": [
+        "bank_transfer",
+        "cash",
+        "other"
+      ]
+    },
+    "paymentProfileNameSnapshot": {
+      "type": "string",
+      "maxLength": 150
+    },
+    "paymentProfileCodeSnapshot": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "paymentBankCodeSnapshot": {
+      "type": "string",
+      "maxLength": 20
+    },
+    "paymentBankNameSnapshot": {
+      "type": "string",
+      "maxLength": 150
+    },
+    "paymentAccountNumberSnapshot": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "paymentAccountHolderSnapshot": {
+      "type": "string",
+      "maxLength": 150
+    },
+    "paymentBankBranchSnapshot": {
+      "type": "string",
+      "maxLength": 150
+    },
+    "paymentCurrencySnapshot": {
+      "type": "string",
+      "maxLength": 10
+    },
+    "paymentTransferContentTemplateSnapshot": {
+      "type": "string",
+      "maxLength": 255
+    },
+    "paymentInstructionSnapshot": {
+      "type": "richtext"
+    },
+    "paymentSupportPhoneSnapshot": {
+      "type": "string",
+      "maxLength": 30
+    },
+    "paymentSupportEmailSnapshot": {
+      "type": "email"
+    },
+    "paymentQrImageSnapshot": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "paymentProfileCustomized": {
+      "type": "boolean",
+      "required": true,
+      "default": false
+    },
+    "paymentProfileAppliedAt": {
+      "type": "datetime"
+    },
+    "paymentProfileAppliedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "paymentSettingsUpdatedAt": {
+      "type": "datetime"
+    },
+    "paymentSettingsUpdatedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "pending_approval",
+        "approved",
+        "registration_open",
+        "registration_paused",
+        "registration_closed",
+        "preparing_exam",
+        "exam_in_progress",
+        "scoring",
+        "completed",
+        "cancelled"
+      ],
+      "required": true,
+      "default": "draft"
+    },
+    "submittedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "submittedAt": {
+      "type": "datetime"
+    },
+    "approvedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "approvedAt": {
+      "type": "datetime"
+    },
+    "returnedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "returnedAt": {
+      "type": "datetime"
+    },
+    "approvalNote": {
+      "type": "text"
+    },
+    "returnReason": {
+      "type": "text"
+    },
+    "registrationOpenedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "registrationOpenedAt": {
+      "type": "datetime"
+    },
+    "registrationPausedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "registrationPausedAt": {
+      "type": "datetime"
+    },
+    "registrationPauseReason": {
+      "type": "text"
+    },
+    "registrationResumedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "registrationResumedAt": {
+      "type": "datetime"
+    },
+    "registrationClosedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "registrationClosedAt": {
+      "type": "datetime"
+    },
+    "registrationCloseReason": {
+      "type": "text"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "examRoundSubjects": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-round-subject.exam-round-subject",
+      "mappedBy": "examRound"
+    },
+    "examRoundComponents": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-round-component.exam-round-component",
+      "mappedBy": "examRound"
+    },
+    "eligibilities": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-eligibility.exam-eligibility",
+      "mappedBy": "examRound"
+    },
+    "examRegistrations": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-registration.exam-registration",
+      "mappedBy": "examRound"
+    },
+    "examSchedules": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-schedule.exam-schedule",
+      "mappedBy": "examRound"
+    },
+    "examVenues": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::exam-venue.exam-venue",
+      "inversedBy": "examRounds"
+    },
+    "examRooms": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::exam-room.exam-room",
+      "inversedBy": "examRounds"
+    },
+    "examCandidateLists": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-candidate-list.exam-candidate-list",
+      "mappedBy": "examRound"
+    },
+    "componentResults": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-component-result.exam-component-result",
+      "mappedBy": "examRound"
+    },
+    "subjectResults": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-subject-result.exam-subject-result",
+      "mappedBy": "examRound"
+    },
+    "programResults": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-program-result.exam-program-result",
+      "mappedBy": "examRound"
+    },
+    "integrationJobs": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-integration-job.exam-integration-job",
+      "mappedBy": "examRound"
+    },
+    "outcomeAssessmentRounds": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::outcome-assessment-round.outcome-assessment-round",
+      "mappedBy": "examRounds"
+    }
+  }
+}

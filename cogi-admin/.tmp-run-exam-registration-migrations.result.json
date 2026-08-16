@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "migrations": [
+    {
+      "migrationName": "20260806_001_add_exam_registration_payment_snapshots.js",
+      "status": "applied"
+    },
+    {
+      "migrationName": "20260806_002_add_exam_registration_uniqueness_shadows.js",
+      "status": "applied"
+    }
+  ]
+}

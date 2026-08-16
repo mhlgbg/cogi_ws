@@ -1,0 +1,388 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_registrations",
+  "info": {
+    "singularName": "exam-registration",
+    "pluralName": "exam-registrations",
+    "displayName": "Exam Registration",
+    "description": "Tenant-scoped learner exam registrations."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "registrationCode": {
+      "type": "string",
+      "required": true,
+      "maxLength": 100,
+      "index": true
+    },
+    "examRound": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-round.exam-round",
+      "inversedBy": "examRegistrations",
+      "required": true
+    },
+    "learner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::learner.learner",
+      "required": true
+    },
+    "registeredAt": {
+      "type": "datetime"
+    },
+    "registrationSource": {
+      "type": "enumeration",
+      "enum": [
+        "learner",
+        "staff",
+        "import"
+      ],
+      "required": true,
+      "default": "learner"
+    },
+    "registrationStatus": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "submitted",
+        "pending_review",
+        "accepted",
+        "returned",
+        "rejected",
+        "cancelled",
+        "completed"
+      ],
+      "required": true,
+      "default": "draft"
+    },
+    "eligibilityStatus": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "eligible",
+        "temporarily_ineligible",
+        "ineligible"
+      ],
+      "required": true,
+      "default": "pending"
+    },
+    "paymentStatus": {
+      "type": "enumeration",
+      "enum": [
+        "not_required",
+        "unpaid",
+        "payment_reported",
+        "payment_under_review",
+        "partially_paid",
+        "paid",
+        "payment_rejected",
+        "exempted",
+        "refund_pending",
+        "refunded"
+      ],
+      "required": true,
+      "default": "unpaid"
+    },
+    "paymentCalculationMethodSnapshot": {
+      "type": "enumeration",
+      "enum": [
+        "fixed",
+        "program_fee",
+        "subject_fee",
+        "component_fee"
+      ],
+      "default": "program_fee"
+    },
+    "fixedFeeSnapshot": {
+      "type": "decimal"
+    },
+    "subjectFeeTotalSnapshot": {
+      "type": "decimal",
+      "default": 0
+    },
+    "componentFeeTotalSnapshot": {
+      "type": "decimal",
+      "default": 0
+    },
+    "amountDue": {
+      "type": "decimal",
+      "required": true,
+      "default": 0
+    },
+    "currency": {
+      "type": "string",
+      "maxLength": 10,
+      "default": "VND"
+    },
+    "paymentDueAt": {
+      "type": "datetime"
+    },
+    "paymentMethodSnapshot": {
+      "type": "enumeration",
+      "enum": [
+        "bank_transfer",
+        "cash",
+        "other"
+      ],
+      "default": "bank_transfer"
+    },
+    "paymentProfileNameSnapshot": {
+      "type": "string",
+      "maxLength": 150
+    },
+    "paymentProfileCodeSnapshot": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "paymentBankCodeSnapshot": {
+      "type": "string",
+      "maxLength": 20
+    },
+    "paymentBankNameSnapshot": {
+      "type": "string",
+      "maxLength": 150
+    },
+    "paymentAccountNumberSnapshot": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "paymentAccountHolderSnapshot": {
+      "type": "string",
+      "maxLength": 150
+    },
+    "paymentBankBranchSnapshot": {
+      "type": "string",
+      "maxLength": 150
+    },
+    "paymentTransferContentTemplateSnapshot": {
+      "type": "string",
+      "maxLength": 255
+    },
+    "paymentTransferContent": {
+      "type": "string",
+      "maxLength": 255
+    },
+    "paymentInstructionSnapshot": {
+      "type": "richtext"
+    },
+    "paymentSupportPhoneSnapshot": {
+      "type": "string",
+      "maxLength": 30
+    },
+    "paymentSupportEmailSnapshot": {
+      "type": "email"
+    },
+    "paymentQrImageSnapshot": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "paymentReportedAt": {
+      "type": "datetime"
+    },
+    "paymentReportedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "paymentReportNote": {
+      "type": "text"
+    },
+    "paymentTransferAt": {
+      "type": "datetime"
+    },
+    "paymentSenderName": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "paymentSenderAccount": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "paymentSenderBank": {
+      "type": "string",
+      "maxLength": 150
+    },
+    "paymentTransactionReference": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "paymentEvidence": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::file-asset.file-asset"
+    },
+    "paymentReportUpdatedAt": {
+      "type": "datetime"
+    },
+    "paymentConfirmationNote": {
+      "type": "text"
+    },
+    "paymentConfirmedAt": {
+      "type": "datetime"
+    },
+    "paymentConfirmedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "paymentRejectedAt": {
+      "type": "datetime"
+    },
+    "paymentRejectedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "paymentRejectionReason": {
+      "type": "text"
+    },
+    "calculatedAmount": {
+      "type": "decimal",
+      "required": true,
+      "default": 0
+    },
+    "discountAmount": {
+      "type": "decimal",
+      "required": true,
+      "default": 0
+    },
+    "payableAmount": {
+      "type": "decimal",
+      "required": true,
+      "default": 0
+    },
+    "confirmedPaidAmount": {
+      "type": "decimal",
+      "required": true,
+      "default": 0
+    },
+    "cancelledAt": {
+      "type": "datetime"
+    },
+    "cancellationReason": {
+      "type": "text"
+    },
+    "completedAt": {
+      "type": "datetime"
+    },
+    "studentCodeSnapshot": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "fullNameSnapshot": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "classNameSnapshot": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "cohortSnapshot": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "majorSnapshot": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "note": {
+      "type": "text"
+    },
+    "reviewedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "reviewedAt": {
+      "type": "datetime"
+    },
+    "reviewNote": {
+      "type": "text"
+    },
+    "acceptedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "acceptedAt": {
+      "type": "datetime"
+    },
+    "returnedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "returnedAt": {
+      "type": "datetime"
+    },
+    "returnReason": {
+      "type": "text"
+    },
+    "rejectedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "rejectedAt": {
+      "type": "datetime"
+    },
+    "rejectionReason": {
+      "type": "text"
+    },
+    "eligibilityReason": {
+      "type": "text"
+    },
+    "reviewHistory": {
+      "type": "json"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "subjectRegistrations": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-registration-subject.exam-registration-subject",
+      "mappedBy": "examRegistration"
+    },
+    "componentRegistrations": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-registration-component.exam-registration-component",
+      "mappedBy": "examRegistration"
+    },
+    "payments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-payment.exam-payment",
+      "mappedBy": "examRegistration"
+    },
+    "examCandidates": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-candidate.exam-candidate",
+      "mappedBy": "examRegistration"
+    },
+    "componentResults": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-component-result.exam-component-result",
+      "mappedBy": "examRegistration"
+    },
+    "programResults": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-program-result.exam-program-result",
+      "mappedBy": "examRegistration"
+    }
+  }
+}

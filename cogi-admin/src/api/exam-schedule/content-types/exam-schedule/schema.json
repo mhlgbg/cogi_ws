@@ -1,0 +1,137 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_schedules",
+  "info": {
+    "singularName": "exam-schedule",
+    "pluralName": "exam-schedules",
+    "displayName": "Exam Schedule",
+    "description": "Tenant-scoped exam schedules for round subjects and components."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "examRound": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-round.exam-round",
+      "inversedBy": "examSchedules",
+      "required": true
+    },
+    "examRoundSubject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-round-subject.exam-round-subject",
+      "inversedBy": "examSchedules",
+      "required": true
+    },
+    "examRoundComponent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-round-component.exam-round-component",
+      "inversedBy": "examSchedules",
+      "required": true
+    },
+    "startAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "durationMinutes": {
+      "type": "integer",
+      "required": true,
+      "min": 1
+    },
+    "endAt": {
+      "type": "datetime"
+    },
+    "examVenue": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-venue.exam-venue",
+      "inversedBy": "examSchedules"
+    },
+    "examRoom": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-room.exam-room",
+      "inversedBy": "examSchedules"
+    },
+    "capacity": {
+      "type": "integer",
+      "min": 0
+    },
+    "examMethod": {
+      "type": "enumeration",
+      "enum": [
+        "computer",
+        "paper",
+        "oral",
+        "practical",
+        "mixed",
+        "other"
+      ],
+      "required": true,
+      "default": "other"
+    },
+    "externalExamCode": {
+      "type": "string",
+      "maxLength": 100,
+      "index": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "scheduled",
+        "published",
+        "in_progress",
+        "completed",
+        "postponed",
+        "cancelled"
+      ],
+      "required": true,
+      "default": "draft"
+    },
+    "note": {
+      "type": "text"
+    },
+    "schedulePublishedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "schedulePublishedAt": {
+      "type": "datetime"
+    },
+    "cancelledBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "cancelledAt": {
+      "type": "datetime"
+    },
+    "cancellationReason": {
+      "type": "text"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "examCandidateLists": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-candidate-list.exam-candidate-list",
+      "mappedBy": "examSchedule"
+    },
+    "registrationComponents": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-registration-component.exam-registration-component",
+      "mappedBy": "examSchedule"
+    }
+  }
+}

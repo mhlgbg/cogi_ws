@@ -4,6 +4,7 @@ import { mergeTenantWhere, parseOptionalPositiveInt, resolveCurrentTenantId, toT
 const PUBLIC_PAGE_UID = 'api::public-page.public-page';
 const LEAD_CAMPAIGN_UID = 'api::lead-campaign.lead-campaign';
 const FORM_TEMPLATE_UID = 'api::form-template.form-template';
+const PUBLIC_PAGE_SLUG_PATTERN = /^[a-z0-9-]+$/;
 
 class PublicPageManagementError extends Error {
   status: number;
@@ -177,9 +178,13 @@ async function findPublicPageOrThrow(id: unknown, tenantId: number | string, opt
 
 function buildMutationPayload(payload: Record<string, unknown>, leadCampaign: any) {
   const nextStatus = toPublicPageStatus(payload.publicPageStatus ?? payload.status);
+  const slug = toRequiredText(payload.slug, 'slug').toLowerCase();
+  if (!PUBLIC_PAGE_SLUG_PATTERN.test(slug)) {
+    throw new PublicPageManagementError(400, 'slug is invalid');
+  }
   return {
     title: toRequiredText(payload.title, 'title'),
-    slug: toRequiredText(payload.slug, 'slug'),
+    slug,
     summary: toNullableText(payload.summary),
     contentHtml: toNullableText(payload.contentHtml),
     publicPageStatus: nextStatus,

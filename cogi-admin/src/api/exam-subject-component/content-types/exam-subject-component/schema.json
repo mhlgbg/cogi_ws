@@ -1,0 +1,58 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_subject_components",
+  "info": {
+    "singularName": "exam-subject-component",
+    "pluralName": "exam-subject-components",
+    "displayName": "Exam Subject Component",
+    "description": "Tenant-scoped component membership for an exam subject."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "examSubject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-subject.exam-subject",
+      "inversedBy": "subjectComponents",
+      "required": true
+    },
+    "examComponent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-component.exam-component",
+      "inversedBy": "subjectComponents",
+      "required": true
+    },
+    "displayOrder": {
+      "type": "integer",
+      "default": 0
+    },
+    "isRequired": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
+    "weight": {
+      "type": "decimal"
+    },
+    "passingScoreOverride": {
+      "type": "decimal"
+    },
+    "eliminationScoreOverride": {
+      "type": "decimal"
+    },
+    "durationMinutesOverride": {
+      "type": "integer",
+      "min": 0
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

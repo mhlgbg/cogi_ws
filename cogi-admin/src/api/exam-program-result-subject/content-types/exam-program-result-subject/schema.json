@@ -1,0 +1,36 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_program_result_subjects",
+  "info": {
+    "singularName": "exam-program-result-subject",
+    "pluralName": "exam-program-result-subjects",
+    "displayName": "Exam Program Result Subject",
+    "description": "Tenant-scoped bridge between program results and subject results."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "examProgramResult": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-program-result.exam-program-result",
+      "inversedBy": "programResultSubjects",
+      "required": true
+    },
+    "examSubjectResult": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-subject-result.exam-subject-result",
+      "inversedBy": "programResultLinks",
+      "required": true
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

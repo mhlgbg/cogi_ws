@@ -1,0 +1,99 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_programs",
+  "info": {
+    "singularName": "exam-program",
+    "pluralName": "exam-programs",
+    "displayName": "Exam Program",
+    "description": "Tenant-scoped exam program catalog."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true,
+      "maxLength": 100,
+      "index": true
+    },
+    "name": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200
+    },
+    "passingMethod": {
+      "type": "enumeration",
+      "enum": [
+        "all_subjects_pass",
+        "any_subject_pass",
+        "custom"
+      ],
+      "required": true,
+      "default": "all_subjects_pass"
+    },
+    "feeCalculationMethod": {
+      "type": "enumeration",
+      "enum": [
+        "sum_subject_fees",
+        "fixed"
+      ],
+      "required": true,
+      "default": "sum_subject_fees"
+    },
+    "defaultFee": {
+      "type": "decimal"
+    },
+    "targetDescription": {
+      "type": "text"
+    },
+    "validFrom": {
+      "type": "date"
+    },
+    "validTo": {
+      "type": "date"
+    },
+    "isActive": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "programSubjects": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-program-subject.exam-program-subject",
+      "mappedBy": "examProgram"
+    },
+    "examRounds": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-round.exam-round",
+      "mappedBy": "examProgram"
+    },
+    "outcomeStandards": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::outcome-standard.outcome-standard",
+      "mappedBy": "examProgram"
+    },
+    "programResults": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-program-result.exam-program-result",
+      "mappedBy": "examProgram"
+    },
+    "outcomeAssessmentRounds": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::outcome-assessment-round.outcome-assessment-round",
+      "mappedBy": "examProgram"
+    }
+  }
+}

@@ -68,6 +68,48 @@
       "relation": "oneToMany",
       "target": "api::payment.payment",
       "mappedBy": "learner"
+    },
+    "examEligibilities": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-eligibility.exam-eligibility",
+      "mappedBy": "learner"
+    },
+    "examRegistrations": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-registration.exam-registration",
+      "mappedBy": "learner"
+    },
+    "examCandidates": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-candidate.exam-candidate",
+      "mappedBy": "learner"
+    },
+    "examComponentResults": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-component-result.exam-component-result",
+      "mappedBy": "learner"
+    },
+    "examSubjectResults": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-subject-result.exam-subject-result",
+      "mappedBy": "learner"
+    },
+    "examProgramResults": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-program-result.exam-program-result",
+      "mappedBy": "learner"
+    },
+    "outcomeAssessmentCandidates": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::outcome-assessment-candidate.outcome-assessment-candidate",
+      "mappedBy": "learner"
     }
   }
 }

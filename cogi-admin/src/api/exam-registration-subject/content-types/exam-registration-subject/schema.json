@@ -1,0 +1,133 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_registration_subjects",
+  "info": {
+    "singularName": "exam-registration-subject",
+    "pluralName": "exam-registration-subjects",
+    "displayName": "Exam Registration Subject",
+    "description": "Tenant-scoped subject registrations within an exam registration."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "examRegistration": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-registration.exam-registration",
+      "inversedBy": "subjectRegistrations",
+      "required": true
+    },
+    "examRoundSubject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-round-subject.exam-round-subject",
+      "inversedBy": "registrationSubjects",
+      "required": true
+    },
+    "participationType": {
+      "type": "enumeration",
+      "enum": [
+        "new_exam",
+        "preserved_result",
+        "equivalent_result",
+        "exempted",
+        "not_required"
+      ],
+      "required": true,
+      "default": "new_exam"
+    },
+    "registrationStatus": {
+      "type": "enumeration",
+      "enum": [
+        "registered",
+        "accepted",
+        "cancelled",
+        "completed"
+      ],
+      "required": true,
+      "default": "registered"
+    },
+    "feeAmount": {
+      "type": "decimal",
+      "required": true,
+      "default": 0
+    },
+    "subjectCodeSnapshot": {
+      "type": "string",
+      "maxLength": 100,
+      "index": true
+    },
+    "nameSnapshot": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "isRequiredSnapshot": {
+      "type": "boolean",
+      "default": true
+    },
+    "allowSeparateRegistrationSnapshot": {
+      "type": "boolean",
+      "default": false
+    },
+    "subjectResultStatus": {
+      "type": "enumeration",
+      "enum": [
+        "not_evaluated",
+        "insufficient_data",
+        "passed",
+        "failed"
+      ],
+      "required": true,
+      "default": "not_evaluated"
+    },
+    "calculationMethodSnapshot": {
+      "type": "enumeration",
+      "enum": [
+        "total",
+        "average",
+        "all_components_pass",
+        "custom"
+      ],
+      "default": "total"
+    },
+    "requiredAggregateScoreSnapshot": {
+      "type": "decimal"
+    },
+    "requireAllComponentsSnapshot": {
+      "type": "boolean",
+      "default": true
+    },
+    "ruleDescriptionSnapshot": {
+      "type": "richtext"
+    },
+    "note": {
+      "type": "text"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "componentRegistrations": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-registration-component.exam-registration-component",
+      "mappedBy": "examRegistrationSubject"
+    },
+    "subjectResults": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-subject-result.exam-subject-result",
+      "mappedBy": "examRegistrationSubject"
+    },
+    "examCandidates": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-candidate.exam-candidate",
+      "mappedBy": "examRegistrationSubject"
+    }
+  }
+}

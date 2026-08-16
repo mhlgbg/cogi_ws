@@ -1,0 +1,81 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_subjects",
+  "info": {
+    "singularName": "exam-subject",
+    "pluralName": "exam-subjects",
+    "displayName": "Exam Subject",
+    "description": "Tenant-scoped exam subject catalog."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true,
+      "maxLength": 100,
+      "index": true
+    },
+    "name": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200
+    },
+    "calculationMethod": {
+      "type": "enumeration",
+      "enum": [
+        "total",
+        "average",
+        "all_components_pass",
+        "custom"
+      ],
+      "required": true,
+      "default": "total"
+    },
+    "requiredAggregateScore": {
+      "type": "decimal"
+    },
+    "requireAllComponents": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
+    "defaultFee": {
+      "type": "decimal"
+    },
+    "ruleDescription": {
+      "type": "richtext"
+    },
+    "isActive": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "subjectComponents": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-subject-component.exam-subject-component",
+      "mappedBy": "examSubject"
+    },
+    "programSubjects": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-program-subject.exam-program-subject",
+      "mappedBy": "examSubject"
+    },
+    "examRoundSubjects": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-round-subject.exam-round-subject",
+      "mappedBy": "examSubject"
+    }
+  }
+}

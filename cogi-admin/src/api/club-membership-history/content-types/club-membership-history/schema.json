@@ -1,0 +1,127 @@
+{
+  "kind": "collectionType",
+  "collectionName": "club_membership_histories",
+  "info": {
+    "singularName": "club-membership-history",
+    "pluralName": "club-membership-histories",
+    "displayName": "Club Membership History",
+    "description": "Append-only history events for meaningful sports club membership lifecycle changes."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "clubMembershipHistories",
+      "required": true
+    },
+    "membership": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::club-membership.club-membership",
+      "required": true
+    },
+    "eventType": {
+      "type": "enumeration",
+      "enum": [
+        "joined",
+        "approved",
+        "rejected",
+        "left",
+        "rejoined",
+        "activated",
+        "deactivated",
+        "suspended",
+        "reactivated",
+        "role_changed",
+        "position_changed",
+        "member_code_changed",
+        "info_updated",
+        "other"
+      ],
+      "required": true,
+      "index": true
+    },
+    "eventAt": {
+      "type": "datetime",
+      "required": true,
+      "index": true
+    },
+    "fromStatus": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "active",
+        "inactive",
+        "left",
+        "suspended",
+        "rejected"
+      ]
+    },
+    "toStatus": {
+      "type": "enumeration",
+      "enum": [
+        "pending",
+        "active",
+        "inactive",
+        "left",
+        "suspended",
+        "rejected"
+      ]
+    },
+    "fromRole": {
+      "type": "enumeration",
+      "enum": [
+        "member",
+        "manager",
+        "admin",
+        "owner"
+      ]
+    },
+    "toRole": {
+      "type": "enumeration",
+      "enum": [
+        "member",
+        "manager",
+        "admin",
+        "owner"
+      ]
+    },
+    "fromPositionTitle": {
+      "type": "string",
+      "maxLength": 150
+    },
+    "toPositionTitle": {
+      "type": "string",
+      "maxLength": 150
+    },
+    "note": {
+      "type": "text"
+    },
+    "metadata": {
+      "type": "json"
+    },
+    "performedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "source": {
+      "type": "enumeration",
+      "enum": [
+        "system",
+        "admin",
+        "self_service",
+        "import",
+        "campaign",
+        "invite",
+        "other"
+      ],
+      "default": "admin"
+    }
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_payments",
+  "info": {
+    "singularName": "exam-payment",
+    "pluralName": "exam-payments",
+    "displayName": "Exam Payment",
+    "description": "Tenant-scoped payment reports and confirmations for exam registrations."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "examRegistration": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-registration.exam-registration",
+      "inversedBy": "payments",
+      "required": true
+    },
+    "transactionCode": {
+      "type": "string",
+      "maxLength": 100,
+      "index": true
+    },
+    "amount": {
+      "type": "decimal",
+      "required": true
+    },
+    "paymentMethod": {
+      "type": "enumeration",
+      "enum": [
+        "bank_transfer",
+        "cash",
+        "online",
+        "accounting_confirmation",
+        "other"
+      ],
+      "required": true,
+      "default": "bank_transfer"
+    },
+    "payerName": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "paidAt": {
+      "type": "datetime"
+    },
+    "reportedAt": {
+      "type": "datetime"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "reported",
+        "under_review",
+        "confirmed",
+        "rejected",
+        "refund_pending",
+        "refunded",
+        "cancelled"
+      ],
+      "required": true,
+      "default": "reported"
+    },
+    "evidenceFiles": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::file-asset.file-asset"
+    },
+    "reportedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "verifiedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "verifiedAt": {
+      "type": "datetime"
+    },
+    "rejectionReason": {
+      "type": "text"
+    },
+    "refundAmount": {
+      "type": "decimal",
+      "required": true,
+      "default": 0
+    },
+    "refundedAt": {
+      "type": "datetime"
+    },
+    "note": {
+      "type": "text"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

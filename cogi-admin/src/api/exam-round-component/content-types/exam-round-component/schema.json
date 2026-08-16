@@ -1,0 +1,126 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_round_components",
+  "info": {
+    "singularName": "exam-round-component",
+    "pluralName": "exam-round-components",
+    "displayName": "Exam Round Component",
+    "description": "Tenant-scoped component snapshot inside an exam round subject."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "examRound": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-round.exam-round",
+      "inversedBy": "examRoundComponents",
+      "required": true
+    },
+    "examRoundSubject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-round-subject.exam-round-subject",
+      "inversedBy": "examRoundComponents",
+      "required": true
+    },
+    "examComponent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-component.exam-component",
+      "inversedBy": "examRoundComponents",
+      "required": true
+    },
+    "nameSnapshot": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200
+    },
+    "minimumScoreSnapshot": {
+      "type": "decimal"
+    },
+    "maximumScoreSnapshot": {
+      "type": "decimal"
+    },
+    "passingScoreSnapshot": {
+      "type": "decimal"
+    },
+    "eliminationScoreSnapshot": {
+      "type": "decimal"
+    },
+    "durationMinutes": {
+      "type": "integer",
+      "min": 0
+    },
+    "examMethod": {
+      "type": "enumeration",
+      "enum": [
+        "computer",
+        "paper",
+        "oral",
+        "practical",
+        "mixed",
+        "other"
+      ],
+      "default": "other"
+    },
+    "fee": {
+      "type": "decimal"
+    },
+    "isRequired": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
+    "allowSeparateRegistration": {
+      "type": "boolean",
+      "required": true,
+      "default": false
+    },
+    "externalExamCode": {
+      "type": "string",
+      "maxLength": 100,
+      "index": true
+    },
+    "displayOrder": {
+      "type": "integer",
+      "default": 0
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "inactive",
+        "cancelled"
+      ],
+      "required": true,
+      "default": "active"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "registrationComponents": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-registration-component.exam-registration-component",
+      "mappedBy": "examRoundComponent"
+    },
+    "examSchedules": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-schedule.exam-schedule",
+      "mappedBy": "examRoundComponent"
+    },
+    "componentResults": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-component-result.exam-component-result",
+      "mappedBy": "examRoundComponent"
+    }
+  }
+}

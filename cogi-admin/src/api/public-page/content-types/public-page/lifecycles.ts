@@ -3,6 +3,7 @@ import { extractRelationRef, toText, whereByParam } from '../../../../utils/tena
 
 const PUBLIC_PAGE_UID = 'api::public-page.public-page';
 const LEAD_CAMPAIGN_UID = 'api::lead-campaign.lead-campaign';
+const PUBLIC_PAGE_SLUG_PATTERN = /^[a-z0-9-]+$/;
 
 type GenericRecord = Record<string, unknown>;
 
@@ -17,6 +18,18 @@ function slugifyVietnamese(value: unknown) {
     .replace(/-{2,}/g, '-')
     .slice(0, 160)
     .replace(/-+$/g, '');
+}
+
+function sanitizeManualSlug(value: unknown) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, (char) => (char === 'Đ' ? 'D' : 'd'))
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]+/g, '')
+    .replace(/-{2,}/g, '-')
+    .slice(0, 160);
 }
 
 function getRequestContextTenantId(): number | string | null {
@@ -143,12 +156,18 @@ async function ensurePublicPageValid(params: { data?: GenericRecord; where?: unk
   data.tenant = tenantRef;
 
   const title = toText(data.title ?? existing?.title);
-  const slug = slugifyVietnamese(toText(data.slug) || title || existing?.slug);
+  const hasManualSlug = toText(data.slug);
+  const slug = hasManualSlug
+    ? sanitizeManualSlug(hasManualSlug)
+    : slugifyVietnamese(title || existing?.slug);
   if (!title) {
     throw new errors.ApplicationError('title is required');
   }
   if (!slug) {
     throw new errors.ApplicationError('slug is required');
+  }
+  if (!PUBLIC_PAGE_SLUG_PATTERN.test(slug)) {
+    throw new errors.ApplicationError('slug is invalid');
   }
 
   data.title = title;

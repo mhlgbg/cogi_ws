@@ -1,0 +1,138 @@
+{
+  "kind": "collectionType",
+  "collectionName": "sports_clubs",
+  "info": {
+    "singularName": "sports-club",
+    "pluralName": "sports-clubs",
+    "displayName": "Sports Club",
+    "description": "Tenant-scoped sports clubs, teams, chapters, and communities with optional parent-child hierarchy."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "sportsClubs",
+      "required": true
+    },
+    "parentClub": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::sports-club.sports-club",
+      "inversedBy": "childClubs"
+    },
+    "childClubs": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::sports-club.sports-club",
+      "mappedBy": "parentClub"
+    },
+    "code": {
+      "type": "string",
+      "required": true,
+      "maxLength": 100,
+      "index": true
+    },
+    "name": {
+      "type": "string",
+      "required": true,
+      "maxLength": 150
+    },
+    "shortName": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "slug": {
+      "type": "string",
+      "required": true,
+      "maxLength": 150,
+      "index": true
+    },
+    "clubType": {
+      "type": "enumeration",
+      "enum": [
+        "community",
+        "club",
+        "team",
+        "chapter",
+        "training_group",
+        "other"
+      ],
+      "required": true,
+      "default": "club"
+    },
+    "sportType": {
+      "type": "enumeration",
+      "enum": [
+        "running",
+        "cycling",
+        "badminton",
+        "football",
+        "swimming",
+        "multisport",
+        "other"
+      ],
+      "default": "running"
+    },
+    "description": {
+      "type": "text"
+    },
+    "logo": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "coverImage": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "inactive",
+        "archived"
+      ],
+      "required": true,
+      "default": "active",
+      "index": true
+    },
+    "joinPolicy": {
+      "type": "enumeration",
+      "enum": [
+        "open",
+        "approval",
+        "invite_only",
+        "closed"
+      ],
+      "required": true,
+      "default": "approval"
+    },
+    "foundedAt": {
+      "type": "date"
+    },
+    "contactPhone": {
+      "type": "string",
+      "maxLength": 30
+    },
+    "contactEmail": {
+      "type": "email"
+    },
+    "address": {
+      "type": "text"
+    },
+    "website": {
+      "type": "string",
+      "maxLength": 255
+    }
+  }
+}

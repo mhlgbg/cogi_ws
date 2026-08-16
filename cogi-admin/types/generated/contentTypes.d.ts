@@ -1714,6 +1714,186 @@ export interface ApiClassClass extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiClubMembershipHistoryClubMembershipHistory
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'club_membership_histories';
+  info: {
+    description: 'Append-only history events for meaningful sports club membership lifecycle changes.';
+    displayName: 'Club Membership History';
+    pluralName: 'club-membership-histories';
+    singularName: 'club-membership-history';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    eventAt: Schema.Attribute.DateTime & Schema.Attribute.Required;
+    eventType: Schema.Attribute.Enumeration<
+      [
+        'joined',
+        'approved',
+        'rejected',
+        'left',
+        'rejoined',
+        'activated',
+        'deactivated',
+        'suspended',
+        'reactivated',
+        'role_changed',
+        'position_changed',
+        'member_code_changed',
+        'info_updated',
+        'other',
+      ]
+    > &
+      Schema.Attribute.Required;
+    fromPositionTitle: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    fromRole: Schema.Attribute.Enumeration<
+      ['member', 'manager', 'admin', 'owner']
+    >;
+    fromStatus: Schema.Attribute.Enumeration<
+      ['pending', 'active', 'inactive', 'left', 'suspended', 'rejected']
+    >;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::club-membership-history.club-membership-history'
+    > &
+      Schema.Attribute.Private;
+    membership: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::club-membership.club-membership'
+    > &
+      Schema.Attribute.Required;
+    metadata: Schema.Attribute.JSON;
+    note: Schema.Attribute.Text;
+    performedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    source: Schema.Attribute.Enumeration<
+      [
+        'system',
+        'admin',
+        'self_service',
+        'import',
+        'campaign',
+        'invite',
+        'other',
+      ]
+    > &
+      Schema.Attribute.DefaultTo<'admin'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    toPositionTitle: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    toRole: Schema.Attribute.Enumeration<
+      ['member', 'manager', 'admin', 'owner']
+    >;
+    toStatus: Schema.Attribute.Enumeration<
+      ['pending', 'active', 'inactive', 'left', 'suspended', 'rejected']
+    >;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiClubMembershipClubMembership
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'club_memberships';
+  info: {
+    description: 'Tenant-scoped current membership relation between one sports profile and one sports club.';
+    displayName: 'Club Membership';
+    pluralName: 'club-memberships';
+    singularName: 'club-membership';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    approvedAt: Schema.Attribute.DateTime;
+    approvedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    club: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::sports-club.sports-club'
+    > &
+      Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    joinedAt: Schema.Attribute.Date;
+    joinMessage: Schema.Attribute.Text;
+    leftAt: Schema.Attribute.Date;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::club-membership.club-membership'
+    > &
+      Schema.Attribute.Private;
+    memberCode: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    note: Schema.Attribute.Text;
+    oldMemberCode: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    positionTitle: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    publishedAt: Schema.Attribute.DateTime;
+    role: Schema.Attribute.Enumeration<
+      ['member', 'manager', 'admin', 'owner']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'member'>;
+    source: Schema.Attribute.Enumeration<
+      [
+        'manual_import',
+        'self_registration',
+        'campaign',
+        'invite',
+        'admin_created',
+        'other',
+      ]
+    >;
+    sourceReference: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 255;
+      }>;
+    sportsProfile: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::sports-profile.sports-profile'
+    > &
+      Schema.Attribute.Required;
+    status: Schema.Attribute.Enumeration<
+      ['pending', 'active', 'inactive', 'left', 'suspended', 'rejected']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'active'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiContentBlockContentBlock
   extends Struct.CollectionTypeSchema {
   collectionName: 'content_blocks';
@@ -2088,6 +2268,2464 @@ export interface ApiEnrollmentEnrollment extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private;
     publishedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamCandidateListExamCandidateList
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_candidate_lists';
+  info: {
+    description: 'Tenant-scoped candidate lists for exam schedules.';
+    displayName: 'Exam Candidate List';
+    pluralName: 'exam-candidate-lists';
+    singularName: 'exam-candidate-list';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    approvalStatus: Schema.Attribute.Enumeration<
+      ['draft', 'pending_approval', 'approved', 'rejected']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+    approvedAt: Schema.Attribute.DateTime;
+    approvedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    code: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    examCandidates: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-candidate.exam-candidate'
+    >;
+    examRound: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-round.exam-round'
+    > &
+      Schema.Attribute.Required;
+    examSchedule: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-schedule.exam-schedule'
+    > &
+      Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-candidate-list.exam-candidate-list'
+    > &
+      Schema.Attribute.Private;
+    lockedAt: Schema.Attribute.DateTime;
+    lockedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    lockStatus: Schema.Attribute.Enumeration<['unlocked', 'locked']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'unlocked'>;
+    name: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    note: Schema.Attribute.Text;
+    preparedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    returnedAt: Schema.Attribute.DateTime;
+    returnedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    returnReason: Schema.Attribute.Text;
+    submittedAt: Schema.Attribute.DateTime;
+    submittedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    unlockedAt: Schema.Attribute.DateTime;
+    unlockedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    unlockReason: Schema.Attribute.Text;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    version: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<1>;
+  };
+}
+
+export interface ApiExamCandidateExamCandidate
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_candidates';
+  info: {
+    description: 'Tenant-scoped scheduled candidates in an exam candidate list.';
+    displayName: 'Exam Candidate';
+    pluralName: 'exam-candidates';
+    singularName: 'exam-candidate';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    attendanceStatus: Schema.Attribute.Enumeration<
+      [
+        'not_checked_in',
+        'present',
+        'late',
+        'absent_excused',
+        'absent_unexcused',
+        'suspended',
+        'technical_issue',
+        'rescheduled',
+        'completed',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'not_checked_in'>;
+    candidateNumber: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    candidateStatus: Schema.Attribute.Enumeration<
+      [
+        'scheduled',
+        'present',
+        'late',
+        'absent',
+        'suspended',
+        'technical_issue',
+        'rescheduled',
+        'completed',
+        'cancelled',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'scheduled'>;
+    componentResults: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-component-result.exam-component-result'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    examAccount: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    examCandidateList: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-candidate-list.exam-candidate-list'
+    > &
+      Schema.Attribute.Required;
+    examRegistration: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-registration.exam-registration'
+    > &
+      Schema.Attribute.Required;
+    examRegistrationComponent: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-registration-component.exam-registration-component'
+    > &
+      Schema.Attribute.Required;
+    examRegistrationSubject: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-registration-subject.exam-registration-subject'
+    > &
+      Schema.Attribute.Required;
+    externalCandidateId: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    learner: Schema.Attribute.Relation<'manyToOne', 'api::learner.learner'> &
+      Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-candidate.exam-candidate'
+    > &
+      Schema.Attribute.Private;
+    note: Schema.Attribute.Text;
+    publishedAt: Schema.Attribute.DateTime;
+    seatNumber: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    sequenceNumber: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      >;
+    synchronizationStatus: Schema.Attribute.Enumeration<
+      [
+        'not_required',
+        'pending',
+        'synced',
+        'failed',
+        'resync_required',
+        'cancelled',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'not_required'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamComponentResultExamComponentResult
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_component_results';
+  info: {
+    description: 'Tenant-scoped component-level exam results for learners.';
+    displayName: 'Exam Component Result';
+    pluralName: 'exam-component-results';
+    singularName: 'exam-component-result';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    adjustmentReason: Schema.Attribute.Text;
+    approvalStatus: Schema.Attribute.Enumeration<
+      ['pending_review', 'verified', 'approved', 'rejected']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending_review'>;
+    approvedAt: Schema.Attribute.DateTime;
+    approvedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    attemptNumber: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<1>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    derivedResults: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-component-result.exam-component-result'
+    >;
+    effectiveFrom: Schema.Attribute.DateTime;
+    effectiveUntil: Schema.Attribute.DateTime;
+    enteredBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    examCandidate: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-candidate.exam-candidate'
+    >;
+    examRegistration: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-registration.exam-registration'
+    >;
+    examRegistrationComponent: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-registration-component.exam-registration-component'
+    >;
+    examRound: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-round.exam-round'
+    >;
+    examRoundComponent: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-round-component.exam-round-component'
+    >;
+    examRoundSubject: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-round-subject.exam-round-subject'
+    >;
+    learner: Schema.Attribute.Relation<'manyToOne', 'api::learner.learner'> &
+      Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-component-result.exam-component-result'
+    > &
+      Schema.Attribute.Private;
+    lockedAt: Schema.Attribute.DateTime;
+    lockedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    lockStatus: Schema.Attribute.Enumeration<['unlocked', 'locked']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'unlocked'>;
+    maximumScoreSnapshot: Schema.Attribute.Decimal;
+    minimumScoreSnapshot: Schema.Attribute.Decimal;
+    note: Schema.Attribute.Text;
+    publishedAt: Schema.Attribute.DateTime;
+    reconciliationStatus: Schema.Attribute.Enumeration<
+      [
+        'pending',
+        'matched',
+        'unmatched',
+        'invalid',
+        'duplicate',
+        'reconciliation_required',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending'>;
+    score: Schema.Attribute.Decimal;
+    sourceRegistrations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-registration-component.exam-registration-component'
+    >;
+    sourceResult: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-component-result.exam-component-result'
+    >;
+    sourceType: Schema.Attribute.Enumeration<
+      [
+        'itest',
+        'manual',
+        'import',
+        'preserved_result',
+        'equivalent_result',
+        'exemption',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'manual'>;
+    subjectResultLinks: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-subject-result-component.exam-subject-result-component'
+    >;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    validityStatus: Schema.Attribute.Enumeration<
+      ['active', 'expired', 'replaced', 'cancelled']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'active'>;
+    verifiedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+  };
+}
+
+export interface ApiExamComponentExamComponent
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_components';
+  info: {
+    description: 'Tenant-scoped skill or exam part catalog.';
+    displayName: 'Exam Component';
+    pluralName: 'exam-components';
+    singularName: 'exam-component';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    code: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    componentType: Schema.Attribute.Enumeration<['skill', 'part']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'skill'>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    defaultDurationMinutes: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      >;
+    description: Schema.Attribute.Text;
+    displayOrder: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    eliminationScore: Schema.Attribute.Decimal;
+    examMethod: Schema.Attribute.Enumeration<
+      ['computer', 'paper', 'oral', 'practical', 'mixed', 'other']
+    > &
+      Schema.Attribute.DefaultTo<'other'>;
+    examRoundComponents: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-round-component.exam-round-component'
+    >;
+    isActive: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-component.exam-component'
+    > &
+      Schema.Attribute.Private;
+    maximumScore: Schema.Attribute.Decimal & Schema.Attribute.Required;
+    minimumScore: Schema.Attribute.Decimal &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<0>;
+    name: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    passingScore: Schema.Attribute.Decimal;
+    publishedAt: Schema.Attribute.DateTime;
+    subjectComponents: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-subject-component.exam-subject-component'
+    >;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamEligibilityExamEligibility
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_eligibilities';
+  info: {
+    description: 'Tenant-scoped learner eligibility records for an exam round.';
+    displayName: 'Exam Eligibility';
+    pluralName: 'exam-eligibilities';
+    singularName: 'exam-eligibility';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    eligibilityStatus: Schema.Attribute.Enumeration<
+      ['pending', 'eligible', 'temporarily_ineligible', 'ineligible']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending'>;
+    examRound: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-round.exam-round'
+    > &
+      Schema.Attribute.Required;
+    learner: Schema.Attribute.Relation<'manyToOne', 'api::learner.learner'> &
+      Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-eligibility.exam-eligibility'
+    > &
+      Schema.Attribute.Private;
+    note: Schema.Attribute.Text;
+    publishedAt: Schema.Attribute.DateTime;
+    reason: Schema.Attribute.Text;
+    reviewedAt: Schema.Attribute.DateTime;
+    reviewedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    source: Schema.Attribute.Enumeration<
+      ['synchronized', 'imported', 'manual', 'rule_based']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'manual'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamIntegrationItemExamIntegrationItem
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_integration_items';
+  info: {
+    description: 'Tenant-scoped integration item records for exam data exchange.';
+    displayName: 'Exam Integration Item';
+    pluralName: 'exam-integration-items';
+    singularName: 'exam-integration-item';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    actionType: Schema.Attribute.Enumeration<
+      ['create', 'update', 'cancel', 'import']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'create'>;
+    attempts: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    entityId: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    entityType: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    externalId: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    idempotencyKey: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 255;
+      }>;
+    integrationJob: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-integration-job.exam-integration-job'
+    > &
+      Schema.Attribute.Required;
+    lastError: Schema.Attribute.Text;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-integration-item.exam-integration-item'
+    > &
+      Schema.Attribute.Private;
+    processedAt: Schema.Attribute.DateTime;
+    publishedAt: Schema.Attribute.DateTime;
+    requestPayload: Schema.Attribute.JSON & Schema.Attribute.DefaultTo<{}>;
+    responsePayload: Schema.Attribute.JSON & Schema.Attribute.DefaultTo<{}>;
+    status: Schema.Attribute.Enumeration<
+      [
+        'pending',
+        'processing',
+        'success',
+        'failed',
+        'retry_required',
+        'cancelled',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamIntegrationJobExamIntegrationJob
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_integration_jobs';
+  info: {
+    description: 'Tenant-scoped integration jobs for exam data exchange.';
+    displayName: 'Exam Integration Job';
+    pluralName: 'exam-integration-jobs';
+    singularName: 'exam-integration-job';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    completedAt: Schema.Attribute.DateTime;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    examRound: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-round.exam-round'
+    >;
+    failedItems: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
+    initiatedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    integrationItems: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-integration-item.exam-integration-item'
+    >;
+    integrationType: Schema.Attribute.Enumeration<
+      [
+        'student_import',
+        'candidate_export',
+        'candidate_update',
+        'candidate_cancel',
+        'score_import',
+        'recognition_export',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'student_import'>;
+    lastError: Schema.Attribute.Text;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-integration-job.exam-integration-job'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    requestMetadata: Schema.Attribute.JSON & Schema.Attribute.DefaultTo<{}>;
+    responseMetadata: Schema.Attribute.JSON & Schema.Attribute.DefaultTo<{}>;
+    sourceSystem: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    startedAt: Schema.Attribute.DateTime;
+    status: Schema.Attribute.Enumeration<
+      [
+        'pending',
+        'processing',
+        'completed',
+        'partially_completed',
+        'failed',
+        'cancelled',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending'>;
+    successItems: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
+    targetSystem: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    totalItems: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamPaymentExamPayment extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_payments';
+  info: {
+    description: 'Tenant-scoped payment reports and confirmations for exam registrations.';
+    displayName: 'Exam Payment';
+    pluralName: 'exam-payments';
+    singularName: 'exam-payment';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    amount: Schema.Attribute.Decimal & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    evidenceFiles: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::file-asset.file-asset'
+    >;
+    examRegistration: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-registration.exam-registration'
+    > &
+      Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-payment.exam-payment'
+    > &
+      Schema.Attribute.Private;
+    note: Schema.Attribute.Text;
+    paidAt: Schema.Attribute.DateTime;
+    payerName: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    paymentMethod: Schema.Attribute.Enumeration<
+      ['bank_transfer', 'cash', 'online', 'accounting_confirmation', 'other']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'bank_transfer'>;
+    publishedAt: Schema.Attribute.DateTime;
+    refundAmount: Schema.Attribute.Decimal &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<0>;
+    refundedAt: Schema.Attribute.DateTime;
+    rejectionReason: Schema.Attribute.Text;
+    reportedAt: Schema.Attribute.DateTime;
+    reportedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    status: Schema.Attribute.Enumeration<
+      [
+        'reported',
+        'under_review',
+        'confirmed',
+        'rejected',
+        'refund_pending',
+        'refunded',
+        'cancelled',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'reported'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    transactionCode: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    verifiedAt: Schema.Attribute.DateTime;
+    verifiedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+  };
+}
+
+export interface ApiExamProgramResultSubjectExamProgramResultSubject
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_program_result_subjects';
+  info: {
+    description: 'Tenant-scoped bridge between program results and subject results.';
+    displayName: 'Exam Program Result Subject';
+    pluralName: 'exam-program-result-subjects';
+    singularName: 'exam-program-result-subject';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    examProgramResult: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-program-result.exam-program-result'
+    > &
+      Schema.Attribute.Required;
+    examSubjectResult: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-subject-result.exam-subject-result'
+    > &
+      Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-program-result-subject.exam-program-result-subject'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamProgramResultExamProgramResult
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_program_results';
+  info: {
+    description: 'Tenant-scoped program-level result aggregation for learners.';
+    displayName: 'Exam Program Result';
+    pluralName: 'exam-program-results';
+    singularName: 'exam-program-result';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    approvalStatus: Schema.Attribute.Enumeration<
+      ['pending_review', 'approved', 'rejected']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending_review'>;
+    approvedAt: Schema.Attribute.DateTime;
+    approvedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    calculatedAt: Schema.Attribute.DateTime;
+    calculationRuleSnapshot: Schema.Attribute.JSON &
+      Schema.Attribute.DefaultTo<{}>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    examProgram: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-program.exam-program'
+    > &
+      Schema.Attribute.Required;
+    examRegistration: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-registration.exam-registration'
+    >;
+    examRound: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-round.exam-round'
+    >;
+    learner: Schema.Attribute.Relation<'manyToOne', 'api::learner.learner'> &
+      Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-program-result.exam-program-result'
+    > &
+      Schema.Attribute.Private;
+    outcomeAssessmentCandidates: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::outcome-assessment-candidate.outcome-assessment-candidate'
+    >;
+    programResultSubjects: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-program-result-subject.exam-program-result-subject'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    resultStatus: Schema.Attribute.Enumeration<
+      ['not_evaluated', 'insufficient_data', 'passed', 'failed', 'cancelled']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'not_evaluated'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamProgramSubjectExamProgramSubject
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_program_subjects';
+  info: {
+    description: 'Tenant-scoped subject membership for an exam program.';
+    displayName: 'Exam Program Subject';
+    pluralName: 'exam-program-subjects';
+    singularName: 'exam-program-subject';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    displayOrder: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    examProgram: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-program.exam-program'
+    > &
+      Schema.Attribute.Required;
+    examRoundSubjects: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-round-subject.exam-round-subject'
+    >;
+    examSubject: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-subject.exam-subject'
+    > &
+      Schema.Attribute.Required;
+    feeOverride: Schema.Attribute.Decimal;
+    isRequired: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-program-subject.exam-program-subject'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamProgramExamProgram extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_programs';
+  info: {
+    description: 'Tenant-scoped exam program catalog.';
+    displayName: 'Exam Program';
+    pluralName: 'exam-programs';
+    singularName: 'exam-program';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    code: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    defaultFee: Schema.Attribute.Decimal;
+    examRounds: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-round.exam-round'
+    >;
+    feeCalculationMethod: Schema.Attribute.Enumeration<
+      ['sum_subject_fees', 'fixed']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'sum_subject_fees'>;
+    isActive: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-program.exam-program'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    outcomeAssessmentRounds: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::outcome-assessment-round.outcome-assessment-round'
+    >;
+    outcomeStandards: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::outcome-standard.outcome-standard'
+    >;
+    passingMethod: Schema.Attribute.Enumeration<
+      ['all_subjects_pass', 'any_subject_pass', 'custom']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'all_subjects_pass'>;
+    programResults: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-program-result.exam-program-result'
+    >;
+    programSubjects: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-program-subject.exam-program-subject'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    targetDescription: Schema.Attribute.Text;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    validFrom: Schema.Attribute.Date;
+    validTo: Schema.Attribute.Date;
+  };
+}
+
+export interface ApiExamRegistrationComponentExamRegistrationComponent
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_registration_components';
+  info: {
+    description: 'Tenant-scoped component registrations within an exam registration.';
+    displayName: 'Exam Registration Component';
+    pluralName: 'exam-registration-components';
+    singularName: 'exam-registration-component';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    allowSeparateRegistrationSnapshot: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
+    attendanceStatus: Schema.Attribute.Enumeration<
+      [
+        'not_checked_in',
+        'present',
+        'late',
+        'absent_excused',
+        'absent_unexcused',
+        'suspended',
+        'technical_issue',
+        'rescheduled',
+        'completed',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'not_checked_in'>;
+    componentCodeSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    componentResults: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-component-result.exam-component-result'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    durationMinutesSnapshot: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      >;
+    eligibilityStatus: Schema.Attribute.Enumeration<
+      ['pending', 'eligible', 'ineligible']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending'>;
+    examCandidates: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-candidate.exam-candidate'
+    >;
+    examMethodSnapshot: Schema.Attribute.Enumeration<
+      ['computer', 'paper', 'oral', 'practical', 'mixed', 'other']
+    > &
+      Schema.Attribute.DefaultTo<'other'>;
+    examRegistration: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-registration.exam-registration'
+    > &
+      Schema.Attribute.Required;
+    examRegistrationSubject: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-registration-subject.exam-registration-subject'
+    > &
+      Schema.Attribute.Required;
+    examRoundComponent: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-round-component.exam-round-component'
+    > &
+      Schema.Attribute.Required;
+    examSchedule: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-schedule.exam-schedule'
+    >;
+    feeAmount: Schema.Attribute.Decimal &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<0>;
+    isRequiredSnapshot: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-registration-component.exam-registration-component'
+    > &
+      Schema.Attribute.Private;
+    nameSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    note: Schema.Attribute.Text;
+    participationType: Schema.Attribute.Enumeration<
+      [
+        'new_exam',
+        'preserved_result',
+        'equivalent_result',
+        'exempted',
+        'not_required',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'new_exam'>;
+    publishedAt: Schema.Attribute.DateTime;
+    registrationStatus: Schema.Attribute.Enumeration<
+      ['registered', 'accepted', 'cancelled', 'completed']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'registered'>;
+    resultStatus: Schema.Attribute.Enumeration<
+      [
+        'pending',
+        'available',
+        'insufficient_data',
+        'passed',
+        'failed',
+        'cancelled',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending'>;
+    schedulingStatus: Schema.Attribute.Enumeration<
+      ['not_scheduled', 'scheduled', 'reschedule_required']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'not_scheduled'>;
+    sourceResult: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-component-result.exam-component-result'
+    >;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamRegistrationSubjectExamRegistrationSubject
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_registration_subjects';
+  info: {
+    description: 'Tenant-scoped subject registrations within an exam registration.';
+    displayName: 'Exam Registration Subject';
+    pluralName: 'exam-registration-subjects';
+    singularName: 'exam-registration-subject';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    allowSeparateRegistrationSnapshot: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
+    calculationMethodSnapshot: Schema.Attribute.Enumeration<
+      ['total', 'average', 'all_components_pass', 'custom']
+    > &
+      Schema.Attribute.DefaultTo<'total'>;
+    componentRegistrations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-registration-component.exam-registration-component'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    examCandidates: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-candidate.exam-candidate'
+    >;
+    examRegistration: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-registration.exam-registration'
+    > &
+      Schema.Attribute.Required;
+    examRoundSubject: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-round-subject.exam-round-subject'
+    > &
+      Schema.Attribute.Required;
+    feeAmount: Schema.Attribute.Decimal &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<0>;
+    isRequiredSnapshot: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-registration-subject.exam-registration-subject'
+    > &
+      Schema.Attribute.Private;
+    nameSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    note: Schema.Attribute.Text;
+    participationType: Schema.Attribute.Enumeration<
+      [
+        'new_exam',
+        'preserved_result',
+        'equivalent_result',
+        'exempted',
+        'not_required',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'new_exam'>;
+    publishedAt: Schema.Attribute.DateTime;
+    registrationStatus: Schema.Attribute.Enumeration<
+      ['registered', 'accepted', 'cancelled', 'completed']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'registered'>;
+    requireAllComponentsSnapshot: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<true>;
+    requiredAggregateScoreSnapshot: Schema.Attribute.Decimal;
+    ruleDescriptionSnapshot: Schema.Attribute.RichText;
+    subjectCodeSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    subjectResults: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-subject-result.exam-subject-result'
+    >;
+    subjectResultStatus: Schema.Attribute.Enumeration<
+      ['not_evaluated', 'insufficient_data', 'passed', 'failed']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'not_evaluated'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamRegistrationExamRegistration
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_registrations';
+  info: {
+    description: 'Tenant-scoped learner exam registrations.';
+    displayName: 'Exam Registration';
+    pluralName: 'exam-registrations';
+    singularName: 'exam-registration';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    acceptedAt: Schema.Attribute.DateTime;
+    acceptedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    amountDue: Schema.Attribute.Decimal &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<0>;
+    calculatedAmount: Schema.Attribute.Decimal &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<0>;
+    cancellationReason: Schema.Attribute.Text;
+    cancelledAt: Schema.Attribute.DateTime;
+    classNameSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    cohortSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    completedAt: Schema.Attribute.DateTime;
+    componentFeeTotalSnapshot: Schema.Attribute.Decimal &
+      Schema.Attribute.DefaultTo<0>;
+    componentRegistrations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-registration-component.exam-registration-component'
+    >;
+    componentResults: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-component-result.exam-component-result'
+    >;
+    confirmedPaidAmount: Schema.Attribute.Decimal &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<0>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    currency: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 10;
+      }> &
+      Schema.Attribute.DefaultTo<'VND'>;
+    discountAmount: Schema.Attribute.Decimal &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<0>;
+    eligibilityReason: Schema.Attribute.Text;
+    eligibilityStatus: Schema.Attribute.Enumeration<
+      ['pending', 'eligible', 'temporarily_ineligible', 'ineligible']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending'>;
+    examCandidates: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-candidate.exam-candidate'
+    >;
+    examRound: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-round.exam-round'
+    > &
+      Schema.Attribute.Required;
+    fixedFeeSnapshot: Schema.Attribute.Decimal;
+    fullNameSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    learner: Schema.Attribute.Relation<'manyToOne', 'api::learner.learner'> &
+      Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-registration.exam-registration'
+    > &
+      Schema.Attribute.Private;
+    majorSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    note: Schema.Attribute.Text;
+    payableAmount: Schema.Attribute.Decimal &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<0>;
+    paymentAccountHolderSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    paymentAccountNumberSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    paymentBankBranchSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    paymentBankCodeSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 20;
+      }>;
+    paymentBankNameSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    paymentCalculationMethodSnapshot: Schema.Attribute.Enumeration<
+      ['fixed', 'program_fee', 'subject_fee', 'component_fee']
+    > &
+      Schema.Attribute.DefaultTo<'program_fee'>;
+    paymentConfirmationNote: Schema.Attribute.Text;
+    paymentConfirmedAt: Schema.Attribute.DateTime;
+    paymentConfirmedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    paymentDueAt: Schema.Attribute.DateTime;
+    paymentEvidence: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::file-asset.file-asset'
+    >;
+    paymentInstructionSnapshot: Schema.Attribute.RichText;
+    paymentMethodSnapshot: Schema.Attribute.Enumeration<
+      ['bank_transfer', 'cash', 'other']
+    > &
+      Schema.Attribute.DefaultTo<'bank_transfer'>;
+    paymentProfileCodeSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    paymentProfileNameSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    paymentQrImageSnapshot: Schema.Attribute.Media<'images'>;
+    paymentRejectedAt: Schema.Attribute.DateTime;
+    paymentRejectedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    paymentRejectionReason: Schema.Attribute.Text;
+    paymentReportedAt: Schema.Attribute.DateTime;
+    paymentReportedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    paymentReportNote: Schema.Attribute.Text;
+    paymentReportUpdatedAt: Schema.Attribute.DateTime;
+    payments: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-payment.exam-payment'
+    >;
+    paymentSenderAccount: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    paymentSenderBank: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    paymentSenderName: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    paymentStatus: Schema.Attribute.Enumeration<
+      [
+        'not_required',
+        'unpaid',
+        'payment_reported',
+        'payment_under_review',
+        'partially_paid',
+        'paid',
+        'payment_rejected',
+        'exempted',
+        'refund_pending',
+        'refunded',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'unpaid'>;
+    paymentSupportEmailSnapshot: Schema.Attribute.Email;
+    paymentSupportPhoneSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 30;
+      }>;
+    paymentTransactionReference: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    paymentTransferAt: Schema.Attribute.DateTime;
+    paymentTransferContent: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 255;
+      }>;
+    paymentTransferContentTemplateSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 255;
+      }>;
+    programResults: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-program-result.exam-program-result'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    registeredAt: Schema.Attribute.DateTime;
+    registrationCode: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    registrationSource: Schema.Attribute.Enumeration<
+      ['learner', 'staff', 'import']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'learner'>;
+    registrationStatus: Schema.Attribute.Enumeration<
+      [
+        'draft',
+        'submitted',
+        'pending_review',
+        'accepted',
+        'returned',
+        'rejected',
+        'cancelled',
+        'completed',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+    rejectedAt: Schema.Attribute.DateTime;
+    rejectedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    rejectionReason: Schema.Attribute.Text;
+    returnedAt: Schema.Attribute.DateTime;
+    returnedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    returnReason: Schema.Attribute.Text;
+    reviewedAt: Schema.Attribute.DateTime;
+    reviewedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    reviewHistory: Schema.Attribute.JSON;
+    reviewNote: Schema.Attribute.Text;
+    studentCodeSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    subjectFeeTotalSnapshot: Schema.Attribute.Decimal &
+      Schema.Attribute.DefaultTo<0>;
+    subjectRegistrations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-registration-subject.exam-registration-subject'
+    >;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamRoomExamRoom extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_rooms';
+  info: {
+    description: 'Tenant-scoped exam room catalog.';
+    displayName: 'Exam Room';
+    pluralName: 'exam-rooms';
+    singularName: 'exam-room';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    capacity: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      >;
+    code: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
+    examRounds: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::exam-round.exam-round'
+    >;
+    examSchedules: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-schedule.exam-schedule'
+    >;
+    examVenue: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-venue.exam-venue'
+    > &
+      Schema.Attribute.Required;
+    floor: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 50;
+      }>;
+    isActive: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-room.exam-room'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    publishedAt: Schema.Attribute.DateTime;
+    roomType: Schema.Attribute.Enumeration<
+      ['computer', 'standard', 'oral', 'practical', 'other']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'standard'>;
+    sortOrder: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamRoundComponentExamRoundComponent
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_round_components';
+  info: {
+    description: 'Tenant-scoped component snapshot inside an exam round subject.';
+    displayName: 'Exam Round Component';
+    pluralName: 'exam-round-components';
+    singularName: 'exam-round-component';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    allowSeparateRegistration: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    componentResults: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-component-result.exam-component-result'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    displayOrder: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    durationMinutes: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      >;
+    eliminationScoreSnapshot: Schema.Attribute.Decimal;
+    examComponent: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-component.exam-component'
+    > &
+      Schema.Attribute.Required;
+    examMethod: Schema.Attribute.Enumeration<
+      ['computer', 'paper', 'oral', 'practical', 'mixed', 'other']
+    > &
+      Schema.Attribute.DefaultTo<'other'>;
+    examRound: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-round.exam-round'
+    > &
+      Schema.Attribute.Required;
+    examRoundSubject: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-round-subject.exam-round-subject'
+    > &
+      Schema.Attribute.Required;
+    examSchedules: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-schedule.exam-schedule'
+    >;
+    externalExamCode: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    fee: Schema.Attribute.Decimal;
+    isRequired: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-round-component.exam-round-component'
+    > &
+      Schema.Attribute.Private;
+    maximumScoreSnapshot: Schema.Attribute.Decimal;
+    minimumScoreSnapshot: Schema.Attribute.Decimal;
+    nameSnapshot: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    passingScoreSnapshot: Schema.Attribute.Decimal;
+    publishedAt: Schema.Attribute.DateTime;
+    registrationComponents: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-registration-component.exam-registration-component'
+    >;
+    status: Schema.Attribute.Enumeration<['active', 'inactive', 'cancelled']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'active'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamRoundSubjectExamRoundSubject
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_round_subjects';
+  info: {
+    description: 'Tenant-scoped subject snapshot inside an exam round.';
+    displayName: 'Exam Round Subject';
+    pluralName: 'exam-round-subjects';
+    singularName: 'exam-round-subject';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    allowSeparateRegistration: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    calculationMethodSnapshot: Schema.Attribute.Enumeration<
+      ['total', 'average', 'all_components_pass', 'custom']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'total'>;
+    componentResults: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-component-result.exam-component-result'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    displayOrder: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    examRound: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-round.exam-round'
+    > &
+      Schema.Attribute.Required;
+    examRoundComponents: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-round-component.exam-round-component'
+    >;
+    examSchedules: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-schedule.exam-schedule'
+    >;
+    examSubject: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-subject.exam-subject'
+    > &
+      Schema.Attribute.Required;
+    fee: Schema.Attribute.Decimal;
+    isRequired: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-round-subject.exam-round-subject'
+    > &
+      Schema.Attribute.Private;
+    nameSnapshot: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    publishedAt: Schema.Attribute.DateTime;
+    registrationSubjects: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-registration-subject.exam-registration-subject'
+    >;
+    requireAllComponentsSnapshot: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    requiredAggregateScoreSnapshot: Schema.Attribute.Decimal;
+    ruleDescriptionSnapshot: Schema.Attribute.RichText;
+    sourceProgramSubject: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-program-subject.exam-program-subject'
+    >;
+    status: Schema.Attribute.Enumeration<['active', 'inactive', 'cancelled']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'active'>;
+    subjectResults: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-subject-result.exam-subject-result'
+    >;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamRoundExamRound extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_rounds';
+  info: {
+    description: 'Tenant-scoped exam round and registration window configuration.';
+    displayName: 'Exam Round';
+    pluralName: 'exam-rounds';
+    singularName: 'exam-round';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    academicYear: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 50;
+      }>;
+    allowCancellation: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    allowComponentSelection: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    allowSubjectSelection: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    approvalNote: Schema.Attribute.Text;
+    approvedAt: Schema.Attribute.DateTime;
+    approvedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    cancellationDeadline: Schema.Attribute.DateTime;
+    candidateListClosingAt: Schema.Attribute.DateTime;
+    code: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    componentResults: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-component-result.exam-component-result'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    eligibilities: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-eligibility.exam-eligibility'
+    >;
+    examCandidateLists: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-candidate-list.exam-candidate-list'
+    >;
+    examEndAt: Schema.Attribute.DateTime;
+    examProgram: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-program.exam-program'
+    > &
+      Schema.Attribute.Required;
+    examRegistrations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-registration.exam-registration'
+    >;
+    examRooms: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::exam-room.exam-room'
+    >;
+    examRoundComponents: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-round-component.exam-round-component'
+    >;
+    examRoundSubjects: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-round-subject.exam-round-subject'
+    >;
+    examSchedules: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-schedule.exam-schedule'
+    >;
+    examStartAt: Schema.Attribute.DateTime;
+    examVenues: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::exam-venue.exam-venue'
+    >;
+    fixedFee: Schema.Attribute.Decimal;
+    instructions: Schema.Attribute.RichText;
+    integrationJobs: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-integration-job.exam-integration-job'
+    >;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-round.exam-round'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    outcomeAssessmentRounds: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::outcome-assessment-round.outcome-assessment-round'
+    >;
+    paymentAccountHolderSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    paymentAccountNumberSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    paymentBankBranchSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    paymentBankCodeSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 20;
+      }>;
+    paymentBankNameSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    paymentCalculationMethod: Schema.Attribute.Enumeration<
+      ['program_fee', 'subject_fee', 'component_fee', 'fixed']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'program_fee'>;
+    paymentCurrencySnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 10;
+      }>;
+    paymentEndAt: Schema.Attribute.DateTime;
+    paymentInstructions: Schema.Attribute.RichText;
+    paymentInstructionSnapshot: Schema.Attribute.RichText;
+    paymentMethodSnapshot: Schema.Attribute.Enumeration<
+      ['bank_transfer', 'cash', 'other']
+    >;
+    paymentProfile: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::payment-profile.payment-profile'
+    >;
+    paymentProfileAppliedAt: Schema.Attribute.DateTime;
+    paymentProfileAppliedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    paymentProfileCodeSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    paymentProfileCustomized: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    paymentProfileNameSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    paymentQrImageSnapshot: Schema.Attribute.Media<'images'>;
+    paymentSettingsUpdatedAt: Schema.Attribute.DateTime;
+    paymentSettingsUpdatedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    paymentStartAt: Schema.Attribute.DateTime;
+    paymentSupportEmailSnapshot: Schema.Attribute.Email;
+    paymentSupportPhoneSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 30;
+      }>;
+    paymentTransferContentTemplateSnapshot: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 255;
+      }>;
+    programResults: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-program-result.exam-program-result'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    registrationClosedAt: Schema.Attribute.DateTime;
+    registrationClosedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    registrationCloseReason: Schema.Attribute.Text;
+    registrationEndAt: Schema.Attribute.DateTime;
+    registrationMode: Schema.Attribute.Enumeration<['open', 'restricted']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'open'>;
+    registrationOpenedAt: Schema.Attribute.DateTime;
+    registrationOpenedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    registrationPausedAt: Schema.Attribute.DateTime;
+    registrationPausedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    registrationPauseReason: Schema.Attribute.Text;
+    registrationResumedAt: Schema.Attribute.DateTime;
+    registrationResumedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    registrationStartAt: Schema.Attribute.DateTime;
+    requireConfirmedPayment: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    returnedAt: Schema.Attribute.DateTime;
+    returnedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    returnReason: Schema.Attribute.Text;
+    semester: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 50;
+      }>;
+    status: Schema.Attribute.Enumeration<
+      [
+        'draft',
+        'pending_approval',
+        'approved',
+        'registration_open',
+        'registration_paused',
+        'registration_closed',
+        'preparing_exam',
+        'exam_in_progress',
+        'scoring',
+        'completed',
+        'cancelled',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+    subjectResults: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-subject-result.exam-subject-result'
+    >;
+    submittedAt: Schema.Attribute.DateTime;
+    submittedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamScheduleExamSchedule
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_schedules';
+  info: {
+    description: 'Tenant-scoped exam schedules for round subjects and components.';
+    displayName: 'Exam Schedule';
+    pluralName: 'exam-schedules';
+    singularName: 'exam-schedule';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    cancellationReason: Schema.Attribute.Text;
+    cancelledAt: Schema.Attribute.DateTime;
+    cancelledBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    capacity: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    durationMinutes: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      >;
+    endAt: Schema.Attribute.DateTime;
+    examCandidateLists: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-candidate-list.exam-candidate-list'
+    >;
+    examMethod: Schema.Attribute.Enumeration<
+      ['computer', 'paper', 'oral', 'practical', 'mixed', 'other']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'other'>;
+    examRoom: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-room.exam-room'
+    >;
+    examRound: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-round.exam-round'
+    > &
+      Schema.Attribute.Required;
+    examRoundComponent: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-round-component.exam-round-component'
+    > &
+      Schema.Attribute.Required;
+    examRoundSubject: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-round-subject.exam-round-subject'
+    > &
+      Schema.Attribute.Required;
+    examVenue: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-venue.exam-venue'
+    >;
+    externalExamCode: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-schedule.exam-schedule'
+    > &
+      Schema.Attribute.Private;
+    note: Schema.Attribute.Text;
+    publishedAt: Schema.Attribute.DateTime;
+    registrationComponents: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-registration-component.exam-registration-component'
+    >;
+    schedulePublishedAt: Schema.Attribute.DateTime;
+    schedulePublishedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    startAt: Schema.Attribute.DateTime & Schema.Attribute.Required;
+    status: Schema.Attribute.Enumeration<
+      [
+        'draft',
+        'scheduled',
+        'published',
+        'in_progress',
+        'completed',
+        'postponed',
+        'cancelled',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamSubjectComponentExamSubjectComponent
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_subject_components';
+  info: {
+    description: 'Tenant-scoped component membership for an exam subject.';
+    displayName: 'Exam Subject Component';
+    pluralName: 'exam-subject-components';
+    singularName: 'exam-subject-component';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    displayOrder: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    durationMinutesOverride: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      >;
+    eliminationScoreOverride: Schema.Attribute.Decimal;
+    examComponent: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-component.exam-component'
+    > &
+      Schema.Attribute.Required;
+    examSubject: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-subject.exam-subject'
+    > &
+      Schema.Attribute.Required;
+    isRequired: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-subject-component.exam-subject-component'
+    > &
+      Schema.Attribute.Private;
+    passingScoreOverride: Schema.Attribute.Decimal;
+    publishedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    weight: Schema.Attribute.Decimal;
+  };
+}
+
+export interface ApiExamSubjectResultComponentExamSubjectResultComponent
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_subject_result_components';
+  info: {
+    description: 'Tenant-scoped bridge between subject results and component results.';
+    displayName: 'Exam Subject Result Component';
+    pluralName: 'exam-subject-result-components';
+    singularName: 'exam-subject-result-component';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    examComponentResult: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-component-result.exam-component-result'
+    > &
+      Schema.Attribute.Required;
+    examSubjectResult: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-subject-result.exam-subject-result'
+    > &
+      Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-subject-result-component.exam-subject-result-component'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamSubjectResultExamSubjectResult
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_subject_results';
+  info: {
+    description: 'Tenant-scoped subject-level result aggregation for learners.';
+    displayName: 'Exam Subject Result';
+    pluralName: 'exam-subject-results';
+    singularName: 'exam-subject-result';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    approvalStatus: Schema.Attribute.Enumeration<
+      ['pending_review', 'approved', 'rejected']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending_review'>;
+    approvedAt: Schema.Attribute.DateTime;
+    approvedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    averageScore: Schema.Attribute.Decimal;
+    calculatedAt: Schema.Attribute.DateTime;
+    calculationRuleSnapshot: Schema.Attribute.JSON &
+      Schema.Attribute.DefaultTo<{}>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    examRegistrationSubject: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-registration-subject.exam-registration-subject'
+    >;
+    examRound: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-round.exam-round'
+    >;
+    examRoundSubject: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-round-subject.exam-round-subject'
+    > &
+      Schema.Attribute.Required;
+    learner: Schema.Attribute.Relation<'manyToOne', 'api::learner.learner'> &
+      Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-subject-result.exam-subject-result'
+    > &
+      Schema.Attribute.Private;
+    programResultLinks: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-program-result-subject.exam-program-result-subject'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    resultStatus: Schema.Attribute.Enumeration<
+      ['not_evaluated', 'insufficient_data', 'passed', 'failed', 'cancelled']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'not_evaluated'>;
+    subjectResultComponents: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-subject-result-component.exam-subject-result-component'
+    >;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    totalScore: Schema.Attribute.Decimal;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamSubjectExamSubject extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_subjects';
+  info: {
+    description: 'Tenant-scoped exam subject catalog.';
+    displayName: 'Exam Subject';
+    pluralName: 'exam-subjects';
+    singularName: 'exam-subject';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    calculationMethod: Schema.Attribute.Enumeration<
+      ['total', 'average', 'all_components_pass', 'custom']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'total'>;
+    code: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    defaultFee: Schema.Attribute.Decimal;
+    examRoundSubjects: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-round-subject.exam-round-subject'
+    >;
+    isActive: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-subject.exam-subject'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    programSubjects: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-program-subject.exam-program-subject'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    requireAllComponents: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    requiredAggregateScore: Schema.Attribute.Decimal;
+    ruleDescription: Schema.Attribute.RichText;
+    subjectComponents: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-subject-component.exam-subject-component'
+    >;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiExamVenueExamVenue extends Struct.CollectionTypeSchema {
+  collectionName: 'exam_venues';
+  info: {
+    description: 'Tenant-scoped exam venue catalog.';
+    displayName: 'Exam Venue';
+    pluralName: 'exam-venues';
+    singularName: 'exam-venue';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    address: Schema.Attribute.Text;
+    code: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    contactName: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    contactPhone: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 30;
+      }>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
+    examRooms: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-room.exam-room'
+    >;
+    examRounds: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::exam-round.exam-round'
+    >;
+    examSchedules: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-schedule.exam-schedule'
+    >;
+    isActive: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-venue.exam-venue'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    publishedAt: Schema.Attribute.DateTime;
+    shortName: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    sortOrder: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
     tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
       Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
@@ -3092,6 +5730,30 @@ export interface ApiLearnerLearner extends Struct.CollectionTypeSchema {
       'oneToMany',
       'api::enrollment.enrollment'
     >;
+    examCandidates: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-candidate.exam-candidate'
+    >;
+    examComponentResults: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-component-result.exam-component-result'
+    >;
+    examEligibilities: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-eligibility.exam-eligibility'
+    >;
+    examProgramResults: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-program-result.exam-program-result'
+    >;
+    examRegistrations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-registration.exam-registration'
+    >;
+    examSubjectResults: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::exam-subject-result.exam-subject-result'
+    >;
     feeItems: Schema.Attribute.Relation<'oneToMany', 'api::fee-item.fee-item'>;
     fullName: Schema.Attribute.String & Schema.Attribute.Required;
     learnerStatus: Schema.Attribute.Enumeration<['active', 'inactive']> &
@@ -3103,6 +5765,10 @@ export interface ApiLearnerLearner extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private;
     oldUserId: Schema.Attribute.String;
+    outcomeAssessmentCandidates: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::outcome-assessment-candidate.outcome-assessment-candidate'
+    >;
     parentName: Schema.Attribute.String;
     parentPhone: Schema.Attribute.String;
     payments: Schema.Attribute.Relation<'oneToMany', 'api::payment.payment'>;
@@ -3696,6 +6362,264 @@ export interface ApiNotificationTemplateNotificationTemplate
   };
 }
 
+export interface ApiOutcomeAssessmentCandidateOutcomeAssessmentCandidate
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'outcome_assessment_candidates';
+  info: {
+    description: 'Tenant-scoped learner assessment dossiers for outcome recognition.';
+    displayName: 'Outcome Assessment Candidate';
+    pluralName: 'outcome-assessment-candidates';
+    singularName: 'outcome-assessment-candidate';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    approvalStatus: Schema.Attribute.Enumeration<
+      ['pending', 'approved', 'rejected']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending'>;
+    automatedResultStatus: Schema.Attribute.Enumeration<
+      [
+        'not_evaluated',
+        'insufficient_data',
+        'eligible',
+        'ineligible',
+        'pending_verification',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'not_evaluated'>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    decisionDate: Schema.Attribute.Date;
+    decisionNumber: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    examProgramResult: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-program-result.exam-program-result'
+    >;
+    learner: Schema.Attribute.Relation<'manyToOne', 'api::learner.learner'> &
+      Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::outcome-assessment-candidate.outcome-assessment-candidate'
+    > &
+      Schema.Attribute.Private;
+    note: Schema.Attribute.Text;
+    outcomeAssessmentRound: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::outcome-assessment-round.outcome-assessment-round'
+    > &
+      Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    reason: Schema.Attribute.Text;
+    recognitionSource: Schema.Attribute.Enumeration<
+      [
+        'exam',
+        'preserved_result',
+        'certificate',
+        'exemption',
+        'equivalent_result',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'exam'>;
+    recognitionStatus: Schema.Attribute.Enumeration<
+      ['not_recognized', 'recognized', 'revoked']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'not_recognized'>;
+    recognizedAt: Schema.Attribute.DateTime;
+    reviewStatus: Schema.Attribute.Enumeration<
+      ['pending', 'verified', 'need_supplement', 'rejected']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending'>;
+    synchronizationStatus: Schema.Attribute.Enumeration<
+      ['not_synced', 'pending', 'synced', 'failed', 'resync_required']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'not_synced'>;
+    synchronizedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiOutcomeAssessmentRoundOutcomeAssessmentRound
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'outcome_assessment_rounds';
+  info: {
+    description: 'Tenant-scoped assessment rounds for graduation outcome decisions.';
+    displayName: 'Outcome Assessment Round';
+    pluralName: 'outcome-assessment-rounds';
+    singularName: 'outcome-assessment-round';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    academicYear: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 50;
+      }>;
+    applicableDescription: Schema.Attribute.Text;
+    approvedAt: Schema.Attribute.DateTime;
+    approvedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    assessmentCandidates: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::outcome-assessment-candidate.outcome-assessment-candidate'
+    >;
+    assessmentEndAt: Schema.Attribute.DateTime;
+    assessmentStartAt: Schema.Attribute.DateTime;
+    code: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    decisionDate: Schema.Attribute.Date;
+    decisionNumber: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    examProgram: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-program.exam-program'
+    >;
+    examRounds: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::exam-round.exam-round'
+    >;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::outcome-assessment-round.outcome-assessment-round'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    outcomeStandard: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::outcome-standard.outcome-standard'
+    > &
+      Schema.Attribute.Required;
+    preparedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    ruleSnapshot: Schema.Attribute.JSON & Schema.Attribute.DefaultTo<{}>;
+    status: Schema.Attribute.Enumeration<
+      [
+        'draft',
+        'collecting',
+        'pending_review',
+        'pending_approval',
+        'approved',
+        'published',
+        'synced',
+        'completed',
+        'cancelled',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+    submittedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiOutcomeStandardOutcomeStandard
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'outcome_standards';
+  info: {
+    description: 'Tenant-scoped outcome standard catalog.';
+    displayName: 'Outcome Standard';
+    pluralName: 'outcome-standards';
+    singularName: 'outcome-standard';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    applicableDescription: Schema.Attribute.Text;
+    assessmentRounds: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::outcome-assessment-round.outcome-assessment-round'
+    >;
+    code: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    examProgram: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::exam-program.exam-program'
+    >;
+    isActive: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::outcome-standard.outcome-standard'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    publishedAt: Schema.Attribute.DateTime;
+    recognitionMethod: Schema.Attribute.Enumeration<
+      [
+        'exam_program',
+        'certificate',
+        'exemption',
+        'equivalent_result',
+        'multiple_methods',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'exam_program'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    validFrom: Schema.Attribute.Date;
+    validTo: Schema.Attribute.Date;
+  };
+}
+
 export interface ApiPaymentAllocationPaymentAllocation
   extends Struct.CollectionTypeSchema {
   collectionName: 'payment_allocations';
@@ -3726,6 +6650,99 @@ export interface ApiPaymentAllocationPaymentAllocation
     publishedAt: Schema.Attribute.DateTime;
     tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
       Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiPaymentProfilePaymentProfile
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'payment_profiles';
+  info: {
+    description: 'H\u1ED3 s\u01A1 th\u00F4ng tin nh\u1EADn thanh to\u00E1n d\u00F9ng chung c\u1EE7a t\u1EEBng tenant.';
+    displayName: 'Payment Profile';
+    pluralName: 'payment-profiles';
+    singularName: 'payment-profile';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    accountHolder: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    accountNumber: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    bankBranch: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    bankCode: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 20;
+      }>;
+    bankName: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    code: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    currency: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 10;
+      }> &
+      Schema.Attribute.DefaultTo<'VND'>;
+    description: Schema.Attribute.Text;
+    isActive: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    isDefault: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::payment-profile.payment-profile'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    paymentInstruction: Schema.Attribute.RichText;
+    paymentMethod: Schema.Attribute.Enumeration<
+      ['bank_transfer', 'cash', 'other']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'bank_transfer'>;
+    publishedAt: Schema.Attribute.DateTime;
+    qrImage: Schema.Attribute.Media<'images'>;
+    sortOrder: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<0>;
+    supportEmail: Schema.Attribute.Email;
+    supportPhone: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 30;
+      }>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    transferContentTemplate: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 255;
+      }>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -5276,6 +8293,483 @@ export interface ApiSliderSlider extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiSportsAchievementSubmissionSportsAchievementSubmission
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'sports_achievement_submissions';
+  info: {
+    description: 'Tenant-scoped sports achievement proposals that move through submit, verify, reject, or cancel workflow before creating a recognized achievement.';
+    displayName: 'Sports Achievement Submission';
+    pluralName: 'sports-achievement-submissions';
+    singularName: 'sports-achievement-submission';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    achievedAt: Schema.Attribute.DateTime;
+    achievement: Schema.Attribute.Relation<
+      'oneToOne',
+      'api::sports-achievement.sports-achievement'
+    >;
+    achievementType: Schema.Attribute.Enumeration<
+      [
+        'personal_best',
+        'race_result',
+        'champion',
+        'podium',
+        'finisher',
+        'distance_milestone',
+        'streak',
+        'club_award',
+        'system_award',
+        'other',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'other'>;
+    club: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::sports-club.sports-club'
+    > &
+      Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
+    evidence: Schema.Attribute.Media<
+      'images' | 'files' | 'videos' | 'audios',
+      true
+    >;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::sports-achievement-submission.sports-achievement-submission'
+    > &
+      Schema.Attribute.Private;
+    note: Schema.Attribute.Text;
+    publishedAt: Schema.Attribute.DateTime;
+    resultText: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 255;
+      }>;
+    resultUnit: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 50;
+      }>;
+    resultValue: Schema.Attribute.Decimal;
+    reviewedAt: Schema.Attribute.DateTime;
+    reviewedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    reviewNote: Schema.Attribute.Text;
+    source: Schema.Attribute.Enumeration<
+      [
+        'club_manager',
+        'member',
+        'event',
+        'public_form',
+        'import',
+        'system',
+        'strava',
+        'other',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'other'>;
+    sourceAchievement: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::sports-achievement.sports-achievement'
+    >;
+    sourceReference: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 255;
+      }>;
+    sportsProfile: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::sports-profile.sports-profile'
+    > &
+      Schema.Attribute.Required;
+    sportType: Schema.Attribute.Enumeration<
+      [
+        'running',
+        'cycling',
+        'badminton',
+        'football',
+        'swimming',
+        'multisport',
+        'other',
+      ]
+    >;
+    status: Schema.Attribute.Enumeration<
+      ['draft', 'submitted', 'verified', 'rejected', 'cancelled']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+    submittedAt: Schema.Attribute.DateTime;
+    submittedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    title: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiSportsAchievementSportsAchievement
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'sports_achievements';
+  info: {
+    description: 'Tenant-scoped recognized sports achievements that have already been verified or officially recorded.';
+    displayName: 'Sports Achievement';
+    pluralName: 'sports-achievements';
+    singularName: 'sports-achievement';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    achievedAt: Schema.Attribute.DateTime;
+    achievementType: Schema.Attribute.Enumeration<
+      [
+        'personal_best',
+        'race_result',
+        'champion',
+        'podium',
+        'finisher',
+        'distance_milestone',
+        'streak',
+        'club_award',
+        'system_award',
+        'other',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'other'>;
+    club: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::sports-club.sports-club'
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
+    evidence: Schema.Attribute.Media<
+      'images' | 'files' | 'videos' | 'audios',
+      true
+    >;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::sports-achievement.sports-achievement'
+    > &
+      Schema.Attribute.Private;
+    note: Schema.Attribute.Text;
+    publishedAt: Schema.Attribute.DateTime;
+    resultText: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 255;
+      }>;
+    resultUnit: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 50;
+      }>;
+    resultValue: Schema.Attribute.Decimal;
+    revokedAt: Schema.Attribute.DateTime;
+    revokedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    revokeReason: Schema.Attribute.Text;
+    source: Schema.Attribute.Enumeration<
+      ['club', 'event', 'manual', 'system', 'strava', 'import', 'other']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'manual'>;
+    sourceReference: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 255;
+      }>;
+    sportsProfile: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::sports-profile.sports-profile'
+    > &
+      Schema.Attribute.Required;
+    sportType: Schema.Attribute.Enumeration<
+      [
+        'running',
+        'cycling',
+        'badminton',
+        'football',
+        'swimming',
+        'multisport',
+        'other',
+      ]
+    >;
+    status: Schema.Attribute.Enumeration<['active', 'revoked']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'active'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    title: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 200;
+      }>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    verifiedAt: Schema.Attribute.DateTime;
+    verifiedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+  };
+}
+
+export interface ApiSportsClubUserAssignmentSportsClubUserAssignment
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'sports_club_user_assignments';
+  info: {
+    description: 'Tenant-scoped assignment of a user to manage a specific sports club.';
+    displayName: 'Sports Club User Assignment';
+    pluralName: 'sports-club-user-assignments';
+    singularName: 'sports-club-user-assignment';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    assignedAt: Schema.Attribute.DateTime;
+    assignedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    club: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::sports-club.sports-club'
+    > &
+      Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::sports-club-user-assignment.sports-club-user-assignment'
+    > &
+      Schema.Attribute.Private;
+    note: Schema.Attribute.Text;
+    publishedAt: Schema.Attribute.DateTime;
+    status: Schema.Attribute.Enumeration<['active', 'inactive']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'active'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    > &
+      Schema.Attribute.Required;
+  };
+}
+
+export interface ApiSportsClubSportsClub extends Struct.CollectionTypeSchema {
+  collectionName: 'sports_clubs';
+  info: {
+    description: 'Tenant-scoped sports clubs, teams, chapters, and communities with optional parent-child hierarchy.';
+    displayName: 'Sports Club';
+    pluralName: 'sports-clubs';
+    singularName: 'sports-club';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    address: Schema.Attribute.Text;
+    childClubs: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::sports-club.sports-club'
+    >;
+    clubType: Schema.Attribute.Enumeration<
+      ['community', 'club', 'team', 'chapter', 'training_group', 'other']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'club'>;
+    code: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    contactEmail: Schema.Attribute.Email;
+    contactPhone: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 30;
+      }>;
+    coverImage: Schema.Attribute.Media<'images'>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
+    foundedAt: Schema.Attribute.Date;
+    joinPolicy: Schema.Attribute.Enumeration<
+      ['open', 'approval', 'invite_only', 'closed']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'approval'>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::sports-club.sports-club'
+    > &
+      Schema.Attribute.Private;
+    logo: Schema.Attribute.Media<'images'>;
+    name: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    parentClub: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::sports-club.sports-club'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    shortName: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    slug: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    sportType: Schema.Attribute.Enumeration<
+      [
+        'running',
+        'cycling',
+        'badminton',
+        'football',
+        'swimming',
+        'multisport',
+        'other',
+      ]
+    > &
+      Schema.Attribute.DefaultTo<'running'>;
+    status: Schema.Attribute.Enumeration<['active', 'inactive', 'archived']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'active'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    website: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 255;
+      }>;
+  };
+}
+
+export interface ApiSportsProfileSportsProfile
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'sports_profiles';
+  info: {
+    description: 'Tenant-scoped sports identity profile that may exist before a linked user account.';
+    displayName: 'Sports Profile';
+    pluralName: 'sports-profiles';
+    singularName: 'sports-profile';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    avatar: Schema.Attribute.Media<'images'>;
+    bio: Schema.Attribute.Text;
+    birthYear: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          max: 2100;
+          min: 1900;
+        },
+        number
+      >;
+    code: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 100;
+      }>;
+    contactEmail: Schema.Attribute.Email;
+    contactPhone: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 30;
+      }>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    dateOfBirth: Schema.Attribute.Date;
+    displayName: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    fullName: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    gender: Schema.Attribute.Enumeration<
+      ['male', 'female', 'other', 'unspecified']
+    > &
+      Schema.Attribute.DefaultTo<'unspecified'>;
+    hometown: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 150;
+      }>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::sports-profile.sports-profile'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    source: Schema.Attribute.Enumeration<
+      [
+        'manual_import',
+        'self_registration',
+        'campaign',
+        'admin_created',
+        'other',
+      ]
+    >;
+    sourceReference: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 255;
+      }>;
+    status: Schema.Attribute.Enumeration<['active', 'inactive', 'merged']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'active'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+  };
+}
+
 export interface ApiStravaActivityStravaActivity
   extends Struct.CollectionTypeSchema {
   collectionName: 'strava_activities';
@@ -5371,9 +8865,18 @@ export interface ApiStravaConnectionStravaConnection
       'oneToMany',
       'api::strava-activity.strava-activity'
     >;
+    activityDeleteMarkers: Schema.Attribute.JSON & Schema.Attribute.Private;
     athleteFirstname: Schema.Attribute.String;
     athleteLastname: Schema.Attribute.String;
     athleteUsername: Schema.Attribute.String;
+    cleanupCompletedAt: Schema.Attribute.DateTime;
+    cleanupError: Schema.Attribute.Text;
+    cleanupRequestedAt: Schema.Attribute.DateTime;
+    cleanupStatus: Schema.Attribute.Enumeration<
+      ['NOT_REQUIRED', 'PENDING', 'RUNNING', 'COMPLETED', 'FAILED']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'NOT_REQUIRED'>;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -5399,13 +8902,17 @@ export interface ApiStravaConnectionStravaConnection
     status: Schema.Attribute.Enumeration<['ACTIVE', 'DISCONNECTED', 'ERROR']> &
       Schema.Attribute.Required &
       Schema.Attribute.DefaultTo<'ACTIVE'>;
-    stravaAthleteId: Schema.Attribute.String & Schema.Attribute.Required;
+    stravaAthleteId: Schema.Attribute.String;
     syncJobs: Schema.Attribute.Relation<
       'oneToMany',
       'api::strava-sync-job.strava-sync-job'
     >;
     tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
       Schema.Attribute.Required;
+    terminationReason: Schema.Attribute.String &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 120;
+      }>;
     tokenExpiresAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -5691,9 +9198,7 @@ export interface ApiStravaWebhookEventStravaWebhookEvent
       }>;
     processedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;
-    rawPayload: Schema.Attribute.JSON &
-      Schema.Attribute.Required &
-      Schema.Attribute.Private;
+    rawPayload: Schema.Attribute.JSON & Schema.Attribute.Private;
     status: Schema.Attribute.Enumeration<
       ['pending', 'processing', 'processed', 'ignored', 'failed', 'dead_letter']
     > &
@@ -6578,6 +10083,14 @@ export interface ApiTenantTenant extends Struct.CollectionTypeSchema {
       'oneToMany',
       'api::chat-session.chat-session'
     >;
+    clubMembershipHistories: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::club-membership-history.club-membership-history'
+    >;
+    clubMemberships: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::club-membership.club-membership'
+    >;
     code: Schema.Attribute.UID<'name'> &
       Schema.Attribute.Required &
       Schema.Attribute.Unique;
@@ -6676,6 +10189,10 @@ export interface ApiTenantTenant extends Struct.CollectionTypeSchema {
       'oneToMany',
       'api::notification-template.notification-template'
     >;
+    paymentProfiles: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::payment-profile.payment-profile'
+    >;
     primaryColor: Schema.Attribute.String;
     publicPages: Schema.Attribute.Relation<
       'oneToMany',
@@ -6720,6 +10237,26 @@ export interface ApiTenantTenant extends Struct.CollectionTypeSchema {
     siteTitle: Schema.Attribute.String;
     skills: Schema.Attribute.Relation<'oneToMany', 'api::skill.skill'>;
     slogan: Schema.Attribute.Text;
+    sportsAchievements: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::sports-achievement.sports-achievement'
+    >;
+    sportsAchievementSubmissions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::sports-achievement-submission.sports-achievement-submission'
+    >;
+    sportsClubs: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::sports-club.sports-club'
+    >;
+    sportsClubUserAssignments: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::sports-club-user-assignment.sports-club-user-assignment'
+    >;
+    sportsProfiles: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::sports-profile.sports-profile'
+    >;
     startDate: Schema.Attribute.Date;
     storageDefaultConfigId: Schema.Attribute.Integer;
     stravaActivities: Schema.Attribute.Relation<
@@ -7623,6 +11160,8 @@ declare module '@strapi/strapi' {
       'api::chat-session.chat-session': ApiChatSessionChatSession;
       'api::class-teacher-assignment.class-teacher-assignment': ApiClassTeacherAssignmentClassTeacherAssignment;
       'api::class.class': ApiClassClass;
+      'api::club-membership-history.club-membership-history': ApiClubMembershipHistoryClubMembershipHistory;
+      'api::club-membership.club-membership': ApiClubMembershipClubMembership;
       'api::content-block.content-block': ApiContentBlockContentBlock;
       'api::customer.customer': ApiCustomerCustomer;
       'api::department-membership.department-membership': ApiDepartmentMembershipDepartmentMembership;
@@ -7630,6 +11169,31 @@ declare module '@strapi/strapi' {
       'api::employee-history.employee-history': ApiEmployeeHistoryEmployeeHistory;
       'api::employee.employee': ApiEmployeeEmployee;
       'api::enrollment.enrollment': ApiEnrollmentEnrollment;
+      'api::exam-candidate-list.exam-candidate-list': ApiExamCandidateListExamCandidateList;
+      'api::exam-candidate.exam-candidate': ApiExamCandidateExamCandidate;
+      'api::exam-component-result.exam-component-result': ApiExamComponentResultExamComponentResult;
+      'api::exam-component.exam-component': ApiExamComponentExamComponent;
+      'api::exam-eligibility.exam-eligibility': ApiExamEligibilityExamEligibility;
+      'api::exam-integration-item.exam-integration-item': ApiExamIntegrationItemExamIntegrationItem;
+      'api::exam-integration-job.exam-integration-job': ApiExamIntegrationJobExamIntegrationJob;
+      'api::exam-payment.exam-payment': ApiExamPaymentExamPayment;
+      'api::exam-program-result-subject.exam-program-result-subject': ApiExamProgramResultSubjectExamProgramResultSubject;
+      'api::exam-program-result.exam-program-result': ApiExamProgramResultExamProgramResult;
+      'api::exam-program-subject.exam-program-subject': ApiExamProgramSubjectExamProgramSubject;
+      'api::exam-program.exam-program': ApiExamProgramExamProgram;
+      'api::exam-registration-component.exam-registration-component': ApiExamRegistrationComponentExamRegistrationComponent;
+      'api::exam-registration-subject.exam-registration-subject': ApiExamRegistrationSubjectExamRegistrationSubject;
+      'api::exam-registration.exam-registration': ApiExamRegistrationExamRegistration;
+      'api::exam-room.exam-room': ApiExamRoomExamRoom;
+      'api::exam-round-component.exam-round-component': ApiExamRoundComponentExamRoundComponent;
+      'api::exam-round-subject.exam-round-subject': ApiExamRoundSubjectExamRoundSubject;
+      'api::exam-round.exam-round': ApiExamRoundExamRound;
+      'api::exam-schedule.exam-schedule': ApiExamScheduleExamSchedule;
+      'api::exam-subject-component.exam-subject-component': ApiExamSubjectComponentExamSubjectComponent;
+      'api::exam-subject-result-component.exam-subject-result-component': ApiExamSubjectResultComponentExamSubjectResultComponent;
+      'api::exam-subject-result.exam-subject-result': ApiExamSubjectResultExamSubjectResult;
+      'api::exam-subject.exam-subject': ApiExamSubjectExamSubject;
+      'api::exam-venue.exam-venue': ApiExamVenueExamVenue;
       'api::feature-group.feature-group': ApiFeatureGroupFeatureGroup;
       'api::feature.feature': ApiFeatureFeature;
       'api::fee-item.fee-item': ApiFeeItemFeeItem;
@@ -7659,7 +11223,11 @@ declare module '@strapi/strapi' {
       'api::lucky-wheel.lucky-wheel': ApiLuckyWheelLuckyWheel;
       'api::mail-log.mail-log': ApiMailLogMailLog;
       'api::notification-template.notification-template': ApiNotificationTemplateNotificationTemplate;
+      'api::outcome-assessment-candidate.outcome-assessment-candidate': ApiOutcomeAssessmentCandidateOutcomeAssessmentCandidate;
+      'api::outcome-assessment-round.outcome-assessment-round': ApiOutcomeAssessmentRoundOutcomeAssessmentRound;
+      'api::outcome-standard.outcome-standard': ApiOutcomeStandardOutcomeStandard;
       'api::payment-allocation.payment-allocation': ApiPaymentAllocationPaymentAllocation;
+      'api::payment-profile.payment-profile': ApiPaymentProfilePaymentProfile;
       'api::payment-transaction.payment-transaction': ApiPaymentTransactionPaymentTransaction;
       'api::payment.payment': ApiPaymentPayment;
       'api::platform-setting.platform-setting': ApiPlatformSettingPlatformSetting;
@@ -7687,6 +11255,11 @@ declare module '@strapi/strapi' {
       'api::skill.skill': ApiSkillSkill;
       'api::slider-item.slider-item': ApiSliderItemSliderItem;
       'api::slider.slider': ApiSliderSlider;
+      'api::sports-achievement-submission.sports-achievement-submission': ApiSportsAchievementSubmissionSportsAchievementSubmission;
+      'api::sports-achievement.sports-achievement': ApiSportsAchievementSportsAchievement;
+      'api::sports-club-user-assignment.sports-club-user-assignment': ApiSportsClubUserAssignmentSportsClubUserAssignment;
+      'api::sports-club.sports-club': ApiSportsClubSportsClub;
+      'api::sports-profile.sports-profile': ApiSportsProfileSportsProfile;
       'api::strava-activity.strava-activity': ApiStravaActivityStravaActivity;
       'api::strava-connection.strava-connection': ApiStravaConnectionStravaConnection;
       'api::strava-oauth-state.strava-oauth-state': ApiStravaOauthStateStravaOauthState;

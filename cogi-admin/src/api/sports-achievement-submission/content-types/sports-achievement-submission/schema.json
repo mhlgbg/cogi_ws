@@ -1,0 +1,165 @@
+{
+  "kind": "collectionType",
+  "collectionName": "sports_achievement_submissions",
+  "info": {
+    "singularName": "sports-achievement-submission",
+    "pluralName": "sports-achievement-submissions",
+    "displayName": "Sports Achievement Submission",
+    "description": "Tenant-scoped sports achievement proposals that move through submit, verify, reject, or cancel workflow before creating a recognized achievement."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "sportsAchievementSubmissions",
+      "required": true
+    },
+    "club": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::sports-club.sports-club",
+      "required": true
+    },
+    "sportsProfile": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::sports-profile.sports-profile",
+      "required": true
+    },
+    "achievementType": {
+      "type": "enumeration",
+      "enum": [
+        "personal_best",
+        "race_result",
+        "champion",
+        "podium",
+        "finisher",
+        "distance_milestone",
+        "streak",
+        "club_award",
+        "system_award",
+        "other"
+      ],
+      "required": true,
+      "default": "other",
+      "index": true
+    },
+    "sportType": {
+      "type": "enumeration",
+      "enum": [
+        "running",
+        "cycling",
+        "badminton",
+        "football",
+        "swimming",
+        "multisport",
+        "other"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200,
+      "index": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "achievedAt": {
+      "type": "datetime"
+    },
+    "resultValue": {
+      "type": "decimal"
+    },
+    "resultUnit": {
+      "type": "string",
+      "maxLength": 50
+    },
+    "resultText": {
+      "type": "string",
+      "maxLength": 255
+    },
+    "evidence": {
+      "type": "media",
+      "multiple": true,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "source": {
+      "type": "enumeration",
+      "enum": [
+        "club_manager",
+        "member",
+        "event",
+        "public_form",
+        "import",
+        "system",
+        "strava",
+        "other"
+      ],
+      "required": true,
+      "default": "other",
+      "index": true
+    },
+    "sourceReference": {
+      "type": "string",
+      "maxLength": 255
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "submitted",
+        "verified",
+        "rejected",
+        "cancelled"
+      ],
+      "required": true,
+      "default": "draft",
+      "index": true
+    },
+    "submittedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "submittedAt": {
+      "type": "datetime",
+      "index": true
+    },
+    "reviewedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "reviewedAt": {
+      "type": "datetime",
+      "index": true
+    },
+    "reviewNote": {
+      "type": "text"
+    },
+    "achievement": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::sports-achievement.sports-achievement"
+    },
+    "sourceAchievement": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::sports-achievement.sports-achievement"
+    },
+    "note": {
+      "type": "text"
+    }
+  }
+}

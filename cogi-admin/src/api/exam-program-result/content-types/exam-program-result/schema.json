@@ -1,0 +1,96 @@
+{
+  "kind": "collectionType",
+  "collectionName": "exam_program_results",
+  "info": {
+    "singularName": "exam-program-result",
+    "pluralName": "exam-program-results",
+    "displayName": "Exam Program Result",
+    "description": "Tenant-scoped program-level result aggregation for learners."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "learner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::learner.learner",
+      "required": true
+    },
+    "examRound": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-round.exam-round",
+      "inversedBy": "programResults"
+    },
+    "examProgram": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-program.exam-program",
+      "inversedBy": "programResults",
+      "required": true
+    },
+    "examRegistration": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::exam-registration.exam-registration",
+      "inversedBy": "programResults"
+    },
+    "resultStatus": {
+      "type": "enumeration",
+      "enum": [
+        "not_evaluated",
+        "insufficient_data",
+        "passed",
+        "failed",
+        "cancelled"
+      ],
+      "required": true,
+      "default": "not_evaluated"
+    },
+    "calculationRuleSnapshot": {
+      "type": "json",
+      "default": {}
+    },
+    "calculatedAt": {
+      "type": "datetime"
+    },
+    "approvalStatus": {
+      "type": "enumeration",
+      "enum": [
+        "pending_review",
+        "approved",
+        "rejected"
+      ],
+      "required": true,
+      "default": "pending_review"
+    },
+    "approvedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "approvedAt": {
+      "type": "datetime"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "programResultSubjects": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::exam-program-result-subject.exam-program-result-subject",
+      "mappedBy": "examProgramResult"
+    },
+    "outcomeAssessmentCandidates": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::outcome-assessment-candidate.outcome-assessment-candidate",
+      "mappedBy": "examProgramResult"
+    }
+  }
+}
