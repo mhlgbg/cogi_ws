@@ -1,4 +1,4 @@
-import { extractRelationRef, findEntityByRef, mergeTenantWhere, parseOptionalPositiveInt, resolveCurrentTenantId, toText, whereByParam } from '../../../utils/tenant-scope';
+import { extractRelationRef, findEntityByRef, hasOwn, mergeTenantWhere, normalizeSortInput, parseOptionalPositiveInt, resolveCurrentTenantId, toText, whereByParam } from '../../../utils/tenant-scope';
 
 const LEARNING_OBJECT_UID = 'api::learning-object.learning-object';
 const CONTENT_BLOCK_UID = 'api::content-block.content-block';
@@ -9,6 +9,8 @@ const SKILL_UID = 'api::skill.skill';
 const FORMULA_UID = 'api::formula.formula';
 const QUESTION_UID = 'api::question.question';
 const QUESTION_OPTION_UID = 'api::question-option.question-option';
+const QUESTION_STIMULUS_UID = 'api::question-stimulus.question-stimulus';
+const FILE_ASSET_UID = 'api::file-asset.file-asset';
 const VISUAL_ASSET_UID = 'api::visual-asset.visual-asset';
 const UPLOAD_FILE_UID = 'plugin::upload.file';
 
@@ -144,6 +146,39 @@ function mapContentBlock(row: any) {
   };
 }
 
+function mapQuestionStimulusQuestion(row: any) {
+  if (!row) return null;
+  return {
+    id: normalizeId(row),
+    documentId: row?.documentId || null,
+    code: row?.code || '',
+    title: row?.title || '',
+    type: row?.type || '',
+    questionStatus: row?.questionStatus || 'draft',
+  };
+}
+
+function mapQuestionStimulus(row: any, options: { includeQuestions?: boolean } = {}) {
+  if (!row) return null;
+  const questions = Array.isArray(row?.questions) ? row.questions : [];
+  return {
+    id: normalizeId(row),
+    documentId: row?.documentId || null,
+    code: row?.code || '',
+    title: row?.title || '',
+    type: row?.type || '',
+    instruction: row?.instruction || '',
+    content: row?.content || '',
+    audioAsset: row?.audioAsset || null,
+    imageAsset: row?.imageAsset || null,
+    stimulusStatus: row?.stimulusStatus || 'draft',
+    usageCount: questions.length,
+    questions: options.includeQuestions && questions.length > 0
+      ? questions.map(mapQuestionStimulusQuestion)
+      : undefined,
+  };
+}
+
 function mapQuestionOption(row: any) {
   return {
     id: normalizeId(row),
@@ -151,10 +186,191 @@ function mapQuestionOption(row: any) {
     label: row?.label || '',
     value: row?.value || '',
     content: row?.content || '',
+    imageAsset: row?.imageAsset || null,
     isCorrect: row?.isCorrect === true,
     order: Number(row?.order || 0),
     explanation: row?.explanation || '',
   };
+}
+
+function hasMeaningfulOptionValue(option: any) {
+  return Boolean(
+    toText(option?.label)
+    || toText(option?.value)
+    || toText(option?.content)
+    || option?.imageAsset,
+  );
+}
+
+function getFileAssetPopulateConfig() {
+  return {
+    select: ['id', 'documentId', 'code', 'moduleKey', 'originalName', 'fileName', 'extension', 'mimeType', 'size', 'provider', 'relativePath', 'url', 'status', 'isPublic'],
+    populate: {
+      tenant: { select: ['id', 'documentId', 'code', 'name'] },
+      uploadedBy: { select: ['id', 'documentId', 'username', 'email', 'fullName'] },
+    },
+  };
+}
+
+function getQuestionStimulusPopulateConfig(options: { includeQuestions?: boolean } = {}) {
+  const populate: Record<string, unknown> = {
+    audioAsset: getFileAssetPopulateConfig(),
+    imageAsset: getFileAssetPopulateConfig(),
+  };
+
+  if (options.includeQuestions) {
+    populate.questions = {
+      select: ['id', 'documentId', 'code', 'title', 'type', 'questionStatus'],
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+    };
+  }
+
+  return populate;
+}
+
+function getQuestionPopulateConfig() {
+  return {
+    subject: { select: ['id', 'documentId', 'code', 'title'] },
+    grade: { select: ['id', 'documentId', 'code', 'title'] },
+    knowledgeNode: { select: ['id', 'documentId', 'code', 'title'] },
+    skills: { select: ['id', 'documentId', 'code', 'title'] },
+    formulas: { select: ['id', 'documentId', 'code', 'title'] },
+    options: {
+      select: ['id', 'documentId', 'label', 'value', 'content', 'isCorrect', 'order', 'explanation'],
+      populate: {
+        imageAsset: getFileAssetPopulateConfig(),
+      },
+    },
+    learningObjects: { select: ['id', 'documentId', 'code', 'title'] },
+    stimulus: {
+      select: ['id', 'documentId', 'code', 'title', 'type', 'instruction', 'content', 'stimulusStatus'],
+      populate: {
+        audioAsset: getFileAssetPopulateConfig(),
+        imageAsset: getFileAssetPopulateConfig(),
+      },
+    },
+  };
+}
+
+async function countQuestionsSafe(where: any) {
+  try {
+    return await strapi.db.query(QUESTION_UID).count({ where });
+  } catch {
+    const rows = await strapi.db.query(QUESTION_UID).findMany({
+      where,
+      select: ['id'],
+    });
+    return Array.isArray(rows) ? rows.length : 0;
+  }
+}
+
+function assertFileAssetMimeCategory(fileAsset: any, category: 'audio' | 'image', label: string) {
+  if (!fileAsset?.id) return;
+  const mimeType = toText(fileAsset?.mimeType).toLowerCase();
+  if (!mimeType) return;
+  if (category === 'audio' && !mimeType.startsWith('audio/')) {
+    throw new LearningManagementError(400, `${label} must reference an audio file asset`);
+  }
+  if (category === 'image' && !mimeType.startsWith('image/')) {
+    throw new LearningManagementError(400, `${label} must reference an image file asset`);
+  }
+}
+
+async function resolveTenantFileAssetRef(ref: unknown, tenantId: number | string, label: string) {
+  if (ref === null || ref === undefined || ref === '') return null;
+  return ensureEntityInTenant(FILE_ASSET_UID, ref, tenantId, label).catch(() => null);
+}
+
+async function findQuestionStimulusByCode(code: string, tenantId: number | string) {
+  const normalizedCode = toText(code);
+  if (!normalizedCode) return null;
+
+  return strapi.db.query(QUESTION_STIMULUS_UID).findOne({
+    where: mergeTenantWhere({ code: { $eq: normalizedCode } }, tenantId),
+    select: ['id', 'documentId', 'code', 'stimulusStatus'],
+  });
+}
+
+async function ensureQuestionStimulusCodeUnique(code: string, tenantId: number | string, existingId?: number | null) {
+  const duplicate = await findQuestionStimulusByCode(code, tenantId);
+  if (duplicate?.id && Number(duplicate.id) !== Number(existingId || 0)) {
+    throw new LearningManagementError(409, 'Question Stimulus code already exists in this tenant');
+  }
+}
+
+function validateQuestionStimulusActivation(data: any) {
+  const status = toText(data?.stimulusStatus).toLowerCase();
+  if (status !== 'active') return;
+
+  const type = toText(data?.type).toLowerCase();
+  const hasContent = Boolean(toText(data?.content));
+  const hasAudio = Boolean(data?.audioAsset);
+  const hasImage = Boolean(data?.imageAsset);
+
+  if (type === 'audio' && !hasAudio) {
+    throw new LearningManagementError(400, 'Active audio stimulus must include audioAsset');
+  }
+  if (type === 'image' && !hasImage) {
+    throw new LearningManagementError(400, 'Active image stimulus must include imageAsset');
+  }
+  if (type === 'text' && !hasContent) {
+    throw new LearningManagementError(400, 'Active text stimulus must include content');
+  }
+  if (type === 'mixed' && !hasContent && !hasAudio && !hasImage) {
+    throw new LearningManagementError(400, 'Active mixed stimulus must include content, audioAsset, or imageAsset');
+  }
+
+  if (hasAudio) {
+    assertFileAssetMimeCategory(data?.audioAsset, 'audio', 'audioAsset');
+  }
+  if (hasImage) {
+    assertFileAssetMimeCategory(data?.imageAsset, 'image', 'imageAsset');
+  }
+}
+
+async function sanitizeQuestionStimulusPayload(body: any, tenantId: number | string, existing?: any) {
+  const payload = extractBody(body);
+  const code = ensureRequiredText(hasOwn(payload, 'code') ? payload.code : existing?.code, 'code');
+  const audioAssetRef = hasOwn(payload, 'audioAsset') ? payload.audioAsset : existing?.audioAsset;
+  const imageAssetRef = hasOwn(payload, 'imageAsset') ? payload.imageAsset : existing?.imageAsset;
+  const audioAsset = await resolveTenantFileAssetRef(audioAssetRef, tenantId, 'audioAsset');
+  const imageAsset = await resolveTenantFileAssetRef(imageAssetRef, tenantId, 'imageAsset');
+
+  const data = {
+    code,
+    title: toNullableText(hasOwn(payload, 'title') ? payload.title : existing?.title),
+    type: ensureRequiredText(hasOwn(payload, 'type') ? payload.type : existing?.type, 'type'),
+    instruction: toNullableText(hasOwn(payload, 'instruction') ? payload.instruction : existing?.instruction),
+    content: toNullableText(hasOwn(payload, 'content') ? payload.content : existing?.content),
+    audioAsset: audioAsset ? audioAsset.id : null,
+    imageAsset: imageAsset ? imageAsset.id : null,
+    stimulusStatus: toText(hasOwn(payload, 'stimulusStatus') ? payload.stimulusStatus : existing?.stimulusStatus) || 'draft',
+    tenant: tenantId,
+  };
+
+  validateQuestionStimulusActivation({
+    ...data,
+    audioAsset,
+    imageAsset,
+  });
+
+  return data;
+}
+
+async function findQuestionStimulusOrThrow(id: unknown, tenantId: number | string, options: { includeQuestions?: boolean } = {}) {
+  const where = whereByParam(id);
+  if (!where) throw new LearningManagementError(400, 'Question Stimulus id is invalid');
+
+  const row = await strapi.db.query(QUESTION_STIMULUS_UID).findOne({
+    where: mergeTenantWhere(where, tenantId),
+    populate: getQuestionStimulusPopulateConfig(options),
+  });
+
+  if (!row) {
+    throw new LearningManagementError(404, 'Question Stimulus not found');
+  }
+
+  return row;
 }
 
 async function replaceQuestionOptions(questionId: number, options: any[], tenantId: number | string) {
@@ -188,6 +404,7 @@ function mapQuestion(row: any) {
     explanation: row?.explanation || '',
     rubric: row?.rubric ?? null,
     questionStatus: row?.questionStatus || 'draft',
+    stimulus: mapQuestionStimulus(row?.stimulus),
     subject: mapSimpleRelation(row?.subject),
     grade: mapSimpleRelation(row?.grade),
     knowledgeNode: mapSimpleRelation(row?.knowledgeNode),
@@ -256,6 +473,20 @@ function getRelationOptionQueryConfig(uid: string) {
   }
 }
 
+function getRelationSearchFields(uid: string) {
+  switch (uid) {
+    case SUBJECT_UID:
+    case GRADE_UID:
+    case KNOWLEDGE_NODE_UID:
+    case SKILL_UID:
+    case FORMULA_UID:
+    case VISUAL_ASSET_UID:
+      return ['code', 'title', 'description']
+    default:
+      return ['code', 'title', 'description']
+  }
+}
+
 function buildPagination(query: any) {
   const page = toPositiveInt(query?.page, 1) || 1;
   const pageSize = toPositiveInt(query?.pageSize, 10) || 10;
@@ -305,6 +536,15 @@ async function ensureEntityListInTenant(uid: string, refs: unknown[], tenantId: 
   return entities;
 }
 
+async function ensureUploadFileExists(ref: unknown, label: string) {
+  if (ref === null || ref === undefined || ref === '') return null;
+  const entity = await findEntityByRef(UPLOAD_FILE_UID, ref);
+  if (!entity) {
+    throw new LearningManagementError(400, `${label} is invalid`);
+  }
+  return entity;
+}
+
 async function findLearningObjectOrThrow(id: unknown, tenantId: number | string) {
   const where = whereByParam(id);
   if (!where) {
@@ -337,7 +577,19 @@ async function findLearningObjectOrThrow(id: unknown, tenantId: number | string)
           knowledgeNode: { select: ['id', 'documentId', 'code', 'title'] },
           skills: { select: ['id', 'documentId', 'code', 'title'] },
           formulas: { select: ['id', 'documentId', 'code', 'title'] },
-          options: { select: ['id', 'documentId', 'label', 'value', 'content', 'isCorrect', 'order', 'explanation'] },
+          options: {
+            select: ['id', 'documentId', 'label', 'value', 'content', 'isCorrect', 'order', 'explanation'],
+            populate: {
+              imageAsset: getFileAssetPopulateConfig(),
+            },
+          },
+          stimulus: {
+            select: ['id', 'documentId', 'code', 'title', 'type', 'instruction', 'content', 'stimulusStatus'],
+            populate: {
+              audioAsset: getFileAssetPopulateConfig(),
+              imageAsset: getFileAssetPopulateConfig(),
+            },
+          },
         },
       },
     },
@@ -354,13 +606,9 @@ async function listRelationOptions(uid: string, tenantId: number | string, optio
   const whereClauses: any[] = [];
   const search = toText(options?.q);
   if (search) {
+    const searchFields = getRelationSearchFields(uid)
     whereClauses.push({
-      $or: [
-        { code: { $containsi: search } },
-        { title: { $containsi: search } },
-        { name: { $containsi: search } },
-        { description: { $containsi: search } },
-      ],
+      $or: searchFields.map((fieldName) => ({ [fieldName]: { $containsi: search } })),
     });
   }
 
@@ -469,6 +717,8 @@ export async function getLearningManagementBootstrap(tenantId: number | string) 
     contentBlockStatuses: ['active', 'hidden', 'archived'],
     questionTypes: ['single_choice', 'multiple_choice', 'true_false', 'short_answer', 'essay', 'ordering', 'matching', 'fill_blank'],
     questionStatuses: ['draft', 'active', 'archived'],
+    stimulusTypes: ['text', 'audio', 'image', 'mixed'],
+    stimulusStatuses: ['draft', 'active', 'archived'],
     subjectStatuses: ['active', 'archived'],
     gradeStatuses: ['active', 'archived'],
     skillStatuses: ['active', 'archived'],
@@ -737,6 +987,47 @@ export async function createKnowledgeNode(body: any, tenantId: number | string) 
   return normalizeOption(row);
 }
 
+export async function updateKnowledgeNode(id: unknown, body: any, tenantId: number | string) {
+  const existing = await ensureEntityInTenant(KNOWLEDGE_NODE_UID, id, tenantId, 'knowledgeNode');
+  if (!existing) {
+    throw new LearningManagementError(404, 'Knowledge Node not found');
+  }
+
+  const payload = extractBody(body);
+  const subject = await ensureEntityInTenant(SUBJECT_UID, payload.subject ?? existing?.subject, tenantId, 'subject');
+  const grade = await ensureEntityInTenant(GRADE_UID, payload.grade ?? existing?.grade, tenantId, 'grade');
+  const parent = await ensureEntityInTenant(KNOWLEDGE_NODE_UID, payload.parent ?? existing?.parent, tenantId, 'parent');
+
+  await strapi.db.query(KNOWLEDGE_NODE_UID).update({
+    where: { id: existing.id },
+    data: {
+      code: ensureRequiredText(payload.code ?? existing?.code, 'code'),
+      title: ensureRequiredText(payload.title ?? existing?.title, 'title'),
+      description: toNullableText(payload.description ?? existing?.description),
+      subject: subject ? subject.id : null,
+      grade: grade ? grade.id : null,
+      parent: parent ? parent.id : null,
+      order: toNonNegativeInt(payload.order ?? existing?.order, 0),
+      level: toNonNegativeInt(payload.level ?? existing?.level, 0),
+      knowledgeNodeStatus: toText(payload.knowledgeNodeStatus ?? existing?.knowledgeNodeStatus) || 'active',
+      tenant: tenantId,
+    },
+  });
+
+  const row = await ensureEntityInTenant(KNOWLEDGE_NODE_UID, existing.id, tenantId, 'knowledgeNode');
+  return normalizeOption(row);
+}
+
+export async function deleteKnowledgeNode(id: unknown, tenantId: number | string) {
+  const existing = await ensureEntityInTenant(KNOWLEDGE_NODE_UID, id, tenantId, 'knowledgeNode');
+  if (!existing) {
+    throw new LearningManagementError(404, 'Knowledge Node not found');
+  }
+
+  await strapi.db.query(KNOWLEDGE_NODE_UID).delete({ where: { id: existing.id } });
+  return { id: normalizeId(existing) };
+}
+
 export async function getSkills(query: any, tenantId: number | string) {
   return listRelationOptions(SKILL_UID, tenantId, query);
 }
@@ -763,6 +1054,48 @@ export async function createSkill(body: any, tenantId: number | string) {
   });
   const row = await ensureEntityInTenant(SKILL_UID, created.id, tenantId, 'skill');
   return normalizeOption(row);
+}
+
+export async function updateSkill(id: unknown, body: any, tenantId: number | string) {
+  const existing = await ensureEntityInTenant(SKILL_UID, id, tenantId, 'skill');
+  if (!existing) {
+    throw new LearningManagementError(404, 'Skill not found');
+  }
+
+  const payload = extractBody(body);
+  const subject = await ensureEntityInTenant(SUBJECT_UID, payload.subject ?? existing?.subject, tenantId, 'subject');
+  const grade = await ensureEntityInTenant(GRADE_UID, payload.grade ?? existing?.grade, tenantId, 'grade');
+  const knowledgeNode = await ensureEntityInTenant(KNOWLEDGE_NODE_UID, payload.knowledgeNode ?? existing?.knowledgeNode, tenantId, 'knowledgeNode');
+  const parentSkill = await ensureEntityInTenant(SKILL_UID, payload.parentSkill ?? existing?.parentSkill, tenantId, 'parentSkill');
+
+  await strapi.db.query(SKILL_UID).update({
+    where: { id: existing.id },
+    data: {
+      code: ensureRequiredText(payload.code ?? existing?.code, 'code'),
+      title: ensureRequiredText(payload.title ?? existing?.title, 'title'),
+      description: toNullableText(payload.description ?? existing?.description),
+      subject: subject ? subject.id : null,
+      grade: grade ? grade.id : null,
+      knowledgeNode: knowledgeNode ? knowledgeNode.id : null,
+      parentSkill: parentSkill ? parentSkill.id : null,
+      level: ensureRequiredText(payload.level ?? existing?.level, 'level'),
+      skillStatus: toText(payload.skillStatus ?? existing?.skillStatus) || 'active',
+      tenant: tenantId,
+    },
+  });
+
+  const row = await ensureEntityInTenant(SKILL_UID, existing.id, tenantId, 'skill');
+  return normalizeOption(row);
+}
+
+export async function deleteSkill(id: unknown, tenantId: number | string) {
+  const existing = await ensureEntityInTenant(SKILL_UID, id, tenantId, 'skill');
+  if (!existing) {
+    throw new LearningManagementError(404, 'Skill not found');
+  }
+
+  await strapi.db.query(SKILL_UID).delete({ where: { id: existing.id } });
+  return { id: normalizeId(existing) };
 }
 
 export async function getFormulas(query: any, tenantId: number | string) {
@@ -844,7 +1177,7 @@ export async function createVisualAsset(body: any, tenantId: number | string) {
   const subject = await ensureEntityInTenant(SUBJECT_UID, payload.subject, tenantId, 'subject');
   const grade = await ensureEntityInTenant(GRADE_UID, payload.grade, tenantId, 'grade');
   const knowledgeNode = await ensureEntityInTenant(KNOWLEDGE_NODE_UID, payload.knowledgeNode, tenantId, 'knowledgeNode');
-  const uploadFile = await ensureEntityInTenant(UPLOAD_FILE_UID, payload.file, tenantId, 'file').catch(() => null);
+  const uploadFile = await ensureUploadFileExists(payload.file, 'file').catch(() => null);
   const created = await strapi.db.query(VISUAL_ASSET_UID).create({
     data: {
       code: toNullableText(payload.code),
@@ -890,7 +1223,7 @@ async function sanitizeContentBlockPayload(body: any, tenantId: number | string,
   const formula = await ensureEntityInTenant(FORMULA_UID, payload.formula ?? existing?.formula, tenantId, 'formula');
   const question = await ensureEntityInTenant(QUESTION_UID, payload.question ?? existing?.question, tenantId, 'question');
   const visualAsset = await ensureEntityInTenant(VISUAL_ASSET_UID, payload.visualAsset ?? existing?.visualAsset, tenantId, 'visualAsset');
-  const media = await ensureEntityInTenant(UPLOAD_FILE_UID, payload.media ?? existing?.media, tenantId, 'media').catch(() => null);
+  const media = await ensureUploadFileExists(payload.media ?? existing?.media, 'media').catch(() => null);
 
   return {
     learningObject: learningObject.id,
@@ -947,12 +1280,107 @@ export async function deleteContentBlock(id: unknown, tenantId: number | string)
   return { id: existing.id };
 }
 
+export async function listQuestionStimuli(query: any, tenantId: number | string) {
+  const q = toText(query?.q || query?.keyword);
+  const type = toText(query?.type);
+  const stimulusStatus = toText(query?.stimulusStatus || query?.status);
+  const whereClauses: any[] = [];
+
+  if (q) {
+    whereClauses.push({
+      $or: [
+        { code: { $containsi: q } },
+        { title: { $containsi: q } },
+        { content: { $containsi: q } },
+      ],
+    });
+  }
+
+  if (type) {
+    whereClauses.push({ type });
+  }
+
+  if (stimulusStatus) {
+    whereClauses.push({ stimulusStatus });
+  }
+
+  const where = mergeTenantWhere(whereClauses.length > 0 ? { $and: whereClauses } : {}, tenantId);
+  const sort = normalizeSortInput(query?.sort);
+  const orderBy = sort.length > 0 ? sort : [{ updatedAt: 'desc' }, { id: 'desc' }];
+  const { page, pageSize, start } = buildPagination(query);
+  const [rows, total] = await Promise.all([
+    strapi.db.query(QUESTION_STIMULUS_UID).findMany({
+      where,
+      offset: start,
+      limit: pageSize,
+      orderBy,
+      populate: {
+        ...getQuestionStimulusPopulateConfig(),
+        questions: { select: ['id'] },
+      },
+    }),
+    strapi.db.query(QUESTION_STIMULUS_UID).count({ where }),
+  ]);
+
+  return {
+    data: (rows || []).map((row: any) => mapQuestionStimulus(row)),
+    meta: {
+      pagination: {
+        page,
+        pageSize,
+        pageCount: Math.max(1, Math.ceil(total / pageSize)),
+        total,
+      },
+    },
+  };
+}
+
+export async function getQuestionStimulusDetail(id: unknown, tenantId: number | string) {
+  const row = await findQuestionStimulusOrThrow(id, tenantId, { includeQuestions: true });
+  return mapQuestionStimulus(row, { includeQuestions: true });
+}
+
+export async function createQuestionStimulus(body: any, tenantId: number | string) {
+  const data = await sanitizeQuestionStimulusPayload(body, tenantId);
+  await ensureQuestionStimulusCodeUnique(data.code, tenantId);
+  const created = await strapi.db.query(QUESTION_STIMULUS_UID).create({ data });
+  const row = await findQuestionStimulusOrThrow(created.id, tenantId, { includeQuestions: true });
+  return mapQuestionStimulus(row, { includeQuestions: true });
+}
+
+export async function updateQuestionStimulus(id: unknown, body: any, tenantId: number | string) {
+  const existing = await findQuestionStimulusOrThrow(id, tenantId, { includeQuestions: true });
+  const data = await sanitizeQuestionStimulusPayload(body, tenantId, existing);
+  await ensureQuestionStimulusCodeUnique(data.code, tenantId, Number(existing.id));
+  await strapi.db.query(QUESTION_STIMULUS_UID).update({
+    where: { id: existing.id },
+    data,
+  });
+  const row = await findQuestionStimulusOrThrow(existing.id, tenantId, { includeQuestions: true });
+  return mapQuestionStimulus(row, { includeQuestions: true });
+}
+
+export async function deleteQuestionStimulus(id: unknown, tenantId: number | string) {
+  const existing = await findQuestionStimulusOrThrow(id, tenantId, { includeQuestions: true });
+  const linkedQuestionCount = Array.isArray(existing?.questions) ? existing.questions.length : 0;
+  if (linkedQuestionCount > 0) {
+    throw new LearningManagementError(409, 'Question Stimulus is currently used by one or more questions. Detach or archive it first.');
+  }
+
+  await strapi.db.query(QUESTION_STIMULUS_UID).delete({ where: { id: existing.id } });
+  return { id: normalizeId(existing) };
+}
+
 export async function getQuestions(query: any, tenantId: number | string) {
   const q = toText(query?.q);
   const learningObjectId = toText(query?.learningObjectId);
   const subjectId = toText(query?.subjectId);
   const gradeId = toText(query?.gradeId);
+  const skillId = toText(query?.skillId || query?.skill);
+  const stimulusId = toText(query?.stimulusId || query?.stimulus);
+  const hasStimulus = toText(query?.hasStimulus).toLowerCase();
   const type = toText(query?.type);
+  const difficulty = toText(query?.difficulty);
   const questionStatus = toText(query?.questionStatus);
   const whereClauses: any[] = [];
 
@@ -978,8 +1406,28 @@ export async function getQuestions(query: any, tenantId: number | string) {
     whereClauses.push({ grade: whereByParam(gradeId) });
   }
 
+  if (skillId) {
+    whereClauses.push({ skills: whereByParam(skillId) });
+  }
+
+  if (stimulusId) {
+    whereClauses.push({ stimulus: whereByParam(stimulusId) });
+  }
+
+  if (hasStimulus === 'true') {
+    whereClauses.push({ stimulus: { id: { $notNull: true } } });
+  }
+
+  if (hasStimulus === 'false') {
+    whereClauses.push({ stimulus: { id: { $null: true } } });
+  }
+
   if (type) {
     whereClauses.push({ type });
+  }
+
+  if (difficulty) {
+    whereClauses.push({ difficulty });
   }
 
   if (questionStatus) {
@@ -988,6 +1436,7 @@ export async function getQuestions(query: any, tenantId: number | string) {
 
   const where = mergeTenantWhere(whereClauses.length > 0 ? { $and: whereClauses } : {}, tenantId);
   const shouldPaginate = toPositiveInt(query?.page) !== null || toPositiveInt(query?.pageSize) !== null;
+  const orderBy = normalizeSortInput(query?.sort).length > 0 ? normalizeSortInput(query?.sort) : [{ updatedAt: 'desc' }, { id: 'desc' }];
 
   if (shouldPaginate) {
     const { page, pageSize, start } = buildPagination(query);
@@ -996,18 +1445,10 @@ export async function getQuestions(query: any, tenantId: number | string) {
         where,
         offset: start,
         limit: pageSize,
-        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-        populate: {
-          subject: { select: ['id', 'documentId', 'code', 'title'] },
-          grade: { select: ['id', 'documentId', 'code', 'title'] },
-          knowledgeNode: { select: ['id', 'documentId', 'code', 'title'] },
-          skills: { select: ['id', 'documentId', 'code', 'title'] },
-          formulas: { select: ['id', 'documentId', 'code', 'title'] },
-          options: { select: ['id', 'documentId', 'label', 'value', 'content', 'isCorrect', 'order', 'explanation'] },
-          learningObjects: { select: ['id', 'documentId', 'code', 'title'] },
-        },
+        orderBy,
+        populate: getQuestionPopulateConfig(),
       }),
-      strapi.db.query(QUESTION_UID).count({ where }),
+      countQuestionsSafe(where),
     ]);
 
     return {
@@ -1025,16 +1466,8 @@ export async function getQuestions(query: any, tenantId: number | string) {
 
   const rows = await strapi.db.query(QUESTION_UID).findMany({
     where,
-    orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-    populate: {
-      subject: { select: ['id', 'documentId', 'code', 'title'] },
-      grade: { select: ['id', 'documentId', 'code', 'title'] },
-      knowledgeNode: { select: ['id', 'documentId', 'code', 'title'] },
-      skills: { select: ['id', 'documentId', 'code', 'title'] },
-      formulas: { select: ['id', 'documentId', 'code', 'title'] },
-      options: { select: ['id', 'documentId', 'label', 'value', 'content', 'isCorrect', 'order', 'explanation'] },
-      learningObjects: { select: ['id', 'documentId', 'code', 'title'] },
-    },
+    orderBy,
+    populate: getQuestionPopulateConfig(),
   });
 
   return (rows || []).map(mapQuestion);
@@ -1045,6 +1478,8 @@ async function sanitizeQuestionPayload(body: any, tenantId: number | string, exi
   const subject = await ensureEntityInTenant(SUBJECT_UID, payload.subject ?? existing?.subject, tenantId, 'subject');
   const grade = await ensureEntityInTenant(GRADE_UID, payload.grade ?? existing?.grade, tenantId, 'grade');
   const knowledgeNode = await ensureEntityInTenant(KNOWLEDGE_NODE_UID, payload.knowledgeNode ?? existing?.knowledgeNode, tenantId, 'knowledgeNode');
+  const stimulusRef = hasOwn(payload, 'stimulus') ? payload.stimulus : existing?.stimulus;
+  const stimulus = await ensureEntityInTenant(QUESTION_STIMULUS_UID, stimulusRef, tenantId, 'stimulus');
   const skillRefs = payload.skills !== undefined ? toRelationIdList(payload.skills) : mapRelationIds(existing?.skills);
   const formulaRefs = payload.formulas !== undefined ? toRelationIdList(payload.formulas) : mapRelationIds(existing?.formulas);
   const learningObjectRefs = payload.learningObjects !== undefined ? toRelationIdList(payload.learningObjects) : mapRelationIds(existing?.learningObjects);
@@ -1057,6 +1492,7 @@ async function sanitizeQuestionPayload(body: any, tenantId: number | string, exi
     title: toNullableText(payload.title ?? existing?.title),
     questionText: ensureRequiredText(payload.questionText ?? existing?.questionText, 'questionText'),
     type: ensureRequiredText(payload.type ?? existing?.type, 'type'),
+    stimulus: stimulus ? stimulus.id : null,
     subject: subject ? subject.id : null,
     grade: grade ? grade.id : null,
     knowledgeNode: knowledgeNode ? knowledgeNode.id : null,
@@ -1077,15 +1513,7 @@ async function findQuestionOrThrow(id: unknown, tenantId: number | string) {
   if (!where) throw new LearningManagementError(400, 'Question id is invalid');
   const row = await strapi.db.query(QUESTION_UID).findOne({
     where: mergeTenantWhere(where, tenantId),
-    populate: {
-      subject: { select: ['id', 'documentId', 'code', 'title'] },
-      grade: { select: ['id', 'documentId', 'code', 'title'] },
-      knowledgeNode: { select: ['id', 'documentId', 'code', 'title'] },
-      skills: { select: ['id', 'documentId', 'code', 'title'] },
-      formulas: { select: ['id', 'documentId', 'code', 'title'] },
-      options: { select: ['id', 'documentId', 'label', 'value', 'content', 'isCorrect', 'order', 'explanation'] },
-      learningObjects: { select: ['id', 'documentId', 'code', 'title'] },
-    },
+    populate: getQuestionPopulateConfig(),
   });
   if (!row) throw new LearningManagementError(404, 'Question not found');
   return row;
@@ -1145,6 +1573,12 @@ export async function createQuestionOption(body: any, tenantId: number | string)
   const payload = extractBody(body);
   const question = await ensureEntityInTenant(QUESTION_UID, payload.question, tenantId, 'question');
   if (!question) throw new LearningManagementError(400, 'question is required');
+  const imageAsset = await resolveTenantFileAssetRef(payload.imageAsset, tenantId, 'imageAsset');
+  assertFileAssetMimeCategory(imageAsset, 'image', 'imageAsset');
+
+  if (!hasMeaningfulOptionValue({ ...payload, imageAsset })) {
+    throw new LearningManagementError(400, 'Question option must include at least one of label, value, content, or imageAsset');
+  }
 
   const created = await strapi.db.query(QUESTION_OPTION_UID).create({
     data: {
@@ -1152,6 +1586,7 @@ export async function createQuestionOption(body: any, tenantId: number | string)
       label: toNullableText(payload.label),
       value: toNullableText(payload.value),
       content: toNullableText(payload.content),
+      imageAsset: imageAsset ? imageAsset.id : null,
       isCorrect: toBoolean(payload.isCorrect, false),
       order: toNonNegativeInt(payload.order, 0),
       explanation: toNullableText(payload.explanation),
@@ -1159,7 +1594,7 @@ export async function createQuestionOption(body: any, tenantId: number | string)
     },
   });
 
-  const row = await strapi.db.query(QUESTION_OPTION_UID).findOne({ where: { id: created.id } });
+  const row = await strapi.db.query(QUESTION_OPTION_UID).findOne({ where: { id: created.id }, populate: { imageAsset: getFileAssetPopulateConfig() } });
   return mapQuestionOption(row);
 }
 

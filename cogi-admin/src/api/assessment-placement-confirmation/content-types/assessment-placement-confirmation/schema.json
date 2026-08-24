@@ -1,0 +1,110 @@
+{
+  "kind": "collectionType",
+  "collectionName": "assessment_placement_confirmations",
+  "info": {
+    "singularName": "assessment-placement-confirmation",
+    "pluralName": "assessment-placement-confirmations",
+    "displayName": "Assessment Placement Confirmation",
+    "description": "Tenant-scoped teacher confirmation history for one assessment result."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "assessmentResult": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-result.assessment-result",
+      "required": true
+    },
+    "assessmentSpeakingReview": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-speaking-review.assessment-speaking-review"
+    },
+    "assessmentAttempt": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-attempt.assessment-attempt",
+      "required": true
+    },
+    "assessment": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment.assessment",
+      "required": true
+    },
+    "assessmentVersion": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-version.assessment-version",
+      "required": true
+    },
+    "confirmedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["draft", "confirmed", "superseded", "cancelled"],
+      "required": true,
+      "default": "draft"
+    },
+    "decision": {
+      "type": "enumeration",
+      "enum": ["keep", "raise", "lower", "manual"]
+    },
+    "provisionalLevelSnapshot": {
+      "type": "enumeration",
+      "enum": ["PRE_A1", "A1", "A2", "B1", "B2", "C1", "C2"]
+    },
+    "provisionalBandCodeSnapshot": {
+      "type": "string"
+    },
+    "provisionalLabelSnapshot": {
+      "type": "string"
+    },
+    "speakingSuggestedLevelSnapshot": {
+      "type": "enumeration",
+      "enum": ["PRE_A1", "A1", "A2", "B1", "B2", "C1", "C2"]
+    },
+    "speakingSummarySnapshot": {
+      "type": "json"
+    },
+    "resultSnapshot": {
+      "type": "json"
+    },
+    "confirmedLevel": {
+      "type": "enumeration",
+      "enum": ["PRE_A1", "A1", "A2", "B1", "B2", "C1", "C2"],
+      "required": true
+    },
+    "confirmedBandCode": {
+      "type": "string"
+    },
+    "confirmedLabel": {
+      "type": "string"
+    },
+    "confirmationNote": {
+      "type": "text"
+    },
+    "confirmedAt": {
+      "type": "datetime"
+    },
+    "isCurrent": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "assessmentPlacementConfirmations",
+      "required": true
+    }
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "kind": "collectionType",
+  "collectionName": "assessment_campaign_rules",
+  "info": {
+    "singularName": "assessment-campaign-rule",
+    "pluralName": "assessment-campaign-rules",
+    "displayName": "Assessment Campaign Rule",
+    "description": "Tenant-scoped resolver rule for selecting an assessment version within an assessment campaign."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "assessmentCampaign": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-campaign.assessment-campaign",
+      "inversedBy": "rules",
+      "required": true
+    },
+    "assessmentVersion": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-version.assessment-version",
+      "required": true
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "assessmentCampaignRules",
+      "required": true
+    },
+    "code": {
+      "type": "string",
+      "required": true
+    },
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "priority": {
+      "type": "integer",
+      "required": true,
+      "default": 0
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["draft", "active", "inactive"],
+      "required": true,
+      "default": "draft"
+    },
+    "gradeFrom": {
+      "type": "integer",
+      "min": 1
+    },
+    "gradeTo": {
+      "type": "integer",
+      "min": 1
+    },
+    "ageFrom": {
+      "type": "integer",
+      "min": 1
+    },
+    "ageTo": {
+      "type": "integer",
+      "min": 1
+    },
+    "conditions": {
+      "type": "json"
+    }
+  }
+}

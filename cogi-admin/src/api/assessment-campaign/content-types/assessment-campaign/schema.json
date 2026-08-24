@@ -1,0 +1,86 @@
+{
+  "kind": "collectionType",
+  "collectionName": "assessment_campaigns",
+  "info": {
+    "singularName": "assessment-campaign",
+    "pluralName": "assessment-campaigns",
+    "displayName": "Assessment Campaign",
+    "description": "Tenant-scoped orchestration campaign for lead capture, assessment assignment, and result tracking."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "assessmentCampaigns",
+      "required": true
+    },
+    "code": {
+      "type": "string",
+      "required": true
+    },
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "slug": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["draft", "active", "paused", "ended", "archived"],
+      "required": true,
+      "default": "draft"
+    },
+    "startAt": {
+      "type": "datetime"
+    },
+    "endAt": {
+      "type": "datetime"
+    },
+    "publicTitle": {
+      "type": "string"
+    },
+    "publicDescription": {
+      "type": "text"
+    },
+    "publicContent": {
+      "type": "richtext"
+    },
+    "successMessage": {
+      "type": "text"
+    },
+    "resultIntro": {
+      "type": "text"
+    },
+    "settings": {
+      "type": "json"
+    },
+    "fields": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-campaign-field.assessment-campaign-field",
+      "mappedBy": "assessmentCampaign"
+    },
+    "rules": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-campaign-rule.assessment-campaign-rule",
+      "mappedBy": "assessmentCampaign"
+    },
+    "participations": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-campaign-participation.assessment-campaign-participation",
+      "mappedBy": "assessmentCampaign"
+    }
+  }
+}

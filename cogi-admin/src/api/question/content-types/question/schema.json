@@ -112,6 +112,12 @@
       "target": "api::content-block.content-block",
       "mappedBy": "question"
     },
+    "stimulus": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::question-stimulus.question-stimulus",
+      "inversedBy": "questions"
+    },
     "tenant": {
       "type": "relation",
       "relation": "manyToOne",

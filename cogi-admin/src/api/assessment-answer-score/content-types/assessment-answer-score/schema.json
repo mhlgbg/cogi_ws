@@ -1,0 +1,95 @@
+{
+  "kind": "collectionType",
+  "collectionName": "assessment_answer_scores",
+  "info": {
+    "singularName": "assessment-answer-score",
+    "pluralName": "assessment-answer-scores",
+    "displayName": "Assessment Answer Score",
+    "description": "Tenant-scoped scoring record for one answer inside one scoring result."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "result": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-result.assessment-result",
+      "inversedBy": "answerScores",
+      "required": true
+    },
+    "attempt": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-attempt.assessment-attempt",
+      "required": true
+    },
+    "answer": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-answer.assessment-answer",
+      "inversedBy": "scores"
+    },
+    "assessmentQuestion": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-question.assessment-question",
+      "required": true
+    },
+    "question": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::question.question",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["pending", "auto_scored", "manual_scored", "not_scored", "invalid"],
+      "required": true,
+      "default": "pending"
+    },
+    "awardedPoints": {
+      "type": "decimal"
+    },
+    "maxPoints": {
+      "type": "decimal"
+    },
+    "isCorrect": {
+      "type": "boolean"
+    },
+    "scoringMethod": {
+      "type": "enumeration",
+      "enum": ["auto", "manual", "none"],
+      "required": true,
+      "default": "none"
+    },
+    "scoringDetail": {
+      "type": "json",
+      "private": true
+    },
+    "manualScoreRequired": {
+      "type": "boolean",
+      "required": true,
+      "default": false
+    },
+    "manualScoreNote": {
+      "type": "text"
+    },
+    "scoredBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "manualScoredAt": {
+      "type": "datetime"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "assessmentAnswerScores",
+      "required": true
+    }
+  }
+}

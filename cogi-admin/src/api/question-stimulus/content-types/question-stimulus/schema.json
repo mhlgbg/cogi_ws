@@ -1,0 +1,72 @@
+{
+  "kind": "collectionType",
+  "collectionName": "question_stimuli",
+  "info": {
+    "singularName": "question-stimulus",
+    "pluralName": "question-stimuli",
+    "displayName": "Question Stimulus",
+    "description": "Tenant-scoped reusable stimulus or source material shared by one or more assessment questions."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true
+    },
+    "title": {
+      "type": "string"
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": [
+        "text",
+        "audio",
+        "image",
+        "mixed"
+      ],
+      "required": true
+    },
+    "instruction": {
+      "type": "richtext"
+    },
+    "content": {
+      "type": "richtext"
+    },
+    "audioAsset": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::file-asset.file-asset"
+    },
+    "imageAsset": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::file-asset.file-asset"
+    },
+    "stimulusStatus": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "active",
+        "archived"
+      ],
+      "default": "draft",
+      "required": true
+    },
+    "questions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::question.question",
+      "mappedBy": "stimulus"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "questionStimuli",
+      "required": true
+    }
+  }
+}

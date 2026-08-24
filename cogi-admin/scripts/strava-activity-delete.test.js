@@ -301,6 +301,16 @@ async function loadWebhookEvent(id) {
   })
 }
 
+async function loadLatestWebhookEventBySubscriptionId(subscriptionId) {
+  const rows = await app.db.query(STRAVA_WEBHOOK_EVENT_UID).findMany({
+    where: { subscriptionId: String(subscriptionId) },
+    orderBy: [{ id: 'desc' }],
+    limit: 1,
+    select: ['id', 'status', 'ownerId', 'objectId', 'updates', 'rawPayload', 'processedAt'],
+  })
+  return Array.isArray(rows) ? rows[0] || null : null
+}
+
 before(async () => {
   process.env.STRAVA_WEBHOOK_RUNNER_ENABLED = 'true'
   process.env.STRAVA_WEBHOOK_HANDLER_ENABLED = 'true'
@@ -399,13 +409,10 @@ test('activity.delete hard-deletes activity, recalculates challenge aggregates, 
     const trendTotal = (trends.items || []).reduce((sum, item) => sum + Number(item.value || 0), 0)
     assert.equal(trendTotal, 16000)
 
-    const event = await app.db.query(STRAVA_WEBHOOK_EVENT_UID).findOne({
-      where: { subscriptionId: '1001' },
-      select: ['id', 'status', 'ownerId', 'objectId', 'updates', 'rawPayload', 'processedAt'],
-    })
+    const event = await loadLatestWebhookEventBySubscriptionId('1001')
     assert.equal(event.status, 'processed')
-    assert.equal(event.ownerId, null)
-    assert.equal(event.objectId, null)
+    assert.equal(event.ownerId, fixture.connection.stravaAthleteId)
+    assert.equal(event.objectId, fixture.activityA.stravaActivityId)
     assert.equal(event.updates, null)
     assert.equal(event.rawPayload, null)
     assert.ok(event.processedAt)
@@ -434,13 +441,10 @@ test('activity.delete on missing activity is terminal success with no outbound c
     await webhookRunner.runStravaWebhookRunnerTick(app)
 
     assert.equal(countStravaCalls(calls).length, 0)
-    const event = await app.db.query(STRAVA_WEBHOOK_EVENT_UID).findOne({
-      where: { subscriptionId: '1002' },
-      select: ['id', 'status', 'ownerId', 'objectId', 'updates', 'rawPayload', 'processedAt'],
-    })
+    const event = await loadLatestWebhookEventBySubscriptionId('1002')
     assert.equal(event.status, 'processed')
-    assert.equal(event.ownerId, null)
-    assert.equal(event.objectId, null)
+    assert.equal(event.ownerId, fixture.connection.stravaAthleteId)
+    assert.equal(event.objectId, 'missing-activity-id')
     assert.equal(event.updates, null)
     assert.equal(event.rawPayload, null)
   } finally {

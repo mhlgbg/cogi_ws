@@ -56,6 +56,12 @@
       "target": "api::question.question",
       "mappedBy": "subject"
     },
+    "assessments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment.assessment",
+      "mappedBy": "subject"
+    },
     "visualAssets": {
       "type": "relation",
       "relation": "oneToMany",

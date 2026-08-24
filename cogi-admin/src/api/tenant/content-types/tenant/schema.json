@@ -295,6 +295,108 @@
       "target": "api::question.question",
       "mappedBy": "tenant"
     },
+    "assessments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment.assessment",
+      "mappedBy": "tenant"
+    },
+    "assessmentVersions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-version.assessment-version",
+      "mappedBy": "tenant"
+    },
+    "assessmentSections": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-section.assessment-section",
+      "mappedBy": "tenant"
+    },
+    "assessmentQuestions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-question.assessment-question",
+      "mappedBy": "tenant"
+    },
+    "assessmentAttempts": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-attempt.assessment-attempt",
+      "mappedBy": "tenant"
+    },
+    "assessmentAnswers": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-answer.assessment-answer",
+      "mappedBy": "tenant"
+    },
+    "assessmentResults": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-result.assessment-result",
+      "mappedBy": "tenant"
+    },
+    "assessmentAnswerScores": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-answer-score.assessment-answer-score",
+      "mappedBy": "tenant"
+    },
+    "assessmentPlacementRules": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-placement-rule.assessment-placement-rule",
+      "mappedBy": "tenant"
+    },
+    "assessmentSpeakingCriteria": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-speaking-criterion.assessment-speaking-criterion",
+      "mappedBy": "tenant"
+    },
+    "assessmentSpeakingReviews": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-speaking-review.assessment-speaking-review",
+      "mappedBy": "tenant"
+    },
+    "assessmentPlacementConfirmations": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-placement-confirmation.assessment-placement-confirmation",
+      "mappedBy": "tenant"
+    },
+    "assessmentCampaigns": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-campaign.assessment-campaign",
+      "mappedBy": "tenant"
+    },
+    "assessmentCampaignFields": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-campaign-field.assessment-campaign-field",
+      "mappedBy": "tenant"
+    },
+    "assessmentCampaignRules": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-campaign-rule.assessment-campaign-rule",
+      "mappedBy": "tenant"
+    },
+    "assessmentCampaignParticipations": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-campaign-participation.assessment-campaign-participation",
+      "mappedBy": "tenant"
+    },
+    "questionStimuli": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::question-stimulus.question-stimulus",
+      "mappedBy": "tenant"
+    },
     "questionOptions": {
       "type": "relation",
       "relation": "oneToMany",

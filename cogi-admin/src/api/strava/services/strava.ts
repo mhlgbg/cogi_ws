@@ -17,6 +17,7 @@ const STRAVA_PUSH_SUBSCRIPTIONS_URL = 'https://www.strava.com/api/v3/push_subscr
 const ACCESS_TOKEN_REFRESH_THRESHOLD_MS = 60 * 1000;
 const INCREMENTAL_BACKTRACK_MS = 24 * 60 * 60 * 1000;
 const ACTIVITY_PAGE_SIZE = 100;
+const DEFAULT_STRAVA_OAUTH_STATE_RETENTION_HOURS = 24;
 const DEFAULT_MAX_RETRIES = 5;
 const DEFAULT_RETRY_BASE_SECONDS = 30;
 const DEFAULT_RETRY_MAX_SECONDS = 15 * 60;
@@ -58,6 +59,22 @@ type VerifiedOAuthState = {
   issuedAt: number;
   recordId: number;
   frontendOrigin: string | null;
+};
+
+type StravaOAuthCallbackAutoSyncReason = 'first_connect' | 'reconnect_after_cleanup' | null;
+
+type StravaOAuthCallbackAutoSyncContext = {
+  connectionExisted: boolean;
+  connectionId: number | null;
+  previousStatus: string | null;
+  previousCleanupStatus: StravaConnectionCleanupStatus | null;
+  previousLastSyncStatus: string | null;
+  localSyncedActivityCount: number;
+  hadCompletedSyncJob: boolean;
+  hadActiveSyncJob: boolean;
+  shouldResetActivityDeleteMarkers: boolean;
+  shouldAutoStartSync: boolean;
+  reason: StravaOAuthCallbackAutoSyncReason;
 };
 
 type StravaTokenResponse = {
@@ -3060,8 +3077,6 @@ async function cleanupStravaWebhookEventsForConnection(tenantId: number | string
       data: {
         rawPayload: null,
         updates: null,
-        ownerId: null,
-        objectId: null,
       },
     })
   }
@@ -3077,8 +3092,6 @@ async function scrubWebhookEventPayload(eventId: number) {
     data: {
       rawPayload: null,
       updates: null,
-      ownerId: null,
-      objectId: null,
     },
   })
 }
@@ -4863,6 +4876,37 @@ function computeStateHash(state: string): string {
   return crypto.createHash('sha256').update(state).digest('hex');
 }
 
+function resolveStravaOAuthStateRetentionMs(): number {
+  const configuredHours = Math.max(1, toPositiveInt(process.env.STRAVA_OAUTH_STATE_RETENTION_HOURS) || DEFAULT_STRAVA_OAUTH_STATE_RETENTION_HOURS);
+  return configuredHours * 60 * 60 * 1000;
+}
+
+export async function cleanupStaleStravaOAuthStates(now = new Date()): Promise<number> {
+  const retentionCutoffIso = new Date(now.getTime() - resolveStravaOAuthStateRetentionMs()).toISOString();
+
+  const deletedCount = await strapi.db.connection('strava_oauth_states')
+    .where((builder: any) => {
+      builder
+        .where((usedBuilder: any) => {
+          usedBuilder.whereNotNull('used_at').andWhere('used_at', '<=', retentionCutoffIso);
+        })
+        .orWhere((expiredBuilder: any) => {
+          expiredBuilder.whereNotNull('expires_at').andWhere('expires_at', '<=', retentionCutoffIso);
+        });
+    })
+    .del();
+
+  return Number(deletedCount || 0) || 0;
+}
+
+async function cleanupStaleStravaOAuthStatesBestEffort(context: 'create' | 'verify'): Promise<void> {
+  try {
+    await cleanupStaleStravaOAuthStates();
+  } catch (error) {
+    strapi.log.warn(`[strava.oauth-state] cleanup failed during ${context}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 async function findStravaOAuthStateRecordByState(state: string) {
   const trimmedState = toText(state);
   if (!trimmedState) return null;
@@ -5722,6 +5766,86 @@ async function determineStravaJobSyncMode(tenantId: number | string, userId: num
   return 'incremental';
 }
 
+export async function getOAuthCallbackAutoSyncContext(
+  tenantId: number | string,
+  userId: number,
+): Promise<StravaOAuthCallbackAutoSyncContext> {
+  const existing = await strapi.db.query(STRAVA_CONNECTION_UID).findOne({
+    where: mergeTenantWhere({ user: { id: userId } }, tenantId),
+    select: ['id', 'status', 'cleanupStatus', 'lastSyncStatus'],
+  });
+
+  if (!existing?.id) {
+    return {
+      connectionExisted: false,
+      connectionId: null,
+      previousStatus: null,
+      previousCleanupStatus: null,
+      previousLastSyncStatus: null,
+      localSyncedActivityCount: 0,
+      hadCompletedSyncJob: false,
+      hadActiveSyncJob: false,
+      shouldResetActivityDeleteMarkers: false,
+      shouldAutoStartSync: true,
+      reason: 'first_connect',
+    };
+  }
+
+  const connectionId = Number(existing.id);
+  const [localSyncedActivityCount, completedSyncJobCount, activeJob] = await Promise.all([
+    strapi.db.query(STRAVA_ACTIVITY_UID).count({
+      where: buildSyncedActivityWhere(tenantId, userId, { connection: { id: connectionId } }),
+    } as any),
+    strapi.db.query(STRAVA_SYNC_JOB_UID).count({
+      where: mergeTenantWhere({
+        user: { id: userId },
+        connection: { id: connectionId },
+        status: 'completed',
+      }, tenantId),
+    } as any),
+    findActiveStravaSyncJob(tenantId, userId, connectionId),
+  ]);
+
+  const previousStatus = toText(existing.status).toUpperCase() || null;
+  const previousCleanupStatus = existing.cleanupStatus
+    ? normalizeStravaConnectionCleanupStatus(existing.cleanupStatus)
+    : null;
+  const previousLastSyncStatus = toText(existing.lastSyncStatus).toUpperCase() || null;
+  const syncedActivityCount = Number(localSyncedActivityCount || 0);
+  const hadCompletedSyncJob = Number(completedSyncJobCount || 0) > 0;
+  const hadActiveSyncJob = Boolean(activeJob?.id);
+  const cleanupIncomplete = previousCleanupStatus === 'PENDING'
+    || previousCleanupStatus === 'RUNNING'
+    || previousCleanupStatus === 'FAILED';
+  const reconnectAfterCompletedCleanup = previousStatus === 'DISCONNECTED'
+    && previousCleanupStatus === 'COMPLETED'
+    && syncedActivityCount === 0;
+  const neverHadLocalDataOrSync = syncedActivityCount === 0
+    && !hadCompletedSyncJob
+    && previousLastSyncStatus !== 'SUCCESS';
+
+  let reason: StravaOAuthCallbackAutoSyncReason = null;
+  if (reconnectAfterCompletedCleanup) {
+    reason = 'reconnect_after_cleanup';
+  } else if (!cleanupIncomplete && previousStatus !== 'ACTIVE' && neverHadLocalDataOrSync) {
+    reason = 'first_connect';
+  }
+
+  return {
+    connectionExisted: true,
+    connectionId,
+    previousStatus,
+    previousCleanupStatus,
+    previousLastSyncStatus,
+    localSyncedActivityCount: syncedActivityCount,
+    hadCompletedSyncJob,
+    hadActiveSyncJob,
+    shouldResetActivityDeleteMarkers: reconnectAfterCompletedCleanup,
+    shouldAutoStartSync: Boolean(reason) && !hadActiveSyncJob,
+    reason,
+  };
+}
+
 export async function startCurrentUserStravaSync(tenantId: number | string, userId: number): Promise<StravaSyncJobStartResult> {
   const connection = await getCurrentStravaConnection(tenantId, userId, true);
   if (!connection?.id) {
@@ -6099,6 +6223,8 @@ export function buildStravaAuthorizeUrl(state: string): string {
 }
 
 export async function createSignedOAuthState(tenantId: number | string, userId: number, options: { frontendOrigin: string }): Promise<string> {
+  await cleanupStaleStravaOAuthStatesBestEffort('create');
+
   const nonce = crypto.randomBytes(18).toString('base64url');
   const payload: SignedStatePayload = {
     tenantId: String(tenantId),
@@ -6129,6 +6255,8 @@ export async function createSignedOAuthState(tenantId: number | string, userId: 
 }
 
 export async function verifySignedOAuthState(state: string): Promise<VerifiedOAuthState> {
+  await cleanupStaleStravaOAuthStatesBestEffort('verify');
+
   const trimmedState = toText(state);
   if (!trimmedState || !trimmedState.includes('.')) {
     throw Object.assign(new Error('Invalid OAuth state'), { status: 400 });
@@ -7107,6 +7235,9 @@ export async function upsertStravaConnection(
   userId: number,
   tokenResponse: StravaTokenResponse,
   callbackScope?: string,
+  options: {
+    resetActivityDeleteMarkers?: boolean;
+  } = {},
 ): Promise<any> {
   const athlete = tokenResponse?.athlete || {};
   const stravaAthleteId = toText(athlete?.id);
@@ -7141,6 +7272,12 @@ export async function upsertStravaConnection(
     rawAthlete: athlete,
     lastSyncStatus: toText(existing?.lastSyncStatus) || 'NEVER',
   };
+
+  if (options.resetActivityDeleteMarkers === true) {
+    Object.assign(payload, {
+      activityDeleteMarkers: [],
+    });
+  }
 
   if (existing?.id) {
     return strapi.db.query(STRAVA_CONNECTION_UID).update({
@@ -8456,7 +8593,10 @@ export default {
   verifyStravaWebhookSubscription,
   verifySignedOAuthState,
   consumeOAuthState,
+  cleanupStaleStravaOAuthStates,
+  scrubWebhookEventPayload,
   exchangeCodeForToken,
+  getOAuthCallbackAutoSyncContext,
   upsertStravaConnection,
   terminateStravaConnection,
   getCurrentUserStravaStatus,

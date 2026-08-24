@@ -1,0 +1,38 @@
+const ASSESSMENT_CAMPAIGN_POLICY = {
+  name: 'global::has-tenant-permission',
+  config: { key: 'assessment-campaign.manage' },
+};
+
+export default {
+  routes: [
+    { method: 'GET', path: '/public/assessment-campaigns/:slug', handler: 'assessment-campaign.getPublicAssessmentCampaign', config: { auth: false } },
+    { method: 'POST', path: '/public/assessment-campaigns/:slug/resolve', handler: 'assessment-campaign.resolvePublicAssessmentCampaign', config: { auth: false } },
+    { method: 'POST', path: '/public/assessment-campaigns/:slug/start', handler: 'assessment-campaign.startPublicAssessmentCampaign', config: { auth: false } },
+    { method: 'POST', path: '/public/assessment-campaigns/attempts/:attemptId/start-retake', handler: 'assessment-campaign.startAssessmentCampaignRetake', config: { auth: false } },
+    { method: 'POST', path: '/public/assessment-campaigns/:slug/recover', handler: 'assessment-campaign.recoverPublicAssessmentCampaignParticipations', config: { auth: false } },
+    { method: 'POST', path: '/public/assessment-campaigns/attempts/:attemptId/restore-access', handler: 'assessment-campaign.restorePublicAssessmentAttemptAccess', config: { auth: false } },
+    { method: 'GET', path: '/public/assessment-campaigns/attempts/:attemptId/result-gate', handler: 'assessment-campaign.getAssessmentCampaignResultGate', config: { auth: false } },
+    { method: 'POST', path: '/public/assessment-campaigns/attempts/:attemptId/complete-result-profile', handler: 'assessment-campaign.completeAssessmentCampaignResultProfile', config: { auth: false } },
+    { method: 'POST', path: '/assessment-campaigns/assessment-attempts/:attemptId/cancel', handler: 'assessment-campaign.cancelAssessmentCampaignAttempt', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'POST', path: '/assessment-campaigns/assessment-attempts/:attemptId/finalize-timeout', handler: 'assessment-campaign.finalizeAssessmentCampaignAttemptTimeout', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'POST', path: '/assessment-campaigns/assessment-attempts/:attemptId/allow-retake', handler: 'assessment-campaign.allowAssessmentCampaignRetake', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'POST', path: '/assessment-campaigns/:id/finalize-overdue', handler: 'assessment-campaign.finalizeOverdueAssessmentCampaignAttempts', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'GET', path: '/assessment-campaigns', handler: 'assessment-campaign.listAssessmentCampaigns', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'POST', path: '/assessment-campaigns', handler: 'assessment-campaign.createAssessmentCampaign', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'GET', path: '/assessment-campaigns/:id', handler: 'assessment-campaign.getAssessmentCampaign', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'PUT', path: '/assessment-campaigns/:id', handler: 'assessment-campaign.updateAssessmentCampaign', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'GET', path: '/assessment-campaigns/:id/fields', handler: 'assessment-campaign.listAssessmentCampaignFields', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'POST', path: '/assessment-campaigns/:id/fields', handler: 'assessment-campaign.createAssessmentCampaignField', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'PUT', path: '/assessment-campaigns/:id/fields/:fieldId', handler: 'assessment-campaign.updateAssessmentCampaignField', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'DELETE', path: '/assessment-campaigns/:id/fields/:fieldId', handler: 'assessment-campaign.deleteAssessmentCampaignField', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'POST', path: '/assessment-campaigns/:id/fields/reorder', handler: 'assessment-campaign.reorderAssessmentCampaignFields', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'GET', path: '/assessment-campaigns/:id/rules', handler: 'assessment-campaign.listAssessmentCampaignRules', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'POST', path: '/assessment-campaigns/:id/rules', handler: 'assessment-campaign.createAssessmentCampaignRule', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'PUT', path: '/assessment-campaigns/:id/rules/:ruleId', handler: 'assessment-campaign.updateAssessmentCampaignRule', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'DELETE', path: '/assessment-campaigns/:id/rules/:ruleId', handler: 'assessment-campaign.deleteAssessmentCampaignRule', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'POST', path: '/assessment-campaigns/:id/rules/resolve', handler: 'assessment-campaign.resolveAssessmentCampaignAssessment', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'GET', path: '/assessment-campaigns/:id/leads', handler: 'assessment-campaign.listAssessmentCampaignLeads', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'GET', path: '/assessment-campaigns/:id/participations', handler: 'assessment-campaign.listAssessmentCampaignParticipations', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+    { method: 'GET', path: '/assessment-campaigns/:id/results', handler: 'assessment-campaign.listAssessmentCampaignResults', config: { auth: false, policies: [ASSESSMENT_CAMPAIGN_POLICY] } },
+  ],
+};

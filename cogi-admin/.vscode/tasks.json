@@ -1,0 +1,27 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "build-strapi-backend",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				".\\node_modules\\@strapi\\strapi\\bin\\strapi.js",
+				"build"
+			],
+			"isBackground": false,
+			"group": "build"
+		},
+		{
+			"label": "build-strapi-backend-validation",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				".\\node_modules\\@strapi\\strapi\\bin\\strapi.js",
+				"build"
+			],
+			"isBackground": false,
+			"group": "build"
+		}
+	]
+}

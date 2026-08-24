@@ -198,6 +198,8 @@ async function markWebhookEventProcessed(strapi: any, eventId: number, runnerId:
       processedAt: now,
       nextAttemptAt: null,
       lastError: null,
+      rawPayload: null,
+      updates: null,
     },
   })
 }
@@ -213,6 +215,8 @@ async function markWebhookEventIgnored(strapi: any, eventId: number, runnerId: s
       status: 'ignored',
       processedAt: now,
       nextAttemptAt: null,
+      rawPayload: null,
+      updates: null,
     },
   })
 }

@@ -1,0 +1,121 @@
+{
+  "kind": "collectionType",
+  "collectionName": "assessment_speaking_reviews",
+  "info": {
+    "singularName": "assessment-speaking-review",
+    "pluralName": "assessment-speaking-reviews",
+    "displayName": "Assessment Speaking Review",
+    "description": "Tenant-scoped speaking review record for one assessment result."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "assessmentResult": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-result.assessment-result",
+      "required": true
+    },
+    "assessmentAttempt": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-attempt.assessment-attempt",
+      "required": true
+    },
+    "assessment": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment.assessment",
+      "required": true
+    },
+    "assessmentVersion": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-version.assessment-version",
+      "required": true
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "learner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::learner.learner"
+    },
+    "lead": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::lead.lead"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["pending", "in_review", "completed", "cancelled"],
+      "required": true,
+      "default": "pending"
+    },
+    "reviewMode": {
+      "type": "enumeration",
+      "enum": ["live", "recording"],
+      "required": true,
+      "default": "live"
+    },
+    "recordingAsset": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::file-asset.file-asset"
+    },
+    "reviewer": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "reviewStartedAt": {
+      "type": "datetime"
+    },
+    "reviewedAt": {
+      "type": "datetime"
+    },
+    "overallScore": {
+      "type": "decimal"
+    },
+    "maxScore": {
+      "type": "decimal"
+    },
+    "percentage": {
+      "type": "decimal"
+    },
+    "criteriaSnapshot": {
+      "type": "json"
+    },
+    "criteriaScores": {
+      "type": "json"
+    },
+    "promptNotes": {
+      "type": "text"
+    },
+    "reviewNotes": {
+      "type": "text"
+    },
+    "strengths": {
+      "type": "text"
+    },
+    "areasForImprovement": {
+      "type": "text"
+    },
+    "suggestedLevel": {
+      "type": "enumeration",
+      "enum": ["PRE_A1", "A1", "A2", "B1", "B2", "C1", "C2"]
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "assessmentSpeakingReviews",
+      "required": true
+    }
+  }
+}

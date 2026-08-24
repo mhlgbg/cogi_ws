@@ -6,13 +6,17 @@ import {
   createKnowledgeNode,
   createLearningObject,
   createQuestion,
+  createQuestionStimulus,
   createQuestionOption,
   createSkill,
   createSubject,
   createVisualAsset,
   deleteGrade,
   deleteFormula,
+  deleteKnowledgeNode,
   deleteQuestion,
+  deleteQuestionStimulus,
+  deleteSkill,
   deleteSubject,
   deleteContentBlock,
   deleteLearningObject,
@@ -24,6 +28,8 @@ import {
   getLearningManagementBootstrap,
   getLearningObjectDetail,
   getQuestions,
+  getQuestionStimulusDetail,
+  listQuestionStimuli,
   getSkills,
   getSubjects,
   getTenantIdFromContext,
@@ -32,8 +38,11 @@ import {
   updateContentBlock,
   updateFormula,
   updateGrade,
+  updateKnowledgeNode,
   updateQuestion,
+  updateQuestionStimulus,
   updateLearningObject,
+  updateSkill,
   updateSubject,
 } from '../services/learning-management';
 
@@ -185,12 +194,28 @@ export default {
     return runHandler(ctx, () => createKnowledgeNode(ctx.request?.body || {}, getTenantIdFromContext(ctx)));
   },
 
+  async updateKnowledgeNode(ctx: any) {
+    return runHandler(ctx, () => updateKnowledgeNode(ctx.params?.id, ctx.request?.body || {}, getTenantIdFromContext(ctx)));
+  },
+
+  async deleteKnowledgeNode(ctx: any) {
+    return runHandler(ctx, () => deleteKnowledgeNode(ctx.params?.id, getTenantIdFromContext(ctx)));
+  },
+
   async listSkills(ctx: any) {
     return runHandler(ctx, () => getSkills(ctx.request?.query || {}, getTenantIdFromContext(ctx)));
   },
 
   async createSkill(ctx: any) {
     return runHandler(ctx, () => createSkill(ctx.request?.body || {}, getTenantIdFromContext(ctx)));
+  },
+
+  async updateSkill(ctx: any) {
+    return runHandler(ctx, () => updateSkill(ctx.params?.id, ctx.request?.body || {}, getTenantIdFromContext(ctx)));
+  },
+
+  async deleteSkill(ctx: any) {
+    return runHandler(ctx, () => deleteSkill(ctx.params?.id, getTenantIdFromContext(ctx)));
   },
 
   async listFormulas(ctx: any) {
@@ -235,6 +260,26 @@ export default {
 
   async listQuestions(ctx: any) {
     return runHandler(ctx, () => getQuestions(ctx.request?.query || {}, getTenantIdFromContext(ctx)));
+  },
+
+  async listQuestionStimuli(ctx: any) {
+    return runHandler(ctx, () => listQuestionStimuli(ctx.request?.query || {}, getTenantIdFromContext(ctx)));
+  },
+
+  async findOneQuestionStimulus(ctx: any) {
+    return runHandler(ctx, () => getQuestionStimulusDetail(ctx.params?.id, getTenantIdFromContext(ctx)));
+  },
+
+  async createQuestionStimulus(ctx: any) {
+    return runHandler(ctx, () => createQuestionStimulus(ctx.request?.body || {}, getTenantIdFromContext(ctx)));
+  },
+
+  async updateQuestionStimulus(ctx: any) {
+    return runHandler(ctx, () => updateQuestionStimulus(ctx.params?.id, ctx.request?.body || {}, getTenantIdFromContext(ctx)));
+  },
+
+  async deleteQuestionStimulus(ctx: any) {
+    return runHandler(ctx, () => deleteQuestionStimulus(ctx.params?.id, getTenantIdFromContext(ctx)));
   },
 
   async createQuestion(ctx: any) {

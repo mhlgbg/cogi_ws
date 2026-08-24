@@ -1,0 +1,70 @@
+{
+  "kind": "collectionType",
+  "collectionName": "assessment_questions",
+  "info": {
+    "singularName": "assessment-question",
+    "pluralName": "assessment-questions",
+    "displayName": "Assessment Question",
+    "description": "Question placement and runtime configuration within a specific assessment section."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "section": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-section.assessment-section",
+      "inversedBy": "questions",
+      "required": true
+    },
+    "question": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::question.question",
+      "required": true
+    },
+    "order": {
+      "type": "integer",
+      "required": true,
+      "default": 0
+    },
+    "points": {
+      "type": "decimal",
+      "default": 1
+    },
+    "required": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
+    "audioPlayLimit": {
+      "type": "integer",
+      "min": 1
+    },
+    "allowSeek": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
+    "minWords": {
+      "type": "integer",
+      "min": 0
+    },
+    "maxWords": {
+      "type": "integer",
+      "min": 0
+    },
+    "config": {
+      "type": "json"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "assessmentQuestions",
+      "required": true
+    }
+  }
+}

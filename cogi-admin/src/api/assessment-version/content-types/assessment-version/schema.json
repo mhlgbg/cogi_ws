@@ -1,0 +1,138 @@
+{
+  "kind": "collectionType",
+  "collectionName": "assessment_versions",
+  "info": {
+    "singularName": "assessment-version",
+    "pluralName": "assessment-versions",
+    "displayName": "Assessment Version",
+    "description": "Versioned snapshot of an assessment definition, including grade range, candidate level range and runtime rules."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true
+    },
+    "version": {
+      "type": "integer",
+      "required": true,
+      "min": 1
+    },
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "richtext"
+    },
+    "assessment": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment.assessment",
+      "inversedBy": "versions",
+      "required": true
+    },
+    "versionStatus": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "published",
+        "retired"
+      ],
+      "required": true,
+      "default": "draft"
+    },
+    "durationMinutes": {
+      "type": "integer",
+      "min": 0
+    },
+    "gradeFrom": {
+      "type": "integer",
+      "min": 1
+    },
+    "gradeTo": {
+      "type": "integer",
+      "min": 1
+    },
+    "candidateLevelFrom": {
+      "type": "enumeration",
+      "enum": [
+        "PRE_A1",
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "C1",
+        "C2"
+      ]
+    },
+    "candidateLevelTo": {
+      "type": "enumeration",
+      "enum": [
+        "PRE_A1",
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "C1",
+        "C2"
+      ]
+    },
+    "resultMode": {
+      "type": "enumeration",
+      "enum": [
+        "provisional",
+        "final"
+      ],
+      "required": true,
+      "default": "provisional"
+    },
+    "requiresSpeaking": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
+    "requiresTeacherConfirmation": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
+    "ceilingLevel": {
+      "type": "enumeration",
+      "enum": [
+        "PRE_A1",
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "C1",
+        "C2"
+      ]
+    },
+    "instructions": {
+      "type": "richtext"
+    },
+    "speakingCriteria": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-speaking-criterion.assessment-speaking-criterion",
+      "mappedBy": "assessmentVersion"
+    },
+    "sections": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-section.assessment-section",
+      "mappedBy": "assessmentVersion"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "assessmentVersions",
+      "required": true
+    }
+  }
+}

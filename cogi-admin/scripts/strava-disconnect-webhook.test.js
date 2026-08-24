@@ -342,6 +342,16 @@ async function loadWebhookEvent(id) {
   })
 }
 
+async function loadLatestWebhookEventBySubscriptionId(subscriptionId) {
+  const rows = await app.db.query(STRAVA_WEBHOOK_EVENT_UID).findMany({
+    where: { subscriptionId: String(subscriptionId) },
+    orderBy: [{ id: 'desc' }],
+    limit: 1,
+    select: ['id', 'status', 'ownerId', 'objectId', 'updates', 'rawPayload', 'processedAt'],
+  })
+  return Array.isArray(rows) ? rows[0] || null : null
+}
+
 function installFetchMock(handler) {
   const calls = []
   global.fetch = async (input, init = {}) => {
@@ -560,13 +570,10 @@ test('athlete deauthorization webhook uses shared termination service without re
     assert.equal(runningJob.status, 'cancelled')
     assert.equal(partialJob.status, 'cancelled')
 
-    const event = await app.db.query(STRAVA_WEBHOOK_EVENT_UID).findOne({
-      where: { subscriptionId: '999' },
-      select: ['id', 'status', 'ownerId', 'objectId', 'updates', 'rawPayload', 'processedAt'],
-    })
+    const event = await loadLatestWebhookEventBySubscriptionId('999')
     assert.equal(event.status, 'processed')
-    assert.equal(event.ownerId, null)
-    assert.equal(event.objectId, null)
+    assert.equal(event.ownerId, fixture.connection.stravaAthleteId)
+    assert.equal(event.objectId, fixture.connection.stravaAthleteId)
     assert.equal(event.updates, null)
     assert.equal(event.rawPayload, null)
     assert.ok(event.processedAt)

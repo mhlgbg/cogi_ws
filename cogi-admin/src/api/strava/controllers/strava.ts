@@ -84,9 +84,36 @@ export default {
       }
 
       const verified = await stravaService.verifySignedOAuthState(state);
+      const autoSyncContext = await stravaService.getOAuthCallbackAutoSyncContext(verified.tenantId, verified.userId);
       const tokenResponse = await stravaService.exchangeCodeForToken(code);
-      await stravaService.upsertStravaConnection(verified.tenantId, verified.userId, tokenResponse, scope);
+      await stravaService.upsertStravaConnection(verified.tenantId, verified.userId, tokenResponse, scope, {
+        resetActivityDeleteMarkers: autoSyncContext.shouldResetActivityDeleteMarkers,
+      });
       await stravaService.consumeOAuthState(verified.recordId);
+
+      if (autoSyncContext.shouldAutoStartSync) {
+        try {
+          const syncResult = await stravaService.startCurrentUserStravaSync(verified.tenantId, verified.userId);
+          strapi.log.info('[strava.callback] auto sync queued', {
+            tenantId: String(verified.tenantId),
+            userId: verified.userId,
+            reason: autoSyncContext.reason,
+            created: syncResult.created === true,
+            alreadyRunning: syncResult.alreadyRunning === true,
+            jobId: Number(syncResult.job?.id || 0) || null,
+          });
+        } catch (error: any) {
+          const classified = stravaService.classifyStravaSyncError(error);
+          strapi.log.warn('[strava.callback] auto sync start failed', {
+            tenantId: String(verified.tenantId),
+            userId: verified.userId,
+            reason: autoSyncContext.reason,
+            code: classified.code,
+            message: classified.message,
+            status: classified.httpStatus,
+          });
+        }
+      }
 
       return redirectTo(await stravaService.buildFrontendSuccessRedirect({
         tenantId: verified.tenantId,

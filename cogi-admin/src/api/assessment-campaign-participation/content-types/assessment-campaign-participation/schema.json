@@ -1,0 +1,110 @@
+{
+  "kind": "collectionType",
+  "collectionName": "assessment_campaign_participations",
+  "info": {
+    "singularName": "assessment-campaign-participation",
+    "pluralName": "assessment-campaign-participations",
+    "displayName": "Assessment Campaign Participation",
+    "description": "Tenant-scoped participation record linking a lead/candidate to an assessment campaign and an assessment attempt."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "assessmentCampaign": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-campaign.assessment-campaign",
+      "inversedBy": "participations",
+      "required": true
+    },
+    "lead": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::lead.lead"
+    },
+    "matchedRule": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-campaign-rule.assessment-campaign-rule"
+    },
+    "assessmentVersion": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-version.assessment-version"
+    },
+    "assessmentAttempt": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-attempt.assessment-attempt"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "assessmentCampaignParticipations",
+      "required": true
+    },
+    "code": {
+      "type": "string",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["created", "verified", "ready", "in_progress", "submitted", "result_pending", "completed", "cancelled", "expired"],
+      "required": true,
+      "default": "created"
+    },
+    "startedAt": {
+      "type": "datetime"
+    },
+    "verifiedAt": {
+      "type": "datetime"
+    },
+    "assessmentStartedAt": {
+      "type": "datetime"
+    },
+    "submittedAt": {
+      "type": "datetime"
+    },
+    "completedAt": {
+      "type": "datetime"
+    },
+    "retakeAllowed": {
+      "type": "boolean",
+      "required": true,
+      "default": false
+    },
+    "retakeAllowedAt": {
+      "type": "datetime"
+    },
+    "retakeAllowedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "retakeReason": {
+      "type": "enumeration",
+      "enum": ["wrong_assessment", "technical_issue", "test_data", "candidate_mistake", "admin_decision", "other"]
+    },
+    "retakeNote": {
+      "type": "text"
+    },
+    "retakeCount": {
+      "type": "integer",
+      "required": true,
+      "default": 0,
+      "min": 0
+    },
+    "assessmentVersionSnapshot": {
+      "type": "json"
+    },
+    "collectedData": {
+      "type": "json"
+    },
+    "sourceMetadata": {
+      "type": "json"
+    }
+  }
+}

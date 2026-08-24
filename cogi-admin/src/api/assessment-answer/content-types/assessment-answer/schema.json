@@ -1,0 +1,72 @@
+{
+  "kind": "collectionType",
+  "collectionName": "assessment_answers",
+  "info": {
+    "singularName": "assessment-answer",
+    "pluralName": "assessment-answers",
+    "displayName": "Assessment Answer",
+    "description": "Tenant-scoped canonical answer state for one attempt and one assessment question."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "attempt": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-attempt.assessment-attempt",
+      "inversedBy": "answers",
+      "required": true
+    },
+    "assessmentQuestion": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-question.assessment-question",
+      "required": true
+    },
+    "question": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::question.question",
+      "required": true
+    },
+    "answerData": {
+      "type": "json"
+    },
+    "questionSnapshot": {
+      "type": "json"
+    },
+    "firstAnsweredAt": {
+      "type": "datetime"
+    },
+    "lastAnsweredAt": {
+      "type": "datetime"
+    },
+    "timeSpentSeconds": {
+      "type": "integer",
+      "required": true,
+      "default": 0,
+      "min": 0
+    },
+    "audioPlayCount": {
+      "type": "integer",
+      "required": true,
+      "default": 0,
+      "min": 0
+    },
+    "scores": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-answer-score.assessment-answer-score",
+      "mappedBy": "answer"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "assessmentAnswers",
+      "required": true
+    }
+  }
+}

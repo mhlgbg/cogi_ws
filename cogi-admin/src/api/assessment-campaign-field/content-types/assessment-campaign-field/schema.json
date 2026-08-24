@@ -1,0 +1,75 @@
+{
+  "kind": "collectionType",
+  "collectionName": "assessment_campaign_fields",
+  "info": {
+    "singularName": "assessment-campaign-field",
+    "pluralName": "assessment-campaign-fields",
+    "displayName": "Assessment Campaign Field",
+    "description": "Tenant-scoped configurable data collection field for an assessment campaign."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "assessmentCampaign": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-campaign.assessment-campaign",
+      "inversedBy": "fields",
+      "required": true
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "assessmentCampaignFields",
+      "required": true
+    },
+    "key": {
+      "type": "string",
+      "required": true
+    },
+    "label": {
+      "type": "string",
+      "required": true
+    },
+    "fieldType": {
+      "type": "enumeration",
+      "enum": ["text", "email", "phone", "number", "date", "select", "radio", "checkbox", "textarea"],
+      "required": true,
+      "default": "text"
+    },
+    "required": {
+      "type": "boolean",
+      "required": true,
+      "default": false
+    },
+    "order": {
+      "type": "integer",
+      "required": true,
+      "default": 0
+    },
+    "placeholder": {
+      "type": "string"
+    },
+    "helpText": {
+      "type": "text"
+    },
+    "options": {
+      "type": "json"
+    },
+    "collectStage": {
+      "type": "enumeration",
+      "enum": ["before_start", "before_result", "optional"],
+      "required": true,
+      "default": "before_start"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["active", "inactive"],
+      "required": true,
+      "default": "active"
+    }
+  }
+}

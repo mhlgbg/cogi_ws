@@ -21,6 +21,11 @@
     "content": {
       "type": "richtext"
     },
+    "imageAsset": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::file-asset.file-asset"
+    },
     "isCorrect": {
       "type": "boolean",
       "default": false

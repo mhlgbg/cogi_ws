@@ -1,0 +1,164 @@
+{
+  "kind": "collectionType",
+  "collectionName": "assessment_results",
+  "info": {
+    "singularName": "assessment-result",
+    "pluralName": "assessment-results",
+    "displayName": "Assessment Result",
+    "description": "Tenant-scoped scoring result snapshot for one assessment attempt."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true
+    },
+    "attempt": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-attempt.assessment-attempt",
+      "inversedBy": "results",
+      "required": true
+    },
+    "assessment": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment.assessment",
+      "required": true
+    },
+    "assessmentVersion": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-version.assessment-version",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["pending", "partially_scored", "provisional", "confirmed", "superseded", "cancelled"],
+      "required": true,
+      "default": "pending"
+    },
+    "resultMode": {
+      "type": "enumeration",
+      "enum": ["provisional", "final"],
+      "required": true,
+      "default": "provisional"
+    },
+    "scoringVersion": {
+      "type": "integer",
+      "required": true,
+      "default": 1,
+      "min": 1
+    },
+    "scoringStartedAt": {
+      "type": "datetime"
+    },
+    "scoredAt": {
+      "type": "datetime"
+    },
+    "rawScore": {
+      "type": "decimal"
+    },
+    "maxScore": {
+      "type": "decimal"
+    },
+    "percentage": {
+      "type": "decimal"
+    },
+    "objectiveScore": {
+      "type": "decimal"
+    },
+    "objectiveMaxScore": {
+      "type": "decimal"
+    },
+    "manualScore": {
+      "type": "decimal"
+    },
+    "manualMaxScore": {
+      "type": "decimal"
+    },
+    "pendingManualCount": {
+      "type": "integer",
+      "required": true,
+      "default": 0,
+      "min": 0
+    },
+    "pendingManualMaxScore": {
+      "type": "decimal"
+    },
+    "configuredTotalMaxScore": {
+      "type": "decimal"
+    },
+    "sectionScores": {
+      "type": "json"
+    },
+    "scoreSummary": {
+      "type": "json"
+    },
+    "provisionalLevel": {
+      "type": "enumeration",
+      "enum": ["PRE_A1", "A1", "A2", "B1", "B2", "C1", "C2"]
+    },
+    "placementBandCode": {
+      "type": "string"
+    },
+    "placementLabel": {
+      "type": "string"
+    },
+    "placementNotes": {
+      "type": "text"
+    },
+    "speakingReviewStatus": {
+      "type": "enumeration",
+      "enum": ["pending", "in_review", "completed", "cancelled"]
+    },
+    "speakingSuggestedLevel": {
+      "type": "enumeration",
+      "enum": ["PRE_A1", "A1", "A2", "B1", "B2", "C1", "C2"]
+    },
+    "speakingReviewedAt": {
+      "type": "datetime"
+    },
+    "confirmationStatus": {
+      "type": "enumeration",
+      "enum": ["draft", "confirmed", "superseded", "cancelled"]
+    },
+    "confirmedLevel": {
+      "type": "enumeration",
+      "enum": ["PRE_A1", "A1", "A2", "B1", "B2", "C1", "C2"]
+    },
+    "confirmedBandCode": {
+      "type": "string"
+    },
+    "confirmedLabel": {
+      "type": "string"
+    },
+    "confirmedAt": {
+      "type": "datetime"
+    },
+    "resultSnapshot": {
+      "type": "json"
+    },
+    "isCurrent": {
+      "type": "boolean",
+      "required": true,
+      "default": true
+    },
+    "answerScores": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-answer-score.assessment-answer-score",
+      "mappedBy": "result"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "assessmentResults",
+      "required": true
+    }
+  }
+}

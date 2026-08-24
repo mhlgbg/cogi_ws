@@ -1,0 +1,122 @@
+{
+  "kind": "collectionType",
+  "collectionName": "assessment_attempts",
+  "info": {
+    "singularName": "assessment-attempt",
+    "pluralName": "assessment-attempts",
+    "displayName": "Assessment Attempt",
+    "description": "Tenant-scoped runtime attempt against a specific assessment version."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true
+    },
+    "assessment": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment.assessment",
+      "required": true
+    },
+    "assessmentVersion": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-version.assessment-version",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["created", "in_progress", "submitted", "expired", "cancelled"],
+      "required": true,
+      "default": "created"
+    },
+    "startedAt": {
+      "type": "datetime"
+    },
+    "submittedAt": {
+      "type": "datetime"
+    },
+    "expiresAt": {
+      "type": "datetime"
+    },
+    "cancelledAt": {
+      "type": "datetime"
+    },
+    "cancelledBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "cancelReason": {
+      "type": "enumeration",
+      "enum": ["wrong_assessment", "technical_issue", "test_data", "candidate_mistake", "admin_decision", "other"]
+    },
+    "cancelNote": {
+      "type": "text"
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "learner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::learner.learner"
+    },
+    "lead": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::lead.lead"
+    },
+    "candidateNameSnapshot": {
+      "type": "string"
+    },
+    "candidateEmailSnapshot": {
+      "type": "string"
+    },
+    "candidatePhoneSnapshot": {
+      "type": "string"
+    },
+    "sourceType": {
+      "type": "enumeration",
+      "enum": ["admin", "campaign", "public", "learner", "exam", "other"]
+    },
+    "sourceRef": {
+      "type": "string"
+    },
+    "definitionSnapshot": {
+      "type": "json"
+    },
+    "scoringSnapshot": {
+      "type": "json",
+      "private": true
+    },
+    "progressState": {
+      "type": "json"
+    },
+    "answers": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-answer.assessment-answer",
+      "mappedBy": "attempt"
+    },
+    "results": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assessment-result.assessment-result",
+      "mappedBy": "attempt"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "assessmentAttempts",
+      "required": true
+    }
+  }
+}

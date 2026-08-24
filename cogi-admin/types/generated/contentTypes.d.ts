@@ -943,6 +943,1224 @@ export interface ApiArticleArticle extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiAssessmentAnswerScoreAssessmentAnswerScore
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'assessment_answer_scores';
+  info: {
+    description: 'Tenant-scoped scoring record for one answer inside one scoring result.';
+    displayName: 'Assessment Answer Score';
+    pluralName: 'assessment-answer-scores';
+    singularName: 'assessment-answer-score';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    answer: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-answer.assessment-answer'
+    >;
+    assessmentQuestion: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-question.assessment-question'
+    > &
+      Schema.Attribute.Required;
+    attempt: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-attempt.assessment-attempt'
+    > &
+      Schema.Attribute.Required;
+    awardedPoints: Schema.Attribute.Decimal;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    isCorrect: Schema.Attribute.Boolean;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-answer-score.assessment-answer-score'
+    > &
+      Schema.Attribute.Private;
+    manualScoredAt: Schema.Attribute.DateTime;
+    manualScoreNote: Schema.Attribute.Text;
+    manualScoreRequired: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    maxPoints: Schema.Attribute.Decimal;
+    publishedAt: Schema.Attribute.DateTime;
+    question: Schema.Attribute.Relation<'manyToOne', 'api::question.question'> &
+      Schema.Attribute.Required;
+    result: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-result.assessment-result'
+    > &
+      Schema.Attribute.Required;
+    scoredBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    scoringDetail: Schema.Attribute.JSON & Schema.Attribute.Private;
+    scoringMethod: Schema.Attribute.Enumeration<['auto', 'manual', 'none']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'none'>;
+    status: Schema.Attribute.Enumeration<
+      ['pending', 'auto_scored', 'manual_scored', 'not_scored', 'invalid']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiAssessmentAnswerAssessmentAnswer
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'assessment_answers';
+  info: {
+    description: 'Tenant-scoped canonical answer state for one attempt and one assessment question.';
+    displayName: 'Assessment Answer';
+    pluralName: 'assessment-answers';
+    singularName: 'assessment-answer';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    answerData: Schema.Attribute.JSON;
+    assessmentQuestion: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-question.assessment-question'
+    > &
+      Schema.Attribute.Required;
+    attempt: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-attempt.assessment-attempt'
+    > &
+      Schema.Attribute.Required;
+    audioPlayCount: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    firstAnsweredAt: Schema.Attribute.DateTime;
+    lastAnsweredAt: Schema.Attribute.DateTime;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-answer.assessment-answer'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    question: Schema.Attribute.Relation<'manyToOne', 'api::question.question'> &
+      Schema.Attribute.Required;
+    questionSnapshot: Schema.Attribute.JSON;
+    scores: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-answer-score.assessment-answer-score'
+    >;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    timeSpentSeconds: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiAssessmentAttemptAssessmentAttempt
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'assessment_attempts';
+  info: {
+    description: 'Tenant-scoped runtime attempt against a specific assessment version.';
+    displayName: 'Assessment Attempt';
+    pluralName: 'assessment-attempts';
+    singularName: 'assessment-attempt';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    answers: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-answer.assessment-answer'
+    >;
+    assessment: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment.assessment'
+    > &
+      Schema.Attribute.Required;
+    assessmentVersion: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-version.assessment-version'
+    > &
+      Schema.Attribute.Required;
+    cancelledAt: Schema.Attribute.DateTime;
+    cancelledBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    cancelNote: Schema.Attribute.Text;
+    cancelReason: Schema.Attribute.Enumeration<
+      [
+        'wrong_assessment',
+        'technical_issue',
+        'test_data',
+        'candidate_mistake',
+        'admin_decision',
+        'other',
+      ]
+    >;
+    candidateEmailSnapshot: Schema.Attribute.String;
+    candidateNameSnapshot: Schema.Attribute.String;
+    candidatePhoneSnapshot: Schema.Attribute.String;
+    code: Schema.Attribute.String & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    definitionSnapshot: Schema.Attribute.JSON;
+    expiresAt: Schema.Attribute.DateTime;
+    lead: Schema.Attribute.Relation<'manyToOne', 'api::lead.lead'>;
+    learner: Schema.Attribute.Relation<'manyToOne', 'api::learner.learner'>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-attempt.assessment-attempt'
+    > &
+      Schema.Attribute.Private;
+    progressState: Schema.Attribute.JSON;
+    publishedAt: Schema.Attribute.DateTime;
+    results: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-result.assessment-result'
+    >;
+    scoringSnapshot: Schema.Attribute.JSON & Schema.Attribute.Private;
+    sourceRef: Schema.Attribute.String;
+    sourceType: Schema.Attribute.Enumeration<
+      ['admin', 'campaign', 'public', 'learner', 'exam', 'other']
+    >;
+    startedAt: Schema.Attribute.DateTime;
+    status: Schema.Attribute.Enumeration<
+      ['created', 'in_progress', 'submitted', 'expired', 'cancelled']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'created'>;
+    submittedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+  };
+}
+
+export interface ApiAssessmentCampaignFieldAssessmentCampaignField
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'assessment_campaign_fields';
+  info: {
+    description: 'Tenant-scoped configurable data collection field for an assessment campaign.';
+    displayName: 'Assessment Campaign Field';
+    pluralName: 'assessment-campaign-fields';
+    singularName: 'assessment-campaign-field';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    assessmentCampaign: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-campaign.assessment-campaign'
+    > &
+      Schema.Attribute.Required;
+    collectStage: Schema.Attribute.Enumeration<
+      ['before_start', 'before_result', 'optional']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'before_start'>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    fieldType: Schema.Attribute.Enumeration<
+      [
+        'text',
+        'email',
+        'phone',
+        'number',
+        'date',
+        'select',
+        'radio',
+        'checkbox',
+        'textarea',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'text'>;
+    helpText: Schema.Attribute.Text;
+    key: Schema.Attribute.String & Schema.Attribute.Required;
+    label: Schema.Attribute.String & Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-campaign-field.assessment-campaign-field'
+    > &
+      Schema.Attribute.Private;
+    options: Schema.Attribute.JSON;
+    order: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<0>;
+    placeholder: Schema.Attribute.String;
+    publishedAt: Schema.Attribute.DateTime;
+    required: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    status: Schema.Attribute.Enumeration<['active', 'inactive']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'active'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiAssessmentCampaignParticipationAssessmentCampaignParticipation
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'assessment_campaign_participations';
+  info: {
+    description: 'Tenant-scoped participation record linking a lead/candidate to an assessment campaign and an assessment attempt.';
+    displayName: 'Assessment Campaign Participation';
+    pluralName: 'assessment-campaign-participations';
+    singularName: 'assessment-campaign-participation';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    assessmentAttempt: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-attempt.assessment-attempt'
+    >;
+    assessmentCampaign: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-campaign.assessment-campaign'
+    > &
+      Schema.Attribute.Required;
+    assessmentStartedAt: Schema.Attribute.DateTime;
+    assessmentVersion: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-version.assessment-version'
+    >;
+    assessmentVersionSnapshot: Schema.Attribute.JSON;
+    code: Schema.Attribute.String & Schema.Attribute.Required;
+    collectedData: Schema.Attribute.JSON;
+    completedAt: Schema.Attribute.DateTime;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    lead: Schema.Attribute.Relation<'manyToOne', 'api::lead.lead'>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-campaign-participation.assessment-campaign-participation'
+    > &
+      Schema.Attribute.Private;
+    matchedRule: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-campaign-rule.assessment-campaign-rule'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    retakeAllowed: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<false>;
+    retakeAllowedAt: Schema.Attribute.DateTime;
+    retakeAllowedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    retakeCount: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
+    retakeNote: Schema.Attribute.Text;
+    retakeReason: Schema.Attribute.Enumeration<
+      [
+        'wrong_assessment',
+        'technical_issue',
+        'test_data',
+        'candidate_mistake',
+        'admin_decision',
+        'other',
+      ]
+    >;
+    sourceMetadata: Schema.Attribute.JSON;
+    startedAt: Schema.Attribute.DateTime;
+    status: Schema.Attribute.Enumeration<
+      [
+        'created',
+        'verified',
+        'ready',
+        'in_progress',
+        'submitted',
+        'result_pending',
+        'completed',
+        'cancelled',
+        'expired',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'created'>;
+    submittedAt: Schema.Attribute.DateTime;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    verifiedAt: Schema.Attribute.DateTime;
+  };
+}
+
+export interface ApiAssessmentCampaignRuleAssessmentCampaignRule
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'assessment_campaign_rules';
+  info: {
+    description: 'Tenant-scoped resolver rule for selecting an assessment version within an assessment campaign.';
+    displayName: 'Assessment Campaign Rule';
+    pluralName: 'assessment-campaign-rules';
+    singularName: 'assessment-campaign-rule';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    ageFrom: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      >;
+    ageTo: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      >;
+    assessmentCampaign: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-campaign.assessment-campaign'
+    > &
+      Schema.Attribute.Required;
+    assessmentVersion: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-version.assessment-version'
+    > &
+      Schema.Attribute.Required;
+    code: Schema.Attribute.String & Schema.Attribute.Required;
+    conditions: Schema.Attribute.JSON;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    gradeFrom: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      >;
+    gradeTo: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      >;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-campaign-rule.assessment-campaign-rule'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    priority: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<0>;
+    publishedAt: Schema.Attribute.DateTime;
+    status: Schema.Attribute.Enumeration<['draft', 'active', 'inactive']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiAssessmentCampaignAssessmentCampaign
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'assessment_campaigns';
+  info: {
+    description: 'Tenant-scoped orchestration campaign for lead capture, assessment assignment, and result tracking.';
+    displayName: 'Assessment Campaign';
+    pluralName: 'assessment-campaigns';
+    singularName: 'assessment-campaign';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    code: Schema.Attribute.String & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
+    endAt: Schema.Attribute.DateTime;
+    fields: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-campaign-field.assessment-campaign-field'
+    >;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-campaign.assessment-campaign'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    participations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-campaign-participation.assessment-campaign-participation'
+    >;
+    publicContent: Schema.Attribute.RichText;
+    publicDescription: Schema.Attribute.Text;
+    publicTitle: Schema.Attribute.String;
+    publishedAt: Schema.Attribute.DateTime;
+    resultIntro: Schema.Attribute.Text;
+    rules: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-campaign-rule.assessment-campaign-rule'
+    >;
+    settings: Schema.Attribute.JSON;
+    slug: Schema.Attribute.String & Schema.Attribute.Required;
+    startAt: Schema.Attribute.DateTime;
+    status: Schema.Attribute.Enumeration<
+      ['draft', 'active', 'paused', 'ended', 'archived']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+    successMessage: Schema.Attribute.Text;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiAssessmentPlacementConfirmationAssessmentPlacementConfirmation
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'assessment_placement_confirmations';
+  info: {
+    description: 'Tenant-scoped teacher confirmation history for one assessment result.';
+    displayName: 'Assessment Placement Confirmation';
+    pluralName: 'assessment-placement-confirmations';
+    singularName: 'assessment-placement-confirmation';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    assessment: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment.assessment'
+    > &
+      Schema.Attribute.Required;
+    assessmentAttempt: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-attempt.assessment-attempt'
+    > &
+      Schema.Attribute.Required;
+    assessmentResult: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-result.assessment-result'
+    > &
+      Schema.Attribute.Required;
+    assessmentSpeakingReview: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-speaking-review.assessment-speaking-review'
+    >;
+    assessmentVersion: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-version.assessment-version'
+    > &
+      Schema.Attribute.Required;
+    confirmationNote: Schema.Attribute.Text;
+    confirmedAt: Schema.Attribute.DateTime;
+    confirmedBandCode: Schema.Attribute.String;
+    confirmedBy: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    > &
+      Schema.Attribute.Required;
+    confirmedLabel: Schema.Attribute.String;
+    confirmedLevel: Schema.Attribute.Enumeration<
+      ['PRE_A1', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+    > &
+      Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    decision: Schema.Attribute.Enumeration<
+      ['keep', 'raise', 'lower', 'manual']
+    >;
+    isCurrent: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-placement-confirmation.assessment-placement-confirmation'
+    > &
+      Schema.Attribute.Private;
+    provisionalBandCodeSnapshot: Schema.Attribute.String;
+    provisionalLabelSnapshot: Schema.Attribute.String;
+    provisionalLevelSnapshot: Schema.Attribute.Enumeration<
+      ['PRE_A1', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    resultSnapshot: Schema.Attribute.JSON;
+    speakingSuggestedLevelSnapshot: Schema.Attribute.Enumeration<
+      ['PRE_A1', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+    >;
+    speakingSummarySnapshot: Schema.Attribute.JSON;
+    status: Schema.Attribute.Enumeration<
+      ['draft', 'confirmed', 'superseded', 'cancelled']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiAssessmentPlacementRuleAssessmentPlacementRule
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'assessment_placement_rules';
+  info: {
+    description: 'Tenant-scoped configurable placement band rules for one assessment version.';
+    displayName: 'Assessment Placement Rule';
+    pluralName: 'assessment-placement-rules';
+    singularName: 'assessment-placement-rule';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    assessmentVersion: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-version.assessment-version'
+    > &
+      Schema.Attribute.Required;
+    code: Schema.Attribute.String & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    label: Schema.Attribute.String & Schema.Attribute.Required;
+    level: Schema.Attribute.Enumeration<
+      ['PRE_A1', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+    >;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-placement-rule.assessment-placement-rule'
+    > &
+      Schema.Attribute.Private;
+    maxPercentage: Schema.Attribute.Decimal;
+    maxRawScore: Schema.Attribute.Decimal;
+    minPercentage: Schema.Attribute.Decimal;
+    minRawScore: Schema.Attribute.Decimal;
+    order: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<0>;
+    placementBandCode: Schema.Attribute.String;
+    placementLabel: Schema.Attribute.String;
+    publishedAt: Schema.Attribute.DateTime;
+    ruleType: Schema.Attribute.Enumeration<
+      ['percentage', 'raw_score', 'custom']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'percentage'>;
+    scoreBasis: Schema.Attribute.Enumeration<
+      ['objective_only', 'scored_total', 'final_total']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'objective_only'>;
+    status: Schema.Attribute.Enumeration<['active', 'inactive']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'active'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiAssessmentQuestionAssessmentQuestion
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'assessment_questions';
+  info: {
+    description: 'Question placement and runtime configuration within a specific assessment section.';
+    displayName: 'Assessment Question';
+    pluralName: 'assessment-questions';
+    singularName: 'assessment-question';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    allowSeek: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    audioPlayLimit: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      >;
+    config: Schema.Attribute.JSON;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-question.assessment-question'
+    > &
+      Schema.Attribute.Private;
+    maxWords: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      >;
+    minWords: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      >;
+    order: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<0>;
+    points: Schema.Attribute.Decimal & Schema.Attribute.DefaultTo<1>;
+    publishedAt: Schema.Attribute.DateTime;
+    question: Schema.Attribute.Relation<'manyToOne', 'api::question.question'> &
+      Schema.Attribute.Required;
+    required: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    section: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-section.assessment-section'
+    > &
+      Schema.Attribute.Required;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiAssessmentResultAssessmentResult
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'assessment_results';
+  info: {
+    description: 'Tenant-scoped scoring result snapshot for one assessment attempt.';
+    displayName: 'Assessment Result';
+    pluralName: 'assessment-results';
+    singularName: 'assessment-result';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    answerScores: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-answer-score.assessment-answer-score'
+    >;
+    assessment: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment.assessment'
+    > &
+      Schema.Attribute.Required;
+    assessmentVersion: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-version.assessment-version'
+    > &
+      Schema.Attribute.Required;
+    attempt: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-attempt.assessment-attempt'
+    > &
+      Schema.Attribute.Required;
+    code: Schema.Attribute.String & Schema.Attribute.Required;
+    configuredTotalMaxScore: Schema.Attribute.Decimal;
+    confirmationStatus: Schema.Attribute.Enumeration<
+      ['draft', 'confirmed', 'superseded', 'cancelled']
+    >;
+    confirmedAt: Schema.Attribute.DateTime;
+    confirmedBandCode: Schema.Attribute.String;
+    confirmedLabel: Schema.Attribute.String;
+    confirmedLevel: Schema.Attribute.Enumeration<
+      ['PRE_A1', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+    >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    isCurrent: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-result.assessment-result'
+    > &
+      Schema.Attribute.Private;
+    manualMaxScore: Schema.Attribute.Decimal;
+    manualScore: Schema.Attribute.Decimal;
+    maxScore: Schema.Attribute.Decimal;
+    objectiveMaxScore: Schema.Attribute.Decimal;
+    objectiveScore: Schema.Attribute.Decimal;
+    pendingManualCount: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<0>;
+    pendingManualMaxScore: Schema.Attribute.Decimal;
+    percentage: Schema.Attribute.Decimal;
+    placementBandCode: Schema.Attribute.String;
+    placementLabel: Schema.Attribute.String;
+    placementNotes: Schema.Attribute.Text;
+    provisionalLevel: Schema.Attribute.Enumeration<
+      ['PRE_A1', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    rawScore: Schema.Attribute.Decimal;
+    resultMode: Schema.Attribute.Enumeration<['provisional', 'final']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'provisional'>;
+    resultSnapshot: Schema.Attribute.JSON;
+    scoredAt: Schema.Attribute.DateTime;
+    scoreSummary: Schema.Attribute.JSON;
+    scoringStartedAt: Schema.Attribute.DateTime;
+    scoringVersion: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<1>;
+    sectionScores: Schema.Attribute.JSON;
+    speakingReviewedAt: Schema.Attribute.DateTime;
+    speakingReviewStatus: Schema.Attribute.Enumeration<
+      ['pending', 'in_review', 'completed', 'cancelled']
+    >;
+    speakingSuggestedLevel: Schema.Attribute.Enumeration<
+      ['PRE_A1', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+    >;
+    status: Schema.Attribute.Enumeration<
+      [
+        'pending',
+        'partially_scored',
+        'provisional',
+        'confirmed',
+        'superseded',
+        'cancelled',
+      ]
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiAssessmentSectionAssessmentSection
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'assessment_sections';
+  info: {
+    description: 'Logical assessment section grouping questions within a specific assessment version.';
+    displayName: 'Assessment Section';
+    pluralName: 'assessment-sections';
+    singularName: 'assessment-section';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    assessmentVersion: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-version.assessment-version'
+    > &
+      Schema.Attribute.Required;
+    code: Schema.Attribute.String & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.RichText;
+    instruction: Schema.Attribute.RichText;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-section.assessment-section'
+    > &
+      Schema.Attribute.Private;
+    order: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<0>;
+    publishedAt: Schema.Attribute.DateTime;
+    questions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-question.assessment-question'
+    >;
+    skill: Schema.Attribute.Relation<'manyToOne', 'api::skill.skill'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    title: Schema.Attribute.String & Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiAssessmentSpeakingCriterionAssessmentSpeakingCriterion
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'assessment_speaking_criteria';
+  info: {
+    description: 'Tenant-scoped speaking review criterion configuration for one assessment version.';
+    displayName: 'Assessment Speaking Criterion';
+    pluralName: 'assessment-speaking-criteria';
+    singularName: 'assessment-speaking-criterion';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    assessmentVersion: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-version.assessment-version'
+    > &
+      Schema.Attribute.Required;
+    code: Schema.Attribute.String & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.Text;
+    guidance: Schema.Attribute.Text;
+    label: Schema.Attribute.String & Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-speaking-criterion.assessment-speaking-criterion'
+    > &
+      Schema.Attribute.Private;
+    maxScore: Schema.Attribute.Decimal & Schema.Attribute.Required;
+    order: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<0>;
+    publishedAt: Schema.Attribute.DateTime;
+    required: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    status: Schema.Attribute.Enumeration<['active', 'inactive']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'active'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    weight: Schema.Attribute.Decimal;
+  };
+}
+
+export interface ApiAssessmentSpeakingReviewAssessmentSpeakingReview
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'assessment_speaking_reviews';
+  info: {
+    description: 'Tenant-scoped speaking review record for one assessment result.';
+    displayName: 'Assessment Speaking Review';
+    pluralName: 'assessment-speaking-reviews';
+    singularName: 'assessment-speaking-review';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    areasForImprovement: Schema.Attribute.Text;
+    assessment: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment.assessment'
+    > &
+      Schema.Attribute.Required;
+    assessmentAttempt: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-attempt.assessment-attempt'
+    > &
+      Schema.Attribute.Required;
+    assessmentResult: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-result.assessment-result'
+    > &
+      Schema.Attribute.Required;
+    assessmentVersion: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment-version.assessment-version'
+    > &
+      Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    criteriaScores: Schema.Attribute.JSON;
+    criteriaSnapshot: Schema.Attribute.JSON;
+    lead: Schema.Attribute.Relation<'manyToOne', 'api::lead.lead'>;
+    learner: Schema.Attribute.Relation<'manyToOne', 'api::learner.learner'>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-speaking-review.assessment-speaking-review'
+    > &
+      Schema.Attribute.Private;
+    maxScore: Schema.Attribute.Decimal;
+    overallScore: Schema.Attribute.Decimal;
+    percentage: Schema.Attribute.Decimal;
+    promptNotes: Schema.Attribute.Text;
+    publishedAt: Schema.Attribute.DateTime;
+    recordingAsset: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::file-asset.file-asset'
+    >;
+    reviewedAt: Schema.Attribute.DateTime;
+    reviewer: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    reviewMode: Schema.Attribute.Enumeration<['live', 'recording']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'live'>;
+    reviewNotes: Schema.Attribute.Text;
+    reviewStartedAt: Schema.Attribute.DateTime;
+    status: Schema.Attribute.Enumeration<
+      ['pending', 'in_review', 'completed', 'cancelled']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pending'>;
+    strengths: Schema.Attribute.Text;
+    suggestedLevel: Schema.Attribute.Enumeration<
+      ['PRE_A1', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+    >;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    user: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+  };
+}
+
+export interface ApiAssessmentVersionAssessmentVersion
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'assessment_versions';
+  info: {
+    description: 'Versioned snapshot of an assessment definition, including grade range, candidate level range and runtime rules.';
+    displayName: 'Assessment Version';
+    pluralName: 'assessment-versions';
+    singularName: 'assessment-version';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    assessment: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::assessment.assessment'
+    > &
+      Schema.Attribute.Required;
+    candidateLevelFrom: Schema.Attribute.Enumeration<
+      ['PRE_A1', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+    >;
+    candidateLevelTo: Schema.Attribute.Enumeration<
+      ['PRE_A1', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+    >;
+    ceilingLevel: Schema.Attribute.Enumeration<
+      ['PRE_A1', 'A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+    >;
+    code: Schema.Attribute.String & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.RichText;
+    durationMinutes: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      >;
+    gradeFrom: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      >;
+    gradeTo: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      >;
+    instructions: Schema.Attribute.RichText;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-version.assessment-version'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    requiresSpeaking: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    requiresTeacherConfirmation: Schema.Attribute.Boolean &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<true>;
+    resultMode: Schema.Attribute.Enumeration<['provisional', 'final']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'provisional'>;
+    sections: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-section.assessment-section'
+    >;
+    speakingCriteria: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-speaking-criterion.assessment-speaking-criterion'
+    >;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    title: Schema.Attribute.String & Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    version: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      >;
+    versionStatus: Schema.Attribute.Enumeration<
+      ['draft', 'published', 'retired']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+  };
+}
+
+export interface ApiAssessmentAssessment extends Struct.CollectionTypeSchema {
+  collectionName: 'assessments';
+  info: {
+    description: 'Tenant-scoped reusable assessment definition independent from a specific published version.';
+    displayName: 'Assessment';
+    pluralName: 'assessments';
+    singularName: 'assessment';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    assessmentType: Schema.Attribute.Enumeration<
+      ['placement', 'diagnostic', 'practice', 'quiz', 'exam', 'other']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'placement'>;
+    code: Schema.Attribute.String & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    description: Schema.Attribute.RichText;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment.assessment'
+    > &
+      Schema.Attribute.Private;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    status: Schema.Attribute.Enumeration<['draft', 'active', 'archived']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+    subject: Schema.Attribute.Relation<'manyToOne', 'api::subject.subject'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    versions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-version.assessment-version'
+    >;
+  };
+}
+
 export interface ApiAuthorAuthor extends Struct.CollectionTypeSchema {
   collectionName: 'authors';
   info: {
@@ -7002,6 +8220,10 @@ export interface ApiQuestionOptionQuestionOption
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     explanation: Schema.Attribute.Text;
+    imageAsset: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::file-asset.file-asset'
+    >;
     isCorrect: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
     label: Schema.Attribute.String;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
@@ -7020,6 +8242,57 @@ export interface ApiQuestionOptionQuestionOption
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     value: Schema.Attribute.String;
+  };
+}
+
+export interface ApiQuestionStimulusQuestionStimulus
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'question_stimuli';
+  info: {
+    description: 'Tenant-scoped reusable stimulus or source material shared by one or more assessment questions.';
+    displayName: 'Question Stimulus';
+    pluralName: 'question-stimuli';
+    singularName: 'question-stimulus';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    audioAsset: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::file-asset.file-asset'
+    >;
+    code: Schema.Attribute.String & Schema.Attribute.Required;
+    content: Schema.Attribute.RichText;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    imageAsset: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::file-asset.file-asset'
+    >;
+    instruction: Schema.Attribute.RichText;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::question-stimulus.question-stimulus'
+    > &
+      Schema.Attribute.Private;
+    publishedAt: Schema.Attribute.DateTime;
+    questions: Schema.Attribute.Relation<'oneToMany', 'api::question.question'>;
+    stimulusStatus: Schema.Attribute.Enumeration<
+      ['draft', 'active', 'archived']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'draft'>;
+    tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
+      Schema.Attribute.Required;
+    title: Schema.Attribute.String;
+    type: Schema.Attribute.Enumeration<['text', 'audio', 'image', 'mixed']> &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
   };
 }
 
@@ -7075,6 +8348,10 @@ export interface ApiQuestionQuestion extends Struct.CollectionTypeSchema {
     questionText: Schema.Attribute.RichText & Schema.Attribute.Required;
     rubric: Schema.Attribute.JSON;
     skills: Schema.Attribute.Relation<'manyToMany', 'api::skill.skill'>;
+    stimulus: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::question-stimulus.question-stimulus'
+    >;
     subject: Schema.Attribute.Relation<'manyToOne', 'api::subject.subject'>;
     tenant: Schema.Attribute.Relation<'manyToOne', 'api::tenant.tenant'> &
       Schema.Attribute.Required;
@@ -8163,6 +9440,10 @@ export interface ApiSkillSkill extends Struct.CollectionTypeSchema {
     draftAndPublish: true;
   };
   attributes: {
+    assessmentSections: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-section.assessment-section'
+    >;
     childSkills: Schema.Attribute.Relation<'oneToMany', 'api::skill.skill'>;
     code: Schema.Attribute.String & Schema.Attribute.Required;
     createdAt: Schema.Attribute.DateTime;
@@ -9378,6 +10659,10 @@ export interface ApiSubjectSubject extends Struct.CollectionTypeSchema {
     draftAndPublish: true;
   };
   attributes: {
+    assessments: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment.assessment'
+    >;
     code: Schema.Attribute.String & Schema.Attribute.Required;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -10060,6 +11345,70 @@ export interface ApiTenantTenant extends Struct.CollectionTypeSchema {
       'oneToMany',
       'api::ai-knowledge.ai-knowledge'
     >;
+    assessmentAnswers: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-answer.assessment-answer'
+    >;
+    assessmentAnswerScores: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-answer-score.assessment-answer-score'
+    >;
+    assessmentAttempts: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-attempt.assessment-attempt'
+    >;
+    assessmentCampaignFields: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-campaign-field.assessment-campaign-field'
+    >;
+    assessmentCampaignParticipations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-campaign-participation.assessment-campaign-participation'
+    >;
+    assessmentCampaignRules: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-campaign-rule.assessment-campaign-rule'
+    >;
+    assessmentCampaigns: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-campaign.assessment-campaign'
+    >;
+    assessmentPlacementConfirmations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-placement-confirmation.assessment-placement-confirmation'
+    >;
+    assessmentPlacementRules: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-placement-rule.assessment-placement-rule'
+    >;
+    assessmentQuestions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-question.assessment-question'
+    >;
+    assessmentResults: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-result.assessment-result'
+    >;
+    assessments: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment.assessment'
+    >;
+    assessmentSections: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-section.assessment-section'
+    >;
+    assessmentSpeakingCriteria: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-speaking-criterion.assessment-speaking-criterion'
+    >;
+    assessmentSpeakingReviews: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-speaking-review.assessment-speaking-review'
+    >;
+    assessmentVersions: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::assessment-version.assessment-version'
+    >;
     banner: Schema.Attribute.Media<'images'>;
     campaignRegistrations: Schema.Attribute.Relation<
       'oneToMany',
@@ -10204,6 +11553,10 @@ export interface ApiTenantTenant extends Struct.CollectionTypeSchema {
       'api::question-option.question-option'
     >;
     questions: Schema.Attribute.Relation<'oneToMany', 'api::question.question'>;
+    questionStimuli: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::question-stimulus.question-stimulus'
+    >;
     quickMessageAccesses: Schema.Attribute.Relation<
       'oneToMany',
       'api::quick-message-access.quick-message-access'
@@ -11148,6 +12501,22 @@ declare module '@strapi/strapi' {
       'api::ai-assistant.ai-assistant': ApiAiAssistantAiAssistant;
       'api::ai-knowledge.ai-knowledge': ApiAiKnowledgeAiKnowledge;
       'api::article.article': ApiArticleArticle;
+      'api::assessment-answer-score.assessment-answer-score': ApiAssessmentAnswerScoreAssessmentAnswerScore;
+      'api::assessment-answer.assessment-answer': ApiAssessmentAnswerAssessmentAnswer;
+      'api::assessment-attempt.assessment-attempt': ApiAssessmentAttemptAssessmentAttempt;
+      'api::assessment-campaign-field.assessment-campaign-field': ApiAssessmentCampaignFieldAssessmentCampaignField;
+      'api::assessment-campaign-participation.assessment-campaign-participation': ApiAssessmentCampaignParticipationAssessmentCampaignParticipation;
+      'api::assessment-campaign-rule.assessment-campaign-rule': ApiAssessmentCampaignRuleAssessmentCampaignRule;
+      'api::assessment-campaign.assessment-campaign': ApiAssessmentCampaignAssessmentCampaign;
+      'api::assessment-placement-confirmation.assessment-placement-confirmation': ApiAssessmentPlacementConfirmationAssessmentPlacementConfirmation;
+      'api::assessment-placement-rule.assessment-placement-rule': ApiAssessmentPlacementRuleAssessmentPlacementRule;
+      'api::assessment-question.assessment-question': ApiAssessmentQuestionAssessmentQuestion;
+      'api::assessment-result.assessment-result': ApiAssessmentResultAssessmentResult;
+      'api::assessment-section.assessment-section': ApiAssessmentSectionAssessmentSection;
+      'api::assessment-speaking-criterion.assessment-speaking-criterion': ApiAssessmentSpeakingCriterionAssessmentSpeakingCriterion;
+      'api::assessment-speaking-review.assessment-speaking-review': ApiAssessmentSpeakingReviewAssessmentSpeakingReview;
+      'api::assessment-version.assessment-version': ApiAssessmentVersionAssessmentVersion;
+      'api::assessment.assessment': ApiAssessmentAssessment;
       'api::author.author': ApiAuthorAuthor;
       'api::campaign-registration.campaign-registration': ApiCampaignRegistrationCampaignRegistration;
       'api::campaign.campaign': ApiCampaignCampaign;
@@ -11234,6 +12603,7 @@ declare module '@strapi/strapi' {
       'api::position.position': ApiPositionPosition;
       'api::public-page.public-page': ApiPublicPagePublicPage;
       'api::question-option.question-option': ApiQuestionOptionQuestionOption;
+      'api::question-stimulus.question-stimulus': ApiQuestionStimulusQuestionStimulus;
       'api::question.question': ApiQuestionQuestion;
       'api::quick-message-access-log.quick-message-access-log': ApiQuickMessageAccessLogQuickMessageAccessLog;
       'api::quick-message-access.quick-message-access': ApiQuickMessageAccessQuickMessageAccess;

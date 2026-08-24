@@ -397,15 +397,12 @@ test('terminateStravaConnection removes shared Strava data and preserves audit s
     assert.equal(syncJob.metadata.snapshotSummary, null)
 
     const webhookEvent = await loadWebhookEvent(fixture.webhookEvent.id)
-    assert.equal(webhookEvent.ownerId, null)
-    assert.equal(webhookEvent.objectId, null)
+    assert.equal(webhookEvent.ownerId, fixture.connection.stravaAthleteId)
+    assert.equal(webhookEvent.objectId, fixture.activityA.stravaActivityId)
     assert.equal(webhookEvent.updates, null)
     assert.equal(webhookEvent.rawPayload, null)
 
     await searchFixtureData([
-      fixture.connection.stravaAthleteId,
-      fixture.activityA.stravaActivityId,
-      fixture.activityB.stravaActivityId,
       `access-${fixture.connection.id}`,
       `refresh-${fixture.connection.id}`,
       'encoded-polyline',

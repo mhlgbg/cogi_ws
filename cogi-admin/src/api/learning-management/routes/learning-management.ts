@@ -10,7 +10,14 @@ export default {
           {
             name: 'global::has-tenant-permission',
             config: {
-              key: 'learning.learning-object.manage',
+              keys: [
+                'learning.learning-object.manage',
+                'learning.question.manage',
+                'learning.question-stimulus.manage',
+                'learning.subject.manage',
+                'learning.grade.manage',
+                'learning.formula.manage',
+              ],
             },
           },
         ],
@@ -67,7 +74,7 @@ export default {
       handler: 'learning-management.listSubjects',
       config: {
         auth: false,
-        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.subject.manage', 'learning.learning-object.manage'] } }],
+        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.subject.manage', 'learning.question.manage', 'learning.question-stimulus.manage', 'learning.learning-object.manage'] } }],
       },
     },
     {
@@ -76,7 +83,7 @@ export default {
       handler: 'learning-management.createSubject',
       config: {
         auth: false,
-        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.subject.manage', 'learning.learning-object.manage'] } }],
+        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.subject.manage', 'learning.question.manage', 'learning.question-stimulus.manage', 'learning.learning-object.manage'] } }],
       },
     },
     {
@@ -85,7 +92,7 @@ export default {
       handler: 'learning-management.updateSubject',
       config: {
         auth: false,
-        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.subject.manage', 'learning.learning-object.manage'] } }],
+        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.subject.manage', 'learning.question.manage', 'learning.question-stimulus.manage', 'learning.learning-object.manage'] } }],
       },
     },
     {
@@ -103,7 +110,7 @@ export default {
       handler: 'learning-management.listGrades',
       config: {
         auth: false,
-        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.grade.manage', 'learning.learning-object.manage'] } }],
+        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.grade.manage', 'learning.question.manage', 'learning.question-stimulus.manage', 'learning.learning-object.manage'] } }],
       },
     },
     {
@@ -112,7 +119,7 @@ export default {
       handler: 'learning-management.createGrade',
       config: {
         auth: false,
-        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.grade.manage', 'learning.learning-object.manage'] } }],
+        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.grade.manage', 'learning.question.manage', 'learning.question-stimulus.manage', 'learning.learning-object.manage'] } }],
       },
     },
     {
@@ -121,7 +128,7 @@ export default {
       handler: 'learning-management.updateGrade',
       config: {
         auth: false,
-        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.grade.manage', 'learning.learning-object.manage'] } }],
+        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.grade.manage', 'learning.question.manage', 'learning.question-stimulus.manage', 'learning.learning-object.manage'] } }],
       },
     },
     {
@@ -139,13 +146,31 @@ export default {
       handler: 'learning-management.listKnowledgeNodes',
       config: {
         auth: false,
-        policies: [{ name: 'global::has-tenant-permission', config: { key: 'learning.learning-object.manage' } }],
+        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.question.manage', 'learning.question-stimulus.manage', 'learning.learning-object.manage'] } }],
       },
     },
     {
       method: 'POST',
       path: '/learning-management/knowledge-nodes',
       handler: 'learning-management.createKnowledgeNode',
+      config: {
+        auth: false,
+        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.question.manage', 'learning.question-stimulus.manage', 'learning.learning-object.manage'] } }],
+      },
+    },
+    {
+      method: 'PUT',
+      path: '/learning-management/knowledge-nodes/:id',
+      handler: 'learning-management.updateKnowledgeNode',
+      config: {
+        auth: false,
+        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.question.manage', 'learning.question-stimulus.manage', 'learning.learning-object.manage'] } }],
+      },
+    },
+    {
+      method: 'DELETE',
+      path: '/learning-management/knowledge-nodes/:id',
+      handler: 'learning-management.deleteKnowledgeNode',
       config: {
         auth: false,
         policies: [{ name: 'global::has-tenant-permission', config: { key: 'learning.learning-object.manage' } }],
@@ -157,13 +182,31 @@ export default {
       handler: 'learning-management.listSkills',
       config: {
         auth: false,
-        policies: [{ name: 'global::has-tenant-permission', config: { key: 'learning.learning-object.manage' } }],
+        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.question.manage', 'learning.question-stimulus.manage', 'learning.learning-object.manage'] } }],
       },
     },
     {
       method: 'POST',
       path: '/learning-management/skills',
       handler: 'learning-management.createSkill',
+      config: {
+        auth: false,
+        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.question.manage', 'learning.question-stimulus.manage', 'learning.learning-object.manage'] } }],
+      },
+    },
+    {
+      method: 'PUT',
+      path: '/learning-management/skills/:id',
+      handler: 'learning-management.updateSkill',
+      config: {
+        auth: false,
+        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.question.manage', 'learning.question-stimulus.manage', 'learning.learning-object.manage'] } }],
+      },
+    },
+    {
+      method: 'DELETE',
+      path: '/learning-management/skills/:id',
+      handler: 'learning-management.deleteSkill',
       config: {
         auth: false,
         policies: [{ name: 'global::has-tenant-permission', config: { key: 'learning.learning-object.manage' } }],
@@ -175,7 +218,7 @@ export default {
       handler: 'learning-management.listFormulas',
       config: {
         auth: false,
-        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.formula.manage', 'learning.learning-object.manage'] } }],
+        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.formula.manage', 'learning.question.manage', 'learning.question-stimulus.manage', 'learning.learning-object.manage'] } }],
       },
     },
     {
@@ -266,6 +309,51 @@ export default {
       config: {
         auth: false,
         policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.question.manage', 'learning.learning-object.manage'] } }],
+      },
+    },
+    {
+      method: 'GET',
+      path: '/learning-management/question-stimuli',
+      handler: 'learning-management.listQuestionStimuli',
+      config: {
+        auth: false,
+        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.question-stimulus.manage', 'learning.question.manage', 'learning.learning-object.manage'] } }],
+      },
+    },
+    {
+      method: 'GET',
+      path: '/learning-management/question-stimuli/:id',
+      handler: 'learning-management.findOneQuestionStimulus',
+      config: {
+        auth: false,
+        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.question-stimulus.manage', 'learning.question.manage', 'learning.learning-object.manage'] } }],
+      },
+    },
+    {
+      method: 'POST',
+      path: '/learning-management/question-stimuli',
+      handler: 'learning-management.createQuestionStimulus',
+      config: {
+        auth: false,
+        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.question-stimulus.manage', 'learning.question.manage', 'learning.learning-object.manage'] } }],
+      },
+    },
+    {
+      method: 'PUT',
+      path: '/learning-management/question-stimuli/:id',
+      handler: 'learning-management.updateQuestionStimulus',
+      config: {
+        auth: false,
+        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.question-stimulus.manage', 'learning.question.manage', 'learning.learning-object.manage'] } }],
+      },
+    },
+    {
+      method: 'DELETE',
+      path: '/learning-management/question-stimuli/:id',
+      handler: 'learning-management.deleteQuestionStimulus',
+      config: {
+        auth: false,
+        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.question-stimulus.manage', 'learning.question.manage', 'learning.learning-object.manage'] } }],
       },
     },
     {

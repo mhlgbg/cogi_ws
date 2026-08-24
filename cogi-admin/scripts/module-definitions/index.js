@@ -28,6 +28,7 @@ const learningManagement = require('./learning');
 const slider = require('./slider');
 const system = require('./system');
 const registrationCampaign = require('./registration-campaign');
+const assessmentCampaign = require('./assessment-campaign');
 const exam = require('./exam');
 const sports = require('./sports');
 // const inventory = require('./inventory');
@@ -53,6 +54,7 @@ module.exports = [
   slider,
   system,
   registrationCampaign,
+  assessmentCampaign,
   exam,
   sports,
   // inventory,
