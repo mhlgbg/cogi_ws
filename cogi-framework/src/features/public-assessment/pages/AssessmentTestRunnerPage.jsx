@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import AssessmentProgress from '../components/AssessmentProgress'
 import QuestionRenderer from '../components/QuestionRenderer'
 import { getMockAssessmentTest } from '../mock/assessmentTestMock'
-import { buildCampaignRegisterPath, buildCampaignResultPath, buildCampaignSoundCheckPath, buildCampaignVerifyPath } from '../utils/assessmentRoutes'
+import { buildCampaignQualificationPath, buildCampaignRegisterPath, buildCampaignSoundCheckPath, buildCampaignVerifyPath } from '../utils/assessmentRoutes'
 import { getFlowState, mergeFlowState } from '../utils/assessmentFlowStorage'
 import { createMockAudioSampleDataUri } from '../utils/assessmentRuntime'
 
@@ -84,7 +84,7 @@ export default function AssessmentTestRunnerPage() {
   const registerPath = buildCampaignRegisterPath(tenantCode, campaignCode)
   const verifyPath = buildCampaignVerifyPath(tenantCode, campaignCode)
   const soundCheckPath = buildCampaignSoundCheckPath(tenantCode, campaignCode)
-  const resultPath = buildCampaignResultPath(tenantCode, campaignCode)
+  const qualificationPath = buildCampaignQualificationPath(tenantCode, campaignCode)
   const hasQualification = Boolean(qualification?.student?.grade && qualification?.parent?.email)
   const emailVerified = verification?.emailVerified === true
   const soundConfirmed = assessment?.soundConfirmed === true
@@ -117,21 +117,38 @@ export default function AssessmentTestRunnerPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [assessment?.attempt?.startedAt, isSameFlow])
 
+  useEffect(() => {
+    if (!hasQualification) {
+      navigate(registerPath, { replace: true })
+      return
+    }
+    if (!emailVerified) {
+      navigate(verifyPath, { replace: true })
+      return
+    }
+    if (!soundConfirmed) {
+      navigate(soundCheckPath, { replace: true })
+    }
+  }, [emailVerified, hasQualification, navigate, registerPath, soundCheckPath, soundConfirmed, verifyPath])
+
+  useEffect(() => {
+    if (assessment?.attempt?.currentSectionScreen === 'complete' && assessment?.finished === true) {
+      navigate(qualificationPath, { replace: true })
+    }
+  }, [assessment?.attempt?.currentSectionScreen, assessment?.finished, navigate, qualificationPath])
+
   function syncState(nextState) {
     setFlowState(nextState)
     return nextState
   }
 
   if (!hasQualification) {
-    navigate(registerPath, { replace: true })
     return null
   }
   if (!emailVerified) {
-    navigate(verifyPath, { replace: true })
     return null
   }
   if (!soundConfirmed) {
-    navigate(soundCheckPath, { replace: true })
     return null
   }
   if (!test) {
@@ -287,6 +304,18 @@ export default function AssessmentTestRunnerPage() {
       currentSectionScreen: nextSection ? 'intro' : 'complete',
       finishedAt: nextSection ? null : new Date().toISOString(),
     }))
+    if (!nextSection) {
+      const nextState = mergeFlowState((current) => ({
+        ...current,
+        assessment: {
+          ...(current.assessment || {}),
+          finished: true,
+          qualificationCompleted: false,
+          resultStatus: 'PROVISIONAL',
+        },
+      }))
+      syncState(nextState)
+    }
     setSectionConfirm(null)
   }
 
@@ -331,7 +360,7 @@ export default function AssessmentTestRunnerPage() {
       <CContainer className='assessment-public-shell py-3 py-md-4'>
         <CCard className='assessment-card'>
           <CCardBody className='p-4 p-md-5 text-center'>
-            <AssessmentProgress currentStep={4} totalSteps={5} label='Bài kiểm tra' />
+            <AssessmentProgress currentStep={4} totalSteps={6} label='Bài kiểm tra' />
             <div className='assessment-section-title'>{test.title}</div>
             <p className='assessment-section-lead mb-4'>{`4 phần · ${test.estimatedMinutes}`}</p>
             <div className='assessment-trust-panel mb-4'>
@@ -348,25 +377,7 @@ export default function AssessmentTestRunnerPage() {
   }
 
   if (attempt.currentSectionScreen === 'complete') {
-    return (
-      <CContainer className='assessment-public-shell py-3 py-md-4'>
-        <CCard className='assessment-card'>
-          <CCardBody className='p-4 p-md-5 text-center'>
-            <AssessmentProgress currentStep={4} totalSteps={5} label='Hoàn thành bài đánh giá' />
-            <div className='assessment-section-title'>Bạn đã hoàn thành bài đánh giá</div>
-            <div className='assessment-trust-list my-4'>
-              {test.sections.map((section) => (
-                <div key={section.code} className='assessment-trust-item justify-content-center'>
-                  <div className='assessment-trust-icon'>✓</div>
-                  <div className='fw-semibold'>{section.title}</div>
-                </div>
-              ))}
-            </div>
-            <CButton color='primary' className='assessment-primary-cta' onClick={() => navigate(resultPath)}>XEM KẾT QUẢ SƠ BỘ</CButton>
-          </CCardBody>
-        </CCard>
-      </CContainer>
-    )
+    return null
   }
 
   if (attempt.currentSectionScreen === 'intro') {
@@ -374,7 +385,7 @@ export default function AssessmentTestRunnerPage() {
       <CContainer className='assessment-public-shell py-3 py-md-4'>
         <CCard className='assessment-card'>
           <CCardBody className='p-4 p-md-5 text-center'>
-            <AssessmentProgress currentStep={4} totalSteps={5} label={`Phần ${currentSectionIndex + 1}/4`} />
+            <AssessmentProgress currentStep={4} totalSteps={6} label={`Phần ${currentSectionIndex + 1}/4`} />
             <div className='assessment-section-title'>{currentSection.title}</div>
             <p className='assessment-section-lead mb-4'>{currentSection.instructions}</p>
             {currentSection.code === 'listening' ? <div className='assessment-secondary-note mb-4'>Bạn có thể phát audio theo số lần được cấu hình cho câu hỏi.</div> : null}

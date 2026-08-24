@@ -1,8 +1,6 @@
+import { createElement } from 'react'
 import LearningObjectManagementPage from '../pages/LearningObjectManagementPage'
-import GradeManagementPage from '../pages/GradeManagementPage'
-import SubjectManagementPage from '../pages/SubjectManagementPage'
-import QuestionManagementPage from '../pages/QuestionManagementPage'
-import FormulaManagementPage from '../pages/FormulaManagementPage'
+import QuestionBankWorkspacePage, { LearningManagementTabRedirect } from '../pages/QuestionBankWorkspacePage'
 import LearningPackageImport from '../../learning/pages/LearningPackageImport.jsx'
 
 const learningManagementRoutes = [
@@ -16,27 +14,27 @@ const learningManagementRoutes = [
     path: '/learning/grades',
     title: 'Khối lớp',
     featureKey: 'learning.grade.manage',
-    component: GradeManagementPage,
+    component: () => createElement(LearningManagementTabRedirect, { targetTab: 'grades' }),
   },
   {
     path: '/learning/subjects',
     title: 'Môn học',
     featureKey: 'learning.subject.manage',
-    component: SubjectManagementPage,
+    component: () => createElement(LearningManagementTabRedirect, { targetTab: 'subjects' }),
   },
   {
     path: '/learning/questions',
-    title: 'Câu hỏi',
+    title: 'Ngân hàng câu hỏi',
     featureKey: 'learning.question.manage',
     featureKeys: ['learning.question.manage', 'learning.learning-object.manage'],
-    component: QuestionManagementPage,
+    component: QuestionBankWorkspacePage,
   },
   {
     path: '/learning/formulas',
     title: 'Công thức',
     featureKey: 'learning.formula.manage',
     featureKeys: ['learning.formula.manage', 'learning.learning-object.manage'],
-    component: FormulaManagementPage,
+    component: () => createElement(LearningManagementTabRedirect, { targetTab: 'formulas' }),
   },
   {
     path: '/learning/import-packages',

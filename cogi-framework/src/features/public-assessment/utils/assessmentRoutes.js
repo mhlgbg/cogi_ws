@@ -3,36 +3,67 @@ function toText(value) {
   return String(value).trim()
 }
 
-function buildPublicCampaignTenantPath(tenantCode, campaignCode, suffix = '') {
+function buildPublicCampaignPath(tenantCode, campaignCode, suffix = '') {
   const tenant = encodeURIComponent(toText(tenantCode))
   const campaign = encodeURIComponent(toText(campaignCode))
   const normalizedSuffix = toText(suffix).replace(/^\/+/, '')
-  if (!tenant || !campaign) return '/'
+  if (!campaign) return '/'
+
+  const basePath = tenant
+    ? `/t/${tenant}/campaign/${campaign}`
+    : `/campaign/${campaign}`
+
   return normalizedSuffix
-    ? `/t/${tenant}/campaign/${campaign}/${normalizedSuffix}`
-    : `/t/${tenant}/campaign/${campaign}`
+    ? `${basePath}/${normalizedSuffix}`
+    : basePath
 }
 
 export function buildCampaignPath(tenantCode, campaignCode, options = {}) {
-  return buildPublicCampaignTenantPath(tenantCode, campaignCode)
+  return buildPublicCampaignPath(tenantCode, campaignCode)
 }
 
 export function buildCampaignRegisterPath(tenantCode, campaignCode, options = {}) {
-  return buildPublicCampaignTenantPath(tenantCode, campaignCode, 'register')
+  return buildPublicCampaignPath(tenantCode, campaignCode, 'register')
 }
 
 export function buildCampaignVerifyPath(tenantCode, campaignCode, options = {}) {
-  return buildPublicCampaignTenantPath(tenantCode, campaignCode, 'verify')
+  return buildPublicCampaignPath(tenantCode, campaignCode, 'verify')
 }
 
 export function buildCampaignSoundCheckPath(tenantCode, campaignCode, options = {}) {
-  return buildPublicCampaignTenantPath(tenantCode, campaignCode, 'sound-check')
+  return buildPublicCampaignPath(tenantCode, campaignCode, 'sound-check')
 }
 
 export function buildCampaignTestPath(tenantCode, campaignCode, options = {}) {
-  return buildPublicCampaignTenantPath(tenantCode, campaignCode, 'test')
+  return buildPublicCampaignPath(tenantCode, campaignCode, 'test')
+}
+
+export function buildCampaignQualificationPath(tenantCode, campaignCode, options = {}) {
+  return buildPublicCampaignPath(tenantCode, campaignCode, 'qualification')
 }
 
 export function buildCampaignResultPath(tenantCode, campaignCode, options = {}) {
-  return buildPublicCampaignTenantPath(tenantCode, campaignCode, 'result')
+  return buildPublicCampaignPath(tenantCode, campaignCode, 'result')
+}
+
+export function buildCampaignSpeakingPath(tenantCode, campaignCode, options = {}) {
+  return buildPublicCampaignPath(tenantCode, campaignCode, 'speaking')
+}
+
+export function buildAssessmentRunnerPath(tenantCode, attemptId, options = {}) {
+  const tenant = encodeURIComponent(toText(tenantCode))
+  const attempt = encodeURIComponent(toText(attemptId))
+  if (!attempt) return '/'
+  return tenant
+    ? `/t/${tenant}/assessment-runner/${attempt}`
+    : `/assessment-runner/${attempt}`
+}
+
+export function buildAssessmentRunnerResultPath(tenantCode, attemptId, options = {}) {
+  const tenant = encodeURIComponent(toText(tenantCode))
+  const attempt = encodeURIComponent(toText(attemptId))
+  if (!attempt) return '/'
+  return tenant
+    ? `/t/${tenant}/assessment-runner/${attempt}/result`
+    : `/assessment-runner/${attempt}/result`
 }

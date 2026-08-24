@@ -108,6 +108,10 @@
   margin-bottom: 20px;
 }
 
+.fitness-page__compact-grid--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .fitness-page__panel {
   border: 1px solid rgba(226, 232, 240, 0.9);
   border-left: 3px solid rgba(37, 99, 235, 0.18);
@@ -200,6 +204,12 @@
   gap: 12px;
 }
 
+.fitness-page__connection-metrics--disconnected {
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  max-width: 360px;
+}
+
 .fitness-page__connection-metric {
   padding: 14px 16px;
   border: 1px solid rgba(226, 232, 240, 0.95);
@@ -224,6 +234,43 @@
 
 .fitness-page__connection-actions {
   justify-content: flex-start;
+}
+
+.fitness-page__connection-status-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  width: 100%;
+}
+
+.fitness-page__connection-cta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.fitness-page__strava-connect-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  line-height: 0;
+  cursor: pointer;
+}
+
+.fitness-page__strava-connect-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.fitness-page__strava-connect-image {
+  display: block;
+  height: 48px;
+  width: auto;
 }
 
 .fitness-page__connection-actions .btn {
@@ -562,6 +609,11 @@
 
   .fitness-page__connection-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fitness-page__connection-metrics--disconnected {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: none;
   }
 
   .fitness-page__actions {

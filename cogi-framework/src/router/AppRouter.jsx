@@ -42,12 +42,16 @@ import JournalIssueCategoryPage from '../pages/journal/JournalIssueCategoryPage'
 import JournalIssueArchiveTreePage from '../pages/journal/JournalIssueArchiveTreePage'
 import JournalIssueDetailPage from '../pages/journal/JournalIssueDetailPage'
 import AssessmentPublicLayout from '../features/public-assessment/components/AssessmentPublicLayout'
+import AssessmentPreliminaryResultPage from '../features/public-assessment/pages/AssessmentPreliminaryResultPage'
+import CandidateAssessmentResultPage from '../features/public-assessment/pages/CandidateAssessmentResultPage'
+import AssessmentQualificationPage from '../features/public-assessment/pages/AssessmentQualificationPage'
 import AssessmentRegistrationPage from '../features/public-assessment/pages/AssessmentRegistrationPage'
-import AssessmentResultPlaceholderPage from '../features/public-assessment/pages/AssessmentResultPlaceholderPage'
+import AssessmentSpeakingPage from '../features/public-assessment/pages/AssessmentSpeakingPage'
 import AssessmentSoundCheckPage from '../features/public-assessment/pages/AssessmentSoundCheckPage'
 import AssessmentTestRunnerPage from '../features/public-assessment/pages/AssessmentTestRunnerPage'
 import AssessmentVerifyPage from '../features/public-assessment/pages/AssessmentVerifyPage'
 import AssessmentWelcomePage from '../features/public-assessment/pages/AssessmentWelcomePage'
+import AssessmentRunnerPage from '../modules/assessments/pages/AssessmentRunnerPage'
 import platformRoutes, { PlatformAccessGuard } from '../platform/routes/platformRoutes'
 import { allModuleRoutes } from '../modules'
 import PublicAnalyticsBoundary from './PublicAnalyticsBoundary'
@@ -120,6 +124,21 @@ function renderPlatformRoutes() {
 
     return <Route key={`platform-${route.path || index}`} path={route.path} element={route.element} />
   })
+}
+
+function renderAssessmentPublicRoutes() {
+  return (
+    <>
+      <Route index element={<AssessmentWelcomePage />} />
+      <Route path="register" element={<AssessmentRegistrationPage />} />
+      <Route path="verify" element={<AssessmentVerifyPage />} />
+      <Route path="sound-check" element={<AssessmentSoundCheckPage />} />
+      <Route path="test" element={<AssessmentTestRunnerPage />} />
+      <Route path="qualification" element={<AssessmentQualificationPage />} />
+      <Route path="result" element={<AssessmentPreliminaryResultPage />} />
+      <Route path="speaking" element={<AssessmentSpeakingPage />} />
+    </>
+  )
 }
 
 export default function AppRouter() {
@@ -216,6 +235,61 @@ export default function AppRouter() {
         </Route>
 
         <Route
+          path="/campaign/:campaignCode"
+          element={(
+            <TenantRoute requireAuth={false}>
+              <AssessmentPublicLayout />
+            </TenantRoute>
+          )}
+        >
+          {renderAssessmentPublicRoutes()}
+        </Route>
+
+        <Route
+          path="/assessment-runner/:attemptId/result"
+          element={(
+            <TenantRoute requireAuth={false}>
+              <AssessmentPublicLayout />
+            </TenantRoute>
+          )}
+        >
+          <Route index element={<CandidateAssessmentResultPage />} />
+        </Route>
+
+        <Route
+          path="/assessment-runner/:attemptId"
+          element={(
+            <TenantRoute requireAuth={false}>
+              <AssessmentPublicLayout />
+            </TenantRoute>
+          )}
+        >
+          <Route index element={<AssessmentRunnerPage />} />
+        </Route>
+
+        <Route
+          path="/t/:tenantCode/assessment-runner/:attemptId/result"
+          element={(
+            <TenantRoute requireAuth={false}>
+              <AssessmentPublicLayout />
+            </TenantRoute>
+          )}
+        >
+          <Route index element={<CandidateAssessmentResultPage />} />
+        </Route>
+
+        <Route
+          path="/t/:tenantCode/assessment-runner/:attemptId"
+          element={(
+            <TenantRoute requireAuth={false}>
+              <AssessmentPublicLayout />
+            </TenantRoute>
+          )}
+        >
+          <Route index element={<AssessmentRunnerPage />} />
+        </Route>
+
+        <Route
           path="/t/:tenantCode/campaign/:campaignCode"
           element={(
             <TenantRoute requireAuth={false}>
@@ -223,12 +297,7 @@ export default function AppRouter() {
             </TenantRoute>
           )}
         >
-          <Route index element={<AssessmentWelcomePage />} />
-          <Route path="register" element={<AssessmentRegistrationPage />} />
-          <Route path="verify" element={<AssessmentVerifyPage />} />
-          <Route path="sound-check" element={<AssessmentSoundCheckPage />} />
-          <Route path="test" element={<AssessmentTestRunnerPage />} />
-          <Route path="result" element={<AssessmentResultPlaceholderPage />} />
+          {renderAssessmentPublicRoutes()}
         </Route>
       </Route>
 

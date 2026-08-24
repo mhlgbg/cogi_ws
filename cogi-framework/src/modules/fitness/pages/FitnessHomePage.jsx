@@ -67,6 +67,7 @@ const TAB_ITEMS = [
 ]
 
 const STRAVA_SYNC_POLL_INTERVAL = 4000
+const STRAVA_CONNECT_BUTTON_SRC = '/assets/strava/connect-with-strava.svg'
 const ACTIVE_SYNC_JOB_STATUSES = new Set(['queued', 'running', 'partial_ready'])
 const TERMINAL_SYNC_JOB_STATUSES = new Set(['completed', 'failed', 'cancelled'])
 const RECONNECT_REQUIRED_ERROR_CODES = new Set([
@@ -74,8 +75,7 @@ const RECONNECT_REQUIRED_ERROR_CODES = new Set([
   'STRAVA_TOKEN_REFRESH_FAILED',
   'STRAVA_NOT_CONNECTED',
 ])
-const VKL_RUNNERS_PRIVACY_URL = '/privacy/vkl-runners'
-const COGI_PRIVACY_URL = '/privacy/cogi-platform'
+const COGI_PRIVACY_URL = 'https://giaiphapgiaoducvietnam.com/page/privacy-policy-en'
 
 function InlineIcon({ name }) {
   const props = {
@@ -271,6 +271,15 @@ function getReadableSyncStatus(status) {
   return 'Chưa đồng bộ'
 }
 
+function getStatusBarSyncLabel(status) {
+  const normalized = String(status || '').trim()
+  if (normalized === 'completed') return 'Đã đồng bộ'
+  if (normalized === 'failed') return 'Đồng bộ lỗi'
+  if (normalized === 'cancelled') return 'Chưa đồng bộ'
+  if (normalized === 'partial_ready' || normalized === 'running' || normalized === 'queued') return 'Đang đồng bộ'
+  return 'Chưa đồng bộ'
+}
+
 function getReadableConnectionStatus(status, connected) {
   if (!connected) return 'Chưa kết nối'
 
@@ -355,6 +364,7 @@ function computeSyncProgress(job) {
 }
 
 function StravaSyncStatusCard({
+  connected,
   job,
   loading,
   polling,
@@ -368,6 +378,7 @@ function StravaSyncStatusCard({
   fallbackSyncAt,
   fallbackStatus,
 }) {
+  if (!connected) return null
   if (!job && !loading && !error && !fallbackStatus && !fallbackSyncAt && !fallbackActivityCount) return null
 
   const status = String(job?.status || fallbackStatus || '').trim()
@@ -686,6 +697,7 @@ export default function FitnessHomePage() {
   const overviewSyncStatus = overview?.lastSyncStatus || stravaStatus?.lastSyncStatus || 'NEVER'
   const overviewSyncAt = overview?.lastSyncAt || stravaStatus?.lastSyncAt || null
   const syncStatus = String(syncJob?.status || '').trim()
+  const currentSyncStatus = syncStatus || overviewSyncStatus
   const isSyncActive = isActiveSyncJob(syncJob)
   const isPartialReady = syncStatus === 'partial_ready'
   const isFailed = syncStatus === 'failed'
@@ -694,9 +706,9 @@ export default function FitnessHomePage() {
   const syncButtonDisabled = !isStravaConnected || syncActionPending || isSyncActive
   const totalActivitiesAllTime = Number(overview?.allTime?.totalActivities || 0)
   const hasOverviewData = totalActivitiesAllTime > 0
-  const statusBarSyncLabel = isSyncActive ? getReadableSyncStatus(syncStatus) : getReadableSyncStatus(overviewSyncStatus)
-  const statusBarSyncTime = getSyncReferenceTime(syncJob, overviewSyncAt)
-  const statusBarActivityCount = getSyncActivityCount(syncJob, overview?.allTime?.totalActivities || 0)
+  const statusBarSyncLabel = isStravaConnected ? getStatusBarSyncLabel(currentSyncStatus) : ''
+  const statusBarSyncTime = isStravaConnected ? getSyncReferenceTime(syncJob, overviewSyncAt) : null
+  const statusBarActivityCount = isStravaConnected ? getSyncActivityCount(syncJob, overview?.allTime?.totalActivities || 0) : 0
 
   useEffect(() => {
     mountedRef.current = true
@@ -1177,7 +1189,7 @@ export default function FitnessHomePage() {
 
   async function handleDisconnectStrava() {
     if (disconnectLoading) return
-    const confirmed = window.confirm('Bạn có chắc muốn ngắt kết nối Strava? Các thành tích đã đồng bộ trước đây vẫn được giữ lại.')
+    const confirmed = window.confirm('Bạn có chắc muốn ngắt kết nối Strava? COGI sẽ ngắt quyền truy cập Strava và xóa dữ liệu hoạt động Strava đã đồng bộ khỏi hệ thống. Khi kết nối lại, bạn cần cấp quyền lại để COGI đồng bộ dữ liệu.')
     if (!confirmed) return
     setIfMounted(() => {
       setDisconnectLoading(true)
@@ -1283,21 +1295,25 @@ export default function FitnessHomePage() {
             <InlineIcon name='link' />
             {isStravaConnected ? 'Strava đã kết nối' : 'Chưa kết nối Strava'}
           </span>
-          <span className='fitness-page__status-chip'>
-            <InlineIcon name='sync' />
-            {statusBarSyncLabel}
-          </span>
-          <span className='fitness-page__status-chip'>
-            <InlineIcon name='activities' />
-            {`${formatNumber(statusBarActivityCount)} hoạt động`}
-          </span>
-          <span className='fitness-page__status-chip'>
-            <InlineIcon name='clock' />
-            <small>Lần sync</small>
-            {formatDateTime(statusBarSyncTime)}
-          </span>
+          {isStravaConnected ? (
+            <>
+              <span className='fitness-page__status-chip'>
+                <InlineIcon name='sync' />
+                {statusBarSyncLabel}
+              </span>
+              <span className='fitness-page__status-chip'>
+                <InlineIcon name='activities' />
+                {`${formatNumber(statusBarActivityCount)} hoạt động`}
+              </span>
+              <span className='fitness-page__status-chip'>
+                <InlineIcon name='clock' />
+                <small>Lần sync</small>
+                {formatDateTime(statusBarSyncTime)}
+              </span>
+            </>
+          ) : null}
         </div>
-        {lastDashboardRefreshAt ? (
+        {isStravaConnected && lastDashboardRefreshAt ? (
           <div className='fitness-page__muted-note'>{`Cập nhật dashboard: ${formatDateTime(lastDashboardRefreshAt)}`}</div>
         ) : null}
       </div>
@@ -1365,6 +1381,9 @@ export default function FitnessHomePage() {
     })
     const friendlyConnectionStatus = getReadableConnectionStatus(stravaStatus?.status, isStravaConnected)
     const syncedActivities = Number(overview?.allTime?.totalActivities || 0)
+    const connectionDescription = isStravaConnected
+      ? 'Đồng bộ hoạt động để xem thống kê, thành tích và phân tích luyện tập.'
+      : 'Bạn chưa kết nối Strava. Kết nối Strava để đồng bộ và xem dữ liệu hoạt động của chính bạn.'
 
     return (
       <CCard className='fitness-page__panel mb-0'>
@@ -1392,7 +1411,7 @@ export default function FitnessHomePage() {
                       Kết nối Strava
                     </div>
                     <h2 className='fitness-page__connection-title'>Kết nối Strava</h2>
-                    <div className='fitness-page__connection-description'>Đồng bộ hoạt động để xem thống kê, thành tích và phân tích luyện tập.</div>
+                    <div className='fitness-page__connection-description'>{connectionDescription}</div>
                   </div>
                 </div>
 
@@ -1403,31 +1422,26 @@ export default function FitnessHomePage() {
                 </div>
               </div>
 
-              <div className='fitness-page__connection-metrics'>
-                <div className='fitness-page__connection-metric'>
-                  <div className='fitness-page__connection-metric-label'>Trạng thái kết nối</div>
-                  <div className='fitness-page__connection-metric-value'>{friendlyConnectionStatus}</div>
-                </div>
-                <div className='fitness-page__connection-metric'>
-                  <div className='fitness-page__connection-metric-label'>Lần đồng bộ gần nhất</div>
-                  <div className='fitness-page__connection-metric-value'>{overviewSyncAt ? formatDateTime(overviewSyncAt) : 'Chưa đồng bộ'}</div>
-                </div>
-                {syncedActivities > 0 ? (
-                  <div className='fitness-page__connection-metric'>
-                    <div className='fitness-page__connection-metric-label'>Hoạt động đã đồng bộ</div>
-                    <div className='fitness-page__connection-metric-value'>{`${formatNumber(syncedActivities)} hoạt động`}</div>
+              {isStravaConnected ? (
+                <>
+                  <div className='fitness-page__connection-metrics'>
+                    <div className='fitness-page__connection-metric'>
+                      <div className='fitness-page__connection-metric-label'>Trạng thái kết nối</div>
+                      <div className='fitness-page__connection-metric-value'>{friendlyConnectionStatus}</div>
+                    </div>
+                    <div className='fitness-page__connection-metric'>
+                      <div className='fitness-page__connection-metric-label'>Lần đồng bộ gần nhất</div>
+                      <div className='fitness-page__connection-metric-value'>{overviewSyncAt ? formatDateTime(overviewSyncAt) : 'Chưa đồng bộ'}</div>
+                    </div>
+                    {syncedActivities > 0 ? (
+                      <div className='fitness-page__connection-metric'>
+                        <div className='fitness-page__connection-metric-label'>Hoạt động đã đồng bộ</div>
+                        <div className='fitness-page__connection-metric-value'>{`${formatNumber(syncedActivities)} hoạt động`}</div>
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
 
-              <div className='fitness-page__actions fitness-page__connection-actions'>
-                {!isStravaConnected ? (
-                  <CButton color='primary' onClick={handleConnectStrava} disabled={connectLoading || disconnectLoading}>
-                    <InlineIcon name='link' />
-                    <span>{connectLoading ? 'Đang chuyển hướng...' : 'Kết nối Strava'}</span>
-                  </CButton>
-                ) : (
-                  <>
+                  <div className='fitness-page__actions fitness-page__connection-actions'>
                     <CButton color='primary' onClick={isFailed && syncJob?.canRetry && !reconnectRequired ? handleRetrySyncJob : handleSyncStrava} disabled={syncButtonDisabled}>
                       <InlineIcon name='sync' />
                       <span>{syncStarting ? 'Đang gửi yêu cầu...' : isFailed && syncJob?.canRetry && !reconnectRequired ? 'Thử đồng bộ lại' : 'Đồng bộ ngay'}</span>
@@ -1436,13 +1450,39 @@ export default function FitnessHomePage() {
                       <InlineIcon name='link' />
                       <span>{disconnectLoading ? 'Đang ngắt kết nối...' : 'Ngắt kết nối'}</span>
                     </CButton>
-                  </>
-                )}
-              </div>
+                  </div>
+                </>
+              ) : (
+                <div className='fitness-page__connection-status-stack'>
+                  <div className='fitness-page__connection-metrics fitness-page__connection-metrics--disconnected'>
+                    <div className='fitness-page__connection-metric'>
+                      <div className='fitness-page__connection-metric-label'>Trạng thái kết nối</div>
+                      <div className='fitness-page__connection-metric-value'>{friendlyConnectionStatus}</div>
+                    </div>
+                  </div>
+
+                  <div className='fitness-page__connection-cta'>
+                    <button
+                      type='button'
+                      className='fitness-page__strava-connect-button'
+                      onClick={handleConnectStrava}
+                      disabled={connectLoading || disconnectLoading}
+                      aria-label='Connect with Strava'
+                      aria-busy={connectLoading ? 'true' : 'false'}
+                    >
+                      <img
+                        src={STRAVA_CONNECT_BUTTON_SRC}
+                        alt='Connect with Strava'
+                        className='fitness-page__strava-connect-image'
+                      />
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className='fitness-page__connection-policy'>
                 <div className='fitness-page__connection-policy-line'>
-                  Khi kết nối Strava, bạn đồng ý với <a href={VKL_RUNNERS_PRIVACY_URL} target='_blank' rel='noreferrer'>Chính sách bảo mật của VKL Runners</a> và <a href={COGI_PRIVACY_URL} target='_blank' rel='noreferrer'>Chính sách bảo mật của nền tảng COGI</a>.
+                  Khi kết nối Strava, bạn đồng ý với <a href={COGI_PRIVACY_URL} target='_blank' rel='noreferrer'>Chính sách bảo mật của COGI Sports</a>.
                 </div>
                 <div className='fitness-page__connection-policy-line'>Hệ thống không lưu mật khẩu Strava và chỉ truy cập dữ liệu trong phạm vi bạn cấp quyền.</div>
               </div>
@@ -2219,16 +2259,17 @@ export default function FitnessHomePage() {
             <h1 className='fitness-page__title'>Thể thao</h1>
             <CBadge color='info' shape='rounded-pill'>Beta</CBadge>
           </div>
-          <div className='fitness-page__description'>Khu vực dành cho người dùng đã đăng nhập để kết nối ứng dụng thể thao, theo dõi thành tích cá nhân và tham gia challenge tại {tenantName}.</div>
+          <div className='fitness-page__description'>Khu vực dành cho người dùng đã đăng nhập để kết nối ứng dụng thể thao, đồng bộ hoạt động và theo dõi thành tích cá nhân tại {tenantName}.</div>
         </div>
       </div>
 
       {message.text ? <CAlert color={message.type || 'info'}>{message.text}</CAlert> : null}
       {renderStatusBar()}
 
-      <div className='fitness-page__compact-grid'>
+      <div className={`fitness-page__compact-grid${isStravaConnected ? '' : ' fitness-page__compact-grid--single'}`}>
         {renderConnectionCard()}
         <StravaSyncStatusCard
+          connected={isStravaConnected}
           job={syncJob}
           loading={syncJobLoading}
           polling={isPolling}

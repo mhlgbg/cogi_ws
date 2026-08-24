@@ -38,8 +38,10 @@ import * as luckyWheel from './lucky-wheel-management'
 import * as fitness from './fitness'
 import * as sports from './sports'
 import * as registrationCampaign from './registration-campaign'
+import * as assessmentCampaigns from './assessment-campaigns'
 import * as examManagement from './exam-management'
 import * as examConfigurations from './exam-configurations'
+import * as assessments from './assessments'
 // import * as inventory from "./inventory";
 
 export const allModules = [
@@ -69,8 +71,10 @@ export const allModules = [
   fitness,
   sports,
   registrationCampaign,
+  assessmentCampaigns,
   examManagement,
   examConfigurations,
+  assessments,
   luckyWheel,
   mailMonitor,
   // inventory,

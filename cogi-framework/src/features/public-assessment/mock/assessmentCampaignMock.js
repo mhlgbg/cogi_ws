@@ -9,9 +9,10 @@ export const mockCampaigns = {
     estimatedMinutes: '20–30 phút',
     highlights: ['20–30 phút', 'Làm trực tuyến', 'Có giáo viên xác nhận'],
     steps: [
-      'Điền thông tin',
+      'Thông tin ban đầu',
       'Xác thực email',
       'Làm bài kiểm tra',
+      'Bổ sung thông tin',
       'Nhận kết quả sơ bộ',
       'Speaking cùng giáo viên',
     ],
@@ -28,9 +29,9 @@ export const mockCampaigns = {
       'Sau phần Speaking, giáo viên sẽ xem xét và xác nhận mức độ phù hợp trước khi tư vấn lớp học và lộ trình.',
     ],
     registerIntro: {
-      title: 'Thông tin trước khi làm bài',
-      description: 'Vui lòng cung cấp một số thông tin để Vitaminfun lựa chọn bài đánh giá phù hợp và tư vấn kết quả chính xác hơn.',
-      stepLabel: 'Bước 1/5',
+      title: 'Thông tin để bắt đầu bài đánh giá',
+      description: 'Bạn chỉ cần một vài thông tin cơ bản để bắt đầu. Sau khi hoàn thành bài đánh giá, chúng tôi sẽ hỏi thêm một số thông tin để tư vấn kết quả phù hợp hơn.',
+      stepLabel: 'Bước 1/6',
       stepTitle: 'Thông tin ban đầu',
     },
   },
@@ -86,19 +87,19 @@ export const goalOptions = [
 
 export const studyModeOptions = [
   { value: 'online', label: 'Online' },
-  { value: 'offline_viet_hung', label: 'Offline tại Việt Hưng' },
-  { value: 'online_or_offline', label: 'Cả Online và Offline đều được' },
+  { value: 'offline', label: 'Offline tại Việt Hưng' },
+  { value: 'both', label: 'Online hoặc Offline đều được' },
   { value: 'undecided', label: 'Chưa quyết định' },
 ]
 
 export const availableDayOptions = [
-  { value: 'mon', label: 'Thứ 2' },
-  { value: 'tue', label: 'Thứ 3' },
-  { value: 'wed', label: 'Thứ 4' },
-  { value: 'thu', label: 'Thứ 5' },
-  { value: 'fri', label: 'Thứ 6' },
-  { value: 'sat', label: 'Thứ 7' },
-  { value: 'sun', label: 'Chủ nhật' },
+  { value: 'mon', label: 'Thứ 2', shortLabel: 'T2' },
+  { value: 'tue', label: 'Thứ 3', shortLabel: 'T3' },
+  { value: 'wed', label: 'Thứ 4', shortLabel: 'T4' },
+  { value: 'thu', label: 'Thứ 5', shortLabel: 'T5' },
+  { value: 'fri', label: 'Thứ 6', shortLabel: 'T6' },
+  { value: 'sat', label: 'Thứ 7', shortLabel: 'T7' },
+  { value: 'sun', label: 'Chủ nhật', shortLabel: 'CN' },
 ]
 
 export const availableTimeOptions = [

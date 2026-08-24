@@ -55,7 +55,7 @@ export function buildInitialQualificationForm() {
   }
 }
 
-function cloneFormValues(value) {
+export function cloneQualificationFormValues(value) {
   return JSON.parse(JSON.stringify(value || buildInitialQualificationForm()))
 }
 
@@ -63,26 +63,30 @@ function buildFieldKey(section, field) {
   return `${section}.${field}`
 }
 
-function SelectableOption({ type = 'radio', name, checked = false, disabled = false, label, onChange }) {
+function SelectableOption({ type = 'radio', name, checked = false, disabled = false, label, onChange, compact = false }) {
   return (
     <label className='assessment-selectable'>
       <input className='assessment-selectable-input' type={type} name={name} checked={checked} disabled={disabled} onChange={onChange} />
-      <div className={`assessment-selectable-card${checked ? ' active' : ''}${disabled ? ' disabled' : ''}`}>
+      <div className={`assessment-selectable-card${compact ? ' compact' : ''}${checked ? ' active' : ''}${disabled ? ' disabled' : ''}`}>
         <div className='assessment-selectable-title'>{label}</div>
       </div>
     </label>
   )
 }
 
-export default function QualificationForm({ campaign, brandName = 'Vitaminfun', initialValues = null, onValidSubmit }) {
-  const [form, setForm] = useState(() => cloneFormValues(initialValues || buildInitialQualificationForm()))
+export default function QualificationForm({ campaign, brandName = 'Vitaminfun', initialValues = null, onValidSubmit, onDraftChange = null }) {
+  const [form, setForm] = useState(() => cloneQualificationFormValues(initialValues || buildInitialQualificationForm()))
   const [errors, setErrors] = useState({})
   const fieldRefs = useRef({})
 
   useEffect(() => {
-    setForm(cloneFormValues(initialValues || buildInitialQualificationForm()))
+    setForm(cloneQualificationFormValues(initialValues || buildInitialQualificationForm()))
     setErrors({})
   }, [initialValues])
+
+  useEffect(() => {
+    onDraftChange?.(cloneQualificationFormValues(form))
+  }, [form, onDraftChange])
 
   const availableDistrictOptions = useMemo(() => districtOptionsByProvince[form.parent.province] || ['Khác'], [form.parent.province])
 
@@ -137,19 +141,9 @@ export default function QualificationForm({ campaign, brandName = 'Vitaminfun', 
   function validate() {
     const nextErrors = {}
     if (!toText(form.parent.name)) nextErrors['parent.name'] = 'Vui lòng nhập tên phụ huynh.'
-    const phone = toText(form.parent.phone)
-    if (!phone) nextErrors['parent.phone'] = 'Vui lòng nhập số điện thoại / Zalo.'
-    else if (!/^[0-9+\s().-]{8,20}$/.test(phone)) nextErrors['parent.phone'] = 'Số điện thoại chưa đúng định dạng.'
-    const parentEmail = toText(form.parent.email).toLowerCase()
-    if (!parentEmail) nextErrors['parent.email'] = 'Vui lòng nhập email phụ huynh.'
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(parentEmail)) nextErrors['parent.email'] = 'Email chưa đúng định dạng.'
     if (!toText(form.parent.province)) nextErrors['parent.province'] = 'Vui lòng chọn tỉnh / thành phố.'
-    if (!toText(form.parent.district)) nextErrors['parent.district'] = 'Vui lòng nhập quận / huyện / khu vực.'
+    if (!toText(form.parent.district)) nextErrors['parent.district'] = 'Vui lòng chọn quận / huyện / khu vực.'
 
-    if (!toText(form.student.name)) nextErrors['student.name'] = 'Vui lòng nhập họ tên học sinh.'
-    if (!toText(form.student.dob)) nextErrors['student.dob'] = 'Vui lòng chọn ngày sinh.'
-    if (!toText(form.student.grade)) nextErrors['student.grade'] = 'Vui lòng chọn lớp hiện tại.'
-    if (!toText(form.student.school)) nextErrors['student.school'] = 'Vui lòng nhập trường đang học.'
     const studentEmail = toText(form.student.email).toLowerCase()
     if (studentEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(studentEmail)) nextErrors['student.email'] = 'Email chưa đúng định dạng.'
 
@@ -157,10 +151,7 @@ export default function QualificationForm({ campaign, brandName = 'Vitaminfun', 
     if (!Array.isArray(form.qualification.goals) || form.qualification.goals.length === 0) nextErrors['qualification.goals'] = 'Vui lòng chọn mục tiêu học.'
     else if (form.qualification.goals.length > 2) nextErrors['qualification.goals'] = 'Bạn có thể chọn tối đa 2 mục tiêu.'
     if (!toText(form.qualification.studyMode)) nextErrors['qualification.studyMode'] = 'Vui lòng chọn hình thức học mong muốn.'
-    if (!Array.isArray(form.qualification.availableDays) || form.qualification.availableDays.length === 0) nextErrors['qualification.availableDays'] = 'Vui lòng chọn ngày có thể học.'
-    if (!Array.isArray(form.qualification.availableTimes) || form.qualification.availableTimes.length === 0) nextErrors['qualification.availableTimes'] = 'Vui lòng chọn khung giờ có thể học.'
     if (!toText(form.qualification.startIntent)) nextErrors['qualification.startIntent'] = 'Vui lòng chọn thời điểm muốn bắt đầu.'
-    if (form.consent !== true) nextErrors.consent = 'Vui lòng xác nhận đồng ý trước khi tiếp tục.'
 
     return nextErrors
   }
@@ -181,35 +172,53 @@ export default function QualificationForm({ campaign, brandName = 'Vitaminfun', 
       return
     }
 
-    onValidSubmit?.(cloneFormValues(form))
+    onValidSubmit?.(cloneQualificationFormValues(form))
   }
 
   return (
     <CCard className='assessment-form-card assessment-card'>
       <CCardBody className='p-4 p-md-5'>
-        <AssessmentProgress currentStep={1} totalSteps={5} label={campaign?.registerIntro?.stepTitle || 'Thông tin ban đầu'} />
-        <div className='assessment-section-title'>{campaign?.registerIntro?.title || 'Thông tin trước khi làm bài'}</div>
-        <p className='assessment-section-lead mb-4'>{campaign?.registerIntro?.description || 'Vui lòng cung cấp một số thông tin để lựa chọn bài đánh giá phù hợp.'}</p>
+        <AssessmentProgress currentStep={5} totalSteps={6} label='Bổ sung thông tin' />
+        <div className='assessment-section-title'>Bạn đã hoàn thành bài đánh giá</div>
+        <p className='assessment-section-lead mb-4'>Hãy bổ sung một vài thông tin để chúng tôi hiển thị kết quả sơ bộ và giúp giáo viên tư vấn phù hợp hơn.</p>
+
+        <div className='assessment-trust-panel mb-4'>
+          <div className='assessment-trust-item'>
+            <div className='assessment-trust-icon'>✓</div>
+            <div className='assessment-domain-copy'>Một số thông tin bên dưới giúp giáo viên đọc kết quả sơ bộ đúng ngữ cảnh hơn trước khi tư vấn bước Speaking.</div>
+          </div>
+        </div>
 
         <form onSubmit={handleSubmit} noValidate>
           <section className='assessment-form-section'>
-            <div className='assessment-form-section-title'>Thông tin phụ huynh</div>
+            <div className='assessment-form-section-title'>Thông tin đã có sẵn</div>
+            <div className='assessment-inline-summary-grid'>
+              <div className='assessment-inline-summary-item'>
+                <div className='assessment-inline-summary-item__label'>Học sinh</div>
+                <div className='assessment-inline-summary-item__value'>{form.student.name || '—'}</div>
+              </div>
+              <div className='assessment-inline-summary-item'>
+                <div className='assessment-inline-summary-item__label'>Lớp hiện tại</div>
+                <div className='assessment-inline-summary-item__value'>{form.student.grade || '—'}</div>
+              </div>
+              <div className='assessment-inline-summary-item'>
+                <div className='assessment-inline-summary-item__label'>Email phụ huynh</div>
+                <div className='assessment-inline-summary-item__value'>{form.parent.email || '—'}</div>
+              </div>
+              <div className='assessment-inline-summary-item'>
+                <div className='assessment-inline-summary-item__label'>Số điện thoại / Zalo</div>
+                <div className='assessment-inline-summary-item__value'>{form.parent.phone || '—'}</div>
+              </div>
+            </div>
+          </section>
+
+          <section className='assessment-form-section'>
+            <div className='assessment-form-section-title'>Thông tin bổ sung</div>
             <div className='assessment-form-grid'>
               <div className='assessment-form-field'>
                 <CFormLabel className='assessment-form-label' htmlFor='assessment-parent-name'>Họ và tên phụ huynh</CFormLabel>
                 <CFormInput id='assessment-parent-name' value={form.parent.name} invalid={Boolean(errors['parent.name'])} onChange={(event) => updateField('parent', 'name', event.target.value)} ref={(node) => registerFieldRef('parent.name', node)} />
                 {errors['parent.name'] ? <div className='assessment-form-error'>{errors['parent.name']}</div> : null}
-              </div>
-              <div className='assessment-form-field'>
-                <CFormLabel className='assessment-form-label' htmlFor='assessment-parent-phone'>Số điện thoại / Zalo</CFormLabel>
-                <CFormInput id='assessment-parent-phone' value={form.parent.phone} invalid={Boolean(errors['parent.phone'])} onChange={(event) => updateField('parent', 'phone', event.target.value)} ref={(node) => registerFieldRef('parent.phone', node)} />
-                {errors['parent.phone'] ? <div className='assessment-form-error'>{errors['parent.phone']}</div> : null}
-              </div>
-              <div className='assessment-form-field'>
-                <CFormLabel className='assessment-form-label' htmlFor='assessment-parent-email'>Email phụ huynh</CFormLabel>
-                <CFormInput id='assessment-parent-email' type='email' value={form.parent.email} invalid={Boolean(errors['parent.email'])} onChange={(event) => updateField('parent', 'email', event.target.value)} ref={(node) => registerFieldRef('parent.email', node)} />
-                <div className='assessment-form-label-helper'>Mã xác thực sẽ được gửi đến email này.</div>
-                {errors['parent.email'] ? <div className='assessment-form-error'>{errors['parent.email']}</div> : null}
               </div>
               <div className='assessment-form-field'>
                 <CFormLabel className='assessment-form-label' htmlFor='assessment-parent-province'>Tỉnh / Thành phố</CFormLabel>
@@ -227,34 +236,25 @@ export default function QualificationForm({ campaign, brandName = 'Vitaminfun', 
                 </CFormSelect>
                 {errors['parent.district'] ? <div className='assessment-form-error'>{errors['parent.district']}</div> : null}
               </div>
-            </div>
-          </section>
-
-          <section className='assessment-form-section'>
-            <div className='assessment-form-section-title'>Thông tin học sinh</div>
-            <div className='assessment-form-grid'>
               <div className='assessment-form-field'>
                 <CFormLabel className='assessment-form-label' htmlFor='assessment-student-name'>Họ tên học sinh</CFormLabel>
-                <CFormInput id='assessment-student-name' value={form.student.name} invalid={Boolean(errors['student.name'])} onChange={(event) => updateField('student', 'name', event.target.value)} ref={(node) => registerFieldRef('student.name', node)} />
-                {errors['student.name'] ? <div className='assessment-form-error'>{errors['student.name']}</div> : null}
+                <CFormInput id='assessment-student-name' value={form.student.name} disabled readOnly />
+                <div className='assessment-form-label-helper'>Đã ghi nhận từ bước ban đầu.</div>
               </div>
               <div className='assessment-form-field'>
                 <CFormLabel className='assessment-form-label' htmlFor='assessment-student-dob'>Ngày sinh</CFormLabel>
                 <CFormInput id='assessment-student-dob' type='date' value={form.student.dob} invalid={Boolean(errors['student.dob'])} onChange={(event) => updateField('student', 'dob', event.target.value)} ref={(node) => registerFieldRef('student.dob', node)} />
-                {errors['student.dob'] ? <div className='assessment-form-error'>{errors['student.dob']}</div> : null}
+                <div className='assessment-form-label-helper'>Có thể bổ sung sau nếu bạn chưa tiện nhập ngay.</div>
               </div>
               <div className='assessment-form-field'>
                 <CFormLabel className='assessment-form-label' htmlFor='assessment-student-grade'>Lớp hiện tại</CFormLabel>
-                <CFormSelect id='assessment-student-grade' value={form.student.grade} invalid={Boolean(errors['student.grade'])} onChange={(event) => updateField('student', 'grade', event.target.value)} ref={(node) => registerFieldRef('student.grade', node)}>
-                  <option value=''>Chọn lớp hiện tại</option>
-                  {gradeOptions.map((item) => <option key={item} value={item}>{item}</option>)}
-                </CFormSelect>
-                {errors['student.grade'] ? <div className='assessment-form-error'>{errors['student.grade']}</div> : null}
+                <CFormInput id='assessment-student-grade' value={form.student.grade} disabled readOnly />
+                <div className='assessment-form-label-helper'>Đã dùng để xác định bài test phù hợp.</div>
               </div>
               <div className='assessment-form-field'>
                 <CFormLabel className='assessment-form-label' htmlFor='assessment-student-school'>Trường đang học</CFormLabel>
                 <CFormInput id='assessment-student-school' value={form.student.school} invalid={Boolean(errors['student.school'])} onChange={(event) => updateField('student', 'school', event.target.value)} ref={(node) => registerFieldRef('student.school', node)} />
-                {errors['student.school'] ? <div className='assessment-form-error'>{errors['student.school']}</div> : null}
+                <div className='assessment-form-label-helper'>Có thể bổ sung sau nếu bạn chưa tiện nhập ngay.</div>
               </div>
               <div className='assessment-form-field assessment-form-field--full'>
                 <CFormLabel className='assessment-form-label' htmlFor='assessment-student-email'>Email học sinh</CFormLabel>
@@ -270,20 +270,19 @@ export default function QualificationForm({ campaign, brandName = 'Vitaminfun', 
             <div className='assessment-form-grid assessment-form-grid--single'>
               <div className='assessment-form-field'>
                 <div className='assessment-form-label'>Hiện đang học tiếng Anh ở đâu?</div>
-                <div className='assessment-option-grid assessment-option-grid--cards-2' ref={(node) => registerFieldRef('qualification.currentEnglishStudy', node)}>
-                  {currentEnglishStudyOptions.map((option) => (
-                    <SelectableOption key={option.value} type='radio' name='currentEnglishStudy' label={option.label} checked={form.qualification.currentEnglishStudy === option.value} onChange={() => updateField('qualification', 'currentEnglishStudy', option.value)} />
-                  ))}
-                </div>
+                <CFormSelect value={form.qualification.currentEnglishStudy} invalid={Boolean(errors['qualification.currentEnglishStudy'])} onChange={(event) => updateField('qualification', 'currentEnglishStudy', event.target.value)} ref={(node) => registerFieldRef('qualification.currentEnglishStudy', node)}>
+                  <option value=''>Chọn tình trạng hiện tại</option>
+                  {currentEnglishStudyOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </CFormSelect>
                 {errors['qualification.currentEnglishStudy'] ? <div className='assessment-form-error'>{errors['qualification.currentEnglishStudy']}</div> : null}
               </div>
               <div className='assessment-form-field'>
                 <div className='assessment-form-label'>Mục tiêu học</div>
-                <div className='assessment-option-grid assessment-option-grid--cards-3' ref={(node) => registerFieldRef('qualification.goals', node)}>
+                <div className='assessment-chip-select-grid' ref={(node) => registerFieldRef('qualification.goals', node)}>
                   {goalOptions.map((option) => {
                     const selected = form.qualification.goals.includes(option.value)
                     const reachedLimit = !selected && form.qualification.goals.length >= 2
-                    return <SelectableOption key={option.value} type='checkbox' name={`goal-${option.value}`} label={option.label} checked={selected} disabled={reachedLimit} onChange={() => toggleArrayValue('qualification', 'goals', option.value, 2)} />
+                    return <SelectableOption key={option.value} type='checkbox' compact name={`goal-${option.value}`} label={option.label} checked={selected} disabled={reachedLimit} onChange={() => toggleArrayValue('qualification', 'goals', option.value, 2)} />
                   })}
                 </div>
                 <div className='assessment-form-label-helper'>Bạn có thể chọn tối đa 2 mục tiêu.</div>
@@ -297,49 +296,39 @@ export default function QualificationForm({ campaign, brandName = 'Vitaminfun', 
             <div className='assessment-form-grid assessment-form-grid--single'>
               <div className='assessment-form-field'>
                 <div className='assessment-form-label'>Hình thức học mong muốn</div>
-                <div className='assessment-option-grid assessment-option-grid--cards-2' ref={(node) => registerFieldRef('qualification.studyMode', node)}>
-                  {studyModeOptions.map((option) => (
-                    <SelectableOption key={option.value} type='radio' name='studyMode' label={option.label} checked={form.qualification.studyMode === option.value} onChange={() => updateField('qualification', 'studyMode', option.value)} />
-                  ))}
-                </div>
+                <CFormSelect value={form.qualification.studyMode} invalid={Boolean(errors['qualification.studyMode'])} onChange={(event) => updateField('qualification', 'studyMode', event.target.value)} ref={(node) => registerFieldRef('qualification.studyMode', node)}>
+                  <option value=''>Chọn hình thức học</option>
+                  {studyModeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </CFormSelect>
                 {errors['qualification.studyMode'] ? <div className='assessment-form-error'>{errors['qualification.studyMode']}</div> : null}
               </div>
               <div className='assessment-form-field'>
                 <div className='assessment-form-label'>Ngày có thể học</div>
-                <div className='assessment-option-grid assessment-option-grid--cards-3' ref={(node) => registerFieldRef('qualification.availableDays', node)}>
-                  {availableDayOptions.map((option) => <SelectableOption key={option.value} type='checkbox' name={`day-${option.value}`} label={option.label} checked={form.qualification.availableDays.includes(option.value)} onChange={() => toggleArrayValue('qualification', 'availableDays', option.value)} />)}
+                <div className='assessment-chip-select-grid assessment-chip-select-grid--compact' ref={(node) => registerFieldRef('qualification.availableDays', node)}>
+                  {availableDayOptions.map((option) => <SelectableOption key={option.value} type='checkbox' compact name={`day-${option.value}`} label={option.shortLabel || option.label} checked={form.qualification.availableDays.includes(option.value)} onChange={() => toggleArrayValue('qualification', 'availableDays', option.value)} />)}
                 </div>
-                {errors['qualification.availableDays'] ? <div className='assessment-form-error'>{errors['qualification.availableDays']}</div> : null}
+                <div className='assessment-form-label-helper'>Không bắt buộc. Bạn có thể bổ sung sau nếu chưa tiện chọn ngay.</div>
               </div>
               <div className='assessment-form-field'>
                 <div className='assessment-form-label'>Khung giờ có thể học</div>
-                <div className='assessment-option-grid assessment-option-grid--cards-3' ref={(node) => registerFieldRef('qualification.availableTimes', node)}>
-                  {availableTimeOptions.map((option) => <SelectableOption key={option.value} type='checkbox' name={`time-${option.value}`} label={option.label} checked={form.qualification.availableTimes.includes(option.value)} onChange={() => toggleArrayValue('qualification', 'availableTimes', option.value)} />)}
+                <div className='assessment-chip-select-grid' ref={(node) => registerFieldRef('qualification.availableTimes', node)}>
+                  {availableTimeOptions.map((option) => <SelectableOption key={option.value} type='checkbox' compact name={`time-${option.value}`} label={option.label} checked={form.qualification.availableTimes.includes(option.value)} onChange={() => toggleArrayValue('qualification', 'availableTimes', option.value)} />)}
                 </div>
-                {errors['qualification.availableTimes'] ? <div className='assessment-form-error'>{errors['qualification.availableTimes']}</div> : null}
+                <div className='assessment-form-label-helper'>Không bắt buộc. Có thể chọn sau khi cần chốt lịch học.</div>
               </div>
               <div className='assessment-form-field'>
                 <div className='assessment-form-label'>Khi nào muốn bắt đầu?</div>
-                <div className='assessment-option-grid assessment-option-grid--cards-2' ref={(node) => registerFieldRef('qualification.startIntent', node)}>
-                  {startIntentOptions.map((option) => (
-                    <SelectableOption key={option.value} type='radio' name='startIntent' label={option.label} checked={form.qualification.startIntent === option.value} onChange={() => updateField('qualification', 'startIntent', option.value)} />
-                  ))}
-                </div>
+                <CFormSelect value={form.qualification.startIntent} invalid={Boolean(errors['qualification.startIntent'])} onChange={(event) => updateField('qualification', 'startIntent', event.target.value)} ref={(node) => registerFieldRef('qualification.startIntent', node)}>
+                  <option value=''>Chọn thời điểm mong muốn</option>
+                  {startIntentOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </CFormSelect>
                 {errors['qualification.startIntent'] ? <div className='assessment-form-error'>{errors['qualification.startIntent']}</div> : null}
               </div>
             </div>
           </section>
 
-          <section className='assessment-form-section'>
-            <div className='assessment-form-section-title'>Xác nhận thông tin</div>
-            <div className='assessment-consent-box' ref={(node) => registerFieldRef('consent', node)}>
-              <CFormCheck id='assessment-consent' checked={form.consent} onChange={(event) => updateConsent(event.target.checked)} label={`Tôi xác nhận các thông tin trên là đúng và đồng ý để ${brandName} sử dụng thông tin, bài làm và kết quả đánh giá để tư vấn lộ trình học phù hợp cho học sinh.`} />
-              {errors.consent ? <div className='assessment-form-error'>{errors.consent}</div> : null}
-            </div>
-          </section>
-
           <div className='assessment-form-actions'>
-            <CButton type='submit' color='primary' className='assessment-primary-cta'>NHẬN MÃ & LÀM BÀI</CButton>
+            <CButton type='submit' color='primary' className='assessment-primary-cta'>XEM KẾT QUẢ SƠ BỘ</CButton>
           </div>
         </form>
       </CCardBody>

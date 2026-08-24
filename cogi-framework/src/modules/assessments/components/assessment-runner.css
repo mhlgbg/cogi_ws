@@ -1,0 +1,217 @@
+.assessment-runner {
+  display: grid;
+  gap: 1rem;
+}
+
+.assessment-runner-shell {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.assessment-runner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.assessment-runner-meta {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  color: var(--cui-body-color, #333);
+  font-size: 0.9rem;
+}
+
+.assessment-runner-layout {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+}
+
+.assessment-runner-sidebar {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.assessment-runner-main {
+  display: grid;
+  gap: 1rem;
+}
+
+.assessment-runner-question-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(42px, 1fr));
+}
+
+.assessment-runner-question-chip {
+  border: 1px solid var(--cui-border-color, #d7dce3);
+  border-radius: 999px;
+  background: var(--cui-body-bg, #fff);
+  min-height: 40px;
+  font-weight: 600;
+}
+
+.assessment-runner-question-chip.is-current {
+  border-color: var(--cui-primary, #0d6efd);
+  color: var(--cui-primary, #0d6efd);
+}
+
+.assessment-runner-question-chip.is-answered {
+  background: rgba(25, 135, 84, 0.12);
+  border-color: rgba(25, 135, 84, 0.4);
+}
+
+.assessment-runner-section-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.assessment-runner-section-card {
+  border: 1px solid var(--cui-border-color, #d7dce3);
+  border-radius: 1rem;
+  padding: 0.875rem 1rem;
+  background: var(--cui-body-bg, #fff);
+}
+
+.assessment-runner-section-card.is-active {
+  border-color: var(--cui-primary, #0d6efd);
+  box-shadow: 0 0 0 1px rgba(13, 110, 253, 0.15);
+}
+
+.assessment-runner-stimulus,
+.assessment-runner-question-card,
+.assessment-runner-submit-summary {
+  border: 1px solid var(--cui-border-color, #d7dce3);
+  border-radius: 1.25rem;
+  background: var(--cui-body-bg, #fff);
+  padding: 1rem;
+}
+
+.assessment-runner-stimulus img,
+.assessment-runner-option-image {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  border-radius: 1rem;
+  background: #fff;
+}
+
+.assessment-runner-option-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.assessment-runner-option-card {
+  display: flex;
+  gap: 0.875rem;
+  align-items: flex-start;
+  border: 1px solid var(--cui-border-color, #d7dce3);
+  border-radius: 1rem;
+  padding: 0.875rem 1rem;
+  background: var(--cui-body-bg, #fff);
+  width: 100%;
+  text-align: left;
+}
+
+.assessment-runner-option-card.is-selected {
+  border-color: var(--cui-primary, #0d6efd);
+  background: rgba(13, 110, 253, 0.08);
+}
+
+.assessment-runner-option-card.is-disabled {
+  opacity: 0.72;
+}
+
+.assessment-runner-option-marker {
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  font-weight: 700;
+  background: rgba(13, 110, 253, 0.1);
+  color: var(--cui-primary, #0d6efd);
+  flex: 0 0 auto;
+}
+
+.assessment-runner-audio-box {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.assessment-runner-audio-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.assessment-runner-statusline {
+  min-height: 1.5rem;
+}
+
+.assessment-runner-navigation {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.assessment-runner-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: 999px;
+  font-weight: 700;
+  background: rgba(13, 110, 253, 0.08);
+  color: var(--cui-primary, #0d6efd);
+}
+
+.assessment-runner-timer.is-warning {
+  background: rgba(255, 193, 7, 0.16);
+  color: #8a6d00;
+}
+
+.assessment-runner-timer.is-danger {
+  background: rgba(220, 53, 69, 0.14);
+  color: #a61c2f;
+}
+
+.assessment-runner-word-count {
+  color: var(--cui-secondary-color, #6c757d);
+  font-size: 0.9rem;
+}
+
+.assessment-runner-bottom-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+
+@media (max-width: 991.98px) {
+  .assessment-runner-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .assessment-runner-sidebar {
+    order: 2;
+  }
+
+  .assessment-runner-main {
+    order: 1;
+  }
+
+  .assessment-runner-bottom-bar {
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(10px);
+    margin: 0 -0.5rem -0.5rem;
+    padding: 0.75rem 0.5rem 0.5rem;
+  }
+}

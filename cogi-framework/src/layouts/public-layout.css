@@ -741,6 +741,7 @@
 
   .public-layout-footer-wrap {
     padding: 16px 0;
+  }
 
   .public-page-summary {
     font-size: 1rem;
@@ -1040,3 +1041,4 @@
     flex-direction: column;
     align-items: flex-start;
   }
+}

@@ -1,0 +1,80 @@
+{
+  "format": "cogi.question-bank.import.v1",
+  "packageCode": "vitaminfun-golden-pilot-v3",
+  "supportingData": {
+    "subjects": [
+      {
+        "code": "ENGLISH",
+        "title": "English",
+        "description": "Shared English subject for VitaminFun question bank",
+        "subjectStatus": "active"
+      }
+    ],
+    "grades": [
+      {
+        "code": "GRADE_1_2",
+        "title": "Grade 1-2",
+        "description": "VitaminFun lower primary grouping",
+        "order": 1,
+        "gradeStatus": "active"
+      }
+    ],
+    "skills": [
+      {
+        "code": "LISTENING",
+        "title": "Listening",
+        "description": "Listening comprehension skill",
+        "subjectCode": "ENGLISH",
+        "gradeCode": "GRADE_1_2",
+        "level": "understand",
+        "skillStatus": "active"
+      }
+    ]
+  },
+  "stimuli": [
+    {
+      "code": "M01-AUDIO",
+      "title": "Listening M01",
+      "type": "audio",
+      "instruction": "Listen and choose the correct picture.",
+      "stimulusStatus": "draft"
+    }
+  ],
+  "questions": [
+    {
+      "code": "M01-Q01",
+      "title": "Choose the correct picture",
+      "questionText": "Listen and tap the correct picture.",
+      "type": "single_choice",
+      "difficulty": "easy",
+      "subjectCode": "ENGLISH",
+      "gradeCode": "GRADE_1_2",
+      "skillCodes": ["LISTENING"],
+      "stimulusCode": "M01-AUDIO",
+      "questionStatus": "draft",
+      "options": [
+        {
+          "label": "A",
+          "value": "a",
+          "content": "Picture A",
+          "isCorrect": false,
+          "order": 0
+        },
+        {
+          "label": "B",
+          "value": "b",
+          "content": "Picture B",
+          "isCorrect": true,
+          "order": 1
+        },
+        {
+          "label": "C",
+          "value": "c",
+          "content": "Picture C",
+          "isCorrect": false,
+          "order": 2
+        }
+      ]
+    }
+  ]
+}

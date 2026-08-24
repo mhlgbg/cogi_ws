@@ -87,6 +87,16 @@ export async function createKnowledgeNode(data) {
   return unwrapSuccess(res.data)
 }
 
+export async function updateKnowledgeNode(id, data) {
+  const res = await api.put(`/learning-management/knowledge-nodes/${id}`, data)
+  return unwrapSuccess(res.data)
+}
+
+export async function deleteKnowledgeNode(id) {
+  const res = await api.delete(`/learning-management/knowledge-nodes/${id}`)
+  return unwrapSuccess(res.data)
+}
+
 export async function getSkills(params = {}) {
   const res = await api.get('/learning-management/skills', { params })
   return unwrapSuccess(res.data)
@@ -94,6 +104,16 @@ export async function getSkills(params = {}) {
 
 export async function createSkill(data) {
   const res = await api.post('/learning-management/skills', data)
+  return unwrapSuccess(res.data)
+}
+
+export async function updateSkill(id, data) {
+  const res = await api.put(`/learning-management/skills/${id}`, data)
+  return unwrapSuccess(res.data)
+}
+
+export async function deleteSkill(id) {
+  const res = await api.delete(`/learning-management/skills/${id}`)
   return unwrapSuccess(res.data)
 }
 
@@ -175,6 +195,31 @@ export async function updateQuestion(id, data) {
 
 export async function deleteQuestion(id) {
   const res = await api.delete(`/learning-management/questions/${id}`)
+  return unwrapSuccess(res.data)
+}
+
+export async function getQuestionStimuli(params = {}) {
+  const res = await api.get('/learning-management/question-stimuli', { params })
+  return unwrapSuccess(res.data)
+}
+
+export async function getQuestionStimulus(id) {
+  const res = await api.get(`/learning-management/question-stimuli/${id}`)
+  return unwrapSuccess(res.data)
+}
+
+export async function createQuestionStimulus(data) {
+  const res = await api.post('/learning-management/question-stimuli', data)
+  return unwrapSuccess(res.data)
+}
+
+export async function updateQuestionStimulus(id, data) {
+  const res = await api.put(`/learning-management/question-stimuli/${id}`, data)
+  return unwrapSuccess(res.data)
+}
+
+export async function deleteQuestionStimulus(id) {
+  const res = await api.delete(`/learning-management/question-stimuli/${id}`)
   return unwrapSuccess(res.data)
 }
 

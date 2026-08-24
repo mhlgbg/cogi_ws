@@ -4,7 +4,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import AssessmentProgress from '../components/AssessmentProgress'
 import { buildCampaignRegisterPath, buildCampaignSoundCheckPath } from '../utils/assessmentRoutes'
 import { getFlowState, patchFlowState } from '../utils/assessmentFlowStorage'
-import { maskEmail, OTP_DEMO_CODE, OTP_LOCK_SECONDS, OTP_RESEND_SECONDS, resolveMockTestByGrade } from '../utils/assessmentRuntime'
+import { maskEmail, OTP_DEMO_CODE, OTP_LOCK_SECONDS, OTP_RESEND_SECONDS } from '../utils/assessmentRuntime'
+import { maskPhone } from '../utils/assessmentCampaignFlow'
 
 function toText(value) {
   if (value === null || value === undefined) return ''
@@ -98,16 +99,18 @@ export default function AssessmentVerifyPage() {
   const registerPath = buildCampaignRegisterPath(tenantCode, campaignCode)
   const soundCheckPath = buildCampaignSoundCheckPath(tenantCode, campaignCode)
   const isSameFlow = flowState?.tenantCode === tenantCode && flowState?.campaignCode === campaignCode
-  const qualification = isSameFlow ? (flowState?.qualification || null) : null
+  const beforeStartData = isSameFlow ? (flowState?.beforeStartData || null) : null
   const verification = flowState?.verification || {}
   const assessment = flowState?.assessment || {}
-  const parentEmail = qualification?.parent?.email || flowState?.parentEmail || ''
-  const hasRequiredState = Boolean(isSameFlow && parentEmail && qualification?.student?.grade)
+  const returnToPath = toText(verification?.returnToPath)
+  const hasRequiredState = Boolean(isSameFlow && verification?.target)
   const lockedUntil = Number(verification.lockedUntil || 0)
   const resendAvailableAt = Number(verification.resendAvailableAt || 0)
   const failedAttempts = Number(verification.failedAttempts || 0)
   const isLocked = lockedUntil > tick
   const resendRemaining = Math.max(0, resendAvailableAt - tick)
+  const isEmailVerification = verification?.method === 'email'
+  const displayTarget = isEmailVerification ? maskEmail(verification?.target || '') : maskPhone(verification?.target || '')
 
   useEffect(() => {
     const timer = window.setInterval(() => setTick(nowSeconds()), 1000)
@@ -164,21 +167,26 @@ export default function AssessmentVerifyPage() {
     const nextState = patchFlowState({
       verification: {
         ...(flowState?.verification || {}),
-        emailVerified: true,
+        emailVerified: isEmailVerification,
+        phoneVerified: !isEmailVerification,
         verifiedAt: new Date().toISOString(),
         failedAttempts: 0,
         lockedUntil: 0,
+        returnToPath: returnToPath || '',
       },
       assessment: {
         ...(flowState?.assessment || {}),
-        test: assessment.test || resolveMockTestByGrade(qualification?.student?.grade),
         soundConfirmed: Boolean(assessment.soundConfirmed),
+      },
+      participation: {
+        ...(flowState?.participation || {}),
+        status: 'verified',
       },
     })
     syncState(nextState)
     setError('')
-    setMessage('Xác thực thành công. Đang chuyển sang bước kiểm tra âm thanh...')
-    window.setTimeout(() => navigate(soundCheckPath), 300)
+    setMessage(returnToPath ? 'Xác thực thành công. Đang quay lại trang kết quả...' : 'Xác thực thành công. Đang chuyển sang bước kiểm tra âm thanh...')
+    window.setTimeout(() => navigate(returnToPath || soundCheckPath), 300)
   }
 
   if (!hasRequiredState) {
@@ -199,10 +207,10 @@ export default function AssessmentVerifyPage() {
     <CContainer className='assessment-public-shell py-3 py-md-4'>
       <CCard className='assessment-card'>
         <CCardBody className='p-4 p-md-5'>
-          <AssessmentProgress currentStep={2} totalSteps={5} label='Xác thực email' />
+          <AssessmentProgress currentStep={2} totalSteps={6} label='Xác thực email' />
           <div className='assessment-section-title'>Xác thực email</div>
-          <p className='assessment-section-lead mb-2'>Chúng tôi đã gửi mã xác thực gồm 6 chữ số tới email:</p>
-          <div className='fw-semibold fs-5 mb-4'>{maskEmail(parentEmail)}</div>
+          <p className='assessment-section-lead mb-2'>Chúng tôi đã gửi mã xác thực gồm 6 chữ số tới:</p>
+          <div className='fw-semibold fs-5 mb-4'>{displayTarget}</div>
 
           {import.meta.env.DEV ? <div className='assessment-secondary-note mb-3'>DEV only: OTP demo là {OTP_DEMO_CODE}</div> : null}
           {message ? <CAlert color='success'>{message}</CAlert> : null}
