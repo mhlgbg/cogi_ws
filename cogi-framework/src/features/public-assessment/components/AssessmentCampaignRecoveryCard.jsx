@@ -14,20 +14,25 @@ export default function AssessmentCampaignRecoveryCard({
   loading = false,
   error = '',
   message = '',
+  requestOtpLabel = 'Gửi mã xác thực',
+  onRequestOtp,
   onSubmit,
 }) {
   const [email, setEmail] = useState(initialEmail || '')
   const [otpRequested, setOtpRequested] = useState(false)
   const [otp, setOtp] = useState('')
+  const [challengeId, setChallengeId] = useState('')
   const [localError, setLocalError] = useState('')
   const normalizedEmail = useMemo(() => toText(email).toLowerCase(), [email])
 
-  function handleRequestOtp() {
+  async function handleRequestOtp() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       setLocalError('Vui lòng nhập email hợp lệ.')
       return
     }
     setLocalError('')
+    const payload = await onRequestOtp?.({ email: normalizedEmail })
+    setChallengeId(String(payload?.challengeId || ''))
     setOtpRequested(true)
   }
 
@@ -41,8 +46,12 @@ export default function AssessmentCampaignRecoveryCard({
       setLocalError('Vui lòng nhập mã OTP gồm 6 chữ số.')
       return
     }
+    if (!challengeId) {
+      setLocalError('Vui lòng yêu cầu mã xác thực mới.')
+      return
+    }
     setLocalError('')
-    onSubmit?.({ email: normalizedEmail, otp: toText(otp) })
+    onSubmit?.({ email: normalizedEmail, otp: toText(otp), challengeId })
   }
 
   return (
@@ -63,12 +72,12 @@ export default function AssessmentCampaignRecoveryCard({
               <div className='assessment-form-field'>
                 <CFormLabel className='assessment-form-label'>Mã OTP</CFormLabel>
                 <CFormInput value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 6))} inputMode='numeric' placeholder='123456' autoComplete='one-time-code' />
-                <div className='assessment-form-label-helper'>Mã test hiện tại là 123456.</div>
+                  <div className='assessment-form-label-helper'>Vui lòng nhập mã xác thực gồm 6 chữ số đã được gửi qua email.</div>
               </div>
             ) : null}
           </div>
           <div className='assessment-form-actions d-flex flex-wrap gap-2 mt-4'>
-            {!otpRequested ? <CButton type='button' color='secondary' variant='outline' onClick={handleRequestOtp}>Gửi mã xác thực</CButton> : null}
+              {!otpRequested ? <CButton type='button' color='secondary' variant='outline' onClick={handleRequestOtp} disabled={loading}>{requestOtpLabel}</CButton> : null}
             {otpRequested ? <CButton type='submit' color='primary' className='assessment-primary-cta' disabled={loading}>{loading ? 'Đang xác thực...' : submitLabel}</CButton> : null}
           </div>
         </form>

@@ -65,6 +65,7 @@ function mapRunnerRecoveryError(error, fallback = 'Không thể khôi phục lư
 export default function AssessmentRunnerPage() {
   const navigate = useNavigate()
   const { attemptId, tenantCode } = useParams()
+  const questionViewportRef = useRef(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [autoSubmitting, setAutoSubmitting] = useState(false)
@@ -84,6 +85,7 @@ export default function AssessmentRunnerPage() {
   const [resumeNoticeVisible, setResumeNoticeVisible] = useState(false)
   const [submittedJustNow, setSubmittedJustNow] = useState(false)
   const [autoSubmittedByTimeout, setAutoSubmittedByTimeout] = useState(false)
+  const [remainingSeconds, setRemainingSeconds] = useState(null)
   const [offline, setOffline] = useState(typeof navigator !== 'undefined' ? navigator.onLine === false : false)
   const saveTimersRef = useRef({})
   const mountedRef = useRef(false)
@@ -118,15 +120,16 @@ export default function AssessmentRunnerPage() {
   const currentSectionQuestions = Array.isArray(currentSection?.questions) ? currentSection.questions : []
   const currentQuestionIndex = Math.max(0, currentSectionQuestions.findIndex((item) => String(item?.assessmentQuestionId || item?.assessmentQuestionDocumentId || '') === String(currentEntry?.assessmentQuestionId || '')))
   const currentAnswerDraft = currentEntry ? answerDrafts[String(currentEntry.assessmentQuestionId || currentEntry.assessmentQuestionDocumentId || '')] ?? answerMap[String(currentEntry.assessmentQuestionId || '')]?.answerData ?? {} : {}
+  const flatQuestionIndex = Math.max(0, flatQuestions.findIndex((item) => String(item?.assessmentQuestionId || '') === String(currentEntry?.assessmentQuestionId || '')))
+  const isFirstQuestion = flatQuestionIndex <= 0
+  const isLastQuestion = flatQuestionIndex >= flatQuestions.length - 1
+  const expiresAtMs = useMemo(() => {
+    const raw = runtime?.expiresAt || attempt?.expiresAt || serverSyncRef.current.expiresAt || null
+    if (!raw) return null
+    const parsed = new Date(raw).getTime()
+    return Number.isFinite(parsed) ? parsed : null
+  }, [attempt?.expiresAt, runtime?.expiresAt])
 
-  const remainingSeconds = useMemo(() => {
-    const expiresAt = serverSyncRef.current.expiresAt ? new Date(serverSyncRef.current.expiresAt).getTime() : null
-    const serverTime = serverSyncRef.current.serverTime ? new Date(serverSyncRef.current.serverTime).getTime() : null
-    const loadedAt = serverSyncRef.current.loadedAt || null
-    if (!expiresAt || !serverTime || !loadedAt) return null
-    const elapsed = Date.now() - loadedAt
-    return Math.max(0, Math.floor((expiresAt - serverTime - elapsed) / 1000))
-  }, [runtime])
   const readOnly = ['submitted', 'expired', 'cancelled'].includes(String(attempt?.status || '').trim())
   const submitted = String(attempt?.status || '').trim() === 'submitted'
   const expired = String(attempt?.status || '').trim() === 'expired' || remainingSeconds === 0
@@ -203,6 +206,29 @@ export default function AssessmentRunnerPage() {
     timeoutSubmitTriggeredRef.current = true
     handleTimeoutAutoSubmit()
   }, [attempt?.id, readOnly, remainingSeconds])
+
+  useEffect(() => {
+    if (!expiresAtMs) {
+      setRemainingSeconds(null)
+      return undefined
+    }
+
+    function updateTimer() {
+      setRemainingSeconds(Math.max(0, Math.floor((expiresAtMs - Date.now()) / 1000)))
+    }
+
+    updateTimer()
+    const intervalId = window.setInterval(updateTimer, 1000)
+    return () => window.clearInterval(intervalId)
+  }, [expiresAtMs])
+
+  useEffect(() => {
+    if (!currentEntry?.assessmentQuestionId || !questionViewportRef.current) return undefined
+    const timerId = window.requestAnimationFrame(() => {
+      questionViewportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+    return () => window.cancelAnimationFrame(timerId)
+  }, [currentEntry?.assessmentQuestionId])
 
   function hydrateRuntime(payload) {
     setRuntime(payload)
@@ -585,32 +611,34 @@ export default function AssessmentRunnerPage() {
         </div>
 
         <div className='assessment-runner-main'>
-          <RunnerQuestion
-            attemptId={attempt?.id}
-            item={currentEntry}
-            sectionIndex={currentSectionIndex}
-            questionIndex={currentQuestionIndex}
-            totalQuestions={totalQuestions}
-            value={currentAnswerDraft}
-            disabled={readOnly || expired}
-            saveState={saveStates[String(currentEntry?.assessmentQuestionId || '')] || { status: 'saved' }}
-            audioState={audioStates[String(currentEntry?.assessmentQuestionId || '')] || { audioPlayCount: 0, audioPlayLimit: currentEntry?.audioPlayLimit ?? null, remaining: currentEntry?.audioPlayLimit ?? null, allowSeek: currentEntry?.allowSeek !== false, isPlaying: false }}
-            onChange={(nextValue) => scheduleSave(currentEntry, nextValue)}
-            onRegisterPlay={handleRegisterAudioPlay}
-            onSyncAudioState={handleSyncAudioState}
-          />
+          <div ref={questionViewportRef} className='assessment-runner-question-stage'>
+            <RunnerQuestion
+              attemptId={attempt?.id}
+              item={currentEntry}
+              sectionIndex={currentSectionIndex}
+              questionIndex={currentQuestionIndex}
+              totalQuestions={totalQuestions}
+              value={currentAnswerDraft}
+              disabled={readOnly || expired}
+              saveState={saveStates[String(currentEntry?.assessmentQuestionId || '')] || { status: 'saved' }}
+              audioState={audioStates[String(currentEntry?.assessmentQuestionId || '')] || { audioPlayCount: 0, audioPlayLimit: currentEntry?.audioPlayLimit ?? null, remaining: currentEntry?.audioPlayLimit ?? null, allowSeek: currentEntry?.allowSeek !== false, isPlaying: false }}
+              onChange={(nextValue) => scheduleSave(currentEntry, nextValue)}
+              onRegisterPlay={handleRegisterAudioPlay}
+              onSyncAudioState={handleSyncAudioState}
+            />
+          </div>
 
           <div className='assessment-runner-bottom-bar'>
-            <div className='assessment-runner-navigation assessment-runner-stimulus'>
-              <CButton color='secondary' variant='outline' onClick={() => moveQuestion(-1)} disabled={flatQuestions.findIndex((item) => String(item?.assessmentQuestionId || '') === String(currentEntry?.assessmentQuestionId || '')) <= 0}>← Trước</CButton>
+            <div className='assessment-runner-navigation'>
+              <CButton color='secondary' variant='outline' onClick={() => moveQuestion(-1)} disabled={isFirstQuestion}>← Trước</CButton>
               <div className='assessment-runner-statusline small text-body-secondary'>
                 {readOnly
                   ? submitted ? 'Chế độ xem lại bài đã nộp' : 'Chế độ chỉ đọc'
                   : saveStates[String(currentEntry?.assessmentQuestionId || '')]?.status === 'error' ? saveStates[String(currentEntry?.assessmentQuestionId || '')]?.message || 'Lỗi lưu. Vui lòng thử lại.' : saveStates[String(currentEntry?.assessmentQuestionId || '')]?.status === 'saving' ? 'Đang lưu...' : 'Đã lưu tự động'}
               </div>
-              <div className='d-flex gap-2 flex-wrap'>
-                <CButton color='primary' variant='outline' onClick={() => moveQuestion(1)} disabled={flatQuestions.findIndex((item) => String(item?.assessmentQuestionId || '') === String(currentEntry?.assessmentQuestionId || '')) >= flatQuestions.length - 1}>Tiếp →</CButton>
-                {!readOnly ? <CButton color='primary' onClick={() => setSubmitModalVisible(true)} disabled={expired}>Nộp bài</CButton> : null}
+              <div className='d-flex gap-2 flex-wrap assessment-runner-navigation-actions'>
+                {!readOnly && !isLastQuestion ? <CButton color='primary' variant='outline' onClick={() => moveQuestion(1)}>Tiếp →</CButton> : null}
+                {!readOnly && isLastQuestion ? <CButton color='primary' onClick={() => setSubmitModalVisible(true)} disabled={expired}>Nộp bài</CButton> : null}
               </div>
             </div>
           </div>

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTenant } from '../../../contexts/TenantContext'
 import AssessmentCampaignStartForm from '../components/AssessmentCampaignStartForm'
-import { getApiMessage, getPublicAssessmentCampaign, resolvePublicAssessmentCampaign } from '../services/assessmentCampaignPublicService'
+import { getApiMessage, getPublicAssessmentCampaign, requestAssessmentCampaignOtp, resolvePublicAssessmentCampaign } from '../services/assessmentCampaignPublicService'
 import { buildAssessmentRunnerPath, buildCampaignVerifyPath } from '../utils/assessmentRoutes'
 import { getFlowState, setFlowState } from '../utils/assessmentFlowStorage'
 import { OTP_RESEND_SECONDS } from '../utils/assessmentRuntime'
@@ -148,9 +148,29 @@ export default function AssessmentRegistrationPage() {
         attemptId: null,
       },
     }
-    setFlowState(nextState)
-    navigate(buildCampaignVerifyPath(tenantCode, campaignCode, { isMainDomain: tenant?.isMainDomain }))
-    setSubmitting(false)
+    if (contactTarget.type !== 'email') {
+      setFlowState(nextState)
+      navigate(buildCampaignVerifyPath(tenantCode, campaignCode, { isMainDomain: tenant?.isMainDomain }))
+      setSubmitting(false)
+      return
+    }
+
+    requestAssessmentCampaignOtp(campaignCode, { email: contactTarget.value }, resolvedTenantCode)
+      .then((otpPayload) => {
+        setFlowState({
+          ...nextState,
+          verification: {
+            ...nextState.verification,
+            challengeId: otpPayload?.challengeId || '',
+            resendAvailableAt: Math.floor(Date.now() / 1000) + Number(otpPayload?.resendAfter || OTP_RESEND_SECONDS),
+          },
+        })
+        navigate(buildCampaignVerifyPath(tenantCode, campaignCode, { isMainDomain: tenant?.isMainDomain }))
+      })
+      .catch((requestError) => {
+        setSubmitError(getApiMessage(requestError, 'Chưa thể gửi email xác thực. Vui lòng thử lại sau.'))
+      })
+      .finally(() => setSubmitting(false))
   }
 
   return (

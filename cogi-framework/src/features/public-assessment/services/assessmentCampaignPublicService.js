@@ -57,6 +57,16 @@ export async function resolvePublicAssessmentCampaign(slug, payload, tenantCode)
   return ensureMatchedPayload(response?.data)
 }
 
+export async function requestAssessmentCampaignOtp(slug, payload, tenantCode) {
+  const response = await publicApi.post(`/public/assessment-campaigns/${encodeURIComponent(String(slug || '').trim())}/request-otp`, payload, withTenantHeaders({}, tenantCode))
+  return unwrapSuccess(response?.data)
+}
+
+export async function verifyAssessmentCampaignOtp(slug, payload, tenantCode) {
+  const response = await publicApi.post(`/public/assessment-campaigns/${encodeURIComponent(String(slug || '').trim())}/verify-otp`, payload, withTenantHeaders({}, tenantCode))
+  return unwrapSuccess(response?.data)
+}
+
 export async function startPublicAssessmentCampaign(slug, payload, tenantCode) {
   const response = await publicApi.post(`/public/assessment-campaigns/${encodeURIComponent(String(slug || '').trim())}/start`, payload, withTenantHeaders({}, tenantCode))
   return ensureMatchedPayload(response?.data)

@@ -109,6 +109,17 @@ function moveItem(rows, id, direction) {
   return swapped.map((item, itemIndex) => ({ id: getEntityId(item), order: itemIndex + 1 }))
 }
 
+function getSectionReorderErrorMessage(error) {
+  const message = getApiMessage(error, 'Không sắp xếp lại được các phần thi')
+  if (message === 'Only draft assessment versions can be structurally modified') return 'Phiên bản đã xuất bản, không thể thay đổi cấu trúc.'
+  if (message === 'items must contain at least one section reorder entry') return 'Không có dữ liệu phần thi để sắp xếp lại.'
+  if (message === 'items must include every section in the assessment version exactly once') return 'Danh sách phần thi gửi lên không đầy đủ hoặc đã bị lệch trạng thái. Vui lòng tải lại trang.'
+  if (message === 'Duplicate section id in reorder payload') return 'Danh sách phần thi gửi lên bị trùng. Vui lòng tải lại trang và thử lại.'
+  if (message === 'Duplicate order value in reorder payload') return 'Thứ tự phần thi gửi lên không hợp lệ. Vui lòng tải lại trang và thử lại.'
+  if (message === 'Section does not belong to the specified assessment version') return 'Phần thi không còn thuộc phiên bản hiện tại. Vui lòng tải lại trang.'
+  return message
+}
+
 function getNextQuestionOrder(rows) {
   return (Array.isArray(rows) ? rows : []).reduce((maxOrder, item) => Math.max(maxOrder, Number(item?.order || 0)), 0) + 1
 }
@@ -133,7 +144,7 @@ function VersionSummaryCard({ version, isSelected, onSelect }) {
   )
 }
 
-function SectionCard({ section, currentVersionIsDraft, onEdit, onDelete, onMoveUp, onMoveDown, onSaveQuestionOrders, onAddQuestions, onEditQuestion, onRemoveQuestion, onMoveQuestionUp, onMoveQuestionDown }) {
+function SectionCard({ section, currentVersionIsDraft, savingSection = false, onEdit, onDelete, onMoveUp, onMoveDown, onSaveQuestionOrders, onAddQuestions, onEditQuestion, onRemoveQuestion, onMoveQuestionUp, onMoveQuestionDown }) {
   const sourceQuestions = useMemo(() => sortByOrder(section?.assessmentQuestions), [section])
   const [orderDrafts, setOrderDrafts] = useState({})
 
@@ -169,12 +180,12 @@ function SectionCard({ section, currentVersionIsDraft, onEdit, onDelete, onMoveU
           {section.skill?.title ? <div className='small text-body-secondary'>{`Kỹ năng: ${section.skill.title}`}</div> : null}
         </div>
         <div className='d-flex gap-2 flex-wrap'>
-          <CButton size='sm' color='secondary' variant='outline' onClick={onMoveUp} disabled={!currentVersionIsDraft}>Lên</CButton>
-          <CButton size='sm' color='secondary' variant='outline' onClick={onMoveDown} disabled={!currentVersionIsDraft}>Xuống</CButton>
-          <CButton size='sm' color='primary' variant='outline' onClick={() => onSaveQuestionOrders(buildOrderItems())} disabled={!currentVersionIsDraft || !hasOrderChanges}>Lưu thứ tự</CButton>
-          <CButton size='sm' color='info' variant='outline' onClick={onAddQuestions} disabled={!currentVersionIsDraft}>+ Câu hỏi</CButton>
-          <CButton size='sm' color='secondary' variant='outline' onClick={onEdit} disabled={!currentVersionIsDraft}>Sửa phần</CButton>
-          <CButton size='sm' color='danger' variant='outline' onClick={onDelete} disabled={!currentVersionIsDraft}>Xóa phần</CButton>
+          <CButton size='sm' color='secondary' variant='outline' onClick={onMoveUp} disabled={!currentVersionIsDraft || savingSection}>Lên</CButton>
+          <CButton size='sm' color='secondary' variant='outline' onClick={onMoveDown} disabled={!currentVersionIsDraft || savingSection}>Xuống</CButton>
+          <CButton size='sm' color='primary' variant='outline' onClick={() => onSaveQuestionOrders(buildOrderItems())} disabled={!currentVersionIsDraft || !hasOrderChanges || savingSection}>Lưu thứ tự</CButton>
+          <CButton size='sm' color='info' variant='outline' onClick={onAddQuestions} disabled={!currentVersionIsDraft || savingSection}>+ Câu hỏi</CButton>
+          <CButton size='sm' color='secondary' variant='outline' onClick={onEdit} disabled={!currentVersionIsDraft || savingSection}>Sửa phần</CButton>
+          <CButton size='sm' color='danger' variant='outline' onClick={onDelete} disabled={!currentVersionIsDraft || savingSection}>Xóa phần</CButton>
         </div>
       </CCardHeader>
       <CCardBody>
@@ -489,6 +500,7 @@ export default function AssessmentDetailPage() {
   }
 
   async function handleMoveSection(section, direction) {
+    if (savingSection) return
     const items = moveItem(versionDetail?.sections, getEntityId(section), direction)
     if (items.length === 0) return
     setSavingSection(true)
@@ -497,7 +509,7 @@ export default function AssessmentDetailPage() {
       await reorderAssessmentSections(getEntityId(versionDetail), items)
       await refreshVersion(getEntityId(versionDetail))
     } catch (requestError) {
-      setError(getApiMessage(requestError, 'Không sắp xếp lại được các phần thi'))
+      setError(getSectionReorderErrorMessage(requestError))
     } finally {
       setSavingSection(false)
     }
@@ -752,6 +764,7 @@ export default function AssessmentDetailPage() {
                       key={getEntityId(section)}
                       section={section}
                       currentVersionIsDraft={currentVersionIsDraft}
+                      savingSection={savingSection}
                       onEdit={() => { setEditingSection(section); setShowSectionEditor(true) }}
                       onDelete={() => handleDeleteSection(section)}
                       onMoveUp={() => handleMoveSection(section, 'up')}

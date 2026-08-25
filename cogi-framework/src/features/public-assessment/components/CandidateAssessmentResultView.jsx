@@ -31,12 +31,45 @@ function formatScorePair(score, maxScore) {
   return `${score} / ${maxScore}`
 }
 
+function getManualPendingSummary(payload) {
+  const result = payload?.result || null
+  if (!result || Number(result?.pendingManualCount || 0) <= 0) return null
+  return {
+    objectiveScore: result?.objectiveScore ?? null,
+    objectiveMaxScore: result?.objectiveMaxScore ?? null,
+    objectivePercentage: result?.objectivePercentage ?? null,
+    pendingManualCount: Number(result?.pendingManualCount || 0),
+    provisionalLevel: result?.provisionalLevel || null,
+  }
+}
+
+function getPrimaryDisplayValue(payload, manualPendingSummary) {
+  if (payload?.confirmation?.confirmedLevel) return getCefrLabel(payload.confirmation.confirmedLevel)
+  if (payload?.result?.provisionalLevel) return getCefrLabel(payload.result.provisionalLevel)
+  if (manualPendingSummary?.objectivePercentage !== null && manualPendingSummary?.objectivePercentage !== undefined) return `${manualPendingSummary.objectivePercentage}%`
+  return '—'
+}
+
+function getPrimaryDisplayLabel(payload, manualPendingSummary) {
+  if (payload?.confirmation?.confirmedLevel) return payload?.confirmation?.confirmedLabel || payload?.result?.placementLabel || ''
+  if (payload?.result?.provisionalLevel) return payload?.result?.placementLabel || 'Mức sơ bộ'
+  if (manualPendingSummary?.objectivePercentage !== null && manualPendingSummary?.objectivePercentage !== undefined) return 'Mức sơ bộ chưa xác định'
+  return ''
+}
+
+function getOnlineTimelineValue(payload, manualPendingSummary) {
+  if (payload?.result?.provisionalLevel) return `${getCefrLabel(payload.result.provisionalLevel)} sơ bộ`
+  if (manualPendingSummary?.objectivePercentage !== null && manualPendingSummary?.objectivePercentage !== undefined) return `${manualPendingSummary.objectivePercentage}% đã chấm`
+  return payload?.result?.status ? 'Đã hoàn thành' : 'Đang xử lý'
+}
+
 function buildTimelineSteps(payload) {
   const version = payload?.version || {}
   const speaking = payload?.speaking || null
   const confirmation = payload?.confirmation || null
+  const manualPendingSummary = getManualPendingSummary(payload)
   const steps = [
-    { key: 'online', label: 'Bài online', value: payload?.result?.provisionalLevel ? getCefrLabel(payload.result.provisionalLevel) : payload?.result?.status ? 'Đã hoàn thành' : 'Đang xử lý', completed: Boolean(payload?.result) },
+    { key: 'online', label: 'Bài online', value: getOnlineTimelineValue(payload, manualPendingSummary), completed: Boolean(payload?.result) },
   ]
   if (version?.requiresSpeaking !== false) {
     steps.push({
@@ -61,8 +94,12 @@ function buildTimelineSteps(payload) {
 export default function CandidateAssessmentResultView({ payload, refreshing = false, onRefresh, onBack, previewMode = false }) {
   const workflowState = payload?.workflowState || ''
   const timelineSteps = useMemo(() => buildTimelineSteps(payload), [payload])
+  const manualPendingSummary = useMemo(() => getManualPendingSummary(payload), [payload])
   const primaryLevel = payload?.confirmation?.confirmedLevel || payload?.result?.provisionalLevel || ''
   const primaryTitle = payload?.confirmation?.confirmedLevel ? 'Kết quả đã xác nhận' : payload?.result?.provisionalLevel ? 'Kết quả sơ bộ' : 'Kết quả đánh giá'
+  const primaryDisplayValue = getPrimaryDisplayValue(payload, manualPendingSummary)
+  const primaryDisplayLabel = getPrimaryDisplayLabel(payload, manualPendingSummary)
+  const shouldShowScoredSummary = payload?.revealScores || Boolean(manualPendingSummary)
 
   return (
     <CContainer className='assessment-public-shell py-3'>
@@ -90,8 +127,11 @@ export default function CandidateAssessmentResultView({ payload, refreshing = fa
                   <CCol lg={7}>
                     <div className='border rounded-4 p-4 h-100 bg-white'>
                       <div className='small text-body-secondary mb-2'>{primaryTitle.toUpperCase()}</div>
-                      <div style={{ fontSize: 'clamp(2.5rem, 7vw, 4.5rem)', fontWeight: 800, lineHeight: 1 }}>{primaryLevel ? getCefrLabel(primaryLevel) : '—'}</div>
-                      {payload?.confirmation?.confirmedLabel || payload?.result?.placementLabel ? <div className='mt-2 fw-semibold'>{payload?.confirmation?.confirmedLabel || payload?.result?.placementLabel}</div> : null}
+                      <div style={{ fontSize: 'clamp(2.5rem, 7vw, 4.5rem)', fontWeight: 800, lineHeight: 1 }}>{primaryDisplayValue}</div>
+                      {primaryDisplayLabel ? <div className='mt-2 fw-semibold'>{primaryDisplayLabel}</div> : null}
+                      {manualPendingSummary ? <div className='mt-3 small text-body-secondary'>{`Phần đã chấm: ${formatScorePair(manualPendingSummary.objectiveScore, manualPendingSummary.objectiveMaxScore)}${manualPendingSummary.objectivePercentage !== null && manualPendingSummary.objectivePercentage !== undefined ? ` · ${manualPendingSummary.objectivePercentage}%` : ''}`}</div> : null}
+                      {manualPendingSummary ? <div className='small text-body-secondary mt-1'>Đây là kết quả sơ bộ của phần đã được chấm tự động. Một số nội dung vẫn đang được giáo viên hoàn tất chấm và kết quả cuối cùng có thể thay đổi.</div> : null}
+                      {manualPendingSummary ? <div className='small text-body-secondary mt-1'>Writing đang chờ giáo viên chấm.</div> : null}
                       <p className='assessment-section-lead mt-3 mb-0'>{payload?.statusBanner?.message || ''}</p>
                     </div>
                   </CCol>
@@ -130,15 +170,16 @@ export default function CandidateAssessmentResultView({ payload, refreshing = fa
               </CCard>
             ) : null}
 
-            {payload?.revealScores ? (
+            {shouldShowScoredSummary ? (
               <CCard className='assessment-card'>
                 <CCardBody className='p-4'>
                   <CRow className='g-3'>
-                    <CCol md={4}><div className='assessment-chip'><div className='assessment-chip-title'>Điểm</div><div className='assessment-chip-subtitle'>{formatScorePair(payload?.result?.rawScore, payload?.result?.maxScore)}</div></div></CCol>
-                    <CCol md={4}><div className='assessment-chip'><div className='assessment-chip-title'>Tỷ lệ</div><div className='assessment-chip-subtitle'>{payload?.result?.percentage !== null && payload?.result?.percentage !== undefined ? `${payload.result.percentage}%` : '-'}</div></div></CCol>
-                    <CCol md={4}><div className='assessment-chip'><div className='assessment-chip-title'>Mức</div><div className='assessment-chip-subtitle'>{primaryLevel ? getCefrLabel(primaryLevel) : '-'}</div></div></CCol>
+                    <CCol md={4}><div className='assessment-chip'><div className='assessment-chip-title'>{manualPendingSummary ? 'Phần đã chấm' : 'Điểm'}</div><div className='assessment-chip-subtitle'>{manualPendingSummary ? formatScorePair(manualPendingSummary.objectiveScore, manualPendingSummary.objectiveMaxScore) : formatScorePair(payload?.result?.rawScore, payload?.result?.maxScore)}</div></div></CCol>
+                    <CCol md={4}><div className='assessment-chip'><div className='assessment-chip-title'>Tỷ lệ</div><div className='assessment-chip-subtitle'>{manualPendingSummary ? (manualPendingSummary.objectivePercentage !== null && manualPendingSummary.objectivePercentage !== undefined ? `${manualPendingSummary.objectivePercentage}%` : '-') : payload?.result?.percentage !== null && payload?.result?.percentage !== undefined ? `${payload.result.percentage}%` : '-'}</div></div></CCol>
+                    <CCol md={4}><div className='assessment-chip'><div className='assessment-chip-title'>Mức</div><div className='assessment-chip-subtitle'>{payload?.confirmation?.confirmedLevel ? getCefrLabel(payload.confirmation.confirmedLevel) : payload?.result?.provisionalLevel ? getCefrLabel(payload.result.provisionalLevel) : manualPendingSummary ? 'Chưa xác định' : '-'}</div></div></CCol>
                   </CRow>
-                  {Array.isArray(payload?.result?.sectionScores) && payload.result.sectionScores.length > 0 ? (
+                  {manualPendingSummary ? <div className='small text-body-secondary mt-3'>{`${manualPendingSummary.pendingManualCount} nội dung đang chờ giáo viên hoàn tất chấm.`}</div> : null}
+                  {payload?.revealScores && Array.isArray(payload?.result?.sectionScores) && payload.result.sectionScores.length > 0 ? (
                     <div className='mt-4'>
                       <div className='small text-body-secondary mb-3'>Chi tiết điểm theo phần</div>
                       <div className='d-grid gap-2'>

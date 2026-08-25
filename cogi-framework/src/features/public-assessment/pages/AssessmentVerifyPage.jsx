@@ -4,7 +4,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import AssessmentProgress from '../components/AssessmentProgress'
 import { buildCampaignRegisterPath, buildCampaignSoundCheckPath } from '../utils/assessmentRoutes'
 import { getFlowState, patchFlowState } from '../utils/assessmentFlowStorage'
-import { maskEmail, OTP_DEMO_CODE, OTP_LOCK_SECONDS, OTP_RESEND_SECONDS } from '../utils/assessmentRuntime'
+import { getApiMessage, requestAssessmentCampaignOtp, verifyAssessmentCampaignOtp } from '../services/assessmentCampaignPublicService'
+import { maskEmail, OTP_LOCK_SECONDS, OTP_RESEND_SECONDS } from '../utils/assessmentRuntime'
 import { maskPhone } from '../utils/assessmentCampaignFlow'
 
 function toText(value) {
@@ -123,21 +124,26 @@ export default function AssessmentVerifyPage() {
   }
 
   function handleResend() {
-    const nextState = patchFlowState({
-      verification: {
-        ...(flowState?.verification || {}),
-        resendAvailableAt: nowSeconds() + OTP_RESEND_SECONDS,
-        failedAttempts: 0,
-        lockedUntil: 0,
-      },
-    })
-    syncState(nextState)
-    setOtpValue('')
-    setError('')
-    setMessage('Mã xác thực mới đã được gửi.')
-    if (import.meta.env.DEV) {
-      console.info('[AssessmentVerifyPage] OTP demo', OTP_DEMO_CODE)
-    }
+    requestAssessmentCampaignOtp(campaignCode, { email: verification?.target || '' }, tenantCode)
+      .then((payload) => {
+        const nextState = patchFlowState({
+          verification: {
+            ...(flowState?.verification || {}),
+            challengeId: payload?.challengeId || '',
+            resendAvailableAt: nowSeconds() + Number(payload?.resendAfter || OTP_RESEND_SECONDS),
+            failedAttempts: 0,
+            lockedUntil: 0,
+          },
+        })
+        syncState(nextState)
+        setOtpValue('')
+        setError('')
+        setMessage('Mã xác thực đã được gửi tới email của bạn. Vui lòng kiểm tra hộp thư đến hoặc thư rác.')
+      })
+      .catch((requestError) => {
+        const apiMessage = getApiMessage(requestError, 'Chưa thể gửi email xác thực. Vui lòng thử lại sau.')
+        setError(apiMessage === 'OTP_RESEND_COOLDOWN' ? 'Vui lòng chờ trước khi yêu cầu mã xác thực mới.' : 'Chưa thể gửi email xác thực. Vui lòng thử lại sau.')
+      })
   }
 
   function handleVerify() {
@@ -147,46 +153,53 @@ export default function AssessmentVerifyPage() {
       setError('Vui lòng nhập đầy đủ mã xác thực gồm 6 chữ số.')
       return
     }
-    if (normalized !== OTP_DEMO_CODE) {
-      const nextAttempts = failedAttempts + 1
-      const locked = nextAttempts >= 5 ? nowSeconds() + OTP_LOCK_SECONDS : 0
-      const nextState = patchFlowState({
-        verification: {
-          ...(flowState?.verification || {}),
-          failedAttempts: nextAttempts,
-          lockedUntil: locked,
-          resendAvailableAt: verification.resendAvailableAt || nowSeconds() + OTP_RESEND_SECONDS,
-          emailVerified: false,
-        },
+    verifyAssessmentCampaignOtp(campaignCode, {
+      challengeId: verification?.challengeId || '',
+      otp: normalized,
+    }, tenantCode)
+      .then(() => {
+        const nextState = patchFlowState({
+          verification: {
+            ...(flowState?.verification || {}),
+            emailVerified: isEmailVerification,
+            phoneVerified: !isEmailVerification,
+            verifiedAt: new Date().toISOString(),
+            failedAttempts: 0,
+            lockedUntil: 0,
+            returnToPath: returnToPath || '',
+          },
+          assessment: {
+            ...(flowState?.assessment || {}),
+            soundConfirmed: Boolean(assessment.soundConfirmed),
+          },
+          participation: {
+            ...(flowState?.participation || {}),
+            status: 'verified',
+          },
+        })
+        syncState(nextState)
+        setError('')
+        setMessage(returnToPath ? 'Xác thực thành công. Đang quay lại trang kết quả...' : 'Xác thực thành công. Đang chuyển sang bước kiểm tra âm thanh...')
+        window.setTimeout(() => navigate(returnToPath || soundCheckPath), 300)
       })
-      syncState(nextState)
-      setError(nextAttempts >= 5 ? 'Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau 10 phút.' : 'Mã xác thực chưa đúng. Vui lòng kiểm tra và thử lại.')
-      return
-    }
-
-    const nextState = patchFlowState({
-      verification: {
-        ...(flowState?.verification || {}),
-        emailVerified: isEmailVerification,
-        phoneVerified: !isEmailVerification,
-        verifiedAt: new Date().toISOString(),
-        failedAttempts: 0,
-        lockedUntil: 0,
-        returnToPath: returnToPath || '',
-      },
-      assessment: {
-        ...(flowState?.assessment || {}),
-        soundConfirmed: Boolean(assessment.soundConfirmed),
-      },
-      participation: {
-        ...(flowState?.participation || {}),
-        status: 'verified',
-      },
-    })
-    syncState(nextState)
-    setError('')
-    setMessage(returnToPath ? 'Xác thực thành công. Đang quay lại trang kết quả...' : 'Xác thực thành công. Đang chuyển sang bước kiểm tra âm thanh...')
-    window.setTimeout(() => navigate(returnToPath || soundCheckPath), 300)
+      .catch((requestError) => {
+        const apiMessage = getApiMessage(requestError, 'Mã xác thực không đúng. Vui lòng kiểm tra lại.')
+        const nextAttempts = failedAttempts + 1
+        const locked = apiMessage === 'OTP_TOO_MANY_ATTEMPTS' ? nowSeconds() + OTP_LOCK_SECONDS : lockedUntil
+        const nextState = patchFlowState({
+          verification: {
+            ...(flowState?.verification || {}),
+            failedAttempts: apiMessage === 'INVALID_OTP' ? nextAttempts : failedAttempts,
+            lockedUntil: apiMessage === 'OTP_TOO_MANY_ATTEMPTS' ? locked : lockedUntil,
+            resendAvailableAt: verification.resendAvailableAt || nowSeconds() + OTP_RESEND_SECONDS,
+            emailVerified: false,
+          },
+        })
+        syncState(nextState)
+        if (apiMessage === 'OTP_EXPIRED') setError('Mã xác thực đã hết hạn. Vui lòng yêu cầu mã mới.')
+        else if (apiMessage === 'OTP_TOO_MANY_ATTEMPTS') setError('Bạn đã nhập sai quá số lần cho phép. Vui lòng yêu cầu mã xác thực mới.')
+        else setError('Mã xác thực không đúng. Vui lòng kiểm tra lại.')
+      })
   }
 
   if (!hasRequiredState) {
@@ -212,7 +225,6 @@ export default function AssessmentVerifyPage() {
           <p className='assessment-section-lead mb-2'>Chúng tôi đã gửi mã xác thực gồm 6 chữ số tới:</p>
           <div className='fw-semibold fs-5 mb-4'>{displayTarget}</div>
 
-          {import.meta.env.DEV ? <div className='assessment-secondary-note mb-3'>DEV only: OTP demo là {OTP_DEMO_CODE}</div> : null}
           {message ? <CAlert color='success'>{message}</CAlert> : null}
           {error ? <CAlert color='danger'>{error}</CAlert> : null}
           {isLocked ? <CAlert color='warning'>Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau {formatCountdown(lockedUntil - tick)}.</CAlert> : null}

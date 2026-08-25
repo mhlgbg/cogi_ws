@@ -4,7 +4,7 @@ import { CAlert, CSpinner } from '@coreui/react'
 import AssessmentCampaignCompletionForm from '../components/AssessmentCampaignCompletionForm'
 import AssessmentCampaignRecoveryCard from '../components/AssessmentCampaignRecoveryCard'
 import CandidateAssessmentResultView from '../components/CandidateAssessmentResultView'
-import { completeAssessmentCampaignResultProfile, getApiMessage, getAssessmentCampaignResultGate, restorePublicAssessmentAttemptAccess, startPublicAssessmentCampaignRetake } from '../services/assessmentCampaignPublicService'
+import { completeAssessmentCampaignResultProfile, getApiMessage, getAssessmentCampaignResultGate, requestAssessmentCampaignOtp, restorePublicAssessmentAttemptAccess, startPublicAssessmentCampaignRetake } from '../services/assessmentCampaignPublicService'
 import { getFlowState, patchFlowState } from '../utils/assessmentFlowStorage'
 import { buildAssessmentRunnerPath } from '../utils/assessmentRoutes'
 import { getAssessmentAttemptResult, getRuntimeApiMessage } from '../../../modules/assessments/services/assessmentRuntimeApi'
@@ -185,6 +185,10 @@ export default function CandidateAssessmentResultPage() {
     }
   }
 
+  async function handleRequestRecoverOtp(values) {
+    return requestAssessmentCampaignOtp(publicSession?.campaignCode || flowState?.campaignCode || '', values, publicSession?.tenantCode || tenantCode || flowState?.tenantCode || '')
+  }
+
   async function handleStartRetake() {
     if (!publicSession?.token) return
     setRetakeStarting(true)
@@ -231,7 +235,7 @@ export default function CandidateAssessmentResultPage() {
   return (
     <>
       {error ? <CAlert color='danger'>{error}</CAlert> : null}
-      {shouldShowReverify ? <AssessmentCampaignRecoveryCard title='Xác thực để xem kết quả' description='Phiên truy cập hiện tại không còn hiệu lực hoặc chưa được khôi phục. Vui lòng nhập email đã dùng khi đăng ký và mã OTP để tiếp tục.' initialEmail={publicSession?.verification?.target || flowState?.verification?.target || ''} loading={recovering} error='' message='' submitLabel='Xác thực và tiếp tục' onSubmit={handleRecoverAccess} /> : null}
+      {shouldShowReverify ? <AssessmentCampaignRecoveryCard title='Xác thực để xem kết quả' description='Phiên truy cập hiện tại không còn hiệu lực hoặc chưa được khôi phục. Vui lòng nhập email đã dùng khi đăng ký và mã OTP để tiếp tục.' initialEmail={publicSession?.verification?.target || flowState?.verification?.target || ''} loading={recovering} error='' message='' onRequestOtp={handleRequestRecoverOtp} submitLabel='Xác thực và tiếp tục' onSubmit={handleRecoverAccess} /> : null}
       {!shouldShowReverify && gate?.reason === 'ATTEMPT_CANCELLED' ? <CAlert color='warning'>Lượt làm bài này đã được hủy.</CAlert> : null}
       {!shouldShowReverify && retakeAvailable ? <div className='mb-3'><CAlert color='info'>Bài đánh giá trước của bạn đã được hủy. VitaminFun đã cho phép bạn thực hiện lại bài đánh giá.</CAlert><button type='button' className='btn btn-primary' onClick={handleStartRetake} disabled={retakeStarting}>{retakeStarting ? 'Đang chuẩn bị...' : 'Bắt đầu làm lại'}</button></div> : null}
       {shouldShowCompletion ? <AssessmentCampaignCompletionForm fields={completionFields} initialValues={completionInitialValues} submitting={completing} submitError={completionError} fieldErrors={completionFieldErrors} onSubmit={handleCompleteProfile} /> : null}

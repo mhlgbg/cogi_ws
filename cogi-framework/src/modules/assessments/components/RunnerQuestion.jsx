@@ -6,7 +6,7 @@ export default function RunnerQuestion({ attemptId, item, sectionIndex, question
   if (!item) return null
   const question = item.question || {}
   return (
-    <div className='assessment-runner-main'>
+    <div className='assessment-runner-question-stack'>
       {question?.stimulus ? (
         <StimulusRenderer
           attemptId={attemptId}

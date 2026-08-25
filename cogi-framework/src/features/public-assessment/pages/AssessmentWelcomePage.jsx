@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useTenant } from '../../../contexts/TenantContext'
 import AssessmentCampaignRecoveryCard from '../components/AssessmentCampaignRecoveryCard'
-import { getApiMessage, getPublicAssessmentCampaign, recoverPublicAssessmentCampaignParticipations, startPublicAssessmentCampaignRetake } from '../services/assessmentCampaignPublicService'
+import { getApiMessage, getPublicAssessmentCampaign, recoverPublicAssessmentCampaignParticipations, requestAssessmentCampaignOtp, startPublicAssessmentCampaignRetake } from '../services/assessmentCampaignPublicService'
 import { getFlowState, patchFlowState } from '../utils/assessmentFlowStorage'
 import { buildAssessmentRunnerPath, buildAssessmentRunnerResultPath, buildCampaignRegisterPath } from '../utils/assessmentRoutes'
 
@@ -87,6 +87,12 @@ export default function AssessmentWelcomePage() {
     } finally {
       setRecoveryLoading(false)
     }
+  }
+
+  async function handleRequestRecoveryOtp(values) {
+    const payload = await requestAssessmentCampaignOtp(campaignCode, values, tenantCode || tenant?.resolvedTenant?.tenantCode || tenant?.currentTenant?.tenantCode || '')
+    setRecoveryMessage('Mã xác thực đã được gửi tới email của bạn. Vui lòng kiểm tra hộp thư đến hoặc thư rác.')
+    return payload
   }
 
   function handleOpenRecoveredParticipation(item, email, resolvedCampaignCode) {
@@ -208,6 +214,7 @@ export default function AssessmentWelcomePage() {
               loading={recoveryLoading}
               error={recoveryError}
               message={recoveryMessage}
+              onRequestOtp={handleRequestRecoveryOtp}
               submitLabel='Xác thực và tìm lượt làm bài'
               onSubmit={handleRecover}
             />
