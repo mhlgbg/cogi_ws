@@ -120,6 +120,13 @@ function getSectionReorderErrorMessage(error) {
   return message
 }
 
+function getVersionSaveErrorMessage(error) {
+  const message = getApiMessage(error, 'Không lưu được phiên bản')
+  if (message === 'PUBLISHED_VERSION_STRUCTURAL_UPDATE_NOT_ALLOWED') return 'Phiên bản đã phát hành chỉ cho phép chỉnh sửa thông tin mô tả. Hãy tạo phiên bản mới nếu cần thay đổi cấu hình bài thi.'
+  if (message === 'Retired assessment versions cannot be modified.') return 'Phiên bản đã ngừng sử dụng hiện không cho phép chỉnh sửa.'
+  return message
+}
+
 function getNextQuestionOrder(rows) {
   return (Array.isArray(rows) ? rows : []).reduce((maxOrder, item) => Math.max(maxOrder, Number(item?.order || 0)), 0) + 1
 }
@@ -265,6 +272,7 @@ export default function AssessmentDetailPage() {
   const versions = useMemo(() => sortByOrder([...(assessment?.versions || [])], 'version').reverse(), [assessment])
   const currentVersionSummary = useMemo(() => versions.find((item) => String(getEntityId(item)) === String(selectedVersionId)) || versions[0] || null, [selectedVersionId, versions])
   const currentVersionIsDraft = String(versionDetail?.versionStatus || currentVersionSummary?.versionStatus || '').trim() === 'draft'
+  const currentVersionCanTest = Boolean(currentVersionSummary) && ['draft', 'published'].includes(String(currentVersionSummary?.versionStatus || '').trim())
   const speakingRequired = (versionDetail || currentVersionSummary)?.requiresSpeaking !== false
   const availableTabs = useMemo(() => TABS.filter((item) => item.key !== 'speaking-config' || speakingRequired), [speakingRequired])
   const activeTab = availableTabs.some((item) => item.key === requestedTab) ? requestedTab : 'overview'
@@ -400,7 +408,7 @@ export default function AssessmentDetailPage() {
       setVersionEditorValue(null)
       setSuccess(versionEditorMode === 'edit' ? 'Đã cập nhật phiên bản' : versionEditorMode === 'clone' ? 'Đã nhân bản phiên bản' : 'Đã tạo phiên bản mới')
     } catch (requestError) {
-      setError(getApiMessage(requestError, 'Không lưu được phiên bản'))
+      setError(getVersionSaveErrorMessage(requestError))
       throw requestError
     } finally {
       setSavingVersion(false)
@@ -533,6 +541,7 @@ export default function AssessmentDetailPage() {
           required: defaults.required,
           audioPlayLimit: defaults.audioPlayLimit === '' ? null : Number(defaults.audioPlayLimit),
           allowSeek: defaults.allowSeek,
+          minListenRatioBeforeAnswer: defaults.minListenRatioBeforeAnswer ?? null,
           minWords: defaults.minWords === '' ? null : Number(defaults.minWords),
           maxWords: defaults.maxWords === '' ? null : Number(defaults.maxWords),
         })
@@ -667,7 +676,7 @@ export default function AssessmentDetailPage() {
                 <div className='d-flex gap-2 flex-wrap justify-content-md-end'>
                   <CButton color='secondary' variant='outline' onClick={() => { setVersionEditorMode('edit'); setVersionEditorValue(versionDetail || currentVersionSummary); setShowVersionEditor(true) }} disabled={!currentVersionSummary}>Sửa phiên bản</CButton>
                   <CButton color='secondary' variant='outline' onClick={() => { setVersionEditorMode('clone'); setVersionEditorValue(buildCloneDraft(versionDetail || currentVersionSummary)); setShowVersionEditor(true) }} disabled={!currentVersionSummary}>Nhân bản</CButton>
-                  <CButton color='info' variant='outline' onClick={() => navigate(`/assessment-runner/start/${getEntityId(currentVersionSummary)}`)} disabled={!currentVersionSummary || (currentVersionSummary?.versionStatus || '') !== 'published'}>Làm thử</CButton>
+                  <CButton color='info' variant='outline' onClick={() => navigate(`/assessment-runner/start/${getEntityId(currentVersionSummary)}`)} disabled={!currentVersionCanTest} title={currentVersionCanTest ? 'Chạy thử phiên bản hiện tại bằng Assessment Runner. Dữ liệu thử không tính vào kết quả thật.' : 'Chưa có phiên bản hợp lệ để làm thử.'}>Làm thử</CButton>
                   <CButton color='success' variant='outline' onClick={handlePublishVersion} disabled={!currentVersionIsDraft || savingVersion || !versionDetail}>Publish</CButton>
                   <CButton color='warning' variant='outline' onClick={handleRetireVersion} disabled={savingVersion || !versionDetail}>Retire</CButton>
                   <CButton color='danger' variant='outline' onClick={handleDeleteVersion} disabled={!currentVersionIsDraft || savingVersion || !currentVersionSummary}>Xóa version</CButton>

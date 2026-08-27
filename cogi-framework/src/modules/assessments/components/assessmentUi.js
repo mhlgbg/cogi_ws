@@ -160,6 +160,9 @@ export function getRuntimeConfigSummary(assessmentQuestion) {
   const parts = []
   if (assessmentQuestion?.audioPlayLimit) parts.push(`Nghe tối đa ${assessmentQuestion.audioPlayLimit} lần`)
   if (assessmentQuestion?.allowSeek === false) parts.push('Không tua')
+  if (assessmentQuestion?.minListenRatioBeforeAnswer !== null && assessmentQuestion?.minListenRatioBeforeAnswer !== undefined && Number(assessmentQuestion?.minListenRatioBeforeAnswer) > 0) {
+    parts.push(`Nghe tối thiểu ${Math.round(Number(assessmentQuestion.minListenRatioBeforeAnswer) * 100)}%`)
+  }
   if (assessmentQuestion?.minWords || assessmentQuestion?.maxWords) {
     const minWords = assessmentQuestion?.minWords ?? 0
     const maxWords = assessmentQuestion?.maxWords ?? 0

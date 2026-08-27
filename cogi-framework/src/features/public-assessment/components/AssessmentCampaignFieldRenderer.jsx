@@ -16,7 +16,7 @@ export default function AssessmentCampaignFieldRenderer({ field, value, onChange
   const key = String(field?.key || '').trim()
   const type = String(field?.fieldType || '').trim().toLowerCase()
   const options = normalizeCampaignFieldOptions(field)
-  const placeholder = field?.placeholder || 'Chọn giá trị'
+  const placeholder = field?.placeholder || 'Chọn'
   const controlClassName = variant === 'result-completion'
     ? `assessment-result-completion-control${error ? ' is-invalid' : ''}`
     : error ? 'is-invalid' : ''

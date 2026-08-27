@@ -9,12 +9,22 @@ import ResumeStateNotice from '../components/ResumeStateNotice'
 import SubmitAssessmentModal from '../components/SubmitAssessmentModal'
 import AssessmentCampaignRecoveryCard from '../../../features/public-assessment/components/AssessmentCampaignRecoveryCard'
 import { getApiMessage, restorePublicAssessmentAttemptAccess, startPublicAssessmentCampaignRetake } from '../../../features/public-assessment/services/assessmentCampaignPublicService'
-import { getRuntimeApiDetails, getRuntimeApiMessage, getAssessmentAttempt, registerAssessmentAudioPlay, resumeAssessmentAttempt, saveAssessmentAnswer, submitAssessmentAttempt, updateAssessmentProgress } from '../services/assessmentRuntimeApi'
+import { getRuntimeApiDetails, getRuntimeApiMessage, getAssessmentAttempt, markAudioListenRequirementSatisfied, registerAssessmentAudioPlay, resumeAssessmentAttempt, saveAssessmentAnswer, submitAssessmentAttempt, updateAssessmentProgress } from '../services/assessmentRuntimeApi'
 import { getFlowState, patchFlowState } from '../../../features/public-assessment/utils/assessmentFlowStorage'
 import '../components/assessment-runner.css'
 
 function flattenQuestions(sections = []) {
-  return sections.flatMap((section) => (Array.isArray(section?.questions) ? section.questions.map((item) => ({ ...item, section })) : []))
+  return sections.flatMap((section, sectionIndex) => (
+    Array.isArray(section?.questions)
+      ? section.questions.map((item, questionIndex) => ({
+        ...item,
+        section,
+        sectionIndex,
+        questionIndex,
+        flatIndex: 0,
+      }))
+      : []
+  )).map((item, flatIndex) => ({ ...item, flatIndex }))
 }
 
 function findQuestionEntry(sections, assessmentQuestionId) {
@@ -35,6 +45,36 @@ function isAnswerComplete(questionType, answerData) {
   if (type === 'multiple_choice') return Array.isArray(answerData.selectedOptionIds) && answerData.selectedOptionIds.length > 0
   if (type === 'short_answer' || type === 'essay' || type === 'fill_blank') return String(answerData.text || '').trim().length > 0
   return false
+}
+
+function getQuestionStatus(entry, answerData) {
+  const answered = isAnswerComplete(entry?.question?.type, answerData)
+  const required = entry?.required !== false
+  return {
+    answered,
+    unanswered: answered === false,
+    required,
+    requiredUnanswered: required && answered === false,
+  }
+}
+
+function buildMissingQuestionItem(entry) {
+  return {
+    assessmentQuestionId: entry?.assessmentQuestionId || entry?.assessmentQuestionDocumentId || '',
+    order: Number(entry?.questionIndex || 0) + 1,
+    flatOrder: Number(entry?.flatIndex || 0) + 1,
+    sectionCode: entry?.section?.code || '',
+    sectionTitle: entry?.section?.title || entry?.section?.code || 'Phần',
+    questionCode: entry?.question?.code || entry?.question?.title || '',
+    questionNumber: Number(entry?.questionIndex || 0) + 1,
+  }
+}
+
+function canAnswerAudioQuestion({ hasAudio = false, audioPlayCount = 0, minListenRatioBeforeAnswer = 0, listenRequirementSatisfied = false }) {
+  if (!hasAudio) return true
+  const threshold = Number(minListenRatioBeforeAnswer || 0)
+  if (threshold > 0) return listenRequirementSatisfied === true
+  return Number(audioPlayCount || 0) >= 1
 }
 
 function getAutosaveDelay(questionType) {
@@ -62,10 +102,18 @@ function mapRunnerRecoveryError(error, fallback = 'Không thể khôi phục lư
   return message || fallback
 }
 
+function buildAssessmentVersionPath(attempt) {
+  const assessmentId = attempt?.assessment?.id || attempt?.assessment?.documentId || ''
+  const versionId = attempt?.assessmentVersion?.id || attempt?.assessmentVersion?.documentId || ''
+  if (!assessmentId) return '/assessments'
+  return `/assessments/${assessmentId}?tab=structure&version=${versionId}`
+}
+
 export default function AssessmentRunnerPage() {
   const navigate = useNavigate()
   const { attemptId, tenantCode } = useParams()
   const questionViewportRef = useRef(null)
+  const audioPlayerRef = useRef(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [autoSubmitting, setAutoSubmitting] = useState(false)
@@ -82,6 +130,7 @@ export default function AssessmentRunnerPage() {
   const [submitModalVisible, setSubmitModalVisible] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [missingRequired, setMissingRequired] = useState([])
+  const [submitModalMode, setSubmitModalMode] = useState('confirm')
   const [resumeNoticeVisible, setResumeNoticeVisible] = useState(false)
   const [submittedJustNow, setSubmittedJustNow] = useState(false)
   const [autoSubmittedByTimeout, setAutoSubmittedByTimeout] = useState(false)
@@ -107,12 +156,20 @@ export default function AssessmentRunnerPage() {
   const flatQuestions = useMemo(() => flattenQuestions(sections), [sections])
   const totalQuestions = Number(runtime?.progress?.totalQuestions || definition?.version?.totalQuestions || flatQuestions.length || 0)
   const answerMap = useMemo(() => toAnswerMap(runtime?.answers || []), [runtime?.answers])
-  const answeredMap = useMemo(() => flatQuestions.reduce((result, item) => {
+  const questionStates = useMemo(() => flatQuestions.reduce((result, item) => {
+    const questionId = String(item?.assessmentQuestionId || item?.assessmentQuestionDocumentId || '')
     const answer = answerMap[String(item?.assessmentQuestionId || '')]
-    result[String(item?.assessmentQuestionId || '')] = isAnswerComplete(item?.question?.type, answerDrafts[String(item?.assessmentQuestionId || '')] ?? answer?.answerData)
+    const answerData = answerDrafts[questionId] ?? answer?.answerData
+    result[questionId] = getQuestionStatus(item, answerData)
     return result
   }, {}), [answerDrafts, answerMap, flatQuestions])
+  const answeredMap = useMemo(() => Object.keys(questionStates).reduce((result, key) => {
+    result[key] = questionStates[key]?.answered === true
+    return result
+  }, {}), [questionStates])
   const answeredCount = useMemo(() => Object.values(answeredMap).filter((value) => value === true).length, [answeredMap])
+  const unansweredQuestions = useMemo(() => flatQuestions.filter((item) => questionStates[String(item?.assessmentQuestionId || item?.assessmentQuestionDocumentId || '')]?.unanswered === true), [flatQuestions, questionStates])
+  const requiredUnansweredQuestions = useMemo(() => flatQuestions.filter((item) => questionStates[String(item?.assessmentQuestionId || item?.assessmentQuestionDocumentId || '')]?.requiredUnanswered === true), [flatQuestions, questionStates])
 
   const currentEntry = useMemo(() => findQuestionEntry(sections, currentAssessmentQuestionId) || flatQuestions[0] || null, [currentAssessmentQuestionId, flatQuestions, sections])
   const currentSection = currentEntry?.section || null
@@ -121,8 +178,23 @@ export default function AssessmentRunnerPage() {
   const currentQuestionIndex = Math.max(0, currentSectionQuestions.findIndex((item) => String(item?.assessmentQuestionId || item?.assessmentQuestionDocumentId || '') === String(currentEntry?.assessmentQuestionId || '')))
   const currentAnswerDraft = currentEntry ? answerDrafts[String(currentEntry.assessmentQuestionId || currentEntry.assessmentQuestionDocumentId || '')] ?? answerMap[String(currentEntry.assessmentQuestionId || '')]?.answerData ?? {} : {}
   const flatQuestionIndex = Math.max(0, flatQuestions.findIndex((item) => String(item?.assessmentQuestionId || '') === String(currentEntry?.assessmentQuestionId || '')))
-  const isFirstQuestion = flatQuestionIndex <= 0
-  const isLastQuestion = flatQuestionIndex >= flatQuestions.length - 1
+  const previousRequiredUnanswered = useMemo(() => {
+    if (!currentEntry) return null
+    for (let index = flatQuestionIndex - 1; index >= 0; index -= 1) {
+      const candidate = flatQuestions[index]
+      if (questionStates[String(candidate?.assessmentQuestionId || candidate?.assessmentQuestionDocumentId || '')]?.requiredUnanswered === true) return candidate
+    }
+    return null
+  }, [currentEntry, flatQuestionIndex, flatQuestions, questionStates])
+  const nextRequiredUnanswered = useMemo(() => {
+    if (!currentEntry) return null
+    for (let index = flatQuestionIndex + 1; index < flatQuestions.length; index += 1) {
+      const candidate = flatQuestions[index]
+      if (questionStates[String(candidate?.assessmentQuestionId || candidate?.assessmentQuestionDocumentId || '')]?.requiredUnanswered === true) return candidate
+    }
+    return null
+  }, [currentEntry, flatQuestionIndex, flatQuestions, questionStates])
+  const firstRequiredUnanswered = requiredUnansweredQuestions[0] || null
   const expiresAtMs = useMemo(() => {
     const raw = runtime?.expiresAt || attempt?.expiresAt || serverSyncRef.current.expiresAt || null
     if (!raw) return null
@@ -133,6 +205,23 @@ export default function AssessmentRunnerPage() {
   const readOnly = ['submitted', 'expired', 'cancelled'].includes(String(attempt?.status || '').trim())
   const submitted = String(attempt?.status || '').trim() === 'submitted'
   const expired = String(attempt?.status || '').trim() === 'expired' || remainingSeconds === 0
+  const currentAudioState = audioStates[String(currentEntry?.assessmentQuestionId || '')] || { audioPlayCount: 0, audioPlayLimit: currentEntry?.audioPlayLimit ?? null, remaining: currentEntry?.audioPlayLimit ?? null, allowSeek: currentEntry?.allowSeek !== false, minListenRatioBeforeAnswer: currentEntry?.minListenRatioBeforeAnswer ?? null, listenRequirementSatisfied: false, currentPlaybackRatio: 0, isPlaying: false }
+  const currentMinListenRatio = Number(currentEntry?.minListenRatioBeforeAnswer || 0)
+  const currentHasAudio = Boolean(currentEntry?.question?.stimulus?.audioAsset)
+  const currentRequiresListenThreshold = currentHasAudio && currentMinListenRatio > 0
+  const currentCanAnswerAudio = canAnswerAudioQuestion({
+    hasAudio: currentHasAudio,
+    audioPlayCount: currentAudioState?.audioPlayCount,
+    minListenRatioBeforeAnswer: currentMinListenRatio,
+    listenRequirementSatisfied: currentAudioState?.listenRequirementSatisfied === true,
+  })
+  const answersLockedByListenRequirement = !readOnly && !expired && currentCanAnswerAudio === false
+  const audioDisabled = readOnly || expired
+  const answerLockedMessage = answersLockedByListenRequirement
+    ? currentRequiresListenThreshold
+        ? `Nghe ít nhất ${Math.round(currentMinListenRatio * 100)}% để chọn đáp án.`
+        : 'Hãy nhấn Nghe trước khi trả lời.'
+    : ''
 
   useEffect(() => {
     mountedRef.current = true
@@ -237,13 +326,21 @@ export default function AssessmentRunnerPage() {
       result[key] = mappedAnswers[key]?.answerData || {}
       return result
     }, {}))
-    setAudioStates(Object.keys(mappedAnswers).reduce((result, key) => {
-      const current = mappedAnswers[key]
+    setAudioStates(flattenQuestions(payload?.candidateDefinition?.sections || []).reduce((result, item) => {
+      const key = String(item?.assessmentQuestionId || item?.assessmentQuestionDocumentId || '')
+      const current = mappedAnswers[key] || null
+      const audioPlayLimit = item?.audioPlayLimit ?? null
       result[key] = {
         audioPlayCount: current?.audioPlayCount || 0,
-        audioPlayLimit: findQuestionEntry(payload?.candidateDefinition?.sections || [], key)?.audioPlayLimit ?? null,
-        remaining: findQuestionEntry(payload?.candidateDefinition?.sections || [], key)?.audioPlayLimit === null || findQuestionEntry(payload?.candidateDefinition?.sections || [], key)?.audioPlayLimit === undefined ? null : Math.max(0, Number(findQuestionEntry(payload?.candidateDefinition?.sections || [], key)?.audioPlayLimit || 0) - Number(current?.audioPlayCount || 0)),
-        allowSeek: findQuestionEntry(payload?.candidateDefinition?.sections || [], key)?.allowSeek !== false,
+        audioPlayLimit,
+        remaining: audioPlayLimit === null || audioPlayLimit === undefined ? null : Math.max(0, Number(audioPlayLimit || 0) - Number(current?.audioPlayCount || 0)),
+        allowSeek: item?.allowSeek !== false,
+        minListenRatioBeforeAnswer: item?.minListenRatioBeforeAnswer ?? null,
+        listenRequirementSatisfied: current?.listenRequirementSatisfied === true,
+        listenRequirementSatisfiedAt: current?.listenRequirementSatisfiedAt || null,
+        currentPlaybackRatio: 0,
+        playId: '',
+        mediaFailedBeforePlayback: false,
         isPlaying: false,
       }
       return result
@@ -434,6 +531,25 @@ export default function AssessmentRunnerPage() {
     }, delay)
   }
 
+  async function flushPendingSave(entry) {
+    const questionId = String(entry?.assessmentQuestionId || entry?.assessmentQuestionDocumentId || '')
+    if (!questionId) return
+    if (!saveTimersRef.current[questionId]) return
+    window.clearTimeout(saveTimersRef.current[questionId])
+    delete saveTimersRef.current[questionId]
+    const answerData = answerDrafts[questionId] ?? answerMap[String(entry?.assessmentQuestionId || '')]?.answerData
+    await performSave(questionId, answerData || {}, entry)
+  }
+
+  function stopActiveAudioPlayback() {
+    audioPlayerRef.current?.stopPlayback?.()
+  }
+
+  async function beforeQuestionLeave() {
+    stopActiveAudioPlayback()
+    await flushPendingSave(currentEntry)
+  }
+
   async function handleUpdateProgress(section, item) {
     if (!attempt?.id || readOnly) return
     try {
@@ -444,18 +560,18 @@ export default function AssessmentRunnerPage() {
     }
   }
 
-  function goToQuestion(section, item) {
+  async function goToQuestion(section, item) {
     const questionId = String(item?.assessmentQuestionId || item?.assessmentQuestionDocumentId || '')
+    if (currentEntry && String(currentEntry?.assessmentQuestionId || currentEntry?.assessmentQuestionDocumentId || '') !== questionId) {
+      await beforeQuestionLeave()
+    }
     setCurrentAssessmentQuestionId(questionId)
     handleUpdateProgress(section, item)
   }
 
-  function moveQuestion(direction) {
-    if (!currentEntry) return
-    const index = flatQuestions.findIndex((item) => String(item?.assessmentQuestionId || '') === String(currentEntry?.assessmentQuestionId || ''))
-    const target = flatQuestions[index + direction]
+  async function moveToRequiredUnanswered(target) {
     if (!target) return
-    goToQuestion(target.section, target)
+    await goToQuestion(target.section, target)
   }
 
   async function handleRegisterAudioPlay() {
@@ -467,12 +583,53 @@ export default function AssessmentRunnerPage() {
         [String(currentEntry.assessmentQuestionId)]: {
           ...(prev[String(currentEntry.assessmentQuestionId)] || {}),
           ...payload,
-          isPlaying: true,
+          currentPlaybackRatio: 0,
+          mediaFailedBeforePlayback: false,
+          isPlaying: false,
         },
       }))
       return payload
     } catch (requestError) {
       throw new Error(getRuntimeApiMessage(requestError, 'Bạn đã sử dụng hết số lượt nghe.'))
+    }
+  }
+
+  async function handleMarkListenSatisfied(playId) {
+    if (!attempt?.id || !currentEntry || !playId) return
+    try {
+      const payload = await markAudioListenRequirementSatisfied(attempt.id, currentEntry.assessmentQuestionId, { playId }, runtimeRequestOptions)
+      setAudioStates((prev) => ({
+        ...prev,
+        [String(currentEntry.assessmentQuestionId)]: {
+          ...(prev[String(currentEntry.assessmentQuestionId)] || {}),
+          listenRequirementSatisfied: payload?.listenRequirementSatisfied === true,
+          listenRequirementSatisfiedAt: payload?.listenRequirementSatisfiedAt || null,
+        },
+      }))
+      setRuntime((prev) => prev ? {
+        ...prev,
+        answers: (() => {
+          const map = toAnswerMap(prev.answers || [])
+          const key = String(currentEntry.assessmentQuestionId || '')
+          const existing = map[key] || { assessmentQuestionId: key, answerData: null, audioPlayCount: prev.answers?.find?.((item) => String(item?.assessmentQuestionId || '') === key)?.audioPlayCount || 0 }
+          map[key] = {
+            ...existing,
+            listenRequirementSatisfied: payload?.listenRequirementSatisfied === true,
+            listenRequirementSatisfiedAt: payload?.listenRequirementSatisfiedAt || null,
+          }
+          return Object.values(map)
+        })(),
+      } : prev)
+    } catch (requestError) {
+      const message = getRuntimeApiMessage(requestError, 'Không thể xác nhận thời lượng nghe tối thiểu.')
+      setAudioStates((prev) => ({
+        ...prev,
+        [String(currentEntry.assessmentQuestionId)]: {
+          ...(prev[String(currentEntry.assessmentQuestionId)] || {}),
+          isPlaying: false,
+        },
+      }))
+      setError(message)
     }
   }
 
@@ -489,6 +646,7 @@ export default function AssessmentRunnerPage() {
 
   async function handleSubmit() {
     if (!attempt?.id) return
+    await beforeQuestionLeave()
     setSubmitting(true)
     setSubmitError('')
     setMissingRequired([])
@@ -516,17 +674,33 @@ export default function AssessmentRunnerPage() {
         setRuntime((prev) => prev ? { ...prev, attempt: { ...(prev.attempt || {}), status: 'cancelled' } } : prev)
       }
       setSubmitError(message === 'ATTEMPT_CANCELLED' ? 'Lượt làm bài này đã được quản trị viên hủy.' : message)
-      setMissingRequired(missing)
+      setMissingRequired(missing.length > 0 ? missing : requiredUnansweredQuestions.map(buildMissingQuestionItem))
+      setSubmitModalMode('incomplete')
+      setSubmitModalVisible(true)
     } finally {
       setSubmitting(false)
     }
   }
 
-  function jumpToMissing(item) {
+  async function jumpToMissing(item) {
     const target = findQuestionEntry(sections, item?.assessmentQuestionId)
     if (!target) return
     setSubmitModalVisible(false)
-    goToQuestion(target.section, target)
+    await goToQuestion(target.section, target)
+  }
+
+  function openSubmitModal() {
+    const missing = requiredUnansweredQuestions.map(buildMissingQuestionItem)
+    setSubmitError('')
+    setMissingRequired(missing)
+    setSubmitModalMode(missing.length > 0 ? 'incomplete' : 'confirm')
+    setSubmitModalVisible(true)
+  }
+
+  async function handleContinueIncomplete() {
+    if (!firstRequiredUnanswered) return
+    setSubmitModalVisible(false)
+    await goToQuestion(firstRequiredUnanswered.section, firstRequiredUnanswered)
   }
 
   if (loading) {
@@ -598,8 +772,8 @@ export default function AssessmentRunnerPage() {
             expired={expired}
             readOnlyMode={readOnly}
             submittedAt={attempt?.submittedAt || null}
-            onOpenSubmit={() => setSubmitModalVisible(true)}
-            onBack={() => navigate('/assessments')}
+            onOpenSubmit={openSubmitModal}
+            onBack={() => navigate(String(attempt?.sourceType || '').trim() === 'admin_test' ? buildAssessmentVersionPath(attempt) : '/assessments')}
           />
         </CCardBody>
       </CCard>
@@ -613,32 +787,60 @@ export default function AssessmentRunnerPage() {
         <div className='assessment-runner-main'>
           <div ref={questionViewportRef} className='assessment-runner-question-stage'>
             <RunnerQuestion
+              audioPlayerRef={audioPlayerRef}
               attemptId={attempt?.id}
               item={currentEntry}
               sectionIndex={currentSectionIndex}
               questionIndex={currentQuestionIndex}
               totalQuestions={totalQuestions}
               value={currentAnswerDraft}
-              disabled={readOnly || expired}
+              disabled={readOnly || expired || answersLockedByListenRequirement}
+              audioDisabled={audioDisabled}
+              answerLockedMessage={answerLockedMessage}
               saveState={saveStates[String(currentEntry?.assessmentQuestionId || '')] || { status: 'saved' }}
-              audioState={audioStates[String(currentEntry?.assessmentQuestionId || '')] || { audioPlayCount: 0, audioPlayLimit: currentEntry?.audioPlayLimit ?? null, remaining: currentEntry?.audioPlayLimit ?? null, allowSeek: currentEntry?.allowSeek !== false, isPlaying: false }}
+              audioState={currentAudioState}
               onChange={(nextValue) => scheduleSave(currentEntry, nextValue)}
               onRegisterPlay={handleRegisterAudioPlay}
+              onMarkListenSatisfied={handleMarkListenSatisfied}
               onSyncAudioState={handleSyncAudioState}
             />
           </div>
 
           <div className='assessment-runner-bottom-bar'>
             <div className='assessment-runner-navigation'>
-              <CButton color='secondary' variant='outline' onClick={() => moveQuestion(-1)} disabled={isFirstQuestion}>← Trước</CButton>
+              <CButton
+                type='button'
+                color='secondary'
+                variant='outline'
+                onClick={() => void moveToRequiredUnanswered(previousRequiredUnanswered)}
+                disabled={readOnly || !previousRequiredUnanswered}
+                title='Đi tới câu chưa làm gần nhất phía trước'
+                aria-label='Đi tới câu chưa làm gần nhất phía trước'
+              >
+                <span className='assessment-runner-nav-label-desktop'>← Câu chưa làm trước</span>
+                <span className='assessment-runner-nav-label-mobile'>← Chưa làm trước</span>
+              </CButton>
               <div className='assessment-runner-statusline small text-body-secondary'>
                 {readOnly
                   ? submitted ? 'Chế độ xem lại bài đã nộp' : 'Chế độ chỉ đọc'
+                  : requiredUnansweredQuestions.length === 0 ? 'Bạn đã hoàn thành tất cả câu bắt buộc.'
                   : saveStates[String(currentEntry?.assessmentQuestionId || '')]?.status === 'error' ? saveStates[String(currentEntry?.assessmentQuestionId || '')]?.message || 'Lỗi lưu. Vui lòng thử lại.' : saveStates[String(currentEntry?.assessmentQuestionId || '')]?.status === 'saving' ? 'Đang lưu...' : 'Đã lưu tự động'}
               </div>
               <div className='d-flex gap-2 flex-wrap assessment-runner-navigation-actions'>
-                {!readOnly && !isLastQuestion ? <CButton color='primary' variant='outline' onClick={() => moveQuestion(1)}>Tiếp →</CButton> : null}
-                {!readOnly && isLastQuestion ? <CButton color='primary' onClick={() => setSubmitModalVisible(true)} disabled={expired}>Nộp bài</CButton> : null}
+                {!readOnly ? (
+                  <CButton
+                    type='button'
+                    color='primary'
+                    variant='outline'
+                    onClick={() => void moveToRequiredUnanswered(nextRequiredUnanswered)}
+                    disabled={!nextRequiredUnanswered}
+                    title='Đi tới câu chưa làm gần nhất phía sau'
+                    aria-label='Đi tới câu chưa làm gần nhất phía sau'
+                  >
+                    <span className='assessment-runner-nav-label-desktop'>Câu chưa làm tiếp theo →</span>
+                    <span className='assessment-runner-nav-label-mobile'>Chưa làm tiếp →</span>
+                  </CButton>
+                ) : null}
               </div>
             </div>
           </div>
@@ -647,6 +849,7 @@ export default function AssessmentRunnerPage() {
 
       <SubmitAssessmentModal
         visible={submitModalVisible}
+        mode={submitModalMode}
         answeredCount={answeredCount}
         totalQuestions={totalQuestions}
         missingRequired={missingRequired}
@@ -654,6 +857,7 @@ export default function AssessmentRunnerPage() {
         submitError={submitError}
         onClose={() => setSubmitModalVisible(false)}
         onSubmit={handleSubmit}
+        onContinue={handleContinueIncomplete}
         onJumpToMissing={jumpToMissing}
       />
     </div>

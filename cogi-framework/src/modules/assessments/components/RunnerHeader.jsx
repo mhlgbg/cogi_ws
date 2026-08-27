@@ -5,13 +5,15 @@ import { formatDateTime, getAttemptStatusLabel } from './assessmentUi'
 export default function RunnerHeader({ attempt, version, progress, remainingSeconds, expired, readOnlyMode = false, submittedAt = null, onOpenSubmit, onBack }) {
   const status = String(attempt?.status || '').trim()
   const submitted = status === 'submitted'
+  const testMode = String(attempt?.sourceType || '').trim() === 'admin_test'
   return (
     <div className='assessment-runner-header'>
       <div>
         <div className='d-flex gap-2 flex-wrap mb-2'>
-          <CButton color='secondary' variant='outline' size='sm' onClick={onBack}>Về danh sách đề</CButton>
+          <CButton color='secondary' variant='outline' size='sm' onClick={onBack}>{testMode ? 'Về phiên bản' : 'Về danh sách đề'}</CButton>
           <CBadge color='secondary'>{attempt?.code || '-'}</CBadge>
           <CBadge color={submitted ? 'success' : status === 'expired' ? 'danger' : status === 'cancelled' ? 'secondary' : 'info'}>{getAttemptStatusLabel(status)}</CBadge>
+          {testMode ? <CBadge color='warning'>CHẾ ĐỘ LÀM THỬ</CBadge> : null}
         </div>
         <div className='fs-4 fw-semibold'>{version?.title || version?.code || 'Assessment Runner'}</div>
         <div className='assessment-runner-meta'>

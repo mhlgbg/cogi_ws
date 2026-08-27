@@ -3,11 +3,13 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { CAlert, CBadge, CButton, CCard, CCardBody, CCardHeader, CCol, CFormInput, CFormLabel, CFormSelect, CModal, CModalBody, CModalFooter, CModalHeader, CModalTitle, CNav, CNavItem, CNavLink, CRow, CSpinner, CTable, CTableBody, CTableDataCell, CTableHead, CTableHeaderCell, CTableRow } from '@coreui/react'
 import AssessmentCampaignEditorModal from '../components/AssessmentCampaignEditorModal'
 import AssessmentCampaignFieldEditorModal from '../components/AssessmentCampaignFieldEditorModal'
+import AssessmentCampaignPublicContentModal from '../components/AssessmentCampaignPublicContentModal'
 import AssessmentCampaignRuleEditorModal from '../components/AssessmentCampaignRuleEditorModal'
 import AssessmentCampaignResolverPreview from '../components/AssessmentCampaignResolverPreview'
 import { createAssessmentCampaignField, createAssessmentCampaignRule, deleteAssessmentCampaignField, deleteAssessmentCampaignRule, finalizeAssessmentCampaignAttemptTimeout, finalizeOverdueAssessmentCampaignAttempts, getApiMessage, getAssessmentCampaign, listAssessmentCampaignLeads, listAssessmentCampaignParticipations, listAssessmentCampaignResults, reorderAssessmentCampaignFields, updateAssessmentCampaign, updateAssessmentCampaignField, updateAssessmentCampaignRule } from '../services/assessmentCampaignService'
 import { getAssessmentVersions } from '../../assessments/services/assessmentService'
 import { formatDateTime, getEntityId } from '../../learning-management/utils/questionBankUi'
+import AssessmentCampaignLandingRenderer from '../../../features/public-assessment/components/AssessmentCampaignLandingRenderer'
 
 const TABS = [
   { key: 'overview', label: 'Tổng quan' },
@@ -115,6 +117,7 @@ export default function AssessmentCampaignDetailPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [editorVisible, setEditorVisible] = useState(false)
+  const [publicEditorVisible, setPublicEditorVisible] = useState(false)
   const [fieldEditorVisible, setFieldEditorVisible] = useState(false)
   const [ruleEditorVisible, setRuleEditorVisible] = useState(false)
   const [editingField, setEditingField] = useState(null)
@@ -319,6 +322,28 @@ export default function AssessmentCampaignDetailPage() {
     }
   }
 
+  async function handlePublicContentSubmit(payload) {
+    setSaving(true)
+    setError('')
+    setSuccess('')
+    try {
+      const next = await updateAssessmentCampaign(id, payload)
+      setCampaign(next)
+      setPublicEditorVisible(false)
+      setSuccess('Đã cập nhật nội dung public')
+    } catch (requestError) {
+      setError(getApiMessage(requestError, 'Không cập nhật được nội dung public'))
+      throw requestError
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const publicTitle = String(campaign?.publicTitle || '').trim()
+  const publicDescription = String(campaign?.publicDescription || '').trim()
+  const landingHtml = String(campaign?.landingHtml || campaign?.publicContent || '').trim()
+  const usesCustomLanding = Boolean(landingHtml)
+
   if (loading) return <div className='py-4 d-flex align-items-center gap-2'><CSpinner size='sm' /><span>Đang tải chi tiết chiến dịch đánh giá...</span></div>
   if (!campaign) return <CAlert color='warning'>Không tìm thấy chiến dịch đánh giá.</CAlert>
 
@@ -370,11 +395,54 @@ export default function AssessmentCampaignDetailPage() {
 
       {activeTab === 'results' ? <CCard className='ai-card'><CCardHeader><strong>Kết quả</strong></CCardHeader><CCardBody>{results.length === 0 ? <div className='text-body-secondary'>Chưa có kết quả nào.</div> : <CTable responsive hover align='middle'><CTableHead><CTableRow><CTableHeaderCell>Lead</CTableHeaderCell><CTableHeaderCell>Lớp</CTableHeaderCell><CTableHeaderCell>Assessment</CTableHeaderCell><CTableHeaderCell>Submitted</CTableHeaderCell><CTableHeaderCell>Provisional Level</CTableHeaderCell><CTableHeaderCell>Confirmed Level</CTableHeaderCell><CTableHeaderCell>Status</CTableHeaderCell><CTableHeaderCell>Actions</CTableHeaderCell></CTableRow></CTableHead><CTableBody>{results.map((row) => <CTableRow key={`${row.participationId}-${row.result?.id || ''}`}><CTableDataCell>{row.lead?.fullName || '-'}</CTableDataCell><CTableDataCell>{row.grade || '-'}</CTableDataCell><CTableDataCell>{row.assessmentVersion?.code || '-'}</CTableDataCell><CTableDataCell>{formatDateTime(row.assessmentAttempt?.submittedAt)}</CTableDataCell><CTableDataCell>{row.provisionalLevel || '-'}</CTableDataCell><CTableDataCell>{row.confirmedLevel || '-'}</CTableDataCell><CTableDataCell>{row.status || '-'}</CTableDataCell><CTableDataCell>{row.result?.id ? <CButton size='sm' color='info' variant='outline' onClick={() => navigate(`/assessment-results/${row.result.id}`)}>Xem kết quả</CButton> : null}</CTableDataCell></CTableRow>)}</CTableBody></CTable>}</CCardBody></CCard> : null}
 
-      {activeTab === 'public' ? <CCard className='ai-card'><CCardHeader><strong>Nội dung/Public</strong></CCardHeader><CCardBody><div className='d-grid gap-2'><div><strong>Public title:</strong> {campaign.publicTitle || '-'}</div><div><strong>Public description:</strong> {campaign.publicDescription || '-'}</div><div><strong>Success message:</strong> {campaign.successMessage || '-'}</div><div><strong>Result intro:</strong> {campaign.resultIntro || '-'}</div><div><strong>Public URL:</strong> {campaign.publicUrl || '-'}</div></div></CCardBody></CCard> : null}
+      {activeTab === 'public' ? (
+        <div className='d-grid gap-4'>
+          <CCard className='ai-card'>
+            <CCardHeader className='d-flex justify-content-between align-items-center gap-2 flex-wrap'>
+              <strong>Nội dung/Public</strong>
+              <div className='d-flex gap-2 flex-wrap'>
+                <CButton color='secondary' variant='outline' onClick={() => window.open(`/campaign/${campaign.slug}`, '_blank', 'noopener,noreferrer')}>Mở trang public</CButton>
+                <CButton color='primary' onClick={() => setPublicEditorVisible(true)}>Sửa nội dung public</CButton>
+              </div>
+            </CCardHeader>
+            <CCardBody>
+              <div className='d-grid gap-3'>
+                <div><strong>Public title:</strong> {publicTitle || '-'}</div>
+                <div><strong>Public description:</strong> {publicDescription || '-'}</div>
+                <div><strong>Public URL:</strong> {campaign.publicUrl || '-'}</div>
+                <div>
+                  <strong>Trang giới thiệu:</strong> {usesCustomLanding ? 'Đã tùy chỉnh' : 'Đang dùng nội dung mặc định'}
+                </div>
+                <div><strong>Success message:</strong> {campaign.successMessage || '-'}</div>
+                <div><strong>Result intro:</strong> {campaign.resultIntro || '-'}</div>
+              </div>
+            </CCardBody>
+          </CCard>
+
+          <CCard className='ai-card'>
+            <CCardHeader className='d-flex justify-content-between align-items-center gap-2 flex-wrap'>
+              <strong>Nội dung trang giới thiệu</strong>
+              <div className='small text-body-secondary'>{usesCustomLanding ? 'Preview landing HTML đã sanitize' : 'Preview mẫu mặc định đang fallback'}</div>
+            </CCardHeader>
+            <CCardBody>
+              <div className='border rounded-4 p-4 bg-body-tertiary'>
+                <div className='assessment-public-shell' style={{ width: '100%' }}>
+                  <AssessmentCampaignLandingRenderer
+                    campaign={campaign}
+                    renderStartAction={(key) => <CButton key={`tab-preview-start:${key}`} type='button' color='primary' className='assessment-primary-cta' disabled>BẮT ĐẦU KIỂM TRA</CButton>}
+                    renderRecoveryAction={(key) => <CButton key={`tab-preview-recovery:${key}`} type='button' color='secondary' variant='outline' className='assessment-primary-cta' disabled>TIẾP TỤC / XEM LẠI KẾT QUẢ</CButton>}
+                  />
+                </div>
+              </div>
+            </CCardBody>
+          </CCard>
+        </div>
+      ) : null}
 
       {activeTab === 'tracking' ? <CCard className='ai-card'><CCardHeader><strong>Theo dõi</strong></CCardHeader><CCardBody><div className='d-grid gap-2 text-body-secondary'><div>Lead created</div><div>OTP verified</div><div>Participation created</div><div>Assessment selected</div><div>Assessment started</div><div>Submitted</div><div>Result ready</div><div>Speaking completed</div><div>Confirmed</div></div></CCardBody></CCard> : null}
 
       <AssessmentCampaignEditorModal visible={editorVisible} saving={saving} campaign={campaign} onClose={() => { if (!saving) setEditorVisible(false) }} onSubmit={handleCampaignSubmit} />
+      <AssessmentCampaignPublicContentModal visible={publicEditorVisible} saving={saving} campaign={campaign} onClose={() => { if (!saving) setPublicEditorVisible(false) }} onSubmit={handlePublicContentSubmit} />
       <AssessmentCampaignFieldEditorModal visible={fieldEditorVisible} saving={saving} field={editingField} onClose={() => { if (!saving) { setFieldEditorVisible(false); setEditingField(null) } }} onSubmit={handleFieldSubmit} />
       <AssessmentCampaignRuleEditorModal visible={ruleEditorVisible} saving={saving} rule={editingRule} assessmentVersions={assessmentVersions} onClose={() => { if (!saving) { setRuleEditorVisible(false); setEditingRule(null) } }} onSubmit={handleRuleSubmit} />
       <CModal visible={timeoutDialog.visible} onClose={closeTimeoutDialog} alignment='center'>

@@ -55,6 +55,11 @@ export async function registerAssessmentAudioPlay(attemptId, assessmentQuestionI
   return unwrapSuccess(res.data)
 }
 
+export async function markAudioListenRequirementSatisfied(attemptId, assessmentQuestionId, data = {}, options = {}) {
+  const res = await api.post(`/assessment-runtime/assessment-attempts/${attemptId}/questions/${assessmentQuestionId}/audio-listen-satisfied`, data, buildRequestConfig(options))
+  return unwrapSuccess(res.data)
+}
+
 export async function updateAssessmentProgress(attemptId, data = {}, options = {}) {
   const res = await api.put(`/assessment-runtime/assessment-attempts/${attemptId}/progress`, data, buildRequestConfig(options))
   return unwrapSuccess(res.data)

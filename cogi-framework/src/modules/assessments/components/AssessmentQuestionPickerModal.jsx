@@ -25,13 +25,22 @@ import { getQuestions } from '../../learning-management/services/learningObjectA
 import { getApiMessage } from '../services/assessmentService'
 import { getEntityId, getQuestionTypeLabel, truncateText } from '../../learning-management/utils/questionBankUi'
 
+function parsePercentToRatio(value) {
+  const text = String(value || '').trim()
+  if (text === '') return { ratio: null, error: '' }
+  const percent = Number(text)
+  if (!Number.isFinite(percent)) return { ratio: null, error: 'Tỷ lệ nghe tối thiểu phải là một số hợp lệ.' }
+  if (percent < 0 || percent > 100) return { ratio: null, error: 'Tỷ lệ nghe tối thiểu phải nằm trong khoảng 0 đến 100%.' }
+  return { ratio: percent === 0 ? 0 : percent / 100, error: '' }
+}
+
 export default function AssessmentQuestionPickerModal({ visible, section, bootstrap, saving, onClose, onAdd }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [rows, setRows] = useState([])
   const [filters, setFilters] = useState({ q: '', qDraft: '', subjectId: '', gradeId: '', skillId: '', type: '', difficulty: '', questionStatus: 'active', hasStimulus: '' })
   const [selectedIds, setSelectedIds] = useState([])
-  const [defaults, setDefaults] = useState({ points: '1', required: true, audioPlayLimit: '', allowSeek: true, minWords: '', maxWords: '' })
+  const [defaults, setDefaults] = useState({ points: '1', required: true, audioPlayLimit: '', allowSeek: true, minListenRatioBeforeAnswerPercent: '', minWords: '', maxWords: '' })
 
   const subjects = bootstrap?.subjects || []
   const grades = bootstrap?.grades || []
@@ -88,7 +97,12 @@ export default function AssessmentQuestionPickerModal({ visible, section, bootst
       return
     }
     try {
-      await onAdd?.({ questionIds: selectedIds, defaults })
+      const listenRatio = parsePercentToRatio(defaults.minListenRatioBeforeAnswerPercent)
+      if (listenRatio.error) {
+        setError(listenRatio.error)
+        return
+      }
+      await onAdd?.({ questionIds: selectedIds, defaults: { ...defaults, minListenRatioBeforeAnswer: listenRatio.ratio } })
       setError('')
     } catch (requestError) {
       setError(getApiMessage(requestError, 'Không thêm được câu hỏi vào phần thi'))
@@ -124,9 +138,11 @@ export default function AssessmentQuestionPickerModal({ visible, section, bootst
           <CCol md={2} className='d-flex align-items-end'><CFormCheck label='Bắt buộc' checked={defaults.required} onChange={(event) => setDefaults((prev) => ({ ...prev, required: event.target.checked }))} /></CCol>
           <CCol md={2}><CFormLabel>Giới hạn lượt nghe</CFormLabel><CFormInput type='number' value={defaults.audioPlayLimit} onChange={(event) => setDefaults((prev) => ({ ...prev, audioPlayLimit: event.target.value }))} /></CCol>
           <CCol md={2} className='d-flex align-items-end'><CFormCheck label='Cho phép tua' checked={defaults.allowSeek} onChange={(event) => setDefaults((prev) => ({ ...prev, allowSeek: event.target.checked }))} /></CCol>
+          <CCol md={2}><CFormLabel>Nghe tối thiểu (%)</CFormLabel><CFormInput type='number' min={0} max={100} step='0.01' value={defaults.minListenRatioBeforeAnswerPercent} onChange={(event) => setDefaults((prev) => ({ ...prev, minListenRatioBeforeAnswerPercent: event.target.value }))} placeholder='75' /></CCol>
           <CCol md={2}><CFormLabel>Từ tối thiểu</CFormLabel><CFormInput type='number' value={defaults.minWords} onChange={(event) => setDefaults((prev) => ({ ...prev, minWords: event.target.value }))} /></CCol>
           <CCol md={2}><CFormLabel>Từ tối đa</CFormLabel><CFormInput type='number' value={defaults.maxWords} onChange={(event) => setDefaults((prev) => ({ ...prev, maxWords: event.target.value }))} /></CCol>
         </CRow>
+        <div className='small text-body-secondary mb-4'>Chỉ áp dụng khi câu/ngữ liệu có audio. Ví dụ 75%: người thi phải nghe ít nhất 75% một lượt audio trước khi có thể chọn/trả lời. Để trống hoặc 0: người thi vẫn phải bắt đầu nghe ít nhất một lần trước khi trả lời.</div>
 
         {loading ? <div className='d-flex align-items-center gap-2 py-3'><CSpinner size='sm' /><span>Đang tải câu hỏi...</span></div> : (
           <CTable hover responsive align='middle' className='ai-table'>

@@ -2,19 +2,21 @@ import { CBadge } from '@coreui/react'
 import QuestionRenderer from './QuestionRenderer'
 import StimulusRenderer from './StimulusRenderer'
 
-export default function RunnerQuestion({ attemptId, item, sectionIndex, questionIndex, totalQuestions, value, disabled, saveState, audioState, onChange, onRegisterPlay, onSyncAudioState }) {
+export default function RunnerQuestion({ audioPlayerRef, attemptId, item, sectionIndex, questionIndex, totalQuestions, value, disabled, audioDisabled = false, answerLockedMessage = '', saveState, audioState, onChange, onRegisterPlay, onMarkListenSatisfied, onSyncAudioState }) {
   if (!item) return null
   const question = item.question || {}
   return (
     <div className='assessment-runner-question-stack'>
       {question?.stimulus ? (
         <StimulusRenderer
+          audioPlayerRef={audioPlayerRef}
           attemptId={attemptId}
           assessmentQuestionId={item.assessmentQuestionId || item.assessmentQuestionDocumentId}
           stimulus={question.stimulus}
           audioState={audioState}
-          disabled={disabled}
+          disabled={audioDisabled}
           onRegisterPlay={onRegisterPlay}
+          onMarkListenSatisfied={onMarkListenSatisfied}
           onSyncAudioState={onSyncAudioState}
         />
       ) : null}
@@ -32,6 +34,7 @@ export default function RunnerQuestion({ attemptId, item, sectionIndex, question
           </div>
         </div>
         <div className='mb-3' dangerouslySetInnerHTML={{ __html: question?.questionText || '' }} />
+        {answerLockedMessage ? <div className='assessment-runner-answer-lock-note'>{answerLockedMessage}</div> : null}
         <QuestionRenderer item={item} value={value} disabled={disabled} onChange={onChange} />
       </div>
     </div>

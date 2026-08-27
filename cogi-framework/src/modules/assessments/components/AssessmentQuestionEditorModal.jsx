@@ -17,6 +17,22 @@ import {
 import { getApiMessage } from '../services/assessmentService'
 import { getQuestionTypeLabel } from './assessmentUi'
 
+function formatRatioAsPercent(value) {
+  if (value === null || value === undefined || value === '') return ''
+  const ratio = Number(value)
+  if (!Number.isFinite(ratio)) return ''
+  return String(ratio * 100)
+}
+
+function parsePercentToRatio(value) {
+  const text = String(value || '').trim()
+  if (text === '') return { ratio: null, error: '' }
+  const percent = Number(text)
+  if (!Number.isFinite(percent)) return { ratio: null, error: 'Tỷ lệ nghe tối thiểu phải là một số hợp lệ.' }
+  if (percent < 0 || percent > 100) return { ratio: null, error: 'Tỷ lệ nghe tối thiểu phải nằm trong khoảng 0 đến 100%.' }
+  return { ratio: percent === 0 ? 0 : percent / 100, error: '' }
+}
+
 function normalizeForm(item) {
   return {
     order: String(item?.order ?? 0),
@@ -24,6 +40,7 @@ function normalizeForm(item) {
     required: item?.required !== false,
     audioPlayLimit: String(item?.audioPlayLimit ?? ''),
     allowSeek: item?.allowSeek !== false,
+    minListenRatioBeforeAnswerPercent: formatRatioAsPercent(item?.minListenRatioBeforeAnswer),
     minWords: String(item?.minWords ?? ''),
     maxWords: String(item?.maxWords ?? ''),
     config: item?.config ? JSON.stringify(item.config, null, 2) : '',
@@ -48,6 +65,11 @@ export default function AssessmentQuestionEditorModal({ visible, saving, item, o
 
   async function handleSave() {
     try {
+      const listenRatio = parsePercentToRatio(form.minListenRatioBeforeAnswerPercent)
+      if (listenRatio.error) {
+        setError(listenRatio.error)
+        return
+      }
       await onSubmit?.({
         section: item?.section?.documentId || item?.section?.id || item?.section,
         question: item?.question?.documentId || item?.question?.id,
@@ -56,6 +78,7 @@ export default function AssessmentQuestionEditorModal({ visible, saving, item, o
         required: form.required,
         audioPlayLimit: form.audioPlayLimit === '' ? null : Number(form.audioPlayLimit),
         allowSeek: form.allowSeek,
+        minListenRatioBeforeAnswer: listenRatio.ratio,
         minWords: form.minWords === '' ? null : Number(form.minWords),
         maxWords: form.maxWords === '' ? null : Number(form.maxWords),
         config: form.config ? JSON.parse(form.config) : null,
@@ -84,6 +107,21 @@ export default function AssessmentQuestionEditorModal({ visible, saving, item, o
           <CCol md={4} className='d-flex align-items-end'><CFormCheck label='Bắt buộc' checked={form.required} onChange={(event) => setForm((prev) => ({ ...prev, required: event.target.checked }))} /></CCol>
           {hasAudioStimulus ? <CCol md={6}><CFormLabel>Giới hạn lượt nghe</CFormLabel><CFormInput type='number' value={form.audioPlayLimit} onChange={(event) => setForm((prev) => ({ ...prev, audioPlayLimit: event.target.value }))} /></CCol> : null}
           {hasAudioStimulus ? <CCol md={6} className='d-flex align-items-end'><CFormCheck label='Cho phép tua' checked={form.allowSeek} onChange={(event) => setForm((prev) => ({ ...prev, allowSeek: event.target.checked }))} /></CCol> : null}
+          <CCol md={6}>
+            <CFormLabel>Nghe tối thiểu trước khi trả lời (%)</CFormLabel>
+            <CFormInput
+              type='number'
+              min={0}
+              max={100}
+              step='0.01'
+              value={form.minListenRatioBeforeAnswerPercent}
+              onChange={(event) => setForm((prev) => ({ ...prev, minListenRatioBeforeAnswerPercent: event.target.value }))}
+              disabled={!hasAudioStimulus}
+              placeholder='Ví dụ: 75'
+            />
+            <div className='small text-body-secondary mt-1'>Chỉ áp dụng khi câu/ngữ liệu có audio.</div>
+            <div className='small text-body-secondary'>Ví dụ 75%: người thi phải nghe ít nhất 75% một lượt audio trước khi có thể chọn/trả lời. Để trống hoặc 0: người thi vẫn phải bắt đầu nghe ít nhất một lần trước khi trả lời.</div>
+          </CCol>
           {isEssay ? <CCol md={6}><CFormLabel>Số từ tối thiểu</CFormLabel><CFormInput type='number' value={form.minWords} onChange={(event) => setForm((prev) => ({ ...prev, minWords: event.target.value }))} /></CCol> : null}
           {isEssay ? <CCol md={6}><CFormLabel>Số từ tối đa</CFormLabel><CFormInput type='number' value={form.maxWords} onChange={(event) => setForm((prev) => ({ ...prev, maxWords: event.target.value }))} /></CCol> : null}
           <CCol xs={12}><CFormLabel>Config JSON</CFormLabel><CFormTextarea rows={4} value={form.config} onChange={(event) => setForm((prev) => ({ ...prev, config: event.target.value }))} /></CCol>
