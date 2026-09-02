@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
   CAlert,
+  CBadge,
   CButton,
   CCard,
   CCardBody,
@@ -21,6 +22,8 @@ import {
   formatDateTime,
   formatDateTimeInput,
   getHostnameLabel,
+  getQuickMessageContentTypeLabel,
+  getQuickMessageRenderedHtml,
   getReplyModeLabel,
   toIsoFromDateTimeInput,
 } from './quickMessageUi'
@@ -98,6 +101,7 @@ export default function QuickMessageOverviewTab({
   }
 
   const links = Array.isArray(message?.links) ? message.links : []
+  const renderedHtml = getQuickMessageRenderedHtml(message?.content, message?.contentType)
 
   return (
     <>
@@ -141,7 +145,13 @@ export default function QuickMessageOverviewTab({
               ) : (
                 <CRow className='g-3 small'>
                   <CCol md={12}><strong>Tiêu đề:</strong> {message?.title || '-'}</CCol>
-                  <CCol md={12}><strong>Nội dung:</strong><div className='mt-1' style={{ whiteSpace: 'pre-wrap' }}>{message?.content || '-'}</div></CCol>
+                  <CCol md={6}><strong>Kiểu nội dung:</strong> <CBadge color={message?.contentType === 'html' ? 'info' : 'secondary'}>{getQuickMessageContentTypeLabel(message?.contentType)}</CBadge></CCol>
+                  <CCol md={12}>
+                    <strong>Nội dung:</strong>
+                    {message?.contentType === 'html'
+                      ? <div className='mt-1 quick-message-html-content' dangerouslySetInnerHTML={{ __html: renderedHtml || '<p>-</p>' }} />
+                      : <div className='mt-1 quick-message-text-content' style={{ whiteSpace: 'pre-wrap' }}>{message?.content || '-'}</div>}
+                  </CCol>
                   <CCol md={12}>
                     <strong>Danh sách link:</strong>
                     {links.length === 0 ? <div className='mt-1'>-</div> : (

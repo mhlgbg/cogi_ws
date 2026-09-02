@@ -25,6 +25,9 @@ import {
   CTableHead,
   CTableHeaderCell,
   CTableRow,
+  CToast,
+  CToastBody,
+  CToaster,
 } from '@coreui/react'
 import {
   createExamRoomForRound,
@@ -32,7 +35,8 @@ import {
   getExamRoundVenueRoomConfiguration,
   updateExamRoundVenuesRooms,
 } from '../services/examRoundApi'
-import { formatMoney, getApiMessage, normalizeStatus, toText } from '../utils/examRoundUi'
+import ExamRoundVenueRoomCopyModal from './ExamRoundVenueRoomCopyModal'
+import { formatMoney, getApiMessage } from '../utils/examRoundUi'
 
 function SummaryCard({ label, value, color = 'secondary', helper = '' }) {
   return (
@@ -64,6 +68,10 @@ function getVenueRoomApiMessage(error, fallback) {
     NO_SELECTED_VENUES: 'Đợt thi chưa có địa điểm thi nào được chọn.',
     ROOM_CAPACITY_INVALID: 'Có phòng thi có sức chứa không hợp lệ.',
     CROSS_TENANT_ACCESS: 'Bạn không có quyền truy cập dữ liệu tenant khác.',
+    EXAM_ROUND_COPY_SOURCE_NOT_FOUND: 'Không tìm thấy đợt nguồn phù hợp trong tenant hiện tại.',
+    EXAM_ROUND_COPY_SOURCE_SAME_AS_TARGET: 'Bạn cần chọn một đợt nguồn khác với đợt hiện tại.',
+    EXAM_ROUND_COPY_SOURCE_EMPTY_CONFIGURATION: 'Đợt nguồn chưa có cấu hình địa điểm/phòng để sao chép.',
+    EXAM_ROUND_COPY_SOURCE_NO_VALID_VENUE_ROOM: 'Đợt nguồn không còn venue/phòng active hợp lệ để sao chép.',
     UNKNOWN_FIELDS: 'Biểu mẫu gửi lên có trường không hợp lệ.',
   }[code]
   return mapped || getApiMessage(error, fallback)
@@ -118,6 +126,7 @@ export default function ExamRoundVenueRoomsTab({ round, permissions, onRefresh }
   const [showRoomPicker, setShowRoomPicker] = useState(false)
   const [showVenueCreate, setShowVenueCreate] = useState(false)
   const [showRoomCreate, setShowRoomCreate] = useState(false)
+  const [showCopyModal, setShowCopyModal] = useState(false)
   const [pickerSearch, setPickerSearch] = useState('')
   const [roomVenueFilter, setRoomVenueFilter] = useState('')
   const [draftVenueIds, setDraftVenueIds] = useState([])
@@ -126,11 +135,18 @@ export default function ExamRoundVenueRoomsTab({ round, permissions, onRefresh }
   const [roomForm, setRoomForm] = useState(buildRoomForm)
   const [modalError, setModalError] = useState('')
   const [modalSubmitting, setModalSubmitting] = useState(false)
+  const [toast, setToast] = useState({ visible: false, message: '' })
 
   useEffect(() => {
     if (!round?.id) return
     loadConfiguration()
   }, [round?.id])
+
+  useEffect(() => {
+    if (!toast.visible) return undefined
+    const timer = window.setTimeout(() => setToast((current) => ({ ...current, visible: false })), 2500)
+    return () => window.clearTimeout(timer)
+  }, [toast.visible])
 
   const selectedVenueIds = useMemo(() => Array.isArray(config?.selectedVenues) ? config.selectedVenues.map((item) => Number(item.id || 0)).filter(Boolean) : [], [config?.selectedVenues])
   const selectedRoomIds = useMemo(() => Array.isArray(config?.selectedRooms) ? config.selectedRooms.map((item) => Number(item.id || 0)).filter(Boolean) : [], [config?.selectedRooms])
@@ -279,6 +295,14 @@ export default function ExamRoundVenueRoomsTab({ round, permissions, onRefresh }
     }
   }
 
+  function handleCopyCompleted(result) {
+    setShowCopyModal(false)
+    setConfig(result?.configuration || null)
+    onRefresh?.()
+    loadConfiguration()
+    setToast({ visible: true, message: `Đã bổ sung ${result?.summary?.addedVenues || 0} địa điểm và ${result?.summary?.addedRooms || 0} phòng từ đợt ${result?.sourceRound?.code || '-'}.` })
+  }
+
   const emptyState = !loading && (summary?.venueCount || 0) === 0 && (summary?.roomCount || 0) === 0
 
   return (
@@ -312,6 +336,7 @@ export default function ExamRoundVenueRoomsTab({ round, permissions, onRefresh }
             <div className='text-body-secondary mb-3'>Thông tin này sẽ được sử dụng khi xây dựng lịch thi ở bước tiếp theo.</div>
             <div className='d-flex justify-content-center gap-2 flex-wrap'>
               {canManage ? <CButton color='primary' onClick={openVenuePicker}>Chọn địa điểm & phòng</CButton> : null}
+              {canManage ? <CButton color='primary' variant='outline' onClick={() => setShowCopyModal(true)}>Dùng cấu hình từ đợt khác</CButton> : null}
               {canManage ? <CButton color='secondary' variant='outline' onClick={() => { setModalError(''); setVenueForm(buildVenueForm()); setShowVenueCreate(true) }}>Tạo nhanh địa điểm</CButton> : null}
             </div>
           </CCardBody>
@@ -324,6 +349,7 @@ export default function ExamRoundVenueRoomsTab({ round, permissions, onRefresh }
           {canManage ? (
             <div className='d-flex gap-2 flex-wrap'>
               <CButton color='primary' size='sm' onClick={openVenuePicker} disabled={saving}>Chọn địa điểm</CButton>
+              <CButton color='primary' size='sm' variant='outline' onClick={() => setShowCopyModal(true)} disabled={saving}>Dùng cấu hình từ đợt khác</CButton>
               <CButton color='secondary' size='sm' variant='outline' onClick={() => { setModalError(''); setVenueForm(buildVenueForm()); setShowVenueCreate(true) }} disabled={saving}>Tạo nhanh địa điểm</CButton>
             </div>
           ) : null}
@@ -527,6 +553,14 @@ export default function ExamRoundVenueRoomsTab({ round, permissions, onRefresh }
         </CModalFooter>
       </CModal>
 
+      <ExamRoundVenueRoomCopyModal
+        visible={showCopyModal}
+        roundId={round?.id}
+        hasExistingConfiguration={selectedVenueIds.length > 0 || selectedRoomIds.length > 0}
+        onClose={() => setShowCopyModal(false)}
+        onCopied={handleCopyCompleted}
+      />
+
       <CModal visible={showVenueCreate} onClose={() => setShowVenueCreate(false)}>
         <CModalHeader><CModalTitle>Tạo nhanh địa điểm thi</CModalTitle></CModalHeader>
         <CModalBody>
@@ -568,6 +602,10 @@ export default function ExamRoundVenueRoomsTab({ round, permissions, onRefresh }
           <CButton color='primary' onClick={submitRoomCreate} disabled={modalSubmitting}>{modalSubmitting ? 'Đang tạo...' : 'Tạo phòng'}</CButton>
         </CModalFooter>
       </CModal>
+
+      <CToaster placement='top-end'>
+        {toast.visible ? <CToast visible color='success'><CToastBody>{toast.message}</CToastBody></CToast> : null}
+      </CToaster>
     </div>
   )
 }

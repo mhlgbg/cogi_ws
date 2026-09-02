@@ -1,3 +1,5 @@
+import { sanitizeQuickMessageHtml } from './quickMessageHtml.js'
+
 export const QUICK_MESSAGE_STATUS_OPTIONS = [
   { value: '', label: 'Tất cả' },
   { value: 'draft', label: 'Đang soạn' },
@@ -16,6 +18,11 @@ export const QUICK_MESSAGE_REPLY_MODE_OPTIONS = [
   { value: 'quick', label: 'Phản hồi nhanh' },
   { value: 'text', label: 'Nhập nội dung' },
   { value: 'quick_and_text', label: 'Phản hồi nhanh và nhập nội dung' },
+]
+
+export const QUICK_MESSAGE_CONTENT_TYPE_OPTIONS = [
+  { value: 'text', label: 'Văn bản thuần' },
+  { value: 'html', label: 'HTML đơn giản' },
 ]
 
 export const QUICK_MESSAGE_TABS = [
@@ -80,6 +87,19 @@ export function getReplyModeLabel(value) {
   return QUICK_MESSAGE_REPLY_MODE_OPTIONS.find((item) => item.value === value)?.label || '-'
 }
 
+export function getQuickMessageContentTypeLabel(value) {
+  return QUICK_MESSAGE_CONTENT_TYPE_OPTIONS.find((item) => item.value === value)?.label || 'Văn bản thuần'
+}
+
+export function normalizeQuickMessageContentType(value) {
+  return String(value || '').trim().toLowerCase() === 'html' ? 'html' : 'text'
+}
+
+export function getQuickMessageRenderedHtml(content, contentType) {
+  if (normalizeQuickMessageContentType(contentType) !== 'html') return ''
+  return sanitizeQuickMessageHtml(content)
+}
+
 export function getHostnameLabel(url) {
   try {
     return new URL(String(url || '')).hostname || '-'
@@ -119,6 +139,7 @@ export function buildQuickMessageFormInitialValues(value = {}, options = {}) {
   return {
     title: String(value?.title || '').trim(),
     content: String(value?.content || '').trim(),
+    contentType: normalizeQuickMessageContentType(value?.contentType),
     links: Array.isArray(value?.links)
       ? value.links.map((item) => ({
           label: String(item?.label || '').trim(),
@@ -216,6 +237,7 @@ export function buildQuickMessagePayload(values, options = {}) {
   const payload = {
     title: String(values?.title || '').trim(),
     content: String(values?.content || '').trim(),
+    contentType: normalizeQuickMessageContentType(values?.contentType),
     links: (Array.isArray(values?.links) ? values.links : [])
       .map((item) => ({
         label: String(item?.label || '').trim(),

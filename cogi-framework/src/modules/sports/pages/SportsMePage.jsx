@@ -23,6 +23,7 @@ import {
   CSpinner,
 } from '@coreui/react'
 import {
+  createMySportsProfile,
   getMySportsAchievement,
   getMySportsAchievementSubmission,
   getMySportsClubMembership,
@@ -36,6 +37,7 @@ import {
   updateMySportsProfile,
   uploadMySportsProfileAvatar,
 } from '../services/sportsMeService'
+import SportsProfileQuickCreateFields from '../components/SportsProfileQuickCreateFields'
 import {
   formatSportsDate,
   formatSportsDateTime,
@@ -55,6 +57,7 @@ import {
   getSportsProfileGenderLabel,
   getSportsProfileStatusMeta,
 } from '../utils/sportsProfileUi'
+import { buildInitialQuickSportsProfileForm, buildQuickSportsProfilePayload, validateQuickSportsProfileForm } from '../utils/sportsProfileQuickCreate'
 import './SportsMePage.css'
 
 const TABS = [
@@ -124,9 +127,11 @@ function resolveAchievementResultText(item) {
 
 function buildProfileFormValues(profile = null) {
   return {
+    code: toText(profile?.code),
     displayName: toText(profile?.displayName),
     avatar: profile?.avatar || null,
     gender: toText(profile?.gender) || 'unspecified',
+    fullName: toText(profile?.fullName),
     dateOfBirth: profile?.dateOfBirth || '',
     birthYear: Number.isInteger(Number(profile?.birthYear)) ? String(profile.birthYear) : '',
     hometown: toText(profile?.hometown),
@@ -138,6 +143,7 @@ function buildProfileFormValues(profile = null) {
 
 function buildProfileUpdatePayload(form) {
   return {
+    code: toText(form.code).toUpperCase() || null,
     displayName: toText(form.displayName) || null,
     avatar: form.avatar?.id || null,
     gender: toText(form.gender) || 'unspecified',
@@ -151,19 +157,32 @@ function buildProfileUpdatePayload(form) {
 }
 
 function validateProfileForm(form) {
-  const errors = {}
-  const birthYear = toText(form.birthYear)
-  if (birthYear) {
-    const parsed = Number(birthYear)
-    if (!Number.isInteger(parsed) || parsed < 1900 || parsed > 2100) {
-      errors.birthYear = 'Năm sinh phải là số nguyên từ 1900 đến 2100'
-    }
-  }
-  const email = toText(form.contactEmail).toLowerCase()
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    errors.contactEmail = 'Email liên hệ không hợp lệ'
-  }
+  const errors = validateQuickSportsProfileForm({
+    code: form.code,
+    fullName: form.fullName || 'profile-owner',
+    birthYear: form.birthYear,
+    contactEmail: form.contactEmail,
+  })
+  delete errors.fullName
   return errors
+}
+
+function CreateSportsProfileCard({ form, errors, submitting, onChange, onSubmit }) {
+  return (
+    <CCard className='sports-me-section-card border-0 shadow-sm'>
+      <CCardBody>
+        <div className='d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3'>
+          <div>
+            <div className='sports-me-section-title mb-1'>Tạo hồ sơ thể thao</div>
+            <div className='small text-body-secondary'>Tạo hồ sơ thể thao gắn trực tiếp với tài khoản đang đăng nhập của bạn trong tenant hiện tại.</div>
+          </div>
+          <CButton color='primary' onClick={onSubmit} disabled={submitting}>{submitting ? 'Đang tạo hồ sơ...' : 'Tạo hồ sơ thể thao'}</CButton>
+        </div>
+
+        <SportsProfileQuickCreateFields form={form} errors={errors} disabled={submitting} onChange={onChange} />
+      </CCardBody>
+    </CCard>
+  )
 }
 
 function SummaryCard({ label, value }) {
@@ -262,6 +281,11 @@ function ProfileEditCard({ profile, form, errors, submitting, uploading, onChang
           </CCol>
           <CCol lg={8}>
             <CRow className='g-3'>
+              <CCol md={6}>
+                <CFormLabel>Mã hồ sơ</CFormLabel>
+                <CFormInput value={form.code} onChange={(event) => onChange('code', event.target.value.toUpperCase())} disabled={submitting || uploading} />
+                {errors.code ? <div className='small text-danger mt-1'>{errors.code}</div> : null}
+              </CCol>
               <CCol md={6}>
                 <CFormLabel>Tên hiển thị</CFormLabel>
                 <CFormInput value={form.displayName} onChange={(event) => onChange('displayName', event.target.value)} disabled={submitting || uploading} />
@@ -538,7 +562,10 @@ export default function SportsMePage() {
   const [editing, setEditing] = useState(false)
   const [profileForm, setProfileForm] = useState(buildProfileFormValues())
   const [profileFormErrors, setProfileFormErrors] = useState({})
+  const [createForm, setCreateForm] = useState(buildInitialQuickSportsProfileForm())
+  const [createFormErrors, setCreateFormErrors] = useState({})
   const [submittingProfile, setSubmittingProfile] = useState(false)
+  const [creatingProfile, setCreatingProfile] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [success, setSuccess] = useState('')
   const [achievementStatusFilter, setAchievementStatusFilter] = useState('active')
@@ -599,12 +626,15 @@ export default function SportsMePage() {
       setNoProfile(false)
       setProfileBundle(data)
       setProfileForm(buildProfileFormValues(data.profile))
+      setCreateForm(buildInitialQuickSportsProfileForm())
+      setCreateFormErrors({})
       await loadSecondaryData()
     } catch (requestError) {
       const code = getSportsMeApiCode(requestError)
       if (code === 'SPORTS_PROFILE_NOT_FOUND') {
         setNoProfile(true)
         setProfileBundle({ profile: null, summary: null })
+        setEditing(false)
         setClubs([])
         setAchievements([])
         setSubmissions([])
@@ -633,6 +663,18 @@ export default function SportsMePage() {
 
   function updateProfileField(field, value) {
     setProfileForm((current) => ({ ...current, [field]: value }))
+    setProfileFormErrors((current) => {
+      if (!current[field]) return current
+      return { ...current, [field]: '' }
+    })
+  }
+
+  function updateCreateField(field, value) {
+    setCreateForm((current) => ({ ...current, [field]: value }))
+    setCreateFormErrors((current) => {
+      if (!current[field]) return current
+      return { ...current, [field]: '' }
+    })
   }
 
   async function handleAvatarChange(file) {
@@ -667,6 +709,29 @@ export default function SportsMePage() {
       setError(getSportsMeApiMessage(requestError, 'Không thể cập nhật hồ sơ thể thao của bạn.'))
     } finally {
       setSubmittingProfile(false)
+    }
+  }
+
+  async function handleCreateProfile() {
+    const nextErrors = validateQuickSportsProfileForm(createForm)
+    setCreateFormErrors(nextErrors)
+    if (Object.keys(nextErrors).length > 0) return
+
+    setCreatingProfile(true)
+    setError('')
+    try {
+      const created = await createMySportsProfile(buildQuickSportsProfilePayload(createForm))
+      setProfileBundle(created)
+      setNoProfile(false)
+      setProfileForm(buildProfileFormValues(created.profile))
+      setCreateForm(buildInitialQuickSportsProfileForm())
+      setCreateFormErrors({})
+      setSuccess('Đã tạo hồ sơ thể thao của bạn.')
+      await loadPage(true)
+    } catch (requestError) {
+      setError(getSportsMeApiMessage(requestError, 'Không thể tạo hồ sơ thể thao của bạn.'))
+    } finally {
+      setCreatingProfile(false)
     }
   }
 
@@ -825,7 +890,12 @@ export default function SportsMePage() {
     return (
       <div>
         <div className='fs-5 fw-semibold mb-2'>Hồ sơ thể thao của tôi</div>
-        <CAlert color='secondary' className='mb-0'>Bạn chưa có hồ sơ thể thao. Vui lòng liên hệ quản trị viên để được liên kết hoặc tạo hồ sơ phù hợp.</CAlert>
+        {error ? <CAlert color='danger'>{error}</CAlert> : null}
+        {success ? <CAlert color='success'>{success}</CAlert> : null}
+        <div className='mb-3'>
+          <CAlert color='secondary' className='mb-0'>Bạn chưa có hồ sơ thể thao trong tenant hiện tại. Bạn có thể tự tạo hồ sơ cho chính mình.</CAlert>
+        </div>
+        <CreateSportsProfileCard form={createForm} errors={createFormErrors} submitting={creatingProfile} onChange={updateCreateField} onSubmit={handleCreateProfile} />
       </div>
     )
   }

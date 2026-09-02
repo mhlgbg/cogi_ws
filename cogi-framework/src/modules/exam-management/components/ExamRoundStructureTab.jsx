@@ -18,6 +18,8 @@ import {
   buildExamRoundStructurePayload,
   canEditExamRound,
   getExamMethodLabel,
+  getExamRoundConfigurationAccess,
+  getExamRoundEditLockMessage,
   getSubjectCalculationMethodLabel,
   normalizeStatus,
 } from '../utils/examRoundUi'
@@ -33,6 +35,8 @@ function buildSubjects(round) {
 
 export default function ExamRoundStructureTab({ round, permissions, saving = false, errorMessage = '', errorCode = '', errorDetails = [], onSave }) {
   const editable = canEditExamRound(round, permissions)
+  const configurationAccess = getExamRoundConfigurationAccess(round)
+  const lockMessage = getExamRoundEditLockMessage(round, permissions)
   const [subjects, setSubjects] = useState(() => buildSubjects(round))
   const [localError, setLocalError] = useState('')
 
@@ -82,7 +86,9 @@ export default function ExamRoundStructureTab({ round, permissions, saving = fal
         <CCardHeader><strong>Cấu trúc môn thi</strong></CCardHeader>
         <CCardBody>
           <CAlert color='info'>Tab này chỉnh snapshot môn và kỹ năng ngay trên đợt thi. Mọi thay đổi ở đây chỉ áp dụng cho đợt thi hiện tại.</CAlert>
-          {!editable ? <CAlert color='warning'>Đợt thi chỉ cho phép sửa cấu trúc khi còn ở trạng thái bản nháp và người dùng có quyền quản trị.</CAlert> : null}
+          {editable && configurationAccess.message ? <CAlert color='warning'>{configurationAccess.message}</CAlert> : null}
+          {editable && configurationAccess.warningMessage ? <CAlert color='warning'>{configurationAccess.warningMessage}</CAlert> : null}
+          {!editable && lockMessage ? <CAlert color='warning'>{lockMessage}</CAlert> : null}
           {localError ? <CAlert color='danger'>{localError}</CAlert> : null}
           <ExamErrorAlert message={errorMessage} code={errorCode} details={errorDetails} />
           <CRow className='g-3'>

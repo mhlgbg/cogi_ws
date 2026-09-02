@@ -17,6 +17,8 @@ import QuickMessageLinksEditor from './QuickMessageLinksEditor'
 import {
   buildQuickMessageFormInitialValues,
   buildQuickMessagePayload,
+  getQuickMessageRenderedHtml,
+  QUICK_MESSAGE_CONTENT_TYPE_OPTIONS,
   QUICK_MESSAGE_CREATE_STATUS_OPTIONS,
   QUICK_MESSAGE_REPLY_MODE_OPTIONS,
   validateQuickMessageForm,
@@ -35,13 +37,20 @@ export default function QuickMessageForm({
   const includeInitialAccess = mode === 'create'
   const [form, setForm] = useState(() => buildQuickMessageFormInitialValues(initialValues, { includeInitialAccess }))
   const [errors, setErrors] = useState({})
+  const [showHtmlPreview, setShowHtmlPreview] = useState(false)
 
   useEffect(() => {
     setForm(buildQuickMessageFormInitialValues(initialValues, { includeInitialAccess }))
     setErrors({})
+    setShowHtmlPreview(false)
   }, [includeInitialAccess, initialValues])
 
   const titleLength = useMemo(() => String(form?.title || '').trim().length, [form?.title])
+  const initialContentType = useMemo(
+    () => (String(initialValues?.contentType || 'text').trim().toLowerCase() === 'html' ? 'html' : 'text'),
+    [initialValues?.contentType],
+  )
+  const previewHtml = useMemo(() => getQuickMessageRenderedHtml(form?.content, form?.contentType), [form?.content, form?.contentType])
 
   function updateField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -89,16 +98,48 @@ export default function QuickMessageForm({
               </div>
 
               <div className='mb-3'>
+                <CFormLabel htmlFor='quick-message-content-type'>Kiểu nội dung</CFormLabel>
+                <CFormSelect
+                  id='quick-message-content-type'
+                  value={form.contentType}
+                  onChange={(event) => updateField('contentType', event.target.value)}
+                  disabled={disabled || submitting}
+                >
+                  {QUICK_MESSAGE_CONTENT_TYPE_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>{item.label}</option>
+                  ))}
+                </CFormSelect>
+                <div className='small text-body-secondary mt-1'>Chọn HTML đơn giản nếu nội dung cần render thẻ HTML cơ bản khi người nhận mở liên kết.</div>
+                {form.contentType !== initialContentType ? <div className='small text-warning mt-1'>Khi đổi kiểu nội dung, nội dung hiện tại không được tự động chuyển đổi.</div> : null}
+              </div>
+
+              <div className='mb-3'>
                 <CFormLabel htmlFor='quick-message-content'>Nội dung</CFormLabel>
                 <CFormTextarea
                   id='quick-message-content'
-                  rows={6}
-                  placeholder='Nhập hướng dẫn hoặc nội dung cần gửi...'
+                  rows={form.contentType === 'html' ? 14 : 6}
+                  placeholder={form.contentType === 'html' ? '<h2>Thông báo</h2>\n<p>Vui lòng xem nội dung bên dưới.</p>' : 'Nhập nội dung thông điệp...'}
                   value={form.content}
                   onChange={(event) => updateField('content', event.target.value)}
                   disabled={disabled || submitting}
+                  style={form.contentType === 'html' ? { fontFamily: 'Consolas, Menlo, Monaco, monospace' } : undefined}
                 />
+                {form.contentType === 'html' ? <div className='small text-body-secondary mt-1'>Chỉ hỗ trợ HTML trình bày đơn giản. Script, iframe và mã thực thi sẽ bị loại bỏ khi hiển thị.</div> : null}
               </div>
+
+              {form.contentType === 'html' ? (
+                <div className='mb-3'>
+                  <div className='d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2'>
+                    <CFormLabel className='mb-0'>Xem trước HTML</CFormLabel>
+                    <CButton type='button' color='secondary' size='sm' variant='outline' onClick={() => setShowHtmlPreview((current) => !current)}>
+                      {showHtmlPreview ? 'Ẩn xem trước' : 'Xem trước HTML'}
+                    </CButton>
+                  </div>
+                  {showHtmlPreview ? (
+                    <div className='border rounded p-3 bg-body-tertiary quick-message-html-content' dangerouslySetInnerHTML={{ __html: previewHtml || '<p>-</p>' }} />
+                  ) : null}
+                </div>
+              ) : null}
 
               <QuickMessageLinksEditor
                 value={form.links}

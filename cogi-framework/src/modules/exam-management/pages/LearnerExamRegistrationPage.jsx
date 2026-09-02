@@ -15,6 +15,7 @@ import {
 } from '@coreui/react'
 import { createLearnerExamRegistration, getLearnerRegistrationOptions, normalizeCurrentLearnerApiMessage } from '../services/learnerExamApi'
 import { formatDateTime, formatMoney, getPaymentCalculationMethodLabel } from '../utils/examRoundUi'
+import { buildLearnerExamFeeSummary, getLearnerExamFeeModeDescription, shouldShowLearnerExamComponentFee, shouldShowLearnerExamSubjectFee } from '../utils/learnerExamFeeUi'
 import { getLearnerExamReasonLabel } from '../utils/learnerExamUi'
 
 function SpinnerCenter() {
@@ -135,6 +136,13 @@ export default function LearnerExamRegistrationPage() {
   }, [options, selectedComponentIds, selectedSubjectIds])
 
   const feePreview = useMemo(() => calculateClientFeePreview(options, selectedSubjects), [options, selectedSubjects])
+  const feeDisplay = useMemo(() => buildLearnerExamFeeSummary({
+    paymentCalculationMethod: options?.paymentCalculationMethod,
+    feeConfiguration: options?.feeConfiguration,
+    feePreview,
+  }), [feePreview, options?.feeConfiguration, options?.paymentCalculationMethod])
+  const showSubjectFee = useMemo(() => shouldShowLearnerExamSubjectFee({ paymentCalculationMethod: options?.paymentCalculationMethod, feeConfiguration: options?.feeConfiguration, feePreview }), [feePreview, options?.feeConfiguration, options?.paymentCalculationMethod])
+  const showComponentFee = useMemo(() => shouldShowLearnerExamComponentFee({ paymentCalculationMethod: options?.paymentCalculationMethod, feeConfiguration: options?.feeConfiguration, feePreview }), [feePreview, options?.feeConfiguration, options?.paymentCalculationMethod])
 
   const selectionIssue = useMemo(() => {
     if (!selectedSubjects.length) return 'Bạn cần chọn ít nhất một môn thi.'
@@ -259,10 +267,10 @@ export default function LearnerExamRegistrationPage() {
                       />
                       <div className='d-flex gap-2 flex-wrap'>
                         <CBadge color={subject.isRequired ? 'danger' : 'secondary'}>{subject.isRequired ? 'Bắt buộc' : 'Tự chọn'}</CBadge>
-                        <CBadge color='light' textColor='dark'>{subject.fee === null || subject.fee === undefined ? 'Chưa cấu hình phí' : `${formatMoney(subject.fee)} VND`}</CBadge>
+                        {showSubjectFee ? <CBadge color='light' textColor='dark'>{subject.fee === null || subject.fee === undefined ? 'Chưa cấu hình phí' : `${formatMoney(subject.fee)} VND`}</CBadge> : null}
                       </div>
                     </div>
-                    <div className='small text-body-secondary'>Quy tắc: {getPaymentCalculationMethodLabel(options.paymentCalculationMethod) === 'Phí theo môn' ? 'Phí môn sẽ được cộng vào tổng dự kiến.' : 'Theo cấu hình của đợt thi.'}</div>
+                    <div className='small text-body-secondary'>Quy tắc: {getLearnerExamFeeModeDescription({ paymentCalculationMethod: options?.paymentCalculationMethod, feeConfiguration: options?.feeConfiguration, feePreview })}</div>
                   </div>
                 )
               })}
@@ -294,7 +302,7 @@ export default function LearnerExamRegistrationPage() {
                             />
                             <div className='d-flex gap-2 flex-wrap'>
                               <CBadge color={component.isRequired ? 'danger' : 'secondary'}>{component.isRequired ? 'Bắt buộc' : 'Tự chọn'}</CBadge>
-                              <CBadge color='light' textColor='dark'>{component.fee === null || component.fee === undefined ? 'Chưa cấu hình phí' : `${formatMoney(component.fee)} VND`}</CBadge>
+                              {showComponentFee ? <CBadge color='light' textColor='dark'>{component.fee === null || component.fee === undefined ? 'Chưa cấu hình phí' : `${formatMoney(component.fee)} VND`}</CBadge> : null}
                             </div>
                           </div>
                           <div className='small text-body-secondary mt-2'>Thời lượng: {component.durationMinutes ? `${component.durationMinutes} phút` : '-'} · Hình thức: {component.examMethod || '-'}</div>
@@ -354,12 +362,18 @@ export default function LearnerExamRegistrationPage() {
           <SelectionCard title='Lệ phí dự kiến'>
             <div className='small text-body-secondary mb-2'>Phương thức tính phí</div>
             <div className='fw-semibold mb-3'>{getPaymentCalculationMethodLabel(options?.paymentCalculationMethod)}</div>
-
-            <div className='d-flex justify-content-between py-1'><span>Phí cố định</span><strong>{feePreview.fixedFee === null || feePreview.fixedFee === undefined ? '-' : `${formatMoney(feePreview.fixedFee)} VND`}</strong></div>
-            <div className='d-flex justify-content-between py-1'><span>Tổng phí theo môn</span><strong>{`${formatMoney(feePreview.subjectFeeTotal || 0)} VND`}</strong></div>
-            <div className='d-flex justify-content-between py-1'><span>Tổng phí theo kỹ năng</span><strong>{`${formatMoney(feePreview.componentFeeTotal || 0)} VND`}</strong></div>
-            <hr />
-            <div className='d-flex justify-content-between py-1'><span>Tổng dự kiến</span><strong>{feePreview.totalAmount === null ? '-' : `${formatMoney(feePreview.totalAmount)} VND`}</strong></div>
+            {feeDisplay.rows.map((row) => (
+              <div key={row.key} className='d-flex justify-content-between py-1'>
+                <span>{row.label}</span>
+                <strong>{row.variant === 'free' ? 'Miễn phí' : `${formatMoney(row.amount || 0)} ${feeDisplay.currency || 'VND'}`}</strong>
+              </div>
+            ))}
+            {feeDisplay.mode === 'subject_fee' || feeDisplay.mode === 'component_fee' || feeDisplay.mode === 'unknown' ? (
+              <>
+                <hr />
+                <div className='d-flex justify-content-between py-1'><span>Tổng dự kiến</span><strong>{feeDisplay.mode === 'free' ? 'Miễn phí' : feeDisplay.totalAmount === null ? '-' : `${formatMoney(feeDisplay.totalAmount)} ${feeDisplay.currency || 'VND'}`}</strong></div>
+              </>
+            ) : null}
             <div className='small text-body-secondary mt-2'>Hạn thanh toán: {formatDateTime(options?.paymentDueAt)}</div>
             <div className='small text-body-secondary mt-3'>Lệ phí chính thức được hệ thống xác định khi hồ sơ đăng ký được tạo.</div>
           </SelectionCard>

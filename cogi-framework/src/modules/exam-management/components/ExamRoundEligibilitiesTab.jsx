@@ -35,10 +35,12 @@ import {
   CToaster,
 } from '@coreui/react'
 import ExamErrorAlert from './ExamErrorAlert'
+import ExamEligibilityImportModal from './ExamEligibilityImportModal'
 import ExamEligibilityStatusBadge from './ExamEligibilityStatusBadge'
 import {
   bulkCreateExamEligibilities,
   createExamEligibility,
+  deleteExamEligibility,
   getExamEligibility,
   listExamEligibilities,
   listLearnersForEligibility,
@@ -50,10 +52,76 @@ import {
   EXAM_ELIGIBILITY_STATUS_OPTIONS,
   getEligibilitySourceLabel,
   getExamEligibilityApiMessage,
-  getRegistrationStateLabel,
   mapExamEligibilityFieldErrors,
 } from '../utils/examEligibilityUi'
-import { formatDateTime, formatMoney, getRegistrationModeLabel, normalizeStatus, toText } from '../utils/examRoundUi'
+import { formatDateTime, normalizeStatus, toText } from '../utils/examRoundUi'
+
+function resolveEligibilityManagement(round, permissions, managementMeta) {
+  if (permissions?.canManage !== true) {
+    return {
+      canManage: false,
+      reasonCode: 'PERMISSION_DENIED',
+      message: 'Bạn không có quyền quản lý đối tượng đăng ký.',
+    }
+  }
+
+  if (managementMeta && managementMeta.canManage === false) {
+    return {
+      canManage: false,
+      reasonCode: managementMeta.reasonCode || 'EXAM_ELIGIBILITY_NOT_EDITABLE',
+      message: managementMeta.message || 'Đợt thi hiện không cho phép thay đổi eligibility.',
+    }
+  }
+
+  if (managementMeta && managementMeta.canManage === true) {
+    return {
+      canManage: true,
+      reasonCode: null,
+      message: null,
+    }
+  }
+
+  const registrationMode = normalizeStatus(round?.registrationMode)
+  const status = normalizeStatus(round?.status)
+
+  if (registrationMode !== 'restricted') {
+    return {
+      canManage: false,
+      reasonCode: 'EXAM_ELIGIBILITY_RESTRICTED_MODE_REQUIRED',
+      message: 'Đợt thi không sử dụng chế độ đăng ký có điều kiện.',
+    }
+  }
+
+  if (status === 'pending_approval') {
+    return {
+      canManage: false,
+      reasonCode: 'EXAM_ELIGIBILITY_PENDING_APPROVAL_LOCKED',
+      message: 'Đợt thi đang chờ phê duyệt.',
+    }
+  }
+
+  if (['draft', 'approved', 'registration_open', 'registration_paused'].includes(status)) {
+    return {
+      canManage: true,
+      reasonCode: null,
+      message: null,
+    }
+  }
+
+  if (status === 'registration_closed') {
+    return {
+      canManage: false,
+      reasonCode: 'EXAM_ELIGIBILITY_REGISTRATION_CLOSED',
+      message: 'Đợt thi đã đóng đăng ký.',
+    }
+  }
+
+  return {
+    canManage: false,
+    reasonCode: 'EXAM_ELIGIBILITY_WORKFLOW_LOCKED',
+    message: 'Đợt thi đã qua giai đoạn cho phép thay đổi đối tượng đăng ký.',
+  }
+}
 
 function buildPages(currentPage, pageCount) {
   const maxButtons = 7
@@ -619,23 +687,26 @@ function MarkIneligibleModal({ visible, item, saving = false, submitError = '', 
 
 export default function ExamRoundEligibilitiesTab({ round, permissions }) {
   const roundId = round?.id
-  const canManage = permissions?.canManage === true
   const [loading, setLoading] = useState(false)
   const [rows, setRows] = useState([])
   const [error, setError] = useState('')
   const [pagination, setPagination] = useState({ page: 1, pageSize: 10, total: 0, pageCount: 1 })
   const [summary, setSummary] = useState({ pending: 0, eligible: 0, temporarilyIneligible: 0, ineligible: 0, registered: 0, notRegistered: 0 })
+  const [managementMeta, setManagementMeta] = useState(null)
   const [filters, setFilters] = useState({ search: '', eligibilityStatus: '', source: '', registrationState: '' })
   const [appliedFilters, setAppliedFilters] = useState({ search: '', eligibilityStatus: '', source: '', registrationState: '' })
   const [refreshToken, setRefreshToken] = useState(0)
   const [toast, setToast] = useState({ visible: false, color: 'success', message: '' })
   const [editorState, setEditorState] = useState({ open: false, mode: 'create', item: null, error: '', fieldErrors: {}, saving: false })
   const [bulkState, setBulkState] = useState({ open: false, error: '', saving: false })
+  const [importState, setImportState] = useState({ open: false })
   const [detailState, setDetailState] = useState({ open: false, id: null, item: null, loading: false, error: '' })
   const [markIneligibleState, setMarkIneligibleState] = useState({ open: false, item: null, error: '', fieldErrors: {}, saving: false })
 
   const pages = useMemo(() => buildPages(pagination.page, pagination.pageCount), [pagination.page, pagination.pageCount])
   const totalEligibilities = summary.pending + summary.eligible + summary.temporarilyIneligible + summary.ineligible
+  const management = useMemo(() => resolveEligibilityManagement(round, permissions, managementMeta), [managementMeta, permissions, round])
+  const canManageEligibility = management.canManage === true
 
   useEffect(() => {
     if (!toast.visible) return undefined
@@ -659,9 +730,11 @@ export default function ExamRoundEligibilitiesTab({ round, permissions }) {
         setRows(Array.isArray(result?.rows) ? result.rows : [])
         setPagination(result?.pagination || { page: 1, pageSize: 10, total: 0, pageCount: 1 })
         setSummary(result?.summary || { pending: 0, eligible: 0, temporarilyIneligible: 0, ineligible: 0, registered: 0, notRegistered: 0 })
+        setManagementMeta(result?.management || null)
       } catch (requestError) {
         if (!mounted) return
         setRows([])
+        setManagementMeta(null)
         setError(getExamEligibilityApiMessage(requestError, 'Không tải được danh sách đối tượng đăng ký.'))
       } finally {
         if (mounted) setLoading(false)
@@ -711,6 +784,14 @@ export default function ExamRoundEligibilitiesTab({ round, permissions }) {
   function closeBulk() {
     if (bulkState.saving) return
     setBulkState({ open: false, error: '', saving: false })
+  }
+
+  function openImport() {
+    setImportState({ open: true })
+  }
+
+  function closeImport() {
+    setImportState({ open: false })
   }
 
   async function openDetail(item) {
@@ -797,6 +878,31 @@ export default function ExamRoundEligibilitiesTab({ round, permissions }) {
     setMarkIneligibleState((current) => ({ ...current, saving: false }))
   }
 
+  async function handleDelete(item) {
+    if (!canManageEligibility) return
+    const confirmed = window.confirm(`Xóa learner ${item?.learner?.fullName || item?.learner?.code || ''} khỏi danh sách eligibility?`)
+    if (!confirmed) return
+
+    try {
+      await deleteExamEligibility(roundId, item.id)
+      setToast({ visible: true, color: 'success', message: 'Đã xóa learner khỏi danh sách eligibility.' })
+      reload()
+      if (detailState.open && detailState.id === item.id) closeDetail()
+    } catch (requestError) {
+      setToast({ visible: true, color: 'danger', message: getExamEligibilityApiMessage(requestError, 'Không thể xóa eligibility.') })
+    }
+  }
+
+  function handleImportCompleted(result) {
+    closeImport()
+    reload()
+    setToast({
+      visible: true,
+      color: 'success',
+      message: `Đã nhập ${result?.imported || 0} đối tượng: ${result?.created || 0} tạo mới, ${result?.updated || 0} cập nhật, ${result?.skipped || 0} không thay đổi.`,
+    })
+  }
+
   const registrationMode = normalizeStatus(round?.registrationMode)
 
   return (
@@ -816,13 +922,15 @@ export default function ExamRoundEligibilitiesTab({ round, permissions }) {
           </div>
           <div className='d-flex gap-2 flex-wrap'>
             <CButton color='secondary' variant='outline' onClick={reload} disabled={loading}>Tải lại</CButton>
-            {canManage ? <CButton color='primary' onClick={openCreate}>Thêm đối tượng</CButton> : null}
-            {canManage ? <CButton color='primary' variant='outline' onClick={openBulk}>Thêm hàng loạt</CButton> : null}
+            {permissions?.canManage === true ? <CButton color='primary' onClick={openCreate} disabled={!canManageEligibility}>Thêm đối tượng</CButton> : null}
+            {permissions?.canManage === true ? <CButton color='primary' variant='outline' onClick={openBulk} disabled={!canManageEligibility}>Thêm hàng loạt</CButton> : null}
+            {permissions?.canManage === true || permissions?.canApprove === true ? <CButton color='secondary' variant='outline' onClick={openImport}>Tải file mẫu / Nhập Excel</CButton> : null}
           </div>
         </CCardHeader>
         <CCardBody>
           {registrationMode === 'restricted' ? <CAlert color='info'>Chỉ learner có eligibility hợp lệ mới được đăng ký.</CAlert> : null}
           {registrationMode === 'open' ? <CAlert color='warning'>Đợt thi đang ở chế độ mở. Eligibility không bắt buộc để learner đăng ký, nhưng có thể được dùng để quản lý hoặc theo dõi nếu backend hỗ trợ.</CAlert> : null}
+          {!canManageEligibility && management.message ? <CAlert color='warning'>{management.message}</CAlert> : null}
 
           <CRow className='g-3 mb-3'>
             <CCol lg={4} md={6}>
@@ -898,9 +1006,10 @@ export default function ExamRoundEligibilitiesTab({ round, permissions }) {
                           <CDropdownToggle color='secondary' variant='outline' size='sm'>Thao tác</CDropdownToggle>
                           <CDropdownMenu>
                             <CDropdownItem onClick={() => openDetail(row)}>Xem chi tiết</CDropdownItem>
-                            {canManage && row.eligibilityStatus !== 'eligible' ? <CDropdownItem onClick={() => openMarkEligible(row)}>Đánh dấu đủ điều kiện</CDropdownItem> : null}
-                            {canManage ? <CDropdownItem onClick={() => openEdit(row)}>Chỉnh ghi chú / trạng thái</CDropdownItem> : null}
-                            {canManage && row.eligibilityStatus !== 'ineligible' ? <CDropdownItem onClick={() => openMarkIneligible(row)}>Đánh dấu không đủ điều kiện</CDropdownItem> : null}
+                            {canManageEligibility && row.eligibilityStatus !== 'eligible' ? <CDropdownItem onClick={() => openMarkEligible(row)}>Đánh dấu đủ điều kiện</CDropdownItem> : null}
+                            {canManageEligibility ? <CDropdownItem onClick={() => openEdit(row)}>Chỉnh ghi chú / trạng thái</CDropdownItem> : null}
+                            {canManageEligibility && row.eligibilityStatus !== 'ineligible' ? <CDropdownItem onClick={() => openMarkIneligible(row)}>Đánh dấu không đủ điều kiện</CDropdownItem> : null}
+                            {canManageEligibility ? <CDropdownItem onClick={() => handleDelete(row)}>Xóa khỏi danh sách</CDropdownItem> : null}
                           </CDropdownMenu>
                         </CDropdown>
                       </CTableDataCell>
@@ -956,6 +1065,13 @@ export default function ExamRoundEligibilitiesTab({ round, permissions }) {
         error={detailState.error}
         item={detailState.item}
         onClose={closeDetail}
+      />
+
+      <ExamEligibilityImportModal
+        visible={importState.open}
+        roundId={roundId}
+        onClose={closeImport}
+        onImported={handleImportCompleted}
       />
 
       <MarkIneligibleModal

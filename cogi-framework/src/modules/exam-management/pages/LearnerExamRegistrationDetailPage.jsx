@@ -15,6 +15,7 @@ import {
 import { getLearnerExamRegistration, normalizeCurrentLearnerApiMessage, reportExamRegistrationPayment, uploadExamRegistrationPaymentEvidence } from '../services/learnerExamApi'
 import { formatDateTime, formatMoney, getExamMethodLabel } from '../utils/examRoundUi'
 import { getPaymentStatusBadge, getPaymentStatusLabel, getRegistrationStatusBadge, getRegistrationStatusLabel } from '../utils/learnerExamUi'
+import { buildLearnerExamFeeSummary, shouldShowLearnerExamComponentFee, shouldShowLearnerExamSubjectFee } from '../utils/learnerExamFeeUi'
 import { buildProtectedFileUrl, resolveMediaUrl } from '../../../utils/mediaUrl'
 import LearnerPaymentReportModal from '../components/LearnerPaymentReportModal'
 
@@ -73,6 +74,9 @@ export default function LearnerExamRegistrationDetailPage() {
 
   const registrationBadge = useMemo(() => getRegistrationStatusBadge(detail?.registration?.registrationStatus), [detail?.registration?.registrationStatus])
   const paymentBadge = useMemo(() => getPaymentStatusBadge(detail?.status?.paymentStatus), [detail?.status?.paymentStatus])
+  const feeDisplay = useMemo(() => buildLearnerExamFeeSummary({ fee: detail?.fee }), [detail?.fee])
+  const showSubjectFee = useMemo(() => shouldShowLearnerExamSubjectFee({ fee: detail?.fee }), [detail?.fee])
+  const showComponentFee = useMemo(() => shouldShowLearnerExamComponentFee({ fee: detail?.fee }), [detail?.fee])
 
   async function copyText(value, successText) {
     if (!value) return
@@ -210,7 +214,7 @@ export default function LearnerExamRegistrationDetailPage() {
                       <div className='fw-semibold'>{subject.subjectCodeSnapshot ? `${subject.subjectCodeSnapshot} - ` : ''}{subject.nameSnapshot}</div>
                       <CBadge color={subject.isRequired ? 'danger' : 'secondary'}>{subject.isRequired ? 'Môn bắt buộc' : 'Môn tự chọn'}</CBadge>
                     </div>
-                    <div className='small text-body-secondary mb-2'>Phí môn: {`${formatMoney(subject.feeAmount || 0)} ${detail?.fee?.currency || 'VND'}`}</div>
+                    {showSubjectFee ? <div className='small text-body-secondary mb-2'>Phí môn: {`${formatMoney(subject.feeAmount || 0)} ${detail?.fee?.currency || 'VND'}`}</div> : null}
                     <div className='d-flex flex-column gap-2'>
                       {(subject.components || []).map((component) => (
                         <div key={component.id} className='border rounded p-2 bg-body-tertiary'>
@@ -218,7 +222,7 @@ export default function LearnerExamRegistrationDetailPage() {
                             <div>{component.componentCodeSnapshot ? `${component.componentCodeSnapshot} - ` : ''}{component.nameSnapshot}</div>
                             <CBadge color={component.isRequired ? 'danger' : 'secondary'}>{component.isRequired ? 'Bắt buộc' : 'Tự chọn'}</CBadge>
                           </div>
-                          <div className='small text-body-secondary mt-1'>Phí: {`${formatMoney(component.feeAmount || 0)} ${detail?.fee?.currency || 'VND'}`}</div>
+                          {showComponentFee ? <div className='small text-body-secondary mt-1'>Phí: {`${formatMoney(component.feeAmount || 0)} ${detail?.fee?.currency || 'VND'}`}</div> : null}
                           <div className='small text-body-secondary'>Thời lượng: {component.durationMinutes ? `${component.durationMinutes} phút` : '-'} · Hình thức: {getExamMethodLabel(component.examMethod)}</div>
                         </div>
                       ))}
@@ -232,11 +236,12 @@ export default function LearnerExamRegistrationDetailPage() {
           <CCard>
             <CCardHeader><strong>Lệ phí</strong></CCardHeader>
             <CCardBody>
-              <div className='d-flex justify-content-between py-1'><span>Phí cố định</span><strong>{detail?.fee?.fixedFee === null || detail?.fee?.fixedFee === undefined ? '-' : `${formatMoney(detail.fee.fixedFee)} ${detail?.fee?.currency || 'VND'}`}</strong></div>
-              <div className='d-flex justify-content-between py-1'><span>Tổng phí theo môn</span><strong>{`${formatMoney(detail?.fee?.subjectFeeTotal || 0)} ${detail?.fee?.currency || 'VND'}`}</strong></div>
-              <div className='d-flex justify-content-between py-1'><span>Tổng phí theo kỹ năng</span><strong>{`${formatMoney(detail?.fee?.componentFeeTotal || 0)} ${detail?.fee?.currency || 'VND'}`}</strong></div>
-              <div className='d-flex justify-content-between py-1'><span>Tổng tính phí</span><strong>{`${formatMoney(detail?.fee?.calculatedAmount || 0)} ${detail?.fee?.currency || 'VND'}`}</strong></div>
-              <div className='d-flex justify-content-between py-1'><span>Số tiền phải nộp</span><strong>{`${formatMoney(detail?.fee?.amountDue || 0)} ${detail?.fee?.currency || 'VND'}`}</strong></div>
+              {feeDisplay.rows.map((row) => (
+                <div key={row.key} className='d-flex justify-content-between py-1'>
+                  <span>{row.label}</span>
+                  <strong>{row.variant === 'free' ? 'Miễn phí' : `${formatMoney(row.amount || 0)} ${feeDisplay.currency || 'VND'}`}</strong>
+                </div>
+              ))}
             </CCardBody>
           </CCard>
         </CCol>

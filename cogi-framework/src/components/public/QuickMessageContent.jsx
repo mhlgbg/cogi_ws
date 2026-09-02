@@ -1,5 +1,6 @@
 import { CButton } from '@coreui/react'
 import { resolveMediaUrl } from '../../utils/mediaUrl'
+import { getQuickMessageRenderedHtml, normalizeQuickMessageContentType } from '../../modules/crm/components/quickMessageUi'
 
 function formatDateTime(value) {
   if (!value) return '-'
@@ -27,6 +28,8 @@ export default function QuickMessageContent({ data, code = '', onCopyCode }) {
   const access = data?.access || {}
   const tenant = data?.tenant || {}
   const links = Array.isArray(message?.links) ? message.links : []
+  const contentType = normalizeQuickMessageContentType(message?.contentType)
+  const renderedHtml = getQuickMessageRenderedHtml(message?.content, contentType)
 
   return (
     <div className='border rounded-4 p-4 bg-white shadow-sm'>
@@ -44,7 +47,9 @@ export default function QuickMessageContent({ data, code = '', onCopyCode }) {
 
       {message?.expiresAt ? <div className='small text-body-secondary mb-3'>Thông điệp có hiệu lực đến {formatDateTime(message.expiresAt)}.</div> : null}
 
-      <div className='mb-4' style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{message?.content || '-'}</div>
+      {contentType === 'html'
+        ? <div className='mb-4 quick-message-html-content' dangerouslySetInnerHTML={{ __html: renderedHtml || '<p>-</p>' }} />
+        : <div className='mb-4 quick-message-text-content' style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{message?.content || '-'}</div>}
 
       {links.length > 0 ? (
         <div className='d-flex flex-column gap-3'>

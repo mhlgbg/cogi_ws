@@ -15,6 +15,7 @@ import {
 import { getLearnerExamRound, normalizeCurrentLearnerApiMessage } from '../services/learnerExamApi'
 import { formatDateTime, formatMoney, getPaymentCalculationMethodLabel, getRegistrationModeLabel, getSubjectCalculationMethodLabel } from '../utils/examRoundUi'
 import { getLearnerActionLabel, getLearnerExamReasonLabel, getLearnerExamStatusMeta } from '../utils/learnerExamUi'
+import { buildLearnerExamFeeSummary, shouldShowLearnerExamComponentFee, shouldShowLearnerExamSubjectFee } from '../utils/learnerExamFeeUi'
 
 function SpinnerCenter() {
   return <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><CSpinner /></div>
@@ -72,9 +73,13 @@ export default function LearnerExamDetailPage() {
   }
 
   const reasonLabel = getLearnerExamReasonLabel(detail?.availability?.reasonCode)
+  const feeSummary = buildLearnerExamFeeSummary({ configuration: detail?.configuration, feePreview: detail?.feePreview })
+  const showSubjectFee = shouldShowLearnerExamSubjectFee({ configuration: detail?.configuration, feePreview: detail?.feePreview })
+  const showComponentFee = shouldShowLearnerExamComponentFee({ configuration: detail?.configuration, feePreview: detail?.feePreview })
   const statusMeta = getLearnerExamStatusMeta({
     ...detail?.examRound,
     learnerState: detail?.learnerState,
+    availabilityState: detail?.availability?.availabilityState,
     requiresLearnerCreation: detail?.availability?.requiresLearnerCreation,
     registrationWindowState: detail?.availability?.registrationWindowState,
     canRegister: detail?.availability?.canRegister,
@@ -111,7 +116,7 @@ export default function LearnerExamDetailPage() {
         <CCol lg={3} md={6}><InfoCard label='Thời gian đăng ký' value={`${formatDateTime(detail?.examRound?.registrationStartAt)} - ${formatDateTime(detail?.examRound?.registrationEndAt)}`} /></CCol>
         <CCol lg={3} md={6}><InfoCard label='Thời gian thi' value={`${formatDateTime(detail?.examRound?.examStartAt)} - ${formatDateTime(detail?.examRound?.examEndAt)}`} /></CCol>
         <CCol lg={3} md={6}><InfoCard label='Chế độ đăng ký' value={getRegistrationModeLabel(detail?.examRound?.registrationMode)} /></CCol>
-        <CCol lg={3} md={6}><InfoCard label='Lệ phí' value={detail?.configuration?.paymentCalculationMethod === 'fixed' ? `${formatMoney(detail?.configuration?.fixedFee)} VND` : getPaymentCalculationMethodLabel(detail?.configuration?.paymentCalculationMethod)} /></CCol>
+        <CCol lg={3} md={6}><InfoCard label='Lệ phí' value={feeSummary.mode === 'free' ? 'Miễn phí' : feeSummary.totalAmount === null || feeSummary.totalAmount === undefined ? getPaymentCalculationMethodLabel(detail?.configuration?.paymentCalculationMethod) : `${formatMoney(feeSummary.totalAmount)} ${feeSummary.currency || 'VND'}`} /></CCol>
       </CRow>
 
       <CRow className='g-4'>
@@ -166,14 +171,14 @@ export default function LearnerExamDetailPage() {
                       <div className='fw-semibold mb-2'>{subject.nameSnapshot}</div>
                       <div className='small text-body-secondary mb-2'>Quy tắc: {getSubjectCalculationMethodLabel(subject?.calculationRule?.method)}</div>
                       <div className='small text-body-secondary mb-2'>Môn {subject.isRequired ? 'bắt buộc' : 'tự chọn'}{subject.allowSeparateRegistration ? ' · cho phép đăng ký riêng' : ''}</div>
-                      <div className='small text-body-secondary mb-3'>Lệ phí môn: {subject.fee === null || typeof subject.fee === 'undefined' ? '-' : `${formatMoney(subject.fee)} VND`}</div>
+                      {showSubjectFee ? <div className='small text-body-secondary mb-3'>Lệ phí môn: {subject.fee === null || typeof subject.fee === 'undefined' ? '-' : `${formatMoney(subject.fee)} VND`}</div> : null}
                       <div className='d-flex flex-column gap-2'>
                         {Array.isArray(subject.components) && subject.components.length > 0 ? subject.components.map((component) => (
                           <div key={component.examRoundComponentId} className='border rounded p-2 bg-body-tertiary'>
                             <div className='fw-semibold'>{component.nameSnapshot}</div>
                             <div className='small text-body-secondary'>Thời lượng: {component.durationMinutes ? `${component.durationMinutes} phút` : '-'}</div>
                             <div className='small text-body-secondary'>{component.isRequired ? 'Bắt buộc' : 'Tự chọn'}{component.allowSeparateRegistration ? ' · cho phép đăng ký riêng' : ''}</div>
-                            <div className='small text-body-secondary'>Lệ phí: {component.fee === null || typeof component.fee === 'undefined' ? '-' : `${formatMoney(component.fee)} VND`}</div>
+                            {showComponentFee ? <div className='small text-body-secondary'>Lệ phí: {component.fee === null || typeof component.fee === 'undefined' ? '-' : `${formatMoney(component.fee)} VND`}</div> : null}
                           </div>
                         )) : <div className='text-body-secondary'>Chưa có kỹ năng/phần thi.</div>}
                       </div>

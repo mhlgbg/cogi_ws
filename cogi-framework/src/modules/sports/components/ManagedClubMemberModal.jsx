@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { CAlert, CButton, CCol, CFormInput, CFormLabel, CFormSelect, CFormTextarea, CModal, CModalBody, CModalFooter, CModalHeader, CModalTitle, CRow, CSpinner } from '@coreui/react'
 import { createManagedClubMember, createManagedClubProfile, getSportsClubManagementApiMessage, listManagedClubProfileOptions, updateManagedClubMember } from '../services/sportsClubManagementService'
+import SportsProfileQuickCreateFields from './SportsProfileQuickCreateFields'
 import { CLUB_MEMBERSHIP_ROLE_OPTIONS, CLUB_MEMBERSHIP_SOURCE_OPTIONS, CLUB_MEMBERSHIP_STATUS_OPTIONS, getApprovedByLabel, getSportsProfileOptionLabel } from '../utils/clubMembershipUi'
-import { GENDER_OPTIONS } from '../utils/sportsProfileUi'
+import { buildInitialQuickSportsProfileForm, buildQuickSportsProfilePayload, validateQuickSportsProfileForm } from '../utils/sportsProfileQuickCreate'
 
 function buildInitialForm(initialMembership = null) {
   return {
@@ -21,20 +22,6 @@ function buildInitialForm(initialMembership = null) {
   }
 }
 
-function buildInitialQuickProfileForm() {
-  return {
-    code: '',
-    fullName: '',
-    displayName: '',
-    gender: 'unspecified',
-    dateOfBirth: '',
-    birthYear: '',
-    contactPhone: '',
-    contactEmail: '',
-    hometown: '',
-  }
-}
-
 export default function ManagedClubMemberModal({ visible = false, club = null, initialMembership = null, onClose, onSaved }) {
   const [submitting, setSubmitting] = useState(false)
   const [creatingProfile, setCreatingProfile] = useState(false)
@@ -44,7 +31,8 @@ export default function ManagedClubMemberModal({ visible = false, club = null, i
   const [profileOptions, setProfileOptions] = useState([])
   const [form, setForm] = useState(buildInitialForm(initialMembership))
   const [mode, setMode] = useState('existing')
-  const [quickProfileForm, setQuickProfileForm] = useState(buildInitialQuickProfileForm())
+  const [quickProfileForm, setQuickProfileForm] = useState(buildInitialQuickSportsProfileForm())
+  const [quickProfileErrors, setQuickProfileErrors] = useState({})
   const isEdit = Boolean(initialMembership?.id)
   const profileLookupSearch = mode === 'create'
     ? (String(quickProfileForm.contactPhone || '').trim()
@@ -58,7 +46,8 @@ export default function ManagedClubMemberModal({ visible = false, club = null, i
     setProfileSearch('')
     setError('')
     setMode('existing')
-    setQuickProfileForm(buildInitialQuickProfileForm())
+    setQuickProfileForm(buildInitialQuickSportsProfileForm())
+    setQuickProfileErrors({})
   }, [visible, initialMembership])
 
   useEffect(() => {
@@ -124,39 +113,21 @@ export default function ManagedClubMemberModal({ visible = false, club = null, i
   }
 
   async function handleCreateProfile() {
-    if (!String(quickProfileForm.code || '').trim()) {
-      setError('Mã hồ sơ thể thao là bắt buộc khi tạo nhanh hồ sơ mới')
+    const nextErrors = validateQuickSportsProfileForm(quickProfileForm)
+    setQuickProfileErrors(nextErrors)
+    if (Object.keys(nextErrors).length > 0) {
+      setError('Vui lòng kiểm tra lại thông tin Sports Profile.')
       return
-    }
-    if (!String(quickProfileForm.fullName || '').trim()) {
-      setError('Họ tên là bắt buộc')
-      return
-    }
-    if (quickProfileForm.birthYear) {
-      const parsed = Number(quickProfileForm.birthYear)
-      if (!Number.isInteger(parsed) || parsed < 1900 || parsed > 2100) {
-        setError('Năm sinh phải là số nguyên từ 1900 đến 2100')
-        return
-      }
     }
 
     setCreatingProfile(true)
     setError('')
     try {
-      const createdProfile = await createManagedClubProfile(club.id, {
-        code: String(quickProfileForm.code || '').trim().toUpperCase(),
-        fullName: String(quickProfileForm.fullName || '').trim(),
-        displayName: String(quickProfileForm.displayName || '').trim() || null,
-        gender: quickProfileForm.gender || 'unspecified',
-        dateOfBirth: quickProfileForm.dateOfBirth || null,
-        birthYear: quickProfileForm.birthYear ? Number(quickProfileForm.birthYear) : null,
-        contactPhone: String(quickProfileForm.contactPhone || '').trim() || null,
-        contactEmail: String(quickProfileForm.contactEmail || '').trim().toLowerCase() || null,
-        hometown: String(quickProfileForm.hometown || '').trim() || null,
-      })
+      const createdProfile = await createManagedClubProfile(club.id, buildQuickSportsProfilePayload(quickProfileForm))
       setForm((current) => ({ ...current, sportsProfile: createdProfile }))
       setMode('existing')
       setProfileSearch(createdProfile ? getSportsProfileOptionLabel(createdProfile) : '')
+      setQuickProfileErrors({})
       setError('')
     } catch (requestError) {
       setError(getSportsClubManagementApiMessage(requestError, 'Không thể tạo nhanh Sports Profile.'))
@@ -213,17 +184,18 @@ export default function ManagedClubMemberModal({ visible = false, club = null, i
                 ) : (
                   <>
                     <div className='fw-semibold mb-2'>Tạo nhanh Sports Profile</div>
-                    <CRow className='g-3'>
-                      <CCol md={4}><CFormLabel>Mã hồ sơ</CFormLabel><CFormInput value={quickProfileForm.code} onChange={(event) => setQuickProfileForm((current) => ({ ...current, code: event.target.value.toUpperCase() }))} disabled={creatingProfile || submitting} /></CCol>
-                      <CCol md={4}><CFormLabel>Họ và tên</CFormLabel><CFormInput value={quickProfileForm.fullName} onChange={(event) => setQuickProfileForm((current) => ({ ...current, fullName: event.target.value }))} disabled={creatingProfile || submitting} /></CCol>
-                      <CCol md={4}><CFormLabel>Tên hiển thị</CFormLabel><CFormInput value={quickProfileForm.displayName} onChange={(event) => setQuickProfileForm((current) => ({ ...current, displayName: event.target.value }))} disabled={creatingProfile || submitting} /></CCol>
-                      <CCol md={3}><CFormLabel>Giới tính</CFormLabel><CFormSelect value={quickProfileForm.gender} onChange={(event) => setQuickProfileForm((current) => ({ ...current, gender: event.target.value }))} disabled={creatingProfile || submitting}>{GENDER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</CFormSelect></CCol>
-                      <CCol md={3}><CFormLabel>Ngày sinh</CFormLabel><CFormInput type='date' value={quickProfileForm.dateOfBirth} onChange={(event) => setQuickProfileForm((current) => ({ ...current, dateOfBirth: event.target.value }))} disabled={creatingProfile || submitting} /></CCol>
-                      <CCol md={3}><CFormLabel>Năm sinh</CFormLabel><CFormInput type='number' min='1900' max='2100' value={quickProfileForm.birthYear} onChange={(event) => setQuickProfileForm((current) => ({ ...current, birthYear: event.target.value }))} disabled={Boolean(quickProfileForm.dateOfBirth) || creatingProfile || submitting} /></CCol>
-                      <CCol md={3}><CFormLabel>Số điện thoại</CFormLabel><CFormInput value={quickProfileForm.contactPhone} onChange={(event) => setQuickProfileForm((current) => ({ ...current, contactPhone: event.target.value }))} disabled={creatingProfile || submitting} /></CCol>
-                      <CCol md={6}><CFormLabel>Email liên hệ</CFormLabel><CFormInput value={quickProfileForm.contactEmail} onChange={(event) => setQuickProfileForm((current) => ({ ...current, contactEmail: event.target.value }))} disabled={creatingProfile || submitting} /></CCol>
-                      <CCol md={6}><CFormLabel>Quê quán</CFormLabel><CFormInput value={quickProfileForm.hometown} onChange={(event) => setQuickProfileForm((current) => ({ ...current, hometown: event.target.value }))} disabled={creatingProfile || submitting} /></CCol>
-                    </CRow>
+                    <SportsProfileQuickCreateFields
+                      form={quickProfileForm}
+                      errors={quickProfileErrors}
+                      disabled={creatingProfile || submitting}
+                      onChange={(field, value) => {
+                        setQuickProfileForm((current) => ({ ...current, [field]: value }))
+                        setQuickProfileErrors((current) => {
+                          if (!current[field]) return current
+                          return { ...current, [field]: '' }
+                        })
+                      }}
+                    />
                     {duplicateCandidates.length > 0 ? (
                       <div className='mt-3 border rounded p-3 bg-body-tertiary'>
                         <div className='fw-semibold mb-2'>Có thể đã tồn tại hồ sơ tương tự</div>

@@ -42,6 +42,7 @@ export async function listExamEligibilities(examRoundId, params = {}) {
     rows: normalizeExamEligibilityCollection(response.data),
     pagination: normalizePagination(response.data),
     summary: normalizeEligibilitySummary(response.data),
+    management: response?.data?.meta?.management || null,
   }
 }
 
@@ -65,8 +66,53 @@ export async function updateExamEligibility(examRoundId, id, payload) {
   return normalizeExamEligibility(unwrapSuccess(response.data))
 }
 
+export async function deleteExamEligibility(examRoundId, id) {
+  const response = await api.delete(`/exam-rounds/${examRoundId}/eligibilities/${id}`)
+  return unwrapSuccess(response.data)
+}
+
 export async function markExamEligibilityIneligible(examRoundId, id, payload) {
   const response = await api.post(`/exam-rounds/${examRoundId}/eligibilities/${id}/mark-ineligible`, payload)
+  return unwrapSuccess(response.data)
+}
+
+export async function downloadExamEligibilityImportTemplate() {
+  const response = await api.get('/exam-rounds/eligibilities/import-template', {
+    responseType: 'blob',
+  })
+
+  const headerValue = String(response.headers?.['content-disposition'] || '')
+  const matchedName = headerValue.match(/filename="?([^";]+)"?/i)
+
+  return {
+    blob: response.data,
+    fileName: matchedName?.[1] || 'exam-eligibility-import-template.xlsx',
+  }
+}
+
+export async function previewExamEligibilityImport(examRoundId, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const response = await api.post(`/exam-rounds/${examRoundId}/eligibilities/import/preview`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+
+  return unwrapSuccess(response.data)
+}
+
+export async function commitExamEligibilityImport(examRoundId, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const response = await api.post(`/exam-rounds/${examRoundId}/eligibilities/import/commit`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+
   return unwrapSuccess(response.data)
 }
 
@@ -75,5 +121,6 @@ export async function listLearnersForEligibility(examRoundId, params = {}) {
   return {
     rows: normalizeLearnerLookupCollection(response.data),
     pagination: normalizePagination(response.data),
+    management: response?.data?.meta?.management || null,
   }
 }

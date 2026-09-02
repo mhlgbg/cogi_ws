@@ -199,6 +199,15 @@ export async function getMySportsProfile() {
   }
 }
 
+export async function createMySportsProfile(payload) {
+  const response = await api.post('/sports/me', { data: payload })
+  const data = unwrapSuccess(response.data)
+  return {
+    profile: normalizeProfile(data?.profile),
+    summary: normalizeSummary(data?.summary),
+  }
+}
+
 export async function updateMySportsProfile(payload) {
   const response = await api.put('/sports/me', { data: payload })
   const data = unwrapSuccess(response.data)

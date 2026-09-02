@@ -73,6 +73,7 @@ export function getApiMessage(error, fallback) {
 
   const mapped = {
     EXAM_ROUND_NOT_FOUND: 'Không tìm thấy đợt thi trong tenant hiện tại.',
+    EXAM_ROUND_BASE_CONFIGURATION_LOCKED: 'Đợt thi đã được phê duyệt. Các thông tin cấu hình nền không thể chỉnh sửa.',
     EXAM_ROUND_CANNOT_BE_SUBMITTED: 'Đợt thi hiện không thể trình duyệt.',
     EXAM_ROUND_NOT_READY_FOR_APPROVAL: 'Đợt thi chưa sẵn sàng để trình/phê duyệt.',
     EXAM_ROUND_SELF_APPROVAL_NOT_ALLOWED: 'Người đã trình duyệt không được tự phê duyệt cùng đợt thi.',
@@ -193,6 +194,32 @@ export function getRegistrationOperationState(round) {
   return 'not_available'
 }
 
+export function getExamRoundConfigurationAccess(round) {
+  const access = round?.configurationAccess
+  if (access && typeof access === 'object') {
+    return {
+      canEditBaseConfiguration: access.canEditBaseConfiguration === true,
+      canEditPaymentSettings: access.canEditPaymentSettings === true,
+      reasonCode: toText(access.reasonCode) || null,
+      message: toText(access.message) || '',
+      warningMessage: toText(access.warningMessage) || null,
+      registrationOperationalState: normalizeStatus(access.registrationOperationalState) || getRegistrationOperationState(round),
+      registrationCount: Number(access.registrationCount || 0) || 0,
+    }
+  }
+
+  const status = normalizeStatus(round?.status)
+  return {
+    canEditBaseConfiguration: status === 'draft',
+    canEditPaymentSettings: status === 'draft',
+    reasonCode: null,
+    message: status === 'draft' ? '' : 'Đợt thi đã được phê duyệt hoặc đang vận hành nên các thông tin cấu hình nền không thể chỉnh sửa.',
+    warningMessage: null,
+    registrationOperationalState: getRegistrationOperationState(round),
+    registrationCount: Number(round?.registrationCount || 0) || 0,
+  }
+}
+
 export function getRegistrationOperationLabel(state) {
   if (state === 'open') return 'Đang nhận đăng ký'
   if (state === 'paused') return 'Tạm dừng đăng ký'
@@ -202,8 +229,15 @@ export function getRegistrationOperationLabel(state) {
 }
 
 export function canEditExamRound(round, permissions = {}) {
-  const status = normalizeStatus(round?.status)
-  return status === 'draft' && permissions?.canManage === true
+  return permissions?.canManage === true && getExamRoundConfigurationAccess(round).canEditBaseConfiguration === true
+}
+
+export function getExamRoundEditLockMessage(round, permissions = {}) {
+  if (permissions?.canManage !== true) {
+    return 'Bạn không có quyền quản trị để chỉnh sửa cấu hình đợt thi.'
+  }
+
+  return getExamRoundConfigurationAccess(round).message || ''
 }
 
 export function canSubmitExamRound(round, permissions = {}) {
@@ -295,7 +329,7 @@ export function getExamRoundWorkflowActions(round, permissions = {}) {
       field: 'note',
       required: false,
       title: 'Mở đăng ký dự thi',
-      confirmLabel: 'Mở đăng ký',
+      confirmLabel: 'Xác nhận mở đăng ký',
     })
   }
 
@@ -524,6 +558,7 @@ export function normalizeExamRound(raw) {
     registrationEndAt: entity.registrationEndAt || null,
     paymentStartAt: entity.paymentStartAt || null,
     paymentEndAt: entity.paymentEndAt || null,
+    candidateListClosingAt: entity.candidateListClosingAt || null,
     examStartAt: entity.examStartAt || null,
     examEndAt: entity.examEndAt || null,
     paymentCalculationMethod: normalizeStatus(entity.paymentCalculationMethod),
@@ -531,6 +566,8 @@ export function normalizeExamRound(raw) {
     requireConfirmedPayment: entity.requireConfirmedPayment === true,
     allowSubjectSelection: entity.allowSubjectSelection === true,
     allowComponentSelection: entity.allowComponentSelection === true,
+    allowCancellation: entity.allowCancellation === true,
+    cancellationDeadline: entity.cancellationDeadline || null,
     updatedAt: entity.updatedAt || null,
     createdAt: entity.createdAt || null,
     instructions: entity.instructions || '',
@@ -574,6 +611,17 @@ export function normalizeExamRound(raw) {
     registrationClosedBy: normalizeRelation(entity.registrationClosedBy),
     registrationClosedAt: entity.registrationClosedAt || null,
     registrationCloseReason: toText(entity.registrationCloseReason),
+    registrationCount: Number(entity.registrationCount || 0) || 0,
+    eligibilityCount: Number(entity.eligibilityCount || 0) || 0,
+    configurationAccess: entity.configurationAccess ? {
+      canEditBaseConfiguration: entity.configurationAccess.canEditBaseConfiguration === true,
+      canEditPaymentSettings: entity.configurationAccess.canEditPaymentSettings === true,
+      reasonCode: toText(entity.configurationAccess.reasonCode) || null,
+      message: toText(entity.configurationAccess.message) || '',
+      warningMessage: toText(entity.configurationAccess.warningMessage) || null,
+      registrationOperationalState: normalizeStatus(entity.configurationAccess.registrationOperationalState) || null,
+      registrationCount: Number(entity.configurationAccess.registrationCount || 0) || 0,
+    } : null,
     subjects: structureSubjects,
     paymentSettings: {
       paymentProfile: normalizePaymentProfile(entity.paymentProfile),
@@ -644,12 +692,31 @@ export function buildExamRoundStructurePayload(round, overrides = {}) {
     : []
 
   return {
+    code: toText(overrides.code ?? round?.code),
+    name: toText(overrides.name ?? round?.name),
+    academicYear: toText(overrides.academicYear ?? round?.academicYear) || null,
+    semester: toText(overrides.semester ?? round?.semester) || null,
+    registrationMode: normalizeStatus(overrides.registrationMode ?? round?.registrationMode) || 'restricted',
+    registrationStartAt: overrides.registrationStartAt ?? round?.registrationStartAt ?? null,
+    registrationEndAt: overrides.registrationEndAt ?? round?.registrationEndAt ?? null,
+    paymentStartAt: overrides.paymentStartAt ?? round?.paymentStartAt ?? null,
+    paymentEndAt: overrides.paymentEndAt ?? round?.paymentEndAt ?? null,
+    candidateListClosingAt: overrides.candidateListClosingAt ?? round?.candidateListClosingAt ?? null,
+    examStartAt: overrides.examStartAt ?? round?.examStartAt ?? null,
+    examEndAt: overrides.examEndAt ?? round?.examEndAt ?? null,
     paymentCalculationMethod: normalizeStatus(overrides.paymentCalculationMethod ?? round?.paymentCalculationMethod) || 'program_fee',
     fixedFee: (overrides.paymentCalculationMethod ?? round?.paymentCalculationMethod) === 'fixed'
       ? (overrides.fixedFee ?? round?.fixedFee ?? null)
       : null,
     allowSubjectSelection: overrides.allowSubjectSelection ?? round?.allowSubjectSelection === true,
     allowComponentSelection: overrides.allowComponentSelection ?? round?.allowComponentSelection === true,
+    requireConfirmedPayment: overrides.requireConfirmedPayment ?? round?.requireConfirmedPayment === true,
+    allowCancellation: overrides.allowCancellation ?? round?.allowCancellation === true,
+    cancellationDeadline: overrides.allowCancellation === false
+      ? null
+      : (overrides.cancellationDeadline ?? round?.cancellationDeadline ?? null),
+    instructions: overrides.instructions ?? round?.instructions ?? null,
+    paymentInstructions: overrides.paymentInstructions ?? round?.paymentInstructions ?? null,
     subjects,
   }
 }
@@ -703,8 +770,7 @@ export function buildExamRoundTimeline(status) {
 }
 
 export function canEditExamRoundPaymentSettings(round, permissions = {}) {
-  const status = normalizeStatus(round?.status)
-  return permissions?.canManage === true && ['draft', 'approved', 'registration_open', 'registration_paused', 'registration_closed'].includes(status)
+  return permissions?.canManage === true && getExamRoundConfigurationAccess(round).canEditPaymentSettings === true
 }
 
 export function isExamRoundPaymentOptional(round) {

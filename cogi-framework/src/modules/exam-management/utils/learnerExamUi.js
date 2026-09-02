@@ -24,6 +24,7 @@ export function normalizeLearnerExamRoundItem(raw) {
     canRegister: raw.canRegister === true,
     canView: raw.canView !== false,
     reasonCode: toText(raw.reasonCode) || null,
+    availabilityState: normalizeStatus(raw.availabilityState) || null,
     eligibility: raw.eligibility ? {
       registrationMode: normalizeStatus(raw.eligibility.registrationMode) || null,
       status: normalizeStatus(raw.eligibility.status) || null,
@@ -89,6 +90,7 @@ export function normalizeLearnerExamRoundDetail(raw) {
       paymentInstructions: raw.examRound.paymentInstructions || '',
     } : null,
     availability: raw.availability ? {
+      availabilityState: normalizeStatus(raw.availability.availabilityState) || null,
       registrationWindowState: normalizeStatus(raw.availability.registrationWindowState) || null,
       canRegister: raw.availability.canRegister === true,
       requiresLearnerCreation: raw.availability.requiresLearnerCreation === true,
@@ -137,6 +139,7 @@ export function normalizeLearnerRegistrationOptions(raw) {
     learner: normalizeCurrentLearner(raw.learner),
     canRegister: raw.canRegister === true,
     reasonCode: toText(raw.reasonCode) || null,
+    availabilityState: normalizeStatus(raw.availabilityState) || null,
     registrationWindowState: normalizeStatus(raw.registrationWindowState) || null,
     existingRegistration: raw.existingRegistration ? {
       id: Number(raw.existingRegistration.id || 0) || 0,
@@ -254,13 +257,14 @@ export function normalizePagination(payload) {
 export function getLearnerExamReasonLabel(reasonCode) {
   const normalized = normalizeStatus(reasonCode)
   const mapping = {
-    registration_window_not_started: 'Chưa đến thời gian đăng ký.',
-    exam_registration_not_started: 'Chưa đến thời gian đăng ký.',
-    registration_window_ended: 'Thời gian đăng ký đã kết thúc.',
-    exam_registration_window_expired: 'Thời gian đăng ký đã kết thúc.',
-    exam_round_registration_paused: 'Đợt thi đang tạm dừng nhận đăng ký.',
-    exam_round_registration_closed: 'Đợt thi đã đóng đăng ký.',
-    exam_registration_not_open: 'Đợt thi hiện chưa mở đăng ký.',
+    registration_window_not_started: 'Chưa đến thời gian đăng ký. Vui lòng quay lại sau.',
+    exam_registration_not_started: 'Chưa đến thời gian đăng ký. Vui lòng quay lại sau.',
+    registration_window_ended: 'Đã hết thời gian đăng ký.',
+    exam_registration_window_expired: 'Đã hết thời gian đăng ký.',
+    exam_round_registration_paused: 'Đợt thi đang tạm dừng nhận đăng ký. Vui lòng quay lại sau.',
+    exam_round_registration_closed: 'Đã hết thời gian đăng ký.',
+    exam_registration_not_open: 'Đợt thi đã được phê duyệt nhưng hiện chưa mở nhận đăng ký. Vui lòng quay lại sau.',
+    exam_round_registration_not_open: 'Đợt thi đã được phê duyệt nhưng hiện chưa mở nhận đăng ký. Vui lòng quay lại sau.',
     exam_round_not_ready_for_registration: 'Đợt thi hiện chưa sẵn sàng để đăng ký.',
     exam_round_not_available: 'Đợt thi hiện chưa sẵn sàng để đăng ký.',
     exam_registration_already_exists: 'Bạn đã có hồ sơ đăng ký.',
@@ -268,7 +272,7 @@ export function getLearnerExamReasonLabel(reasonCode) {
     payment_profile_not_configured: 'Đợt thi chưa có snapshot thông tin thanh toán hợp lệ.',
     payment_settings_invalid: 'Thông tin thanh toán của đợt thi hiện chưa hợp lệ.',
     payment_template_invalid: 'Nội dung chuyển khoản mẫu của đợt thi hiện chưa hợp lệ.',
-    exam_learner_not_eligible: 'Bạn chưa thuộc danh sách đủ điều kiện đăng ký đợt thi này.',
+    exam_learner_not_eligible: 'Bạn chưa đủ điều kiện đăng ký đợt thi này.',
     exam_learner_temporarily_ineligible: 'Bạn hiện tạm thời chưa đủ điều kiện đăng ký đợt thi này.',
     exam_eligibility_pending: 'Điều kiện dự thi của bạn đang chờ xác định.',
     learner_required_for_restricted_round: 'Đợt thi này chỉ dành cho người học đã được xác định đủ điều kiện. Vui lòng sử dụng đúng tài khoản đã liên kết hoặc liên hệ nhà trường.',
@@ -285,15 +289,16 @@ export function getLearnerExamReasonLabel(reasonCode) {
 }
 
 export function getLearnerExamStatusMeta(item) {
-  if (item?.existingRegistration?.id) return { label: 'Đã đăng ký', color: 'info' }
-  if (item?.status === 'registration_open' && item?.registrationWindowState === 'within' && item?.canRegister) {
+  const state = normalizeStatus(item?.availabilityState || item?.availability?.availabilityState)
+  if (state === 'registered' || item?.existingRegistration?.id) return { label: 'Đã đăng ký', color: 'info' }
+  if (state === 'open' || (item?.status === 'registration_open' && item?.registrationWindowState === 'within' && item?.canRegister)) {
     return { label: 'Đang mở đăng ký', color: 'success' }
   }
-  if ((item?.status === 'approved' || item?.status === 'registration_open') && item?.registrationWindowState === 'before') {
-    return { label: 'Sắp mở đăng ký', color: 'warning' }
-  }
-  if (item?.status === 'registration_paused') return { label: 'Tạm dừng đăng ký', color: 'warning' }
-  if (item?.status === 'registration_closed') return { label: 'Đã đóng đăng ký', color: 'secondary' }
+  if (state === 'registration_not_open') return { label: 'Chưa mở đăng ký', color: 'warning' }
+  if (state === 'registration_paused') return { label: 'Tạm dừng đăng ký', color: 'warning' }
+  if (state === 'registration_not_started') return { label: 'Chưa đến thời gian đăng ký', color: 'warning' }
+  if (state === 'registration_ended') return { label: 'Đã hết thời gian đăng ký', color: 'secondary' }
+  if (state === 'not_eligible' || state === 'temporarily_ineligible' || state === 'eligibility_pending') return { label: 'Chưa đủ điều kiện đăng ký', color: 'secondary' }
   return { label: 'Đã kết thúc hoặc chưa khả dụng', color: 'secondary' }
 }
 
@@ -421,27 +426,52 @@ export function groupLearnerExamRounds(items = []) {
   const buckets = {
     registered: [],
     opening: [],
+    notOpen: [],
+    paused: [],
     upcoming: [],
-    closed: [],
+    ineligible: [],
+    ended: [],
+    unavailable: [],
   }
 
   items.forEach((item) => {
+    const state = normalizeStatus(item?.availabilityState || item?.availability?.availabilityState)
     if (item?.existingRegistration?.id) {
       buckets.registered.push(item)
       return
     }
 
-    if (item?.status === 'registration_open' && item?.registrationWindowState === 'within') {
+    if (state === 'open' || (item?.status === 'registration_open' && item?.registrationWindowState === 'within')) {
       buckets.opening.push(item)
       return
     }
 
-    if ((item?.status === 'approved' || item?.status === 'registration_open') && item?.registrationWindowState === 'before') {
+    if (state === 'registration_not_open') {
+      buckets.notOpen.push(item)
+      return
+    }
+
+    if (state === 'registration_paused') {
+      buckets.paused.push(item)
+      return
+    }
+
+    if (state === 'registration_not_started' || ((item?.status === 'approved' || item?.status === 'registration_open') && item?.registrationWindowState === 'before')) {
       buckets.upcoming.push(item)
       return
     }
 
-    buckets.closed.push(item)
+    if (state === 'not_eligible' || state === 'temporarily_ineligible' || state === 'eligibility_pending') {
+      buckets.ineligible.push(item)
+      return
+    }
+
+    if (state === 'registration_ended') {
+      buckets.ended.push(item)
+      return
+    }
+
+    buckets.unavailable.push(item)
   })
 
   return buckets

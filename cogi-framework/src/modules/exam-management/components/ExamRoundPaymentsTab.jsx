@@ -43,6 +43,7 @@ import {
   canEditExamRoundPaymentSettings,
   formatDateTime,
   formatMoney,
+  getExamRoundConfigurationAccess,
   getPaymentCalculationMethodLabel,
   getPaymentMethodLabel,
   isExamRoundPaymentOptional,
@@ -80,7 +81,7 @@ function getApiMessage(error, fallback) {
     PAYMENT_PROFILE_BANK_INFO_REQUIRED: 'Thiếu thông tin tài khoản ngân hàng cho cấu hình hiện tại.',
     PAYMENT_TRANSFER_TEMPLATE_INVALID_PLACEHOLDER: 'Mẫu nội dung chuyển khoản đang chứa placeholder không được hỗ trợ.',
     PAYMENT_PROFILE_INVALID_QR_IMAGE: 'Ảnh QR không hợp lệ.',
-    EXAM_ROUND_PAYMENT_SETTINGS_NOT_EDITABLE: 'Trạng thái đợt thi hiện không cho phép chỉnh cấu hình thanh toán.',
+    EXAM_ROUND_PAYMENT_SETTINGS_NOT_EDITABLE: 'Đợt thi đã được phê duyệt hoặc đang vận hành nên các thông tin cấu hình nền không thể chỉnh sửa.',
   }[code]
   return mapped || String(backendMessage || fallback || '').trim()
 }
@@ -162,6 +163,7 @@ export default function ExamRoundPaymentsTab({ round, permissions, onRefresh, on
   const navigate = useNavigate()
   const { tenantCode } = useParams()
   const editable = canEditExamRoundPaymentSettings(round, permissions)
+  const configurationAccess = getExamRoundConfigurationAccess(round)
   const canManagePayments = permissions?.canManage === true || permissions?.canApprove === true
   const [profilesLoading, setProfilesLoading] = useState(false)
   const [profiles, setProfiles] = useState([])
@@ -489,6 +491,8 @@ export default function ExamRoundPaymentsTab({ round, permissions, onRefresh, on
     <div className='d-flex flex-column gap-4'>
       {error ? <CAlert color='danger'>{error}</CAlert> : null}
       {success ? <CAlert color='success'>{success}</CAlert> : null}
+      {editable && configurationAccess.message ? <CAlert color='warning'>{configurationAccess.message}</CAlert> : null}
+      {editable && configurationAccess.warningMessage ? <CAlert color='warning'>{configurationAccess.warningMessage}</CAlert> : null}
 
       <CCard>
         <CCardHeader><strong>Tóm tắt cấu hình phí</strong></CCardHeader>

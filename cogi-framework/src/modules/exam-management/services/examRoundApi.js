@@ -247,6 +247,26 @@ export async function updateExamRoundVenuesRooms(roundId, payload = {}) {
   return unwrapSuccess(response.data)
 }
 
+export async function listExamRoundVenueRoomCopySources(roundId, params = {}) {
+  const response = await api.get(`/exam-rounds/${roundId}/venue-room-copy-sources`, { params })
+  return {
+    data: Array.isArray(response?.data?.data) ? response.data.data : [],
+    pagination: normalizePagination(response?.data),
+  }
+}
+
+export async function previewExamRoundVenueRoomCopy(roundId, sourceRoundId) {
+  const response = await api.get(`/exam-rounds/${roundId}/venue-room-copy-preview`, {
+    params: { sourceRoundId },
+  })
+  return unwrapSuccess(response.data)
+}
+
+export async function copyExamRoundVenueRoomConfiguration(roundId, payload = {}) {
+  const response = await api.post(`/exam-rounds/${roundId}/venue-room-copy`, payload)
+  return unwrapSuccess(response.data)
+}
+
 export async function createExamVenueForRound(roundId, payload = {}) {
   const response = await api.post(`/exam-rounds/${roundId}/venues`, payload)
   return unwrapSuccess(response.data)

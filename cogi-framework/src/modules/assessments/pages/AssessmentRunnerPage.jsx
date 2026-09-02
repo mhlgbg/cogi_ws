@@ -817,8 +817,8 @@ export default function AssessmentRunnerPage() {
                 title='Đi tới câu chưa làm gần nhất phía trước'
                 aria-label='Đi tới câu chưa làm gần nhất phía trước'
               >
-                <span className='assessment-runner-nav-label-desktop'>← Câu chưa làm trước</span>
-                <span className='assessment-runner-nav-label-mobile'>← Chưa làm trước</span>
+                <span className='assessment-runner-nav-label-desktop'>← Trước</span>
+                <span className='assessment-runner-nav-label-mobile'>← Trước</span>
               </CButton>
               <div className='assessment-runner-statusline small text-body-secondary'>
                 {readOnly
@@ -837,8 +837,8 @@ export default function AssessmentRunnerPage() {
                     title='Đi tới câu chưa làm gần nhất phía sau'
                     aria-label='Đi tới câu chưa làm gần nhất phía sau'
                   >
-                    <span className='assessment-runner-nav-label-desktop'>Câu chưa làm tiếp theo →</span>
-                    <span className='assessment-runner-nav-label-mobile'>Chưa làm tiếp →</span>
+                    <span className='assessment-runner-nav-label-desktop'>Tiếp →</span>
+                    <span className='assessment-runner-nav-label-mobile'>Tiếp →</span>
                   </CButton>
                 ) : null}
               </div>

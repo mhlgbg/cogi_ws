@@ -17,6 +17,98 @@ body {
   color: #111827;
 }
 
+.quick-message-html-content {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+}
+
+.quick-message-text-content {
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.quick-message-html-content > :first-child {
+  margin-top: 0;
+}
+
+.quick-message-html-content > :last-child {
+  margin-bottom: 0;
+}
+
+.quick-message-html-content h1,
+.quick-message-html-content h2,
+.quick-message-html-content h3,
+.quick-message-html-content h4 {
+  line-height: 1.25;
+  margin: 0 0 0.75rem;
+}
+
+.quick-message-html-content h1 {
+  font-size: clamp(1.5rem, 4vw, 2rem);
+}
+
+.quick-message-html-content h2 {
+  font-size: clamp(1.25rem, 3vw, 1.7rem);
+}
+
+.quick-message-html-content h3 {
+  font-size: clamp(1.1rem, 2.4vw, 1.35rem);
+}
+
+.quick-message-html-content h4 {
+  font-size: clamp(1rem, 2vw, 1.15rem);
+}
+
+.quick-message-html-content p,
+.quick-message-html-content ul,
+.quick-message-html-content ol,
+.quick-message-html-content blockquote,
+.quick-message-html-content table {
+  margin: 0 0 1rem;
+}
+
+.quick-message-html-content ul,
+.quick-message-html-content ol {
+  padding-left: 1.5rem;
+}
+
+.quick-message-html-content blockquote {
+  border-left: 4px solid #cbd5e1;
+  padding-left: 1rem;
+  color: #475569;
+}
+
+.quick-message-html-content a {
+  color: #0d6efd;
+  text-decoration: underline;
+}
+
+.quick-message-html-content hr {
+  border: 0;
+  border-top: 1px solid #dbe3f0;
+  margin: 1rem 0;
+}
+
+.quick-message-html-content table {
+  width: 100%;
+  min-width: 480px;
+  border-collapse: collapse;
+}
+
+.quick-message-html-content th,
+.quick-message-html-content td {
+  border: 1px solid #dbe3f0;
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.quick-message-html-content thead th {
+  background: #eef4ff;
+}
+
 .notranslate {
   translate: no;
 }

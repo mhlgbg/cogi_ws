@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import {
   CAlert,
   CButton,
+  CCol,
   CFormCheck,
   CFormTextarea,
   CModal,
@@ -9,13 +10,16 @@ import {
   CModalFooter,
   CModalHeader,
   CModalTitle,
+  CRow,
 } from '@coreui/react'
-import { canEditExamRound, formatDateTime, getExamRoundRelatedTabFromPath, getExamRoundWorkflowActions, getRegistrationModeLabel, getRegistrationWindowLabel, getRegistrationWindowState, getPaymentCalculationMethodLabel, isSelfApprovalBlocked } from '../utils/examRoundUi'
+import { canEditExamRound, formatDateTime, formatMoney, getExamRoundConfigurationAccess, getExamRoundEditLockMessage, getExamRoundRelatedTabFromPath, getExamRoundWorkflowActions, getRegistrationModeLabel, getRegistrationWindowLabel, getRegistrationWindowState, getPaymentCalculationMethodLabel, isSelfApprovalBlocked } from '../utils/examRoundUi'
 
 export default function ExamRoundWorkflowActions({ round, permissions, currentUserId = 0, submittingActionKey = '', errorMessage = '', errorDetails = [], onAction, onOpenTab }) {
   const actions = useMemo(() => getExamRoundWorkflowActions(round, permissions), [permissions, round])
   const registrationWindowState = getRegistrationWindowState(round)
   const selfApprovalBlocked = isSelfApprovalBlocked(round, currentUserId)
+  const configurationAccess = getExamRoundConfigurationAccess(round)
+  const editLockMessage = getExamRoundEditLockMessage(round, permissions)
   const [activeAction, setActiveAction] = useState(null)
   const [textValue, setTextValue] = useState('')
   const [confirmed, setConfirmed] = useState(false)
@@ -49,6 +53,12 @@ export default function ExamRoundWorkflowActions({ round, permissions, currentUs
           <>
             <CButton color='warning' variant='outline' onClick={() => onOpenTab?.('configuration')}>Chỉnh cấu hình</CButton>
             <CButton color='info' variant='outline' onClick={() => onOpenTab?.('structure')}>Chỉnh cấu trúc</CButton>
+          </>
+        ) : null}
+        {!canEditExamRound(round, permissions) && permissions?.canManage === true ? (
+          <>
+            <CButton color='warning' variant='outline' disabled title={editLockMessage || undefined}>Chỉnh cấu hình</CButton>
+            <CButton color='info' variant='outline' disabled title={editLockMessage || undefined}>Chỉnh cấu trúc</CButton>
           </>
         ) : null}
         {actions.map((action) => {
@@ -120,9 +130,19 @@ export default function ExamRoundWorkflowActions({ round, permissions, currentUs
 
           {activeAction?.key === 'open' ? (
             <>
+              <div className='alert alert-warning'>Sau khi mở đăng ký, các cấu hình nền của đợt thi sẽ bị hạn chế chỉnh sửa. Hãy kiểm tra kỹ thời gian đăng ký, lệ phí, đối tượng và cấu trúc môn thi trước khi tiếp tục.</div>
               <div className='mb-3'><div className='small text-body-secondary'>Trạng thái cửa sổ đăng ký</div><div>{getRegistrationWindowLabel(registrationWindowState)}</div></div>
               <div className='mb-3'><div className='small text-body-secondary'>Chế độ đăng ký</div><div>{getRegistrationModeLabel(round?.registrationMode)}</div></div>
               <div className='mb-3'><div className='small text-body-secondary'>Phương thức lệ phí</div><div>{getPaymentCalculationMethodLabel(round?.paymentCalculationMethod)}</div></div>
+              <CRow className='g-3 mb-3'>
+                <CCol md={6}><div className='small text-body-secondary'>Thời gian đăng ký</div><div>{formatDateTime(round?.registrationStartAt)} - {formatDateTime(round?.registrationEndAt)}</div></CCol>
+                <CCol md={6}><div className='small text-body-secondary'>Thời gian thi dự kiến</div><div>{formatDateTime(round?.examStartAt)} - {formatDateTime(round?.examEndAt)}</div></CCol>
+                <CCol md={4}><div className='small text-body-secondary'>Chế độ đăng ký</div><div>{getRegistrationModeLabel(round?.registrationMode)}</div></CCol>
+                <CCol md={4}><div className='small text-body-secondary'>Lệ phí</div><div>{round?.paymentCalculationMethod === 'fixed' ? `${formatMoney(round?.fixedFee || 0)} VND` : getPaymentCalculationMethodLabel(round?.paymentCalculationMethod)}</div></CCol>
+                <CCol md={4}><div className='small text-body-secondary'>Eligibility</div><div>{round?.registrationMode === 'restricted' ? `${round?.eligibilityCount || 0} đối tượng` : 'Không áp dụng'}</div></CCol>
+                <CCol md={6}><div className='small text-body-secondary'>Snapshot môn thi</div><div>{round?.structureSummary ? `${round.structureSummary.subjectCount} môn` : 'Chưa có'}</div></CCol>
+                <CCol md={6}><div className='small text-body-secondary'>Snapshot kỹ năng/phần thi</div><div>{round?.structureSummary ? `${round.structureSummary.componentCount} kỹ năng` : 'Chưa có'}</div></CCol>
+              </CRow>
               <div className='mb-3'><div className='small text-body-secondary'>Cho phép learner chọn môn</div><div>{round?.allowSubjectSelection ? 'Có' : 'Không'}</div></div>
               <div className='mb-3'><div className='small text-body-secondary'>Cho phép learner chọn kỹ năng</div><div>{round?.allowComponentSelection ? 'Có' : 'Không'}</div></div>
               <div className='mb-3'><div className='small text-body-secondary'>Yêu cầu xác nhận thanh toán</div><div>{round?.requireConfirmedPayment ? 'Có' : 'Không'}</div></div>
@@ -131,6 +151,7 @@ export default function ExamRoundWorkflowActions({ round, permissions, currentUs
               {registrationWindowState === 'before_window' ? <div className='alert alert-info'>Đợt thi đang được mở trước thời điểm bắt đầu cửa sổ đăng ký. Learner sẽ chỉ đăng ký được khi tới thời gian hiệu lực thực tế.</div> : null}
               {registrationWindowState === 'after_window' ? <div className='alert alert-danger'>Cửa sổ đăng ký đã kết thúc. Backend có thể từ chối mở hoặc tiếp tục đăng ký.</div> : null}
               {registrationWindowState === 'missing_window' || registrationWindowState === 'invalid_window' ? <div className='alert alert-danger'>Cửa sổ đăng ký chưa được cấu hình đầy đủ hoặc đang không hợp lệ.</div> : null}
+              {configurationAccess.canEditBaseConfiguration ? <div className='alert alert-info'>Đợt thi hiện vẫn đang ở giai đoạn có thể điều chỉnh cấu hình nền trước khi mở đăng ký.</div> : null}
             </>
           ) : null}
 

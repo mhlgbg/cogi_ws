@@ -178,18 +178,17 @@ export default function StravaWebhookEventDetailPage() {
             </CCard>
             <CCard className="border-0 shadow-sm mb-4">
               <CCardHeader className="bg-white">
-                <strong>Updates</strong>
+                <strong>Correlation</strong>
               </CCardHeader>
               <CCardBody>
-                <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: '24rem', overflow: 'auto' }}>{safeJson(detail.updates)}</pre>
-              </CCardBody>
-            </CCard>
-            <CCard className="border-0 shadow-sm">
-              <CCardHeader className="bg-white">
-                <strong>Raw Payload</strong>
-              </CCardHeader>
-              <CCardBody>
-                <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: '32rem', overflow: 'auto' }}>{safeJson(detail.rawPayload)}</pre>
+                <pre className="mb-0 small" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: '24rem', overflow: 'auto' }}>{safeJson({
+                  subscriptionId: detail.subscriptionId || null,
+                  ownerId: detail.ownerId || null,
+                  objectType: detail.objectType || null,
+                  objectId: detail.objectId || null,
+                  aspectType: detail.aspectType || null,
+                  idempotencyKey: detail.idempotencyKey || null,
+                })}</pre>
               </CCardBody>
             </CCard>
           </CCol>

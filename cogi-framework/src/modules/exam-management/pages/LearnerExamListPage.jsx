@@ -214,8 +214,12 @@ export default function LearnerExamListPage() {
         <>
           <ExamGroup title='Đã đăng ký' rows={grouped.registered} onViewDetail={(id) => navigate(buildExamDetailPath(id))} onGoRegister={(item) => navigate(buildRegisterPath(item))} onViewRegistration={(id) => navigate(buildRegistrationPath(id))} />
           <ExamGroup title='Đang mở đăng ký' rows={grouped.opening} onViewDetail={(id) => navigate(buildExamDetailPath(id))} onGoRegister={(item) => navigate(buildRegisterPath(item))} onViewRegistration={(id) => navigate(buildRegistrationPath(id))} />
+          <ExamGroup title='Chưa mở đăng ký' rows={grouped.notOpen} onViewDetail={(id) => navigate(buildExamDetailPath(id))} onGoRegister={(item) => navigate(buildRegisterPath(item))} onViewRegistration={(id) => navigate(buildRegistrationPath(id))} />
+          <ExamGroup title='Tạm dừng đăng ký' rows={grouped.paused} onViewDetail={(id) => navigate(buildExamDetailPath(id))} onGoRegister={(item) => navigate(buildRegisterPath(item))} onViewRegistration={(id) => navigate(buildRegistrationPath(id))} />
           <ExamGroup title='Sắp mở đăng ký' rows={grouped.upcoming} onViewDetail={(id) => navigate(buildExamDetailPath(id))} onGoRegister={(item) => navigate(buildRegisterPath(item))} onViewRegistration={(id) => navigate(buildRegistrationPath(id))} />
-          <ExamGroup title='Đã kết thúc hoặc chưa khả dụng' rows={grouped.closed} onViewDetail={(id) => navigate(buildExamDetailPath(id))} onGoRegister={(item) => navigate(buildRegisterPath(item))} onViewRegistration={(id) => navigate(buildRegistrationPath(id))} />
+          <ExamGroup title='Chưa đủ điều kiện đăng ký' rows={grouped.ineligible} onViewDetail={(id) => navigate(buildExamDetailPath(id))} onGoRegister={(item) => navigate(buildRegisterPath(item))} onViewRegistration={(id) => navigate(buildRegistrationPath(id))} />
+          <ExamGroup title='Đã hết thời gian đăng ký' rows={grouped.ended} onViewDetail={(id) => navigate(buildExamDetailPath(id))} onGoRegister={(item) => navigate(buildRegisterPath(item))} onViewRegistration={(id) => navigate(buildRegistrationPath(id))} />
+          <ExamGroup title='Chưa khả dụng' rows={grouped.unavailable} onViewDetail={(id) => navigate(buildExamDetailPath(id))} onGoRegister={(item) => navigate(buildRegisterPath(item))} onViewRegistration={(id) => navigate(buildRegistrationPath(id))} />
 
           {pagination.pageCount > 1 ? (
             <div className='d-flex justify-content-end'>
