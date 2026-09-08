@@ -7,6 +7,7 @@ import { getMockAssessmentTest } from '../mock/assessmentTestMock'
 import { buildCampaignQualificationPath, buildCampaignRegisterPath, buildCampaignSoundCheckPath, buildCampaignVerifyPath } from '../utils/assessmentRoutes'
 import { getFlowState, mergeFlowState } from '../utils/assessmentFlowStorage'
 import { createMockAudioSampleDataUri } from '../utils/assessmentRuntime'
+import useAssessmentCampaignPageTitle from '../utils/useAssessmentCampaignPageTitle'
 
 function toText(value) {
   if (value === null || value === undefined) return ''
@@ -77,6 +78,7 @@ export default function AssessmentTestRunnerPage() {
   const audioSampleSrc = useMemo(() => createMockAudioSampleDataUri(), [])
 
   const isSameFlow = flowState?.tenantCode === tenantCode && flowState?.campaignCode === campaignCode
+  const campaign = isSameFlow ? (flowState?.campaign || null) : null
   const qualification = isSameFlow ? flowState?.qualification : null
   const verification = isSameFlow ? flowState?.verification : null
   const assessment = isSameFlow ? flowState?.assessment : null
@@ -88,6 +90,8 @@ export default function AssessmentTestRunnerPage() {
   const hasQualification = Boolean(qualification?.student?.grade && qualification?.parent?.email)
   const emailVerified = verification?.emailVerified === true
   const soundConfirmed = assessment?.soundConfirmed === true
+
+  useAssessmentCampaignPageTitle(campaign)
 
   useEffect(() => {
     const timer = window.setInterval(() => setTick(nowMs()), 1000)

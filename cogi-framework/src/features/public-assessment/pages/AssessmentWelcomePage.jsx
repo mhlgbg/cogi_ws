@@ -7,6 +7,7 @@ import AssessmentCampaignRecoveryCard from '../components/AssessmentCampaignReco
 import { getApiMessage, getPublicAssessmentCampaign, recoverPublicAssessmentCampaignParticipations, requestAssessmentCampaignOtp, startPublicAssessmentCampaignRetake } from '../services/assessmentCampaignPublicService'
 import { getFlowState, patchFlowState } from '../utils/assessmentFlowStorage'
 import { buildAssessmentRunnerPath, buildAssessmentRunnerResultPath, buildCampaignRegisterPath } from '../utils/assessmentRoutes'
+import useAssessmentCampaignPageTitle from '../utils/useAssessmentCampaignPageTitle'
 
 function getRecoveryErrorMessage(error) {
   const message = getApiMessage(error, 'Không thể khôi phục lượt làm bài.')
@@ -29,6 +30,8 @@ export default function AssessmentWelcomePage() {
   const [recoveryError, setRecoveryError] = useState('')
   const [recoveryMessage, setRecoveryMessage] = useState('')
   const [recoveryResult, setRecoveryResult] = useState(null)
+
+  useAssessmentCampaignPageTitle(campaign)
 
   useEffect(() => {
     let cancelled = false

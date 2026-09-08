@@ -216,7 +216,19 @@ export default function UserManagementPage() {
   const [passwordError, setPasswordError] = useState('')
   const [showImportModal, setShowImportModal] = useState(false)
   const [showImportUpdateRoleModal, setShowImportUpdateRoleModal] = useState(false)
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false)
   const [loadingImportOptions, setLoadingImportOptions] = useState(false)
+  const [createUserSubmitting, setCreateUserSubmitting] = useState(false)
+  const [createUserError, setCreateUserError] = useState('')
+  const [createUserForm, setCreateUserForm] = useState({
+    fullName: '',
+    username: '',
+    email: '',
+    phone: '',
+    password: '',
+    passwordConfirmation: '',
+    roleIds: [],
+  })
   const [importRoleId, setImportRoleId] = useState('')
   const [importFile, setImportFile] = useState(null)
   const [importPreview, setImportPreview] = useState(null)
@@ -443,6 +455,19 @@ export default function UserManagementPage() {
     setImportJob(null)
   }
 
+  const resetCreateUserState = () => {
+    setCreateUserError('')
+    setCreateUserForm({
+      fullName: '',
+      username: '',
+      email: '',
+      phone: '',
+      password: '',
+      passwordConfirmation: '',
+      roleIds: [],
+    })
+  }
+
   const resetImportUpdateRoleState = () => {
     setUpdateRoleOldRoleId('')
     setUpdateRoleNewRoleId('')
@@ -555,6 +580,12 @@ export default function UserManagementPage() {
     await loadImportOptions()
   }
 
+  const handleOpenCreateUserModal = async () => {
+    resetCreateUserState()
+    setShowCreateUserModal(true)
+    await loadImportOptions()
+  }
+
   const handleCloseImportModal = () => {
     if (importing) return
     setShowImportModal(false)
@@ -563,6 +594,95 @@ export default function UserManagementPage() {
   const handleCloseImportUpdateRoleModal = () => {
     if (updatingRoleImport) return
     setShowImportUpdateRoleModal(false)
+  }
+
+  const handleCloseCreateUserModal = () => {
+    if (createUserSubmitting) return
+    setShowCreateUserModal(false)
+  }
+
+  const toggleCreateUserRole = (roleId) => {
+    setCreateUserForm((prev) => {
+      const current = Array.isArray(prev.roleIds) ? prev.roleIds : []
+      const hasRole = current.includes(roleId)
+      return {
+        ...prev,
+        roleIds: hasRole ? current.filter((id) => id !== roleId) : [...current, roleId],
+      }
+    })
+  }
+
+  const handleCreateUser = async () => {
+    const fullName = createUserForm.fullName.trim()
+    const username = createUserForm.username.trim()
+    const email = createUserForm.email.trim().toLowerCase()
+    const phone = createUserForm.phone.trim()
+    const password = createUserForm.password
+    const passwordConfirmation = createUserForm.passwordConfirmation
+    const roleIds = Array.isArray(createUserForm.roleIds) ? createUserForm.roleIds : []
+
+    if (!username) {
+      setCreateUserError('Vui lòng nhập username')
+      return
+    }
+
+    if (!email) {
+      setCreateUserError('Vui lòng nhập email')
+      return
+    }
+
+    if (roleIds.length === 0) {
+      setCreateUserError('Vui lòng chọn ít nhất một quyền tenant')
+      return
+    }
+
+    if (password && password.length < 6) {
+      setCreateUserError('Mật khẩu phải có ít nhất 6 ký tự')
+      return
+    }
+
+    if (password !== passwordConfirmation) {
+      setCreateUserError('Xác nhận mật khẩu không khớp')
+      return
+    }
+
+    setCreateUserSubmitting(true)
+    setCreateUserError('')
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await api.post('/admin/tenant-users', {
+        fullName,
+        username,
+        email,
+        phone,
+        password,
+        roleIds,
+      })
+
+      if (!response.data?.ok) {
+        setCreateUserError('Không thể tạo user')
+        return
+      }
+
+      await fetchUsers()
+      setShowCreateUserModal(false)
+      setSuccess(
+        response.data?.data?.caseType === 'EXISTING_USER'
+          ? 'Đã gắn user có sẵn vào tenant hiện tại'
+          : 'Đã tạo user mới thành công',
+      )
+    } catch (requestError) {
+      const message =
+        requestError?.response?.data?.error?.message
+        || requestError?.response?.data?.message
+        || requestError?.message
+        || 'Không thể tạo user'
+      setCreateUserError(message)
+    } finally {
+      setCreateUserSubmitting(false)
+    }
   }
 
   const handleImportFileChange = async (event) => {
@@ -768,6 +888,9 @@ export default function UserManagementPage() {
 
         <CButton color="primary" onClick={handleOpenImportModal} disabled={loading}>
           Import Users
+        </CButton>
+        <CButton color="success" variant="outline" onClick={handleOpenCreateUserModal} disabled={loading}>
+          Tạo user
         </CButton>
         <CButton color="warning" variant="outline" onClick={handleOpenImportUpdateRoleModal} disabled={loading}>
           Import Update Role
@@ -1304,6 +1427,81 @@ export default function UserManagementPage() {
                 Đang cập nhật...
               </span>
             ) : 'Bắt đầu cập nhật role'}
+          </CButton>
+        </CModalFooter>
+      </CModal>
+
+      <CModal visible={showCreateUserModal} backdrop="static" size="lg" onClose={handleCloseCreateUserModal}>
+        <CModalHeader>
+          <CModalTitle>Tạo user</CModalTitle>
+        </CModalHeader>
+        <CModalBody style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {loadingImportOptions ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#666' }}>
+              <CSpinner size="sm" />
+              <span>Đang tải danh sách role...</span>
+            </div>
+          ) : null}
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(220px, 1fr))', gap: 16 }}>
+            <div>
+              <CFormLabel htmlFor="create-user-full-name">Họ tên</CFormLabel>
+              <CFormInput id="create-user-full-name" value={createUserForm.fullName} onChange={(event) => setCreateUserForm((prev) => ({ ...prev, fullName: event.target.value }))} disabled={createUserSubmitting} />
+            </div>
+            <div>
+              <CFormLabel htmlFor="create-user-username">Username</CFormLabel>
+              <CFormInput id="create-user-username" value={createUserForm.username} onChange={(event) => setCreateUserForm((prev) => ({ ...prev, username: event.target.value }))} disabled={createUserSubmitting} />
+            </div>
+            <div>
+              <CFormLabel htmlFor="create-user-email">Email</CFormLabel>
+              <CFormInput id="create-user-email" type="email" value={createUserForm.email} onChange={(event) => setCreateUserForm((prev) => ({ ...prev, email: event.target.value }))} disabled={createUserSubmitting} />
+            </div>
+            <div>
+              <CFormLabel htmlFor="create-user-phone">Điện thoại</CFormLabel>
+              <CFormInput id="create-user-phone" value={createUserForm.phone} onChange={(event) => setCreateUserForm((prev) => ({ ...prev, phone: event.target.value }))} disabled={createUserSubmitting} />
+            </div>
+            <div>
+              <CFormLabel htmlFor="create-user-password">Mật khẩu</CFormLabel>
+              <CFormInput id="create-user-password" type="password" value={createUserForm.password} onChange={(event) => setCreateUserForm((prev) => ({ ...prev, password: event.target.value }))} disabled={createUserSubmitting} />
+              <div style={{ marginTop: 6, color: '#666', fontSize: 13 }}>
+                Bắt buộc khi tạo user hoàn toàn mới. Nếu email hoặc username đã là user sẵn ngoài tenant, hệ thống sẽ giữ nguyên mật khẩu hiện có.
+              </div>
+            </div>
+            <div>
+              <CFormLabel htmlFor="create-user-password-confirm">Xác nhận mật khẩu</CFormLabel>
+              <CFormInput id="create-user-password-confirm" type="password" value={createUserForm.passwordConfirmation} onChange={(event) => setCreateUserForm((prev) => ({ ...prev, passwordConfirmation: event.target.value }))} disabled={createUserSubmitting} />
+            </div>
+          </div>
+
+          <div>
+            <CFormLabel>Quyền tenant</CFormLabel>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(220px, 1fr))', gap: 8, marginTop: 8 }}>
+              {availableRoles.map((role) => {
+                const roleId = Number(role.id)
+                const checked = createUserForm.roleIds.includes(roleId)
+                return (
+                  <label key={`create-role-${roleId}`} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input type="checkbox" checked={checked} onChange={() => toggleCreateUserRole(roleId)} disabled={createUserSubmitting || loadingImportOptions} />
+                    <span>{toRoleName(role)}</span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+
+          {createUserError ? <CAlert color="danger">{createUserError}</CAlert> : null}
+        </CModalBody>
+        <CModalFooter>
+          <CButton color="secondary" variant="outline" onClick={handleCloseCreateUserModal} disabled={createUserSubmitting}>
+            Đóng
+          </CButton>
+          <CButton color="primary" onClick={handleCreateUser} disabled={createUserSubmitting || loadingImportOptions || availableRoles.length === 0}>
+            {createUserSubmitting ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <CSpinner size="sm" />
+                Đang tạo...
+              </span>
+            ) : 'Tạo user'}
           </CButton>
         </CModalFooter>
       </CModal>

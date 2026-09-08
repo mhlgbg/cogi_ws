@@ -6,6 +6,7 @@ import QualificationForm, { buildInitialQualificationForm } from '../components/
 import { getMockAssessmentCampaign } from '../mock/assessmentCampaignMock'
 import { getFlowState, mergeFlowState } from '../utils/assessmentFlowStorage'
 import { buildCampaignResultPath, buildCampaignTestPath } from '../utils/assessmentRoutes'
+import useAssessmentCampaignPageTitle from '../utils/useAssessmentCampaignPageTitle'
 
 function toText(value) {
   if (value === null || value === undefined) return ''
@@ -21,8 +22,8 @@ export default function AssessmentQualificationPage() {
   const tenant = useTenant()
   const { tenantCode, campaignCode } = useParams()
   const flowState = getFlowState()
-  const campaign = getMockAssessmentCampaign(campaignCode)
   const isSameFlow = flowState?.campaignCode === campaignCode && flowState?.tenantCode === tenantCode
+  const campaign = (isSameFlow ? flowState?.campaign : null) || getMockAssessmentCampaign(campaignCode)
   const qualification = isSameFlow ? (flowState?.qualification || null) : null
   const verification = isSameFlow ? flowState?.verification : null
   const assessment = isSameFlow ? flowState?.assessment : null
@@ -30,6 +31,8 @@ export default function AssessmentQualificationPage() {
   const resultPath = buildCampaignResultPath(tenantCode, campaignCode)
   const emailVerified = verification?.emailVerified === true
   const isFinished = resolveFinishedAssessment(assessment)
+
+  useAssessmentCampaignPageTitle(campaign)
 
   useEffect(() => {
     if (!campaign) return

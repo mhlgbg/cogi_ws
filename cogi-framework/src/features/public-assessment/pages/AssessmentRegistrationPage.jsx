@@ -8,6 +8,7 @@ import { buildAssessmentRunnerPath, buildCampaignVerifyPath } from '../utils/ass
 import { getFlowState, setFlowState } from '../utils/assessmentFlowStorage'
 import { OTP_RESEND_SECONDS } from '../utils/assessmentRuntime'
 import { buildInitialBeforeStartValues, getCandidateDisplayName, getGradeValue, normalizeContactTarget } from '../utils/assessmentCampaignFlow'
+import useAssessmentCampaignPageTitle from '../utils/useAssessmentCampaignPageTitle'
 
 function toText(value) {
   if (value === null || value === undefined) return ''
@@ -34,6 +35,8 @@ export default function AssessmentRegistrationPage() {
   const [submitting, setSubmitting] = useState(false)
   const flowState = getFlowState()
   const resolvedTenantCode = useMemo(() => String(tenantCode || tenant?.resolvedTenant?.tenantCode || tenant?.currentTenant?.tenantCode || '').trim(), [tenant?.currentTenant?.tenantCode, tenant?.resolvedTenant?.tenantCode, tenantCode])
+
+  useAssessmentCampaignPageTitle(campaign)
 
   useEffect(() => {
     let cancelled = false

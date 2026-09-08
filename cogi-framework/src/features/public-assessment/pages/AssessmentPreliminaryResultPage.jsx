@@ -12,6 +12,7 @@ import { getMockAssessmentCampaign } from '../mock/assessmentCampaignMock'
 import { getMockAssessmentPreliminaryResult } from '../mock/assessmentPreliminaryResultMock'
 import { getFlowState } from '../utils/assessmentFlowStorage'
 import { buildCampaignQualificationPath, buildCampaignSpeakingPath, buildCampaignTestPath } from '../utils/assessmentRoutes'
+import useAssessmentCampaignPageTitle from '../utils/useAssessmentCampaignPageTitle'
 
 function resolveFinishedAssessment(assessment) {
   return assessment?.finished === true || Boolean(assessment?.attempt?.finishedAt)
@@ -27,8 +28,8 @@ export default function AssessmentPreliminaryResultPage() {
   const navigate = useNavigate()
   const { tenantCode, campaignCode } = useParams()
   const flowState = getFlowState()
-  const campaign = getMockAssessmentCampaign(campaignCode)
   const isSameFlow = flowState?.campaignCode === campaignCode && flowState?.tenantCode === tenantCode
+  const campaign = (isSameFlow ? flowState?.campaign : null) || getMockAssessmentCampaign(campaignCode)
   const qualification = isSameFlow ? flowState?.qualification : null
   const assessment = isSameFlow ? flowState?.assessment : null
   const speaking = isSameFlow ? flowState?.speaking : null
@@ -40,6 +41,8 @@ export default function AssessmentPreliminaryResultPage() {
   const speakingPath = buildCampaignSpeakingPath(tenantCode, campaignCode)
   const testPath = buildCampaignTestPath(tenantCode, campaignCode)
   const qualificationPath = buildCampaignQualificationPath(tenantCode, campaignCode)
+
+  useAssessmentCampaignPageTitle(campaign)
 
   useEffect(() => {
     if (!campaign) return

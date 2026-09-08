@@ -5,6 +5,7 @@ import AssessmentProgress from '../components/AssessmentProgress'
 import { assessmentSpeakingPrompts, getMockSpeakingSlots } from '../mock/assessmentSpeakingMock'
 import { getFlowState, mergeFlowState } from '../utils/assessmentFlowStorage'
 import { buildCampaignQualificationPath, buildCampaignResultPath, buildCampaignTestPath } from '../utils/assessmentRoutes'
+import useAssessmentCampaignPageTitle from '../utils/useAssessmentCampaignPageTitle'
 
 function resolveFinishedAssessment(assessment) {
   return assessment?.finished === true || Boolean(assessment?.attempt?.finishedAt)
@@ -56,6 +57,7 @@ export default function AssessmentSpeakingPage() {
   const recordingsRef = useRef(recordings)
   const fileInputRefs = useRef({})
   const isSameFlow = flowState?.campaignCode === campaignCode && flowState?.tenantCode === tenantCode
+  const campaign = isSameFlow ? (flowState?.campaign || null) : null
   const assessment = isSameFlow ? flowState?.assessment : null
   const qualificationCompleted = assessment?.qualificationCompleted === true
   const qualification = isSameFlow ? flowState?.qualification : null
@@ -73,6 +75,8 @@ export default function AssessmentSpeakingPage() {
   const selectedSlotDay = speakingSlots.find((entry) => entry.date === selectedDate) || null
   const hasAudioResponses = recordings.every((item) => item.status === 'recorded')
   const hasMediaRecorderSupport = typeof window !== 'undefined' && typeof window.MediaRecorder !== 'undefined' && typeof navigator !== 'undefined' && navigator?.mediaDevices?.getUserMedia
+
+  useAssessmentCampaignPageTitle(campaign)
 
   useEffect(() => {
     if (!resolveFinishedAssessment(assessment)) {

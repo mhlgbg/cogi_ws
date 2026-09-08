@@ -6,6 +6,7 @@ import { buildAssessmentRunnerPath, buildCampaignVerifyPath } from '../utils/ass
 import { getFlowState, patchFlowState } from '../utils/assessmentFlowStorage'
 import { createMockAudioSampleDataUri } from '../utils/assessmentRuntime'
 import { getApiMessage, startPublicAssessmentCampaign } from '../services/assessmentCampaignPublicService'
+import useAssessmentCampaignPageTitle from '../utils/useAssessmentCampaignPageTitle'
 
 function sanitizeBeforeStartData(value) {
   return Object.entries(value || {}).reduce((result, [key, itemValue]) => {
@@ -26,6 +27,7 @@ export default function AssessmentSoundCheckPage() {
   const audioRef = useRef(null)
 
   const isSameFlow = flowState?.tenantCode === tenantCode && flowState?.campaignCode === campaignCode
+  const campaign = isSameFlow ? (flowState?.campaign || null) : null
   const beforeStartData = isSameFlow ? sanitizeBeforeStartData(flowState?.beforeStartData || null) : null
   const verification = flowState?.verification || {}
   const verifyPath = buildCampaignVerifyPath(tenantCode, campaignCode)
@@ -33,6 +35,8 @@ export default function AssessmentSoundCheckPage() {
   const emailVerified = verification?.emailVerified === true
   const testConfig = useMemo(() => flowState?.assessment?.resolvedAssessment || null, [flowState?.assessment?.resolvedAssessment])
   const sampleAudioSrc = useMemo(() => createMockAudioSampleDataUri(), [])
+
+  useAssessmentCampaignPageTitle(campaign)
 
   useEffect(() => {
     if (!audioRef.current) return undefined

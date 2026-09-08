@@ -38,6 +38,22 @@ function unwrapSuccess(payload) {
   return payload
 }
 
+function normalizePublicAssessmentCampaign(payload) {
+  const normalized = unwrapSuccess(payload)
+  if (!normalized || typeof normalized !== 'object' || Array.isArray(normalized)) return normalized
+
+  const title = String(normalized.title || normalized.publicTitle || normalized.name || normalized.code || '').trim()
+  const description = String(normalized.description || normalized.publicDescription || '').trim()
+
+  return {
+    ...normalized,
+    title,
+    seoTitle: String(normalized.seoTitle || '').trim(),
+    description,
+    seoDescription: String(normalized.seoDescription || '').trim(),
+  }
+}
+
 function ensureMatchedPayload(payload) {
   const normalized = unwrapSuccess(payload)
   const status = String(normalized?.status || '').trim()
@@ -49,7 +65,7 @@ function ensureMatchedPayload(payload) {
 
 export async function getPublicAssessmentCampaign(slug, tenantCode) {
   const response = await publicApi.get(`/public/assessment-campaigns/${encodeURIComponent(String(slug || '').trim())}`, withTenantHeaders({}, tenantCode))
-  return unwrapSuccess(response?.data)
+  return normalizePublicAssessmentCampaign(response?.data)
 }
 
 export async function resolvePublicAssessmentCampaign(slug, payload, tenantCode) {

@@ -76,6 +76,11 @@ export default function SimpleHtmlEditor({
   placeholder = '',
   variableTokens = [],
   helperText = '',
+  toolbarActions = TOOLBAR_ACTIONS,
+  showLinkControls = true,
+  showImageControls = true,
+  showColorControls = true,
+  allowHtmlMode = true,
 }) {
   const editorRef = useRef(null)
   const [mode, setMode] = useState('visual')
@@ -188,7 +193,7 @@ export default function SimpleHtmlEditor({
 
       <div className='d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2'>
         <CButtonGroup size='sm' role='group'>
-          {TOOLBAR_ACTIONS.map((action) => (
+          {toolbarActions.map((action) => (
             <CButton
               key={`${action.label}-${action.command}`}
               type='button'
@@ -203,50 +208,62 @@ export default function SimpleHtmlEditor({
         </CButtonGroup>
 
         <div className='d-flex align-items-center gap-2 flex-wrap'>
-          <CFormInput
-            size='sm'
-            value={linkInput}
-            onChange={(event) => setLinkInput(event.target.value)}
-            placeholder='https://...'
-            disabled={disabled || mode !== 'visual'}
-            style={{ width: 180 }}
-          />
-          <CButton type='button' size='sm' color='secondary' variant='outline' onClick={handleCreateLink} disabled={disabled || mode !== 'visual'}>
-            Link
-          </CButton>
-          <CFormInput
-            size='sm'
-            value={imageInput}
-            onChange={(event) => setImageInput(event.target.value)}
-            placeholder='https://.../image.png'
-            disabled={disabled || mode !== 'visual'}
-            style={{ width: 220 }}
-          />
-          <CButton type='button' size='sm' color='secondary' variant='outline' onClick={handleCreateImage} disabled={disabled || mode !== 'visual'}>
-            Ảnh
-          </CButton>
-          <input
-            type='color'
-            value={textColor}
-            onChange={(event) => setTextColor(event.target.value)}
-            disabled={disabled || mode !== 'visual'}
-            title='Màu chữ'
-            style={{ width: 36, height: 32, padding: 2, border: '1px solid #d8dbe0', borderRadius: 6 }}
-          />
-          <CButton type='button' size='sm' color='secondary' variant='outline' onClick={handleApplyTextColor} disabled={disabled || mode !== 'visual'}>
-            Màu chữ
-          </CButton>
-          <input
-            type='color'
-            value={backgroundColor}
-            onChange={(event) => setBackgroundColor(event.target.value)}
-            disabled={disabled || mode !== 'visual'}
-            title='Màu nền'
-            style={{ width: 36, height: 32, padding: 2, border: '1px solid #d8dbe0', borderRadius: 6 }}
-          />
-          <CButton type='button' size='sm' color='secondary' variant='outline' onClick={handleApplyBackgroundColor} disabled={disabled || mode !== 'visual'}>
-            Tô nền
-          </CButton>
+          {showLinkControls ? (
+            <>
+              <CFormInput
+                size='sm'
+                value={linkInput}
+                onChange={(event) => setLinkInput(event.target.value)}
+                placeholder='https://...'
+                disabled={disabled || mode !== 'visual'}
+                style={{ width: 180 }}
+              />
+              <CButton type='button' size='sm' color='secondary' variant='outline' onClick={handleCreateLink} disabled={disabled || mode !== 'visual'}>
+                Link
+              </CButton>
+            </>
+          ) : null}
+          {showImageControls ? (
+            <>
+              <CFormInput
+                size='sm'
+                value={imageInput}
+                onChange={(event) => setImageInput(event.target.value)}
+                placeholder='https://.../image.png'
+                disabled={disabled || mode !== 'visual'}
+                style={{ width: 220 }}
+              />
+              <CButton type='button' size='sm' color='secondary' variant='outline' onClick={handleCreateImage} disabled={disabled || mode !== 'visual'}>
+                Ảnh
+              </CButton>
+            </>
+          ) : null}
+          {showColorControls ? (
+            <>
+              <input
+                type='color'
+                value={textColor}
+                onChange={(event) => setTextColor(event.target.value)}
+                disabled={disabled || mode !== 'visual'}
+                title='Màu chữ'
+                style={{ width: 36, height: 32, padding: 2, border: '1px solid #d8dbe0', borderRadius: 6 }}
+              />
+              <CButton type='button' size='sm' color='secondary' variant='outline' onClick={handleApplyTextColor} disabled={disabled || mode !== 'visual'}>
+                Màu chữ
+              </CButton>
+              <input
+                type='color'
+                value={backgroundColor}
+                onChange={(event) => setBackgroundColor(event.target.value)}
+                disabled={disabled || mode !== 'visual'}
+                title='Màu nền'
+                style={{ width: 36, height: 32, padding: 2, border: '1px solid #d8dbe0', borderRadius: 6 }}
+              />
+              <CButton type='button' size='sm' color='secondary' variant='outline' onClick={handleApplyBackgroundColor} disabled={disabled || mode !== 'visual'}>
+                Tô nền
+              </CButton>
+            </>
+          ) : null}
         </div>
 
         {Array.isArray(variableTokens) && variableTokens.length > 0 ? (
@@ -268,24 +285,26 @@ export default function SimpleHtmlEditor({
           </div>
         ) : null}
 
-        <CButtonGroup size='sm' role='group'>
-          <CButton
-            type='button'
-            color={mode === 'visual' ? 'primary' : 'secondary'}
-            variant={mode === 'visual' ? undefined : 'outline'}
-            onClick={() => setMode('visual')}
-          >
-            Soạn thảo
-          </CButton>
-          <CButton
-            type='button'
-            color={mode === 'html' ? 'primary' : 'secondary'}
-            variant={mode === 'html' ? undefined : 'outline'}
-            onClick={() => setMode('html')}
-          >
-            HTML
-          </CButton>
-        </CButtonGroup>
+        {allowHtmlMode ? (
+          <CButtonGroup size='sm' role='group'>
+            <CButton
+              type='button'
+              color={mode === 'visual' ? 'primary' : 'secondary'}
+              variant={mode === 'visual' ? undefined : 'outline'}
+              onClick={() => setMode('visual')}
+            >
+              Soạn thảo
+            </CButton>
+            <CButton
+              type='button'
+              color={mode === 'html' ? 'primary' : 'secondary'}
+              variant={mode === 'html' ? undefined : 'outline'}
+              onClick={() => setMode('html')}
+            >
+              HTML
+            </CButton>
+          </CButtonGroup>
+        ) : null}
       </div>
 
       {mode === 'visual' ? (

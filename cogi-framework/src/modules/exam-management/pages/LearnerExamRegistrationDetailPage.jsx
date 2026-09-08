@@ -14,9 +14,10 @@ import {
 } from '@coreui/react'
 import { getLearnerExamRegistration, normalizeCurrentLearnerApiMessage, reportExamRegistrationPayment, uploadExamRegistrationPaymentEvidence } from '../services/learnerExamApi'
 import { formatDateTime, formatMoney, getExamMethodLabel } from '../utils/examRoundUi'
-import { getPaymentStatusBadge, getPaymentStatusLabel, getRegistrationStatusBadge, getRegistrationStatusLabel } from '../utils/learnerExamUi'
+import { getLearnerRegistrationPaymentDisplayState, getPaymentStatusBadge, getPaymentStatusLabel, getRegistrationStatusBadge, getRegistrationStatusLabel } from '../utils/learnerExamUi'
 import { buildLearnerExamFeeSummary, shouldShowLearnerExamComponentFee, shouldShowLearnerExamSubjectFee } from '../utils/learnerExamFeeUi'
 import { buildProtectedFileUrl, resolveMediaUrl } from '../../../utils/mediaUrl'
+import ExamRegistrationPaymentPanel from '../components/ExamRegistrationPaymentPanel'
 import LearnerPaymentReportModal from '../components/LearnerPaymentReportModal'
 
 function SpinnerCenter() {
@@ -77,6 +78,7 @@ export default function LearnerExamRegistrationDetailPage() {
   const feeDisplay = useMemo(() => buildLearnerExamFeeSummary({ fee: detail?.fee }), [detail?.fee])
   const showSubjectFee = useMemo(() => shouldShowLearnerExamSubjectFee({ fee: detail?.fee }), [detail?.fee])
   const showComponentFee = useMemo(() => shouldShowLearnerExamComponentFee({ fee: detail?.fee }), [detail?.fee])
+  const paymentDisplayState = useMemo(() => getLearnerRegistrationPaymentDisplayState(detail?.status?.paymentStatus), [detail?.status?.paymentStatus])
 
   async function copyText(value, successText) {
     if (!value) return
@@ -182,10 +184,10 @@ export default function LearnerExamRegistrationDetailPage() {
           <CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Trạng thái thanh toán</div><div className='mt-2'><CBadge color={paymentBadge.color}>{paymentBadge.label}</CBadge></div></CCardBody></CCard>
         </CCol>
         <CCol xl={3} md={6}>
-          <CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Số tiền phải nộp</div><div className='fw-semibold'>{detail?.fee?.amountDue === null || detail?.fee?.amountDue === undefined ? '-' : `${formatMoney(detail.fee.amountDue)} ${detail?.fee?.currency || 'VND'}`}</div></CCardBody></CCard>
+          <CCard className='h-100'><CCardBody><div className='small text-body-secondary'>{paymentDisplayState === 'confirmed' ? 'Số tiền đã thanh toán' : paymentDisplayState === 'not_required' ? 'Lệ phí' : 'Số tiền phải nộp'}</div><div className='fw-semibold'>{paymentDisplayState === 'not_required' ? 'Miễn phí' : detail?.fee?.amountDue === null || detail?.fee?.amountDue === undefined ? '-' : `${formatMoney(detail.fee.amountDue)} ${detail?.fee?.currency || 'VND'}`}</div></CCardBody></CCard>
         </CCol>
         <CCol xl={3} md={6}>
-          <CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Hạn thanh toán</div><div className='fw-semibold'>{formatDateTime(detail?.fee?.paymentDueAt)}</div></CCardBody></CCard>
+          <CCard className='h-100'><CCardBody><div className='small text-body-secondary'>{paymentDisplayState === 'confirmed' ? 'Xác nhận thanh toán' : 'Hạn thanh toán'}</div><div className='fw-semibold'>{paymentDisplayState === 'confirmed' ? formatDateTime(paymentReport?.confirmedAt) : formatDateTime(detail?.fee?.paymentDueAt)}</div></CCardBody></CCard>
         </CCol>
       </CRow>
 
@@ -247,112 +249,21 @@ export default function LearnerExamRegistrationDetailPage() {
         </CCol>
 
         <CCol xl={5}>
-          {payment?.paymentRequired ? (
-            <CCard className='mb-4'>
-              <CCardHeader><strong>Thông tin chuyển khoản</strong></CCardHeader>
-              <CCardBody>
-                <InfoItem label='Ngân hàng' value={payment?.bankName || payment?.bankCode || '-'} />
-                <InfoItem label='Số tài khoản' value={payment?.accountNumber || '-'} />
-                <div className='d-flex gap-2 flex-wrap mb-3'>
-                  <CButton color='secondary' variant='outline' size='sm' onClick={() => copyText(payment?.accountNumber, 'Đã sao chép số tài khoản')} disabled={!payment?.accountNumber}>Sao chép số tài khoản</CButton>
-                  <CButton color='secondary' variant='outline' size='sm' onClick={() => copyText(detail?.fee?.amountDue, 'Đã sao chép số tiền')} disabled={detail?.fee?.amountDue === null || detail?.fee?.amountDue === undefined}>Sao chép số tiền</CButton>
-                </div>
-                <InfoItem label='Chủ tài khoản' value={payment?.accountHolder || '-'} />
-                <InfoItem label='Chi nhánh' value={payment?.bankBranch || '-'} />
-                <InfoItem label='Số tiền' value={`${formatMoney(detail?.fee?.amountDue || 0)} ${detail?.fee?.currency || 'VND'}`} />
-                <InfoItem label='Nội dung chuyển khoản' value={payment?.transferContent || '-'} />
-                <div className='d-flex gap-2 flex-wrap my-3'>
-                  <CButton color='secondary' variant='outline' size='sm' onClick={() => copyText(payment?.transferContent, 'Đã sao chép nội dung chuyển khoản')} disabled={!payment?.transferContent}>Sao chép nội dung</CButton>
-                </div>
-                {qrImageUrl ? <div className='text-center mb-3'><img src={qrImageUrl} alt='QR thanh toán' style={{ width: '100%', maxWidth: 280, height: 'auto', borderRadius: 12 }} /></div> : null}
-                <InfoItem label='Hướng dẫn' value={payment?.paymentInstruction || '-'} html={true} />
-                <InfoItem label='Hỗ trợ' value={[payment?.supportPhone, payment?.supportEmail].filter(Boolean).join(' · ') || '-'} />
-                <CAlert color='warning' className='mt-3 mb-2'>Vui lòng chuyển đúng số tiền và ghi đúng nội dung chuyển khoản để nhà trường thuận tiện đối soát.</CAlert>
-                {detail?.status?.paymentStatus === 'unpaid' ? <div className='small text-body-secondary mb-3'>Sau khi chuyển khoản, vui lòng thông báo để nhà trường kiểm tra và xác nhận.</div> : null}
-                {canReportPayment ? <CButton color='primary' className='w-100' onClick={() => { setReportError(''); setReportModalVisible(true) }}>Tôi đã chuyển tiền</CButton> : null}
-              </CCardBody>
-            </CCard>
-          ) : (
-            <CAlert color='success'>Đợt thi này không yêu cầu nộp lệ phí.</CAlert>
-          )}
-
-          {detail?.status?.paymentStatus === 'payment_reported' ? (
-            <CCard className='mb-4'>
-              <CCardHeader><strong>Thông báo chuyển tiền</strong></CCardHeader>
-              <CCardBody>
-                <InfoItem label='Thời điểm báo' value={formatDateTime(paymentReport?.reportedAt)} />
-                <InfoItem label='Thời gian đã chuyển tiền' value={formatDateTime(paymentReport?.transferAt)} />
-                <InfoItem label='Tên người chuyển tiền' value={paymentReport?.senderName || '-'} />
-                <InfoItem label='Tài khoản người gửi' value={paymentReport?.maskedSenderAccount || '-'} />
-                <InfoItem label='Ngân hàng gửi' value={paymentReport?.senderBank || '-'} />
-                <InfoItem label='Mã giao dịch' value={paymentReport?.transactionReference || '-'} />
-                <InfoItem label='Ghi chú' value={paymentReport?.note || '-'} />
-                {paymentEvidence ? (
-                  <div className='py-2'>
-                    <div className='small text-body-secondary mb-2'>Chứng từ</div>
-                    {String(paymentEvidence.mimeType || '').toLowerCase().startsWith('image/') && paymentEvidenceUrl ? (
-                      <div>
-                        <img src={paymentEvidenceUrl} alt={paymentEvidence.name || 'Chứng từ thanh toán'} style={{ width: '100%', maxWidth: 280, height: 'auto', borderRadius: 12 }} />
-                        <div className='small mt-2'>{paymentEvidence.name || '-'}</div>
-                      </div>
-                    ) : paymentEvidenceUrl ? (
-                      <a href={paymentEvidenceUrl} target='_blank' rel='noreferrer'>{paymentEvidence.name || 'Xem chứng từ'}</a>
-                    ) : (
-                      <div>{paymentEvidence.name || '-'}</div>
-                    )}
-                  </div>
-                ) : null}
-                <CAlert color='info' className='mt-3 mb-0'>Nhà trường đang kiểm tra giao dịch. Trạng thái chỉ chuyển thành đã xác nhận sau khi đơn vị nhận được tiền.</CAlert>
-              </CCardBody>
-            </CCard>
-          ) : null}
-
-          {detail?.status?.paymentStatus === 'payment_rejected' ? (
-            <CCard className='mb-4'>
-              <CCardHeader><strong>Thông báo thanh toán cần bổ sung</strong></CCardHeader>
-              <CCardBody>
-                <InfoItem label='Thời điểm báo' value={formatDateTime(paymentReport?.reportedAt)} />
-                <InfoItem label='Thời gian đã chuyển tiền' value={formatDateTime(paymentReport?.transferAt)} />
-                <InfoItem label='Tên người chuyển tiền' value={paymentReport?.senderName || '-'} />
-                <InfoItem label='Tài khoản người gửi' value={paymentReport?.maskedSenderAccount || '-'} />
-                <InfoItem label='Ngân hàng gửi' value={paymentReport?.senderBank || '-'} />
-                <InfoItem label='Mã giao dịch' value={paymentReport?.transactionReference || '-'} />
-                <InfoItem label='Ghi chú đã gửi' value={paymentReport?.note || '-'} />
-                <InfoItem label='Thời điểm trả lại' value={formatDateTime(paymentReport?.rejectedAt)} />
-                <InfoItem label='Lý do trả lại' value={paymentReport?.rejectionReason || '-'} />
-                {paymentEvidence ? (
-                  <div className='py-2'>
-                    <div className='small text-body-secondary mb-2'>Chứng từ đã gửi</div>
-                    {String(paymentEvidence.mimeType || '').toLowerCase().startsWith('image/') && paymentEvidenceUrl ? (
-                      <div>
-                        <img src={paymentEvidenceUrl} alt={paymentEvidence.name || 'Chứng từ thanh toán'} style={{ width: '100%', maxWidth: 280, height: 'auto', borderRadius: 12 }} />
-                        <div className='small mt-2'>{paymentEvidence.name || '-'}</div>
-                      </div>
-                    ) : paymentEvidenceUrl ? (
-                      <a href={paymentEvidenceUrl} target='_blank' rel='noreferrer'>{paymentEvidence.name || 'Xem chứng từ'}</a>
-                    ) : (
-                      <div>{paymentEvidence.name || '-'}</div>
-                    )}
-                  </div>
-                ) : null}
-                <CAlert color='warning' className='mt-3 mb-0'>Thông tin chuyển tiền chưa được xác nhận. Vui lòng kiểm tra lý do và liên hệ nhà trường.</CAlert>
-              </CCardBody>
-            </CCard>
-          ) : null}
-
-          {detail?.status?.paymentStatus === 'paid' && paymentReport?.reportedAt ? (
-            <CCard className='mb-4'>
-              <CCardHeader><strong>Thông báo chuyển tiền</strong></CCardHeader>
-              <CCardBody>
-                <InfoItem label='Thời điểm báo' value={formatDateTime(paymentReport?.reportedAt)} />
-                <InfoItem label='Thời gian đã chuyển tiền' value={formatDateTime(paymentReport?.transferAt)} />
-                <InfoItem label='Tên người chuyển tiền' value={paymentReport?.senderName || '-'} />
-                <InfoItem label='Tài khoản người gửi' value={paymentReport?.maskedSenderAccount || '-'} />
-                <InfoItem label='Ngân hàng gửi' value={paymentReport?.senderBank || '-'} />
-                <InfoItem label='Mã giao dịch' value={paymentReport?.transactionReference || '-'} />
-              </CCardBody>
-            </CCard>
-          ) : null}
+          <ExamRegistrationPaymentPanel
+            paymentStatus={detail?.status?.paymentStatus}
+            payment={payment}
+            paymentReport={paymentReport}
+            paymentEvidence={paymentEvidence}
+            paymentEvidenceUrl={paymentEvidenceUrl}
+            qrImageUrl={qrImageUrl}
+            amountDue={detail?.fee?.amountDue}
+            confirmedPaidAmount={detail?.fee?.confirmedPaidAmount}
+            currency={detail?.fee?.currency || 'VND'}
+            registrationCode={detail?.registration?.registrationCode}
+            canReportPayment={canReportPayment}
+            onOpenReport={() => { setReportError(''); setReportModalVisible(true) }}
+            onCopy={copyText}
+          />
 
           {detail?.support ? (
             <CCard>

@@ -12,9 +12,12 @@ function normalizeLearner(raw) {
     id: raw.id,
     code: toText(raw.code),
     fullName: toText(raw.fullName),
+    email: toText(raw.email),
+    phone: toText(raw.phone),
     dateOfBirth: raw.dateOfBirth || null,
     parentName: toText(raw.parentName),
     parentPhone: toText(raw.parentPhone),
+    learnerStatus: toText(raw.learnerStatus) || toText(raw.status) || 'active',
     status: toText(raw.status) || 'active',
     updatedAt: raw.updatedAt || null,
     user: raw.user
@@ -22,6 +25,7 @@ function normalizeLearner(raw) {
           id: raw.user.id,
           username: toText(raw.user.username),
           email: toText(raw.user.email),
+          phone: toText(raw.user.phone),
           fullName: toText(raw.user.fullName),
         }
       : null,

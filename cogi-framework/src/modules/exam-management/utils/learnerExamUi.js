@@ -422,6 +422,16 @@ export function getPaymentStatusBadge(status) {
   }[normalized] || { color: 'secondary', label: normalized || '-' }
 }
 
+export function getLearnerRegistrationPaymentDisplayState(status) {
+  const normalized = normalizeStatus(status)
+  if (normalized === 'unpaid') return 'action_required'
+  if (normalized === 'payment_reported' || normalized === 'payment_under_review') return 'pending_review'
+  if (normalized === 'paid' || normalized === 'partially_paid') return 'confirmed'
+  if (normalized === 'not_required' || normalized === 'exempted') return 'not_required'
+  if (normalized === 'payment_rejected') return 'rejected'
+  return 'neutral'
+}
+
 export function groupLearnerExamRounds(items = []) {
   const buckets = {
     registered: [],

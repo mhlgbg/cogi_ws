@@ -35,6 +35,7 @@ import {
   CTableRow,
 } from '@coreui/react'
 import ClassTeacherAssignmentsTab from '../components/ClassTeacherAssignmentsTab'
+import ClassSessionsTab from '../components/ClassSessionsTab'
 import * as XLSX from 'xlsx'
 import {
   createEnrollment,
@@ -73,11 +74,21 @@ function buildPages(currentPage, pageCount) {
 
 function emptyEnrollmentForm() {
   return {
+    mode: 'existing',
     learner: '',
+    newLearnerFullName: '',
+    newLearnerCode: '',
+    newLearnerEmail: '',
+    newLearnerPhone: '',
     joinDate: '',
     leaveDate: '',
     status: 'active',
   }
+}
+
+function normalizeText(value) {
+  if (value === null || value === undefined) return ''
+  return String(value).trim()
 }
 
 function formatDateTime(value) {
@@ -171,6 +182,16 @@ export default function ClassDetailPage() {
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
 
+  function handleMessage(message) {
+    if (!message) return
+    if (message.type === 'error') {
+      setError(message.text || 'Có lỗi xảy ra')
+      return
+    }
+    setSuccess(message.text || '')
+    setError('')
+  }
+
   const enrollmentTotal = enrollmentMeta?.total ?? 0
   const enrollmentPageCount = enrollmentMeta?.pageCount ?? 1
   const enrollmentPages = useMemo(() => buildPages(enrollmentPage, enrollmentPageCount), [enrollmentPage, enrollmentPageCount])
@@ -207,9 +228,10 @@ export default function ClassDetailPage() {
           id: row.id,
           code: row.code || '',
           username: row.user?.username || '',
-          email: row.user?.email || '',
+          email: row.email || row.user?.email || '',
+          phone: row.phone || row.user?.phone || '',
           fullName: row.fullName || '',
-          label: [(row.code || ''), (row.fullName || row.user?.fullName || ''), (row.user?.username || '')].filter(Boolean).join(' - '),
+          label: [(row.code || ''), (row.fullName || row.user?.fullName || ''), (row.email || row.user?.email || ''), (row.phone || row.user?.phone || '')].filter(Boolean).join(' - '),
           status: row.learnerStatus || row.status || 'active',
         }))
       } catch (err) {
@@ -228,7 +250,7 @@ export default function ClassDetailPage() {
       const rows = Array.isArray(page.rows) ? page.rows : []
       return rows.map((r) => ({
         value: r.id,
-        label: [r.code, r.fullName || r.user?.fullName || r.user?.username].filter(Boolean).join(' - '),
+        label: [r.code, r.fullName || r.user?.fullName || r.user?.username, r.email || r.user?.email, r.phone || r.user?.phone].filter(Boolean).join(' - '),
         status: r.learnerStatus || r.status || 'active',
       }))
     } catch (err) {
@@ -292,7 +314,12 @@ export default function ClassDetailPage() {
   async function openEditEnrollmentModal(item) {
     setEditingEnrollmentId(item.id)
     setEnrollmentForm({
+      mode: 'existing',
       learner: String(item?.learner?.id || ''),
+      newLearnerFullName: '',
+      newLearnerCode: '',
+      newLearnerEmail: '',
+      newLearnerPhone: '',
       joinDate: item.joinDate || '',
       leaveDate: item.leaveDate || '',
       status: item.status || 'active',
@@ -322,21 +349,35 @@ export default function ClassDetailPage() {
     setShowEnrollmentModal(false)
     setEditingEnrollmentId(null)
     setEnrollmentForm(emptyEnrollmentForm())
+    setSelectedLearnerOption(null)
   }
 
   async function handleSaveEnrollment() {
-    if (!String(enrollmentForm.learner).trim()) {
-      setError('Bạn cần chọn học viên')
-      return
+    const mode = editingEnrollmentId ? 'existing' : enrollmentForm.mode
+
+    if (mode === 'existing') {
+      if (!String(enrollmentForm.learner).trim()) {
+        setError('Bạn cần chọn học viên')
+        return
+      }
+    } else {
+      if (!normalizeText(enrollmentForm.newLearnerFullName)) {
+        setError('Bạn cần nhập họ tên học viên')
+        return
+      }
+      if (!normalizeText(enrollmentForm.newLearnerCode)) {
+        setError('Bạn cần nhập mã học viên')
+        return
+      }
     }
 
     setSavingEnrollment(true)
     setError('')
     try {
-        // If selected learner is inactive, ask whether to activate before enrolling
+      if (mode === 'existing') {
         const selectedLearner = learners.find((l) => String(l.id) === String(enrollmentForm.learner)) || (selectedLearnerOption ? { id: selectedLearnerOption.value, status: selectedLearnerOption.status } : null)
         if (selectedLearner && (selectedLearner.status === 'inactive' || selectedLearner.learnerStatus === 'inactive')) {
-          const confirmActivate = window.confirm('Học viên đang ở trạng thái inactive. Bạn có muốn kích hoạt họ trước khi nhập học? Nhấn OK để kích hoạt và tiếp tục, hoặc Hủy để hủy.');
+          const confirmActivate = window.confirm('Học viên đang ở trạng thái inactive. Bạn có muốn kích hoạt họ trước khi nhập học? Nhấn OK để kích hoạt và tiếp tục, hoặc Hủy để hủy.')
           if (!confirmActivate) {
             setSavingEnrollment(false)
             return
@@ -344,7 +385,6 @@ export default function ClassDetailPage() {
           try {
             await updateLearner(selectedLearner.id, { learnerStatus: 'active' })
             setSuccess('Kích hoạt học viên thành công')
-            // update local learners list
             setLearners((prev) => prev.map((it) => (String(it.id) === String(selectedLearner.id) ? { ...it, status: 'active', learnerStatus: 'active' } : it)))
           } catch (err) {
             setError('Không thể kích hoạt học viên')
@@ -352,12 +392,23 @@ export default function ClassDetailPage() {
             return
           }
         }
+      }
 
       const payload = {
-        learner: Number(enrollmentForm.learner),
         joinDate: enrollmentForm.joinDate || null,
         leaveDate: enrollmentForm.leaveDate || null,
         status: enrollmentForm.status === 'inactive' ? 'inactive' : 'active',
+      }
+
+      if (mode === 'existing') {
+        payload.learner = Number(enrollmentForm.learner)
+      } else {
+        payload.newLearner = {
+          fullName: normalizeText(enrollmentForm.newLearnerFullName),
+          code: normalizeText(enrollmentForm.newLearnerCode),
+          email: normalizeText(enrollmentForm.newLearnerEmail) || null,
+          phone: normalizeText(enrollmentForm.newLearnerPhone) || null,
+        }
       }
 
       if (editingEnrollmentId) {
@@ -365,11 +416,14 @@ export default function ClassDetailPage() {
         setSuccess('Cập nhật enrollment thành công')
       } else {
         await createEnrollment(id, payload)
-        setSuccess('Thêm enrollment thành công')
+        setSuccess(mode === 'existing' ? 'Thêm học viên vào lớp thành công' : 'Tạo học viên và thêm vào lớp thành công')
       }
 
       closeEnrollmentModal()
-      await loadEnrollments(enrollmentPage, enrollmentPageSize, enrollmentQ, enrollmentStatus)
+      await Promise.all([
+        loadEnrollments(enrollmentPage, enrollmentPageSize, enrollmentQ, enrollmentStatus),
+        loadEnrollmentOptions(),
+      ])
     } catch (requestError) {
       setError(getApiMessage(requestError, 'Không thể lưu enrollment'))
     } finally {
@@ -469,6 +523,9 @@ export default function ClassDetailPage() {
         <CNavItem>
           <CNavLink active={activeTab === 'assignments'} onClick={() => setActiveTab('assignments')} role='button'>Phân công chuyên môn</CNavLink>
         </CNavItem>
+        <CNavItem>
+          <CNavLink active={activeTab === 'sessions'} onClick={() => setActiveTab('sessions')} role='button'>Buổi học</CNavLink>
+        </CNavItem>
       </CNav>
 
       <CTabContent>
@@ -497,6 +554,9 @@ export default function ClassDetailPage() {
 
         <CTabPane visible={activeTab === 'assignments'}>
           <ClassTeacherAssignmentsTab classId={id} />
+        </CTabPane>
+        <CTabPane visible={activeTab === 'sessions'}>
+          <ClassSessionsTab classId={id} classDetail={detail} onMessage={handleMessage} />
         </CTabPane>
         <CTabPane visible={activeTab === 'enrollments'}>
           <div className='d-flex justify-content-between align-items-center mb-3'>
@@ -529,7 +589,7 @@ export default function ClassDetailPage() {
                 {enrollmentRows.map((row, index) => (
                   <CTableRow key={row.id}>
                     <CTableDataCell>{(enrollmentMeta?.page - 1) * enrollmentMeta?.pageSize + index + 1}</CTableDataCell>
-                    <CTableDataCell>{row.learner ? (row.learner.fullName || row.learner.username || row.learner.email) : '-'}</CTableDataCell>
+                    <CTableDataCell>{row.learner ? (row.learner.fullName || row.learner.username || row.learner.email || row.learner.phone) : '-'}</CTableDataCell>
                     <CTableDataCell>{row.joinDate || '-'}</CTableDataCell>
                     <CTableDataCell>{row.leaveDate || '-'}</CTableDataCell>
                     <CTableDataCell>{row.enrollmentStatus === 'inactive' ? 'Ngưng hoạt động' : 'Đang hoạt động'}</CTableDataCell>
@@ -560,23 +620,76 @@ export default function ClassDetailPage() {
 
       <CModal backdrop='static' visible={showEnrollmentModal} onClose={closeEnrollmentModal}>
         <CModalHeader>
-          <CModalTitle>{editingEnrollmentId ? 'Sửa enrollment' : 'Thêm enrollment'}</CModalTitle>
+          <CModalTitle>{editingEnrollmentId ? 'Sửa enrollment' : 'Thêm học viên'}</CModalTitle>
         </CModalHeader>
         <CModalBody>
           <CForm>
             <CRow className='g-3'>
-              <CCol md={12}>
-                <CFormLabel>Học viên</CFormLabel>
-                <AsyncCombobox
-                  loadOptions={loadLearnerOptions}
-                  value={selectedLearnerOption}
-                  onChange={(opt) => {
-                    setSelectedLearnerOption(opt || null)
-                    setEnrollmentForm((prev) => ({ ...prev, learner: opt ? opt.value : '' }))
-                  }}
-                  placeholder='Chọn học viên'
-                />
-              </CCol>
+              {!editingEnrollmentId ? (
+                <CCol md={12}>
+                  <CNav variant='tabs' role='tablist'>
+                    <CNavItem>
+                      <CNavLink active={enrollmentForm.mode === 'existing'} onClick={() => {
+                        setEnrollmentForm((prev) => ({
+                          ...prev,
+                          mode: 'existing',
+                        }))
+                      }} role='button'>Chọn học viên có sẵn</CNavLink>
+                    </CNavItem>
+                    <CNavItem>
+                      <CNavLink active={enrollmentForm.mode === 'new'} onClick={() => {
+                        setSelectedLearnerOption(null)
+                        setEnrollmentForm((prev) => ({
+                          ...prev,
+                          mode: 'new',
+                          learner: '',
+                        }))
+                      }} role='button'>Tạo học viên mới</CNavLink>
+                    </CNavItem>
+                  </CNav>
+                </CCol>
+              ) : null}
+
+              {editingEnrollmentId || enrollmentForm.mode === 'existing' ? (
+                <CCol md={12}>
+                  <CFormLabel>Học viên</CFormLabel>
+                  <AsyncCombobox
+                    loadOptions={loadLearnerOptions}
+                    value={selectedLearnerOption}
+                    onChange={(opt) => {
+                      setSelectedLearnerOption(opt || null)
+                      setEnrollmentForm((prev) => ({ ...prev, learner: opt ? opt.value : '' }))
+                    }}
+                    placeholder='Chọn học viên'
+                  />
+                  <div className='small text-body-secondary mt-1'>Tìm theo mã, họ tên, email hoặc số điện thoại nếu hồ sơ học viên đã có.</div>
+                </CCol>
+              ) : (
+                <>
+                  <CCol md={12}>
+                    <CAlert color='info' className='mb-0'>Luồng này chỉ tạo Learner và Enrollment. Không tạo hoặc liên kết User ở bước này.</CAlert>
+                  </CCol>
+                  <CCol md={12}>
+                    <CFormLabel>Họ tên</CFormLabel>
+                    <CFormInput value={enrollmentForm.newLearnerFullName} onChange={(event) => setEnrollmentForm((prev) => ({ ...prev, newLearnerFullName: event.target.value }))} placeholder='Nhập họ tên học viên' />
+                  </CCol>
+                  <CCol md={6}>
+                    <CFormLabel>Mã học viên</CFormLabel>
+                    <CFormInput value={enrollmentForm.newLearnerCode} onChange={(event) => setEnrollmentForm((prev) => ({ ...prev, newLearnerCode: event.target.value }))} placeholder='Nhập mã học viên' />
+                  </CCol>
+                  <CCol md={6}>
+                    <CFormLabel>Email</CFormLabel>
+                    <CFormInput type='email' value={enrollmentForm.newLearnerEmail} onChange={(event) => setEnrollmentForm((prev) => ({ ...prev, newLearnerEmail: event.target.value }))} placeholder='Không bắt buộc' />
+                  </CCol>
+                  <CCol md={6}>
+                    <CFormLabel>Điện thoại</CFormLabel>
+                    <CFormInput value={enrollmentForm.newLearnerPhone} onChange={(event) => setEnrollmentForm((prev) => ({ ...prev, newLearnerPhone: event.target.value }))} placeholder='Không bắt buộc' />
+                  </CCol>
+                  <CCol md={12}>
+                    <div className='small text-body-secondary'>Nếu mã, email hoặc số điện thoại đã khớp learner hoặc user trong tenant hiện tại, hệ thống sẽ chặn tạo trùng và yêu cầu dùng hồ sơ sẵn có.</div>
+                  </CCol>
+                </>
+              )}
               <CCol md={6}>
                 <CFormLabel>Join date</CFormLabel>
                 <CFormInput type='date' value={enrollmentForm.joinDate} onChange={(event) => setEnrollmentForm((prev) => ({ ...prev, joinDate: event.target.value }))} />

@@ -43,6 +43,7 @@ export default function FileAssetPickerModal({
   const acceptValue = useMemo(() => {
     if (acceptedKind === 'audio') return 'audio/*'
     if (acceptedKind === 'image') return 'image/*'
+    if (acceptedKind === 'video') return 'video/*'
     return '*/*'
   }, [acceptedKind])
 
@@ -52,6 +53,15 @@ export default function FileAssetPickerModal({
     }
     if (acceptedKind === 'image') {
       return rows.filter((item) => String(item?.mimeType || '').toLowerCase().startsWith('image/'))
+    }
+    if (acceptedKind === 'video') {
+      return rows.filter((item) => String(item?.mimeType || '').toLowerCase().startsWith('video/'))
+    }
+    if (acceptedKind === 'file') {
+      return rows.filter((item) => {
+        const mimeType = String(item?.mimeType || '').toLowerCase()
+        return mimeType && !mimeType.startsWith('audio/') && !mimeType.startsWith('image/') && !mimeType.startsWith('video/')
+      })
     }
     return rows
   }, [acceptedKind, rows])

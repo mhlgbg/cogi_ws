@@ -7,6 +7,7 @@ import { getFlowState, patchFlowState } from '../utils/assessmentFlowStorage'
 import { getApiMessage, requestAssessmentCampaignOtp, verifyAssessmentCampaignOtp } from '../services/assessmentCampaignPublicService'
 import { maskEmail, OTP_LOCK_SECONDS, OTP_RESEND_SECONDS } from '../utils/assessmentRuntime'
 import { maskPhone } from '../utils/assessmentCampaignFlow'
+import useAssessmentCampaignPageTitle from '../utils/useAssessmentCampaignPageTitle'
 
 function toText(value) {
   if (value === null || value === undefined) return ''
@@ -101,6 +102,7 @@ export default function AssessmentVerifyPage() {
   const soundCheckPath = buildCampaignSoundCheckPath(tenantCode, campaignCode)
   const isSameFlow = flowState?.tenantCode === tenantCode && flowState?.campaignCode === campaignCode
   const beforeStartData = isSameFlow ? (flowState?.beforeStartData || null) : null
+  const campaign = isSameFlow ? (flowState?.campaign || null) : null
   const verification = flowState?.verification || {}
   const assessment = flowState?.assessment || {}
   const returnToPath = toText(verification?.returnToPath)
@@ -112,6 +114,8 @@ export default function AssessmentVerifyPage() {
   const resendRemaining = Math.max(0, resendAvailableAt - tick)
   const isEmailVerification = verification?.method === 'email'
   const displayTarget = isEmailVerification ? maskEmail(verification?.target || '') : maskPhone(verification?.target || '')
+
+  useAssessmentCampaignPageTitle(campaign)
 
   useEffect(() => {
     const timer = window.setInterval(() => setTick(nowSeconds()), 1000)
