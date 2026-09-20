@@ -197,6 +197,49 @@ function normalizeAssignmentProgress(raw) {
   }
 }
 
+function normalizeAssignmentAssessmentVersion(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  return {
+    id: Number(raw.id || 0) || 0,
+    documentId: toText(raw.documentId) || null,
+    code: toText(raw.code),
+    title: toText(raw.title),
+    version: Number(raw.version || 0) || 0,
+    versionStatus: toText(raw.versionStatus) || 'draft',
+    durationMinutes: Number(raw.durationMinutes || 0) || 0,
+    questionCount: Number(raw.questionCount || 0) || 0,
+  }
+}
+
+function normalizeAssignmentAssessmentSettings(raw) {
+  if (!raw || typeof raw !== 'object') {
+    return {
+      assessmentVersionId: null,
+      maxAttempts: 1,
+      showScoreAfterSubmit: true,
+      reviewMode: 'none',
+    }
+  }
+  return {
+    assessmentVersionId: Number(raw.assessmentVersionId || raw.versionId || 0) || null,
+    maxAttempts: Number(raw.maxAttempts || 1) || 1,
+    showScoreAfterSubmit: raw.showScoreAfterSubmit !== false,
+    reviewMode: toText(raw.reviewMode) || 'none',
+  }
+}
+
+function normalizeAssignmentAssessmentOption(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  return {
+    id: Number(raw.id || 0) || 0,
+    documentId: toText(raw.documentId) || null,
+    code: toText(raw.code),
+    title: toText(raw.title),
+    status: toText(raw.status) || 'draft',
+    assessmentVersion: normalizeAssignmentAssessmentVersion(raw.assessmentVersion),
+  }
+}
+
 function normalizeAssignmentTask(raw) {
   if (!raw || typeof raw !== 'object') return null
   return {
@@ -209,8 +252,12 @@ function normalizeAssignmentTask(raw) {
     assessment: raw.assessment ? {
       id: Number(raw.assessment.id || 0) || 0,
       documentId: toText(raw.assessment.documentId) || null,
+      code: toText(raw.assessment.code),
       title: toText(raw.assessment.title),
+      status: toText(raw.assessment.status) || 'draft',
     } : null,
+    assessmentVersion: normalizeAssignmentAssessmentVersion(raw.assessmentVersion),
+    assessmentSettings: normalizeAssignmentAssessmentSettings(raw.assessmentSettings),
     stats: raw.stats || { learnerCount: 0, submittedCount: 0, completedCount: 0, returnedCount: 0, missingCount: 0, submissionVersionCount: 0 },
     myProgress: normalizeAssignmentProgress(raw.myProgress),
     submissions: Array.isArray(raw.submissions) ? raw.submissions.map(normalizeAssignmentSubmission).filter(Boolean) : [],
@@ -235,6 +282,7 @@ function normalizeAssignmentSummary(raw) {
     completedCount: Number(raw.completedCount || 0) || 0,
     submittedCount: Number(raw.submittedCount || 0) || 0,
     pendingCount: Number(raw.pendingCount || 0) || 0,
+    assessmentVisibilitySummary: toText(raw.assessmentVisibilitySummary),
     totalTaskCount: Number(raw.totalTaskCount || 0) || 0,
     completedTaskCount: Number(raw.completedTaskCount || 0) || 0,
     myProgressState: toText(raw.myProgressState) || '',
@@ -257,6 +305,50 @@ function normalizeAssignmentSummary(raw) {
     progress: normalizeAssignmentProgress(raw.progress),
     submissions: Array.isArray(raw.submissions) ? raw.submissions.map(normalizeAssignmentSubmission).filter(Boolean) : [],
     task: normalizeAssignmentTask(raw.task),
+  }
+}
+
+function normalizeStudentAssignmentListItem(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  return {
+    id: Number(raw.id || 0) || 0,
+    taskId: Number(raw.taskId || raw.id || 0) || 0,
+    taskTitle: toText(raw.taskTitle),
+    taskDescription: toText(raw.taskDescription),
+    taskType: toText(raw.taskType) || 'todo',
+    required: raw.required !== false,
+    order: Number(raw.order || 0) || 0,
+    assignmentId: Number(raw.assignmentId || 0) || 0,
+    assignmentTitle: toText(raw.assignmentTitle),
+    assignmentDescription: toText(raw.assignmentDescription),
+    assignmentStatus: toText(raw.assignmentStatus) || 'draft',
+    assignedAt: raw.assignedAt || null,
+    dueAt: raw.dueAt || null,
+    classId: Number(raw.classId || 0) || 0,
+    classCode: toText(raw.classCode),
+    className: toText(raw.className),
+    subject: toText(raw.subject),
+    sessionId: Number(raw.sessionId || 0) || 0,
+    sessionDate: raw.sessionDate || null,
+    sessionStartTime: raw.sessionStartTime || null,
+    sessionEndTime: raw.sessionEndTime || null,
+    sessionStatus: toText(raw.sessionStatus) || 'scheduled',
+    teacher: normalizeUserLite(raw.teacher),
+    learnerTaskStatus: toText(raw.learnerTaskStatus) || 'assigned',
+    normalizedStatus: toText(raw.normalizedStatus) || 'pending',
+    startedAt: raw.startedAt || null,
+    completedAt: raw.completedAt || null,
+    submittedAt: raw.submittedAt || null,
+    assessmentId: Number(raw.assessmentId || 0) || 0,
+    attemptId: raw.attemptId || null,
+    attemptStatus: toText(raw.attemptStatus) || '',
+    score: raw.score === null || raw.score === undefined || raw.score === '' ? null : Number(raw.score),
+    maxScore: raw.maxScore === null || raw.maxScore === undefined || raw.maxScore === '' ? null : Number(raw.maxScore),
+    showScoreAfterSubmit: raw.showScoreAfterSubmit !== false,
+    latestSubmissionId: Number(raw.latestSubmissionId || 0) || 0,
+    latestSubmissionVersion: Number(raw.latestSubmissionVersion || 0) || 0,
+    latestSubmissionStatus: toText(raw.latestSubmissionStatus),
+    latestSubmissionSubmittedAt: raw.latestSubmissionSubmittedAt || null,
   }
 }
 
@@ -426,9 +518,8 @@ export async function getClassEnrollmentOptions(classId, { includeInactive = fal
   const response = await api.get(`/classes/${classId}/enrollment-options`, { params })
   // Debug: log raw response to help troubleshoot missing learners
   try {
-    // eslint-disable-next-line no-console
     console.debug('[debug] getClassEnrollmentOptions response:', response?.data)
-  } catch (e) {
+  } catch {
     // ignore logging errors
   }
 
@@ -784,6 +875,24 @@ export async function createTeacherSessionAssignment(sessionId, payload) {
   return normalizeAssignmentSummary(response?.data?.data || null)
 }
 
+export async function getTeacherSessionAssignmentAssessmentOptions(sessionId, params = {}) {
+  const response = await api.get(`/teacher/sessions/${sessionId}/assignment-assessment-options`, { params })
+  const payload = response?.data?.data || {}
+  return {
+    data: Array.isArray(payload?.data) ? payload.data.map(normalizeAssignmentAssessmentOption).filter(Boolean) : [],
+    meta: payload?.meta || null,
+  }
+}
+
+export async function startTeacherSessionAssignmentAssessmentPreview(sessionId, assessmentVersionId) {
+  const response = await api.post(`/teacher/sessions/${sessionId}/assignment-assessment-preview`, {
+    data: {
+      assessmentVersionId,
+    },
+  })
+  return response?.data?.data || null
+}
+
 export async function getTeacherAssignmentDetail(assignmentId) {
   const response = await api.get(`/teacher/assignments/${assignmentId}`)
   return normalizeAssignmentSummary(response?.data?.data || null)
@@ -792,6 +901,24 @@ export async function getTeacherAssignmentDetail(assignmentId) {
 export async function updateTeacherAssignment(assignmentId, payload) {
   const response = await api.put(`/teacher/assignments/${assignmentId}`, { data: payload || {} })
   return normalizeAssignmentSummary(response?.data?.data || null)
+}
+
+export async function getTeacherAssignmentAssessmentOptions(assignmentId, params = {}) {
+  const response = await api.get(`/teacher/assignments/${assignmentId}/assessment-options`, { params })
+  const payload = response?.data?.data || {}
+  return {
+    data: Array.isArray(payload?.data) ? payload.data.map(normalizeAssignmentAssessmentOption).filter(Boolean) : [],
+    meta: payload?.meta || null,
+  }
+}
+
+export async function startTeacherAssignmentAssessmentPreview(assignmentId, assessmentVersionId) {
+  const response = await api.post(`/teacher/assignments/${assignmentId}/assessment-preview`, {
+    data: {
+      assessmentVersionId,
+    },
+  })
+  return response?.data?.data || null
 }
 
 export async function publishTeacherAssignment(assignmentId) {
@@ -829,6 +956,29 @@ export async function getStudentSessionAssignments(sessionId, { learnerId = '' }
   return items.map(normalizeAssignmentSummary).filter(Boolean)
 }
 
+export async function getStudentAssignments({ learnerId = '', status = '', classId = '', taskType = '', dueFrom = '', dueTo = '', search = '', page = 1, pageSize = 10 } = {}) {
+  const response = await api.get('/student/assignments', {
+    params: {
+      learnerId: learnerId || undefined,
+      status: String(status || '').trim() || undefined,
+      classId: classId || undefined,
+      taskType: String(taskType || '').trim() || undefined,
+      dueFrom: String(dueFrom || '').trim() || undefined,
+      dueTo: String(dueTo || '').trim() || undefined,
+      search: String(search || '').trim() || undefined,
+      page,
+      pageSize,
+    },
+  })
+  const items = Array.isArray(response?.data?.data) ? response.data.data : []
+  return {
+    rows: items.map(normalizeStudentAssignmentListItem).filter(Boolean),
+    pagination: response?.data?.meta?.pagination || { page: 1, pageSize: 10, pageCount: 1, total: 0 },
+    summary: response?.data?.meta?.summary || { countsByStatus: { pending: 0, in_progress: 0, completed: 0, overdue: 0 } },
+    serverNow: response?.data?.meta?.serverNow || null,
+  }
+}
+
 export async function getStudentAssignmentDetail(assignmentId, { learnerId = '' } = {}) {
   const response = await api.get(`/student/assignments/${assignmentId}`, {
     params: {
@@ -847,6 +997,15 @@ export async function updateStudentAssignmentTodoProgress(taskId, payload, { lea
     },
   })
   return normalizeAssignmentSummary(response?.data?.data || null)
+}
+
+export async function startStudentAssignmentAssessmentAttempt(taskId, { learnerId = '' } = {}) {
+  const response = await api.post(`/student/assignment-tasks/${taskId}/assessment-attempt`, {}, {
+    params: {
+      learnerId: learnerId || undefined,
+    },
+  })
+  return response?.data?.data || null
 }
 
 export async function saveStudentAssignmentSubmissionDraft(taskId, payload, { learnerId = '' } = {}) {

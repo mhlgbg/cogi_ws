@@ -8,8 +8,10 @@ import RunnerSectionNav from '../components/RunnerSectionNav'
 import ResumeStateNotice from '../components/ResumeStateNotice'
 import SubmitAssessmentModal from '../components/SubmitAssessmentModal'
 import AssessmentCampaignRecoveryCard from '../../../features/public-assessment/components/AssessmentCampaignRecoveryCard'
+import CandidateAssessmentResultView from '../../../features/public-assessment/components/CandidateAssessmentResultView'
 import { getApiMessage, restorePublicAssessmentAttemptAccess, startPublicAssessmentCampaignRetake } from '../../../features/public-assessment/services/assessmentCampaignPublicService'
-import { getRuntimeApiDetails, getRuntimeApiMessage, getAssessmentAttempt, markAudioListenRequirementSatisfied, registerAssessmentAudioPlay, resumeAssessmentAttempt, saveAssessmentAnswer, submitAssessmentAttempt, updateAssessmentProgress } from '../services/assessmentRuntimeApi'
+import { buildAssessmentRunnerPath } from '../../../features/public-assessment/utils/assessmentRoutes'
+import { getRuntimeApiDetails, getRuntimeApiMessage, getAssessmentAttempt, getAssessmentAttemptResult, markAudioListenRequirementSatisfied, registerAssessmentAudioPlay, resumeAssessmentAttempt, saveAssessmentAnswer, submitAssessmentAttempt, updateAssessmentProgress } from '../services/assessmentRuntimeApi'
 import { getFlowState, patchFlowState } from '../../../features/public-assessment/utils/assessmentFlowStorage'
 import '../components/assessment-runner.css'
 
@@ -135,6 +137,8 @@ export default function AssessmentRunnerPage() {
   const [submittedJustNow, setSubmittedJustNow] = useState(false)
   const [autoSubmittedByTimeout, setAutoSubmittedByTimeout] = useState(false)
   const [remainingSeconds, setRemainingSeconds] = useState(null)
+  const [resultLoading, setResultLoading] = useState(false)
+  const [resultPayload, setResultPayload] = useState(null)
   const [offline, setOffline] = useState(typeof navigator !== 'undefined' ? navigator.onLine === false : false)
   const saveTimersRef = useRef({})
   const mountedRef = useRef(false)
@@ -152,7 +156,7 @@ export default function AssessmentRunnerPage() {
 
   const definition = runtime?.candidateDefinition || null
   const attempt = runtime?.attempt || null
-  const sections = Array.isArray(definition?.sections) ? definition.sections : []
+  const sections = useMemo(() => (Array.isArray(definition?.sections) ? definition.sections : []), [definition?.sections])
   const flatQuestions = useMemo(() => flattenQuestions(sections), [sections])
   const totalQuestions = Number(runtime?.progress?.totalQuestions || definition?.version?.totalQuestions || flatQuestions.length || 0)
   const answerMap = useMemo(() => toAnswerMap(runtime?.answers || []), [runtime?.answers])
@@ -168,7 +172,6 @@ export default function AssessmentRunnerPage() {
     return result
   }, {}), [questionStates])
   const answeredCount = useMemo(() => Object.values(answeredMap).filter((value) => value === true).length, [answeredMap])
-  const unansweredQuestions = useMemo(() => flatQuestions.filter((item) => questionStates[String(item?.assessmentQuestionId || item?.assessmentQuestionDocumentId || '')]?.unanswered === true), [flatQuestions, questionStates])
   const requiredUnansweredQuestions = useMemo(() => flatQuestions.filter((item) => questionStates[String(item?.assessmentQuestionId || item?.assessmentQuestionDocumentId || '')]?.requiredUnanswered === true), [flatQuestions, questionStates])
 
   const currentEntry = useMemo(() => findQuestionEntry(sections, currentAssessmentQuestionId) || flatQuestions[0] || null, [currentAssessmentQuestionId, flatQuestions, sections])
@@ -261,7 +264,7 @@ export default function AssessmentRunnerPage() {
         const payload = await resumeAssessmentAttempt(attemptId, runtimeRequestOptions)
         if (cancelled) return
         hydrateRuntime(payload)
-      } catch (resumeError) {
+      } catch {
         try {
           const payload = await getAssessmentAttempt(attemptId, runtimeRequestOptions)
           if (cancelled) return
@@ -295,6 +298,27 @@ export default function AssessmentRunnerPage() {
     timeoutSubmitTriggeredRef.current = true
     handleTimeoutAutoSubmit()
   }, [attempt?.id, readOnly, remainingSeconds])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadResultPayload() {
+      if (!submitted || !attemptId) {
+        if (!cancelled) setResultPayload(null)
+        return
+      }
+      setResultLoading(true)
+      try {
+        const payload = await getAssessmentAttemptResult(attemptId, runtimeRequestOptions)
+        if (!cancelled) setResultPayload(payload)
+      } catch {
+        if (!cancelled) setResultPayload(null)
+      } finally {
+        if (!cancelled) setResultLoading(false)
+      }
+    }
+    loadResultPayload()
+    return () => { cancelled = true }
+  }, [attemptId, runtimeRequestOptions, submitted])
 
   useEffect(() => {
     if (!expiresAtMs) {
@@ -682,6 +706,19 @@ export default function AssessmentRunnerPage() {
     }
   }
 
+  async function refreshResultPayload() {
+    if (!submitted || !attemptId) return
+    setResultLoading(true)
+    try {
+      const payload = await getAssessmentAttemptResult(attemptId, runtimeRequestOptions)
+      if (mountedRef.current) setResultPayload(payload)
+    } catch {
+      if (mountedRef.current) setResultPayload(null)
+    } finally {
+      if (mountedRef.current) setResultLoading(false)
+    }
+  }
+
   async function jumpToMissing(item) {
     const target = findQuestionEntry(sections, item?.assessmentQuestionId)
     if (!target) return
@@ -749,6 +786,8 @@ export default function AssessmentRunnerPage() {
     return <div className='assessment-runner assessment-runner-shell py-4'><CAlert color='warning'>Không có dữ liệu attempt để hiển thị.</CAlert></div>
   }
 
+  const shouldShowInlineResult = submitted && resultPayload?.allowResultView === true
+
   return (
     <div className='assessment-runner assessment-runner-shell py-4'>
       {offline ? <CAlert color='warning' className='mb-0'>Mất kết nối. Bài làm vẫn giữ local và sẽ thử lưu lại khi có mạng.</CAlert> : null}
@@ -757,10 +796,12 @@ export default function AssessmentRunnerPage() {
       {submitted ? (
         <CAlert color={submittedJustNow ? 'success' : 'info'} className='mb-0 d-flex justify-content-between align-items-center gap-3 flex-wrap'>
           <span>{autoSubmittedByTimeout ? 'Bài làm đã được tự động nộp khi hết thời gian.' : submittedJustNow ? 'Bài làm đã được nộp thành công.' : 'Bài làm này đã được nộp.'}</span>
-          <CButton color='primary' size='sm' onClick={() => navigate('result')}>Xem kết quả</CButton>
+          {resultPayload?.allowResultView === false ? <span className='small'>Kết quả được ẩn theo cấu hình của bài tập.</span> : null}
         </CAlert>
       ) : null}
       {attempt?.status === 'expired' ? <CAlert color='danger' className='mb-0'>Đã hết thời gian làm bài. Hệ thống đã tự động nộp những câu trả lời bạn đã hoàn thành.</CAlert> : null}
+      {submitted && resultLoading ? <div className='py-3 d-flex align-items-center gap-2'><CSpinner size='sm' /><span>Đang tải kết quả...</span></div> : null}
+      {shouldShowInlineResult ? <CandidateAssessmentResultView payload={resultPayload} refreshing={resultLoading} onRefresh={refreshResultPayload} /> : null}
 
       <CCard className='ai-card'>
         <CCardBody>

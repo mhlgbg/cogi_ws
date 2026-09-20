@@ -31,7 +31,7 @@ function buildEmptyStimulusForm() {
   }
 }
 
-export function normalizeStimulusForm(stimulus) {
+function normalizeStimulusForm(stimulus) {
   return {
     code: stimulus?.code || '',
     title: stimulus?.title || '',
@@ -44,7 +44,7 @@ export function normalizeStimulusForm(stimulus) {
   }
 }
 
-export function toStimulusPayload(form) {
+function toStimulusPayload(form) {
   return {
     code: String(form.code || '').trim(),
     title: String(form.title || '').trim() || null,
@@ -61,18 +61,21 @@ export default function QuestionStimulusEditorModal({
   visible,
   saving,
   editingStimulus,
+  initialValues,
+  notice,
   onClose,
   onSubmit,
 }) {
-  const [form, setForm] = useState(buildEmptyStimulusForm())
+  const [form, setForm] = useState(() => editingStimulus ? normalizeStimulusForm(editingStimulus) : initialValues ? normalizeStimulusForm(initialValues) : buildEmptyStimulusForm())
   const [error, setError] = useState('')
   const [pickerMode, setPickerMode] = useState('')
 
   useEffect(() => {
     if (!visible) return
-    setForm(editingStimulus ? normalizeStimulusForm(editingStimulus) : buildEmptyStimulusForm())
+    setForm(editingStimulus ? normalizeStimulusForm(editingStimulus) : initialValues ? normalizeStimulusForm(initialValues) : buildEmptyStimulusForm())
     setError('')
-  }, [editingStimulus, visible])
+    setPickerMode('')
+  }, [editingStimulus, initialValues, visible])
 
   function handleClose() {
     if (saving) return
@@ -104,6 +107,7 @@ export default function QuestionStimulusEditorModal({
           <CModalTitle>{editingStimulus ? 'Sửa stimulus' : 'Tạo stimulus'}</CModalTitle>
         </CModalHeader>
         <CModalBody>
+            {notice ? <CAlert color='info'>{notice}</CAlert> : null}
           {error ? <CAlert color='danger'>{error}</CAlert> : null}
           <CRow className='g-3'>
             <CCol md={4}><CFormLabel>Code</CFormLabel><CFormInput value={form.code} onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value }))} disabled={saving} /></CCol>
@@ -112,7 +116,7 @@ export default function QuestionStimulusEditorModal({
             <CCol md={4}><CFormLabel>Trạng thái</CFormLabel><CFormSelect value={form.stimulusStatus} onChange={(event) => setForm((prev) => ({ ...prev, stimulusStatus: event.target.value }))} disabled={saving}>{['draft', 'active', 'archived'].map((item) => <option key={item} value={item}>{item}</option>)}</CFormSelect></CCol>
             <CCol md={4}><CFormLabel>Số câu hỏi đang dùng</CFormLabel><CFormInput value={editingStimulus?.usageCount ?? 0} disabled /></CCol>
             <CCol xs={12}><CFormLabel>Instruction</CFormLabel><CFormTextarea rows={3} value={form.instruction} onChange={(event) => setForm((prev) => ({ ...prev, instruction: event.target.value }))} disabled={saving} /></CCol>
-            {(form.type === 'text' || form.type === 'mixed') ? <CCol xs={12}><CFormLabel>Content</CFormLabel><CFormTextarea rows={6} value={form.content} onChange={(event) => setForm((prev) => ({ ...prev, content: event.target.value }))} disabled={saving} /></CCol> : null}
+            <CCol xs={12}><CFormLabel>Content</CFormLabel><CFormTextarea rows={6} value={form.content} onChange={(event) => setForm((prev) => ({ ...prev, content: event.target.value }))} disabled={saving} /></CCol>
             {(form.type === 'audio' || form.type === 'mixed') ? (
               <CCol xs={12} md={6}>
                 <CFormLabel>Audio Asset</CFormLabel>

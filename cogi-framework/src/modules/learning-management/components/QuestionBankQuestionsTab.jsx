@@ -32,11 +32,12 @@ import {
   getQuestions,
   getQuestionStimuli,
   updateQuestion,
+  updateQuestionStimulus,
 } from '../services/learningObjectApi'
 import QuestionBankImportModal from './QuestionBankImportModal'
 import QuestionEditorModal from './QuestionEditorModal'
 import StimulusPreview from './StimulusPreview'
-import { buildPages, formatDateTime, getApiMessage, getEntityId, getQuestionTypeLabel, getStatusBadgeColor, normalizePagination, truncateText } from '../utils/questionBankUi'
+import { buildPages, getApiMessage, getEntityId, getQuestionTypeLabel, getStatusBadgeColor, normalizePagination, truncateText } from '../utils/questionBankUi'
 
 export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorkspaceActions, onRefreshBootstrap }) {
   const [loading, setLoading] = useState(false)
@@ -53,6 +54,7 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
   const [showEditor, setShowEditor] = useState(false)
   const [editingQuestion, setEditingQuestion] = useState(null)
   const [showImport, setShowImport] = useState(false)
+  const [reloadTick, setReloadTick] = useState(0)
 
   const subjects = bootstrap?.subjects || []
   const grades = bootstrap?.grades || []
@@ -74,8 +76,37 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
   }, [setWorkspaceActions])
 
   useEffect(() => {
-    loadQuestions()
-  }, [page, pageSize, filters])
+    let active = true
+    ;(async () => {
+      setLoading(true)
+      setError('')
+      try {
+        const payload = await getQuestions({
+          page,
+          pageSize,
+          q: filters.q || undefined,
+          type: filters.type || undefined,
+          subjectId: filters.subjectId || undefined,
+          gradeId: filters.gradeId || undefined,
+          skillId: filters.skillId || undefined,
+          stimulusId: filters.stimulusId || undefined,
+          difficulty: filters.difficulty || undefined,
+          questionStatus: filters.questionStatus || undefined,
+        })
+        if (!active) return
+        setRows(Array.isArray(payload?.data) ? payload.data : [])
+        setMeta(payload?.meta || null)
+      } catch (requestError) {
+        if (!active) return
+        setRows([])
+        setMeta(null)
+        setError(getApiMessage(requestError, 'Không tải được danh sách câu hỏi'))
+      } finally {
+        if (active) setLoading(false)
+      }
+    })()
+    return () => { active = false }
+  }, [filters, page, pageSize, reloadTick])
 
   useEffect(() => {
     loadStimuli()
@@ -131,7 +162,8 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
       }
       setShowEditor(false)
       setEditingQuestion(null)
-      await Promise.all([loadQuestions(), loadStimuli()])
+      setReloadTick((prev) => prev + 1)
+      await loadStimuli()
     } catch (requestError) {
       setError(getApiMessage(requestError, 'Không lưu được câu hỏi'))
       throw requestError
@@ -147,10 +179,17 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
     try {
       await deleteQuestion(getEntityId(question))
       setSuccess('Xóa câu hỏi thành công')
-      await loadQuestions()
+      setReloadTick((prev) => prev + 1)
     } catch (requestError) {
       setError(getApiMessage(requestError, 'Không xóa được câu hỏi'))
     }
+  }
+
+  async function handleQuickCreateStimulus(payload, existingStimulus = null) {
+    if (existingStimulus && getEntityId(existingStimulus)) {
+      return updateQuestionStimulus(getEntityId(existingStimulus), payload)
+    }
+    return createQuestionStimulus(payload)
   }
 
   return (
@@ -292,7 +331,7 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
         onQuickCreateGrade={createGrade}
         onQuickCreateSkill={createSkill}
         onQuickCreateKnowledgeNode={createKnowledgeNode}
-        onQuickCreateStimulus={createQuestionStimulus}
+        onQuickCreateStimulus={handleQuickCreateStimulus}
         onRefreshStimuli={loadStimuli}
         onRefreshSupportData={onRefreshBootstrap}
         feature={feature}

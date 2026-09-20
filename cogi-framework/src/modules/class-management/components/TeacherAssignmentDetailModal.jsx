@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { CAlert, CBadge, CButton, CCard, CCardBody, CCardHeader, CCol, CFormInput, CFormLabel, CFormSelect, CModal, CModalBody, CModalFooter, CModalHeader, CModalTitle, CRow, CSpinner, CTable, CTableBody, CTableDataCell, CTableHead, CTableHeaderCell, CTableRow } from '@coreui/react'
 import { getFileAssetUrl } from '../../learning-management/utils/questionBankUi'
-import { getTeacherAssignmentDetail, getTeacherAssignmentLearnerTaskDetail, publishTeacherAssignment, closeTeacherAssignment, cancelTeacherAssignment, reviewTeacherAssignmentLearnerTask, updateTeacherAssignment } from '../services/classService'
+import { getTeacherAssignmentDetail, getTeacherAssignmentLearnerTaskDetail, publishTeacherAssignment, closeTeacherAssignment, cancelTeacherAssignment, reviewTeacherAssignmentLearnerTask, startTeacherAssignmentAssessmentPreview, updateTeacherAssignment } from '../services/classService'
 import { sanitizeClassSessionContentHtml } from '../utils/classSessionContentHtml'
 import { formatSessionDateTime } from '../utils/classSessionUi'
 import TeacherAssignmentEditorModal from './TeacherAssignmentEditorModal'
@@ -40,8 +40,9 @@ export default function TeacherAssignmentDetailModal({ visible = false, assignme
   const [reviewDetail, setReviewDetail] = useState(null)
   const [reviewError, setReviewError] = useState('')
   const [reviewForm, setReviewForm] = useState({ status: 'completed', teacherFeedback: '<p></p>', score: '', maxScore: '' })
+  const [previewLoadingTaskId, setPreviewLoadingTaskId] = useState(null)
 
-  async function load() {
+  const load = useCallback(async () => {
     if (!assignmentId) {
       setDetail(null)
       return
@@ -56,12 +57,12 @@ export default function TeacherAssignmentDetailModal({ visible = false, assignme
     } finally {
       setLoading(false)
     }
-  }
+  }, [assignmentId])
 
   useEffect(() => {
     if (!visible) return
     load()
-  }, [assignmentId, visible])
+  }, [load, visible])
 
   async function handleAction(action) {
     if (!assignmentId) return
@@ -103,6 +104,23 @@ export default function TeacherAssignmentDetailModal({ visible = false, assignme
     }
   }
 
+  async function openAssessmentPreview(task) {
+    const assessmentVersionId = task?.assessmentVersion?.id
+    if (!assignmentId || !assessmentVersionId) return
+    setPreviewLoadingTaskId(task.id)
+    setError('')
+    try {
+      const payload = await startTeacherAssignmentAssessmentPreview(assignmentId, assessmentVersionId)
+      if (payload?.runnerPath) {
+        window.open(payload.runnerPath, '_blank', 'noopener,noreferrer')
+      }
+    } catch (requestError) {
+      setError(getApiMessage(requestError, 'Không thể mở preview bài kiểm tra.'))
+    } finally {
+      setPreviewLoadingTaskId(null)
+    }
+  }
+
   return (
     <>
       <CModal visible={visible} onClose={() => !actionLoading && onClose?.()} size='xl'>
@@ -139,9 +157,22 @@ export default function TeacherAssignmentDetailModal({ visible = false, assignme
                     <div key={task.id} className='border rounded-3 p-3'>
                       <div className='d-flex justify-content-between align-items-center gap-2 flex-wrap'>
                         <div className='fw-semibold'>{task.title}</div>
-                        <div className='small text-body-secondary'>{task.taskType} · {task.required ? 'Bắt buộc' : 'Tùy chọn'}</div>
+                        <div className='d-flex align-items-center gap-2 flex-wrap'>
+                          <div className='small text-body-secondary'>{task.taskType} · {task.required ? 'Bắt buộc' : 'Tùy chọn'}</div>
+                          {task.taskType === 'assessment' && task.assessmentVersion?.id ? (
+                            <CButton size='sm' color='info' variant='outline' onClick={() => openAssessmentPreview(task)} disabled={previewLoadingTaskId === task.id}>
+                              {previewLoadingTaskId === task.id ? 'Đang mở...' : 'Xem lại bài kiểm tra'}
+                            </CButton>
+                          ) : null}
+                        </div>
                       </div>
                       <HtmlView value={task.description} />
+                      {task.taskType === 'assessment' && task.assessment ? (
+                        <div className='small text-body-secondary mt-2 d-grid gap-1'>
+                          <div>{`${task.assessment.code || '-'} · ${task.assessment.title || '-'} · ${task.assessmentVersion?.code || '-'} · ${task.assessmentVersion?.durationMinutes || 0} phút · ${task.assessmentVersion?.questionCount || 0} câu`}</div>
+                          <div>{`Xem điểm sau khi nộp: ${task?.assessmentSettings?.showScoreAfterSubmit !== false ? 'Có' : 'Không'}`}</div>
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </CCardBody>
@@ -191,6 +222,7 @@ export default function TeacherAssignmentDetailModal({ visible = false, assignme
         visible={editorOpen}
         saving={actionLoading === 'save'}
         assignment={detail}
+        assignmentId={detail?.id || assignmentId}
         submitError={editorError}
         onClose={() => { if (!actionLoading) setEditorOpen(false) }}
         onSave={async (payload) => {
@@ -217,6 +249,10 @@ export default function TeacherAssignmentDetailModal({ visible = false, assignme
             <div className='d-flex flex-column gap-3'>
               <div><strong>{reviewDetail?.learner?.fullName || reviewDetail?.learner?.code || '-'}</strong> · {reviewDetail?.task?.title || '-'}</div>
               <div>Trạng thái hiện tại: <CBadge color={(STATUS_META[reviewDetail?.progress?.status] || STATUS_META.assigned).color}>{(STATUS_META[reviewDetail?.progress?.status] || STATUS_META.assigned).label}</CBadge></div>
+              <div>
+                <strong>Hướng dẫn task</strong>
+                <HtmlView value={reviewDetail?.task?.description} />
+              </div>
               {(reviewDetail.submissions || []).map((submission) => (
                 <CCard key={submission.id} className='border-0 shadow-sm'>
                   <CCardHeader><strong>Version {submission.version}</strong> · <CBadge color={(STATUS_META[submission.status] || STATUS_META.draft).color}>{(STATUS_META[submission.status] || STATUS_META.draft).label}</CBadge></CCardHeader>

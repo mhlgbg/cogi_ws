@@ -2,6 +2,7 @@ import ClassManagementPage from '../pages/ClassManagementPage'
 import ClassDetailPage from '../pages/ClassDetailPage'
 import StudentClassDetailPage from '../pages/StudentClassDetailPage'
 import StudentClassWorkspacePage from '../pages/StudentClassWorkspacePage'
+import StudentAssignmentsPage from '../pages/StudentAssignmentsPage'
 import StudentSessionDetailPage from '../pages/StudentSessionDetailPage'
 import StudentSessionWorkspacePage from '../pages/StudentSessionWorkspacePage'
 import StudentWorkspaceOverviewPage from '../pages/StudentWorkspaceOverviewPage'
@@ -57,6 +58,12 @@ const classManagementRoutes = [
     title: 'Chi tiết lớp của tôi',
     featureKey: 'class.student-classes',
     component: StudentClassDetailPage,
+  },
+  {
+    path: '/student/assignments',
+    title: 'Bài tập của tôi',
+    featureKey: 'class.student-workspace',
+    component: StudentAssignmentsPage,
   },
   {
     path: '/student/sessions',

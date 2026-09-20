@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CAlert, CBadge, CButton, CCard, CCardBody, CCardHeader, CSpinner, CTable, CTableBody, CTableDataCell, CTableHead, CTableHeaderCell, CTableRow } from '@coreui/react'
 import { getStudentSessionAssignments } from '../services/classService'
+import { getClassSessionContentPreview } from '../utils/classSessionContentHtml'
 import { formatSessionDateTime } from '../utils/classSessionUi'
 import StudentAssignmentDetailModal from './StudentAssignmentDetailModal'
 
@@ -63,7 +64,10 @@ export default function StudentSessionAssignmentsPanel({ sessionId, learnerId = 
               <CTableBody>
                 {rows.length === 0 ? <CTableRow><CTableDataCell colSpan={5} className='text-center text-body-secondary'>Chưa có assignment được giao cho learner này.</CTableDataCell></CTableRow> : rows.map((item) => (
                   <CTableRow key={item.id}>
-                    <CTableDataCell><div className='fw-semibold'>{item.title || '-'}</div></CTableDataCell>
+                    <CTableDataCell>
+                      <div className='fw-semibold'>{item.title || '-'}</div>
+                      <div className='small text-body-secondary'>{getClassSessionContentPreview(item.description, 140)}</div>
+                    </CTableDataCell>
                     <CTableDataCell>{formatSessionDateTime(item.dueAt)}</CTableDataCell>
                     <CTableDataCell><CBadge color={(PROGRESS_META[item.myProgressState] || PROGRESS_META.assigned).color}>{(PROGRESS_META[item.myProgressState] || PROGRESS_META.assigned).label}</CBadge></CTableDataCell>
                     <CTableDataCell>{item.completedTaskCount || 0}/{item.totalTaskCount || item.taskCount || 0}</CTableDataCell>

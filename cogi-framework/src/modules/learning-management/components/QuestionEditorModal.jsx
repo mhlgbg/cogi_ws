@@ -24,9 +24,13 @@ import {
 } from '@coreui/react'
 import FileAssetPickerModal from './FileAssetPickerModal'
 import QuestionPreview from './QuestionPreview'
-import QuestionStimulusEditorModal, { normalizeStimulusForm, toStimulusPayload } from './QuestionStimulusEditorModal'
+import QuestionStimulusEditorModal from './QuestionStimulusEditorModal'
 import StimulusPreview from './StimulusPreview'
 import { canAccessAnyFeature, getApiMessage, getEntityId, getFileAssetUrl, getQuestionTypeLabel, parseOptionalJson } from '../utils/questionBankUi'
+
+function normalizeArray(value) {
+  return Array.isArray(value) ? value : []
+}
 
 function createEmptyOption(index = 0) {
   return {
@@ -63,7 +67,7 @@ function emptyQuestionForm() {
   }
 }
 
-export function normalizeQuestionForm(question) {
+function normalizeQuestionForm(question) {
   return {
     code: question?.code || '',
     title: question?.title || '',
@@ -100,6 +104,42 @@ function shouldShowOptions(type) {
   return ['single_choice', 'multiple_choice', 'true_false'].includes(String(type || '').toLowerCase())
 }
 
+function normalizeText(value) {
+  return String(value || '').trim()
+}
+
+function stripHtml(value) {
+  return String(value || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function inferStimulusTypeFromQuestion(form) {
+  const code = normalizeText(form?.code).toUpperCase()
+  const text = `${normalizeText(form?.title)} ${normalizeText(form?.questionText)}`.toLowerCase()
+  if (code.includes('-L-') || code.includes('LISTEN') || text.includes('listen') || text.includes('audio')) return 'audio'
+  if (normalizeArray(form?.options).some((option) => option?.imageAsset)) return 'image'
+  return 'text'
+}
+
+function buildQuickStimulusCode(questionCode) {
+  const baseCode = normalizeText(questionCode)
+  if (!baseCode) return ''
+  return baseCode.endsWith('-STIM') ? baseCode : `${baseCode}-STIM`
+}
+
+function buildQuickStimulusDraft(form) {
+  const inferredType = inferStimulusTypeFromQuestion(form)
+  return {
+    code: buildQuickStimulusCode(form?.code),
+    title: normalizeText(form?.title) || stripHtml(form?.questionText) || buildQuickStimulusCode(form?.code),
+    type: inferredType,
+    instruction: normalizeText(form?.questionText),
+    content: inferredType === 'text' || inferredType === 'mixed' ? normalizeText(form?.explanation) : '',
+    audioAsset: null,
+    imageAsset: null,
+    stimulusStatus: 'draft',
+  }
+}
+
 export default function QuestionEditorModal({
   visible,
   saving,
@@ -125,6 +165,9 @@ export default function QuestionEditorModal({
   const [quickError, setQuickError] = useState('')
   const [quickForm, setQuickForm] = useState({ code: '', title: '', level: 'understand', subject: '', grade: '', parent: '', description: '' })
   const [showStimulusModal, setShowStimulusModal] = useState(false)
+  const [stimulusModalSeed, setStimulusModalSeed] = useState(null)
+  const [stimulusModalNotice, setStimulusModalNotice] = useState('')
+  const [stimulusModalVersion, setStimulusModalVersion] = useState(0)
 
   const subjects = bootstrap?.subjects || []
   const grades = bootstrap?.grades || []
@@ -296,14 +339,22 @@ export default function QuestionEditorModal({
   }
 
   async function handleQuickCreateStimulus(payload) {
-    try {
-      const created = await onQuickCreateStimulus?.(payload)
-      await onRefreshStimuli?.()
-      setForm((prev) => ({ ...prev, stimulus: getEntityId(created), stimulusEntity: created }))
-      setShowStimulusModal(false)
-    } catch (requestError) {
-      throw requestError
-    }
+    const existing = questionStimuli.find((item) => normalizeText(item?.code) === normalizeText(payload?.code)) || null
+    const created = await onQuickCreateStimulus?.(payload, existing)
+    await onRefreshStimuli?.()
+    setForm((prev) => ({ ...prev, stimulus: getEntityId(created), stimulusEntity: created }))
+    setStimulusModalSeed(null)
+    setStimulusModalNotice('')
+    setShowStimulusModal(false)
+  }
+
+  function openQuickStimulusModal() {
+    const draft = buildQuickStimulusDraft(form)
+    const existing = questionStimuli.find((item) => normalizeText(item?.code) === normalizeText(draft.code)) || null
+    setStimulusModalSeed(existing || draft)
+    setStimulusModalNotice(existing ? `Stimulus ${draft.code} đã tồn tại. Bạn đang cập nhật bản ghi hiện có.` : '')
+    setStimulusModalVersion((prev) => prev + 1)
+    setShowStimulusModal(true)
   }
 
   const previewQuestion = {
@@ -364,7 +415,7 @@ export default function QuestionEditorModal({
                       <option value=''>Không dùng stimulus</option>
                       {questionStimuli.map((item) => <option key={getEntityId(item)} value={getEntityId(item)}>{`${item.code || '-'} • ${item.title || '-'} • ${item.type || '-'}`}</option>)}
                     </CFormSelect>
-                    {canCreateStimulus ? <CButton color='secondary' variant='outline' onClick={() => setShowStimulusModal(true)}>Tạo nhanh</CButton> : null}
+                    {canCreateStimulus ? <CButton color='secondary' variant='outline' onClick={openQuickStimulusModal}>Tạo nhanh</CButton> : null}
                   </div>
                   {selectedStimulus ? <StimulusPreview stimulus={selectedStimulus} compact /> : <div className='small text-body-secondary'>Câu hỏi này không sử dụng stimulus.</div>}
                 </CCol>
@@ -476,10 +527,13 @@ export default function QuestionEditorModal({
       </CModal>
 
       <QuestionStimulusEditorModal
+        key={`quick-stimulus-${stimulusModalVersion}`}
         visible={showStimulusModal}
-        saving={saving}
-        editingStimulus={null}
-        onClose={() => setShowStimulusModal(false)}
+        saving={saving || quickSaving}
+        editingStimulus={stimulusModalSeed && questionStimuli.some((item) => String(getEntityId(item)) === String(getEntityId(stimulusModalSeed))) ? stimulusModalSeed : null}
+        initialValues={stimulusModalSeed && !questionStimuli.some((item) => String(getEntityId(item)) === String(getEntityId(stimulusModalSeed))) ? stimulusModalSeed : null}
+        notice={stimulusModalNotice}
+        onClose={() => { setShowStimulusModal(false); setStimulusModalSeed(null); setStimulusModalNotice('') }}
         onSubmit={handleQuickCreateStimulus}
       />
     </>

@@ -1,4 +1,4 @@
-import { sanitizeQuickMessageHtml } from '../../crm/components/quickMessageHtml'
+import { sanitizeQuickMessageHtml } from '../../crm/components/quickMessageHtml.js'
 
 const HTML_TAG_PATTERN = /<\/?[a-z][\s\S]*>/i
 

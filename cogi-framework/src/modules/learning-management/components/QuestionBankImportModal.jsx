@@ -54,6 +54,85 @@ function normalizeText(value) {
   return String(value || '').trim()
 }
 
+function shouldShowOptions(type) {
+  return ['single_choice', 'multiple_choice', 'true_false'].includes(String(type || '').trim().toLowerCase())
+}
+
+function normalizeCorrectAnswerForApi(correctAnswer) {
+  if (correctAnswer === undefined || correctAnswer === null || correctAnswer === '') return null
+  if (typeof correctAnswer === 'string') return JSON.stringify(correctAnswer)
+  return correctAnswer
+}
+
+function toImportedCorrectAnswerTokens(correctAnswer) {
+  if (Array.isArray(correctAnswer)) {
+    return new Set(correctAnswer.map((item) => normalizeText(item)).filter(Boolean))
+  }
+  const token = normalizeText(correctAnswer)
+  return token ? new Set([token]) : new Set()
+}
+
+function normalizeImportedQuestionPayload(item, lookupMaps = {}) {
+  const type = normalizeText(item?.type).toLowerCase()
+  const usesOptions = shouldShowOptions(type)
+  const correctAnswerTokens = usesOptions ? toImportedCorrectAnswerTokens(item?.correctAnswer) : new Set()
+  const hasDerivedCorrectAnswer = correctAnswerTokens.size > 0
+  const existingQuestion = lookupMaps.existingQuestion || null
+
+  const options = usesOptions
+    ? normalizeArray(item?.options).map((option, index) => {
+      const optionLabel = normalizeText(option?.label) || String.fromCharCode(65 + index)
+      const optionValue = normalizeText(option?.value) || optionLabel
+      const existingOption = normalizeArray(existingQuestion?.options).find((candidate) => normalizeText(candidate?.label) === optionLabel || normalizeText(candidate?.value) === optionValue) || existingQuestion?.options?.[index] || null
+      const matchesDerivedAnswer = hasDerivedCorrectAnswer
+        ? correctAnswerTokens.has(optionLabel) || correctAnswerTokens.has(optionValue)
+        : false
+
+      return {
+        label: optionLabel,
+        value: optionValue,
+        content: option.content || '',
+        imageAsset: option?.imageAssetCode || getEntityId(existingOption?.imageAsset) || null,
+        isCorrect: hasDerivedCorrectAnswer ? matchesDerivedAnswer : option?.isCorrect === true,
+        order: Number(option?.order ?? index),
+        explanation: option.explanation || '',
+      }
+    })
+    : []
+
+  return {
+    code: item.code,
+    title: item.title || item.code,
+    questionText: item.questionText,
+    type: item.type,
+    difficulty: item.difficulty || null,
+    subject: getEntityId(lookupMaps.subjectsByCode?.get(normalizeText(item.subjectCode))) || null,
+    grade: getEntityId(lookupMaps.gradesByCode?.get(normalizeText(item.gradeCode))) || null,
+    knowledgeNode: getEntityId(lookupMaps.knowledgeNodesByCode?.get(normalizeText(item.knowledgeNodeCode))) || null,
+    skills: normalizeArray(item.skillCodes).map((code) => getEntityId(lookupMaps.skillsByCode?.get(normalizeText(code)))).filter(Boolean),
+    formulas: [],
+    stimulus: getEntityId(lookupMaps.stimuliByCode?.get(normalizeText(item.stimulusCode))) || null,
+    correctAnswer: usesOptions ? null : normalizeCorrectAnswerForApi(item?.correctAnswer),
+    explanation: item.explanation || '',
+    rubric: item.rubric ?? null,
+    questionStatus: item.questionStatus || 'draft',
+    options,
+  }
+}
+
+function buildStimulusImportPayload(item, existingStimulus = null) {
+  return {
+    code: item.code,
+    title: item.title || item.code,
+    type: item.type || 'text',
+    instruction: item.instruction || '',
+    content: item.content || '',
+    stimulusStatus: item.stimulusStatus || 'draft',
+    audioAsset: item?.audioAssetCode || getEntityId(existingStimulus?.audioAsset) || null,
+    imageAsset: item?.imageAssetCode || getEntityId(existingStimulus?.imageAsset) || null,
+  }
+}
+
 async function findByCode(loadFn, code) {
   if (!code) return null
   const payload = await loadFn({ q: code, page: 1, pageSize: 50 })
@@ -257,16 +336,7 @@ export default function QuestionBankImportModal({ visible, onClose, onImported }
 
       for (const item of normalizeArray(readBucket(packageData, 'stimuli'))) {
         const existing = await findByCode(getQuestionStimuli, normalizeText(item.code))
-        const payload = {
-          code: item.code,
-          title: item.title || item.code,
-          type: item.type || 'text',
-          instruction: item.instruction || '',
-          content: item.content || '',
-          stimulusStatus: item.stimulusStatus || 'draft',
-          audioAsset: null,
-          imageAsset: null,
-        }
+        const payload = buildStimulusImportPayload(item, existing)
         const saved = existing ? await updateQuestionStimulus(getEntityId(existing), payload) : await createQuestionStimulus(payload)
         summary[existing ? 'updated' : 'created'] += 1
         stimuliByCode.set(normalizeText(saved?.code || item.code), saved)
@@ -274,32 +344,14 @@ export default function QuestionBankImportModal({ visible, onClose, onImported }
 
       for (const item of normalizeArray(readBucket(packageData, 'questions'))) {
         const existing = await findByCode(getQuestions, normalizeText(item.code))
-        const payload = {
-          code: item.code,
-          title: item.title || item.code,
-          questionText: item.questionText,
-          type: item.type,
-          difficulty: item.difficulty || null,
-          subject: getEntityId(subjectsByCode.get(normalizeText(item.subjectCode))) || null,
-          grade: getEntityId(gradesByCode.get(normalizeText(item.gradeCode))) || null,
-          knowledgeNode: getEntityId(knowledgeNodesByCode.get(normalizeText(item.knowledgeNodeCode))) || null,
-          skills: normalizeArray(item.skillCodes).map((code) => getEntityId(skillsByCode.get(normalizeText(code)))).filter(Boolean),
-          formulas: [],
-          stimulus: getEntityId(stimuliByCode.get(normalizeText(item.stimulusCode))) || null,
-          correctAnswer: item.correctAnswer ?? null,
-          explanation: item.explanation || '',
-          rubric: item.rubric ?? null,
-          questionStatus: item.questionStatus || 'draft',
-          options: normalizeArray(item.options).map((option, index) => ({
-            label: option.label || String.fromCharCode(65 + index),
-            value: option.value || String.fromCharCode(97 + index),
-            content: option.content || '',
-            imageAsset: null,
-            isCorrect: option.isCorrect === true,
-            order: Number(option.order ?? index),
-            explanation: option.explanation || '',
-          })),
-        }
+        const payload = normalizeImportedQuestionPayload(item, {
+          subjectsByCode,
+          gradesByCode,
+          knowledgeNodesByCode,
+          skillsByCode,
+          stimuliByCode,
+          existingQuestion: existing,
+        })
         if (existing) {
           await updateQuestion(getEntityId(existing), payload)
           summary.updated += 1

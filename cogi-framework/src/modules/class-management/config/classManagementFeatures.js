@@ -47,9 +47,17 @@ const classManagementFeatures = {
       showInMenu: true,
     },
     {
+      name: 'Bài tập của tôi',
+      key: 'class.student-workspace',
+      order: 6,
+      description: 'Student portal assignments for current learner context',
+      path: '/student/assignments',
+      showInMenu: true,
+    },
+    {
       name: 'Buổi học của tôi',
       key: 'class.student-sessions',
-      order: 6,
+      order: 7,
       description: 'Student portal sessions for current learner context',
       path: '/student/sessions',
       showInMenu: true,

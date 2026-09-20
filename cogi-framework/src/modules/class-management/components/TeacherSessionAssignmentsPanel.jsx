@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { CAlert, CBadge, CButton, CCard, CCardBody, CCardHeader, CSpinner, CTable, CTableBody, CTableDataCell, CTableHead, CTableHeaderCell, CTableRow } from '@coreui/react'
 import { createTeacherSessionAssignment, getTeacherSessionAssignments } from '../services/classService'
+import { getClassSessionContentPreview } from '../utils/classSessionContentHtml'
 import { formatSessionDateTime } from '../utils/classSessionUi'
 import TeacherAssignmentDetailModal from './TeacherAssignmentDetailModal'
 import TeacherAssignmentEditorModal from './TeacherAssignmentEditorModal'
@@ -25,7 +26,7 @@ export default function TeacherSessionAssignmentsPanel({ sessionId, canManage = 
   const [createError, setCreateError] = useState('')
   const [createSaving, setCreateSaving] = useState(false)
 
-  async function load() {
+  const load = useCallback(async () => {
     if (!sessionId) {
       setRows([])
       return
@@ -40,11 +41,11 @@ export default function TeacherSessionAssignmentsPanel({ sessionId, canManage = 
     } finally {
       setLoading(false)
     }
-  }
+  }, [sessionId])
 
   useEffect(() => {
     load()
-  }, [sessionId])
+  }, [load])
 
   return (
     <>
@@ -70,7 +71,12 @@ export default function TeacherSessionAssignmentsPanel({ sessionId, canManage = 
               <CTableBody>
                 {rows.length === 0 ? <CTableRow><CTableDataCell colSpan={6} className='text-center text-body-secondary'>Chưa có assignment nào.</CTableDataCell></CTableRow> : rows.map((item) => (
                   <CTableRow key={item.id}>
-                    <CTableDataCell><div className='fw-semibold'>{item.title || '-'}</div><div className='small text-body-secondary'>{item.learnerCount || 0} learner</div></CTableDataCell>
+                    <CTableDataCell>
+                      <div className='fw-semibold'>{item.title || '-'}</div>
+                      <div className='small text-body-secondary'>{getClassSessionContentPreview(item.description, 140)}</div>
+                      {item.assessmentVisibilitySummary ? <div className='small text-body-secondary'>{item.assessmentVisibilitySummary}</div> : null}
+                      <div className='small text-body-secondary'>{item.learnerCount || 0} learner</div>
+                    </CTableDataCell>
                     <CTableDataCell>{formatSessionDateTime(item.dueAt)}</CTableDataCell>
                     <CTableDataCell><CBadge color={(STATUS_META[item.status] || STATUS_META.draft).color}>{(STATUS_META[item.status] || STATUS_META.draft).label}</CBadge></CTableDataCell>
                     <CTableDataCell>{item.taskCount || 0}</CTableDataCell>
@@ -87,6 +93,7 @@ export default function TeacherSessionAssignmentsPanel({ sessionId, canManage = 
       <TeacherAssignmentEditorModal
         visible={createOpen}
         saving={createSaving}
+        sessionId={sessionId}
         submitError={createError}
         onClose={() => !createSaving && setCreateOpen(false)}
         onSave={async (payload) => {

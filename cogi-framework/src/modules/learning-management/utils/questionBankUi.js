@@ -21,6 +21,7 @@ export const STIMULUS_TYPE_LABELS = {
 export const TAB_DEFINITIONS = [
   { key: 'questions', label: 'Câu hỏi', featureKeys: ['learning.question.manage', 'learning.learning-object.manage'] },
   { key: 'stimuli', label: 'Stimulus', featureKeys: ['learning.question-stimulus.manage', 'learning.question.manage', 'learning.learning-object.manage'] },
+  { key: 'source-sets', label: 'Bộ câu hỏi', featureKeys: ['learning.question.manage', 'learning.question-stimulus.manage', 'learning.learning-object.manage'] },
   { key: 'subjects', label: 'Môn học', featureKeys: ['learning.subject.manage', 'learning.learning-object.manage'] },
   { key: 'grades', label: 'Khối lớp', featureKeys: ['learning.grade.manage', 'learning.learning-object.manage'] },
   { key: 'skills', label: 'Kỹ năng', featureKeys: ['learning.learning-object.manage'] },

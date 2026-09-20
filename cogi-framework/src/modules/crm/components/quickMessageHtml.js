@@ -122,6 +122,7 @@ export function sanitizeQuickMessageHtml(value) {
       .replace(/<link[^>]*>/gi, '')
       .replace(/\son[a-z]+\s*=\s*(['"]).*?\1/gi, '')
       .replace(/\shref\s*=\s*(['"])(javascript:|data:|vbscript:|file:).*?\1/gi, '')
+      .replace(/<a\b([^>]*)>/gi, (_, rawAttributes) => sanitizeAnchorOpenTag(rawAttributes))
       .replace(/\sclass\s*=\s*(['"])(.*?)\1/gi, (_, quote, value) => {
         const className = sanitizeClassName(value)
         return className ? ` class=${quote}${className}${quote}` : ''
@@ -217,6 +218,34 @@ function sanitizeAnchorHref(value) {
   } catch {
     return ''
   }
+}
+
+function sanitizeAnchorOpenTag(rawAttributes) {
+  const attributes = toText(rawAttributes)
+  const hrefMatch = attributes.match(/\shref\s*=\s*(['"])(.*?)\1/i)
+  const titleMatch = attributes.match(/\stitle\s*=\s*(['"])(.*?)\1/i)
+  const href = sanitizeAnchorHref(hrefMatch?.[2] || '')
+  const title = toText(titleMatch?.[2]).trim()
+
+  const sanitizedAttributes = []
+  if (href) {
+    sanitizedAttributes.push(`href="${escapeHtmlAttribute(href)}"`)
+    sanitizedAttributes.push('target="_blank"')
+    sanitizedAttributes.push('rel="noopener noreferrer"')
+  }
+  if (title) {
+    sanitizedAttributes.push(`title="${escapeHtmlAttribute(title)}"`)
+  }
+
+  return sanitizedAttributes.length > 0 ? `<a ${sanitizedAttributes.join(' ')}>` : '<a>'
+}
+
+function escapeHtmlAttribute(value) {
+  return toText(value)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
 }
 
 function sanitizeClassName(value) {

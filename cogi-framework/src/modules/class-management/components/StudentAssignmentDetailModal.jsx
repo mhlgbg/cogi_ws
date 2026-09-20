@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { CAlert, CBadge, CButton, CCard, CCardBody, CCardHeader, CModal, CModalBody, CModalFooter, CModalHeader, CModalTitle, CSpinner } from '@coreui/react'
-import { getStudentAssignmentDetail, saveStudentAssignmentSubmissionDraft, submitStudentAssignmentSubmission, updateStudentAssignmentTodoProgress } from '../services/classService'
+import { getStudentAssignmentDetail, saveStudentAssignmentSubmissionDraft, startStudentAssignmentAssessmentAttempt, submitStudentAssignmentSubmission, updateStudentAssignmentTodoProgress } from '../services/classService'
 import { sanitizeClassSessionContentHtml } from '../utils/classSessionContentHtml'
 import { formatSessionDateTime } from '../utils/classSessionUi'
 import StudentSubmissionEditorModal from './StudentSubmissionEditorModal'
@@ -22,6 +22,13 @@ function HtmlView({ value }) {
   return html ? <div dangerouslySetInnerHTML={{ __html: html }} /> : <div className='text-body-secondary'>Chưa có nội dung.</div>
 }
 
+function getAssessmentTaskActionLabel(task) {
+  if (task?.myProgress?.status === 'in_progress') return 'Tiếp tục làm bài'
+  if ((task?.myProgress?.status === 'completed' || task?.myProgress?.status === 'submitted') && task?.assessmentSettings?.showScoreAfterSubmit !== false) return 'Xem kết quả'
+  if (task?.myProgress?.status === 'completed' || task?.myProgress?.status === 'submitted') return 'Mở bài kiểm tra'
+  return 'Làm bài kiểm tra'
+}
+
 export default function StudentAssignmentDetailModal({ visible = false, assignmentId = null, learnerId = '', onClose, onChanged }) {
   const [loading, setLoading] = useState(false)
   const [detail, setDetail] = useState(null)
@@ -30,7 +37,7 @@ export default function StudentAssignmentDetailModal({ visible = false, assignme
   const [submitError, setSubmitError] = useState('')
   const [submissionTask, setSubmissionTask] = useState(null)
 
-  async function load() {
+  const load = useCallback(async () => {
     if (!assignmentId || !learnerId) {
       setDetail(null)
       return
@@ -45,12 +52,12 @@ export default function StudentAssignmentDetailModal({ visible = false, assignme
     } finally {
       setLoading(false)
     }
-  }
+  }, [assignmentId, learnerId])
 
   useEffect(() => {
     if (!visible) return
     load()
-  }, [assignmentId, learnerId, visible])
+  }, [load, visible])
 
   return (
     <>
@@ -82,7 +89,7 @@ export default function StudentAssignmentDetailModal({ visible = false, assignme
                   <CCardBody className='d-flex flex-column gap-3'>
                     <HtmlView value={task.description} />
                     {task?.myProgress?.teacherFeedback ? <div><strong>Feedback:</strong><HtmlView value={task.myProgress.teacherFeedback} /></div> : null}
-                    {task?.myProgress?.score !== null && task?.myProgress?.score !== undefined ? <div><strong>Điểm:</strong> {task.myProgress.score}{task?.myProgress?.maxScore ? ` / ${task.myProgress.maxScore}` : ''}</div> : null}
+                    {(task.taskType !== 'assessment' || task?.assessmentSettings?.showScoreAfterSubmit !== false) && task?.myProgress?.score !== null && task?.myProgress?.score !== undefined ? <div><strong>Điểm:</strong> {task.myProgress.score}{task?.myProgress?.maxScore ? ` / ${task.myProgress.maxScore}` : ''}</div> : null}
 
                     {task.taskType === 'todo' ? (
                       <div className='d-flex gap-2 flex-wrap'>
@@ -123,6 +130,39 @@ export default function StudentAssignmentDetailModal({ visible = false, assignme
                         {(task.submissions || []).map((submission) => (
                           <div key={submission.id} className='small text-body-secondary'>Version {submission.version} · {submission.status} · {formatSessionDateTime(submission.submittedAt)}</div>
                         ))}
+                      </div>
+                    ) : null}
+
+                    {task.taskType === 'assessment' ? (
+                      <div className='d-flex flex-column gap-2'>
+                        {task.assessment ? (
+                          <div className='small text-body-secondary'>
+                            {`${task.assessment.code || '-'} · ${task.assessment.title || '-'} · ${task.assessmentVersion?.code || '-'} · ${task.assessmentVersion?.durationMinutes || 0} phút · ${task.assessmentVersion?.questionCount || 0} câu`}
+                          </div>
+                        ) : null}
+                        <div className='d-flex gap-2 flex-wrap'>
+                          <CButton size='sm' color='primary' disabled={saving === `assessment-${task.id}` || !task?.assessment?.id} onClick={async () => {
+                            setSaving(`assessment-${task.id}`)
+                            setSubmitError('')
+                            try {
+                              const payload = await startStudentAssignmentAssessmentAttempt(task.id, { learnerId })
+                              await load()
+                              const targetPath = payload?.maxAttemptsReached && payload?.showScoreAfterSubmit !== false
+                                ? (payload?.resultPath || payload?.runnerPath)
+                                : (payload?.runnerPath || payload?.resultPath)
+                              if (targetPath) {
+                                window.open(targetPath, '_blank', 'noopener,noreferrer')
+                              }
+                            } catch (requestError) {
+                              setSubmitError(getApiMessage(requestError, 'Không thể mở bài kiểm tra.'))
+                            } finally {
+                              setSaving('')
+                            }
+                          }}>{getAssessmentTaskActionLabel(task)}</CButton>
+                        </div>
+                        {task?.myProgress?.status === 'submitted' && task?.assessmentSettings?.showScoreAfterSubmit === false ? <div className='small text-body-secondary'>Bài làm đã được nộp.</div> : null}
+                        {task?.myProgress?.status === 'submitted' && task?.assessmentSettings?.showScoreAfterSubmit !== false && (task?.myProgress?.score === null || task?.myProgress?.score === undefined) ? <div className='small text-body-secondary'>Đã nộp – đang chờ chấm.</div> : null}
+                        {task?.myProgress?.status === 'completed' && task?.assessmentSettings?.showScoreAfterSubmit !== false ? <div className='small text-success'>Bài làm đã được nộp và đã có kết quả.</div> : null}
                       </div>
                     ) : null}
                   </CCardBody>

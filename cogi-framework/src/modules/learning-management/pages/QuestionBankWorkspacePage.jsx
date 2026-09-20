@@ -16,6 +16,7 @@ import {
 } from '@coreui/react'
 import { useFeature } from '../../../contexts/FeatureContext'
 import QuestionBankQuestionsTab from '../components/QuestionBankQuestionsTab'
+import QuestionBankSourceSetsTab from '../components/QuestionBankSourceSetsTab'
 import QuestionBankStimuliTab from '../components/QuestionBankStimuliTab'
 import ReferenceDataTab from '../components/ReferenceDataTab'
 import {
@@ -134,6 +135,7 @@ export default function QuestionBankWorkspacePage() {
 
             {activeTab === 'questions' ? <QuestionBankQuestionsTab bootstrap={bootstrap} feature={feature} setWorkspaceActions={setWorkspaceActions} onRefreshBootstrap={loadBootstrap} /> : null}
             {activeTab === 'stimuli' ? <QuestionBankStimuliTab setWorkspaceActions={setWorkspaceActions} /> : null}
+            {activeTab === 'source-sets' ? <QuestionBankSourceSetsTab setWorkspaceActions={setWorkspaceActions} /> : null}
             {activeTab === 'subjects' ? (
               <ReferenceDataTab
                 title='Môn học'

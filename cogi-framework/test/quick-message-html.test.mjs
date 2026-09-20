@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 const { extractQuickMessageHtmlFragment, sanitizeQuickMessageHtml } = await import('../src/modules/crm/components/quickMessageHtml.js')
 const { getQuickMessageRenderedHtml, normalizeQuickMessageContentType } = await import('../src/modules/crm/components/quickMessageUi.js')
+const { sanitizeClassSessionContentHtml, getClassSessionContentPreview } = await import('../src/modules/class-management/utils/classSessionContentHtml.js')
 
 test('quick message html frontend helper sanitizes full documents for preview', () => {
   const html = sanitizeQuickMessageHtml(`<!DOCTYPE html><html><head><title>X</title><script>alert(1)</script></head><body><h2 onclick="alert(1)">Hello</h2><a href="javascript:alert(1)">Bad</a><table><tr><td>1</td></tr></table></body></html>`)
@@ -43,4 +44,27 @@ test('quick message html frontend helper keeps safe layout styles for rich quick
   assert.doesNotMatch(html, /background-image/i)
   assert.doesNotMatch(html, /javascript:/i)
   assert.doesNotMatch(html, /<script/i)
+})
+
+test('assignment html helpers keep rich detail content and shorten list preview safely', () => {
+  const richHtml = '<p>Hướng dẫn <strong>quan trọng</strong>.</p><ul><li>Xem <a href="https://example.com/a">link A</a></li><li>Xem <a href="https://example.com/b">link B</a></li></ul>'
+  const detailHtml = sanitizeClassSessionContentHtml(richHtml)
+  const preview = getClassSessionContentPreview(richHtml, 40)
+
+  assert.match(detailHtml, /<strong>quan trọng<\/strong>/)
+  assert.match(detailHtml, /href="https:\/\/example.com\/a"/)
+  assert.match(detailHtml, /target="_blank"/)
+  assert.match(detailHtml, /rel="noopener noreferrer"/)
+  assert.equal(preview.includes('<a'), false)
+  assert.equal(preview.includes('<strong'), false)
+  assert.match(preview, /Hướng dẫn\s+quan trọng\s*\./)
+})
+
+test('assignment html helpers preserve legacy plain text content', () => {
+  const plainText = 'Dong 1\n\nDong 2 voi link https://example.com'
+  const detailHtml = sanitizeClassSessionContentHtml(plainText)
+  const preview = getClassSessionContentPreview(plainText, 80)
+
+  assert.match(detailHtml, /<p>Dong 1<\/p><p>Dong 2 voi link https:\/\/example.com<\/p>/)
+  assert.equal(preview, 'Dong 1 Dong 2 voi link https://example.com')
 })
