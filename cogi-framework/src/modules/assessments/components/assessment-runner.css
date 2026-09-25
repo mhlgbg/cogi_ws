@@ -119,6 +119,17 @@
   max-height: min(62vh, 560px);
 }
 
+.assessment-runner-stimulus .quick-message-html-content,
+.assessment-runner-stimulus .quick-message-text-content {
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.assessment-runner-stimulus .quick-message-html-content table {
+  display: block;
+  overflow-x: auto;
+}
+
 .assessment-runner-option-image {
   max-height: 280px;
 }

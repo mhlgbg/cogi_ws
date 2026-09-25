@@ -5,6 +5,7 @@ import CandidateAssessmentResultView from '../../../features/public-assessment/c
 import { allowAssessmentCampaignRetake, cancelAssessmentCampaignAttempt, getApiMessage as getCampaignApiMessage } from '../../assessment-campaigns/services/assessmentCampaignService'
 import { formatDateTime, formatScorePair, getAnswerScoreStatusBadgeColor, getAnswerScoreStatusLabel, getCefrLabel, getFileAssetUrl, getPlacementConfirmationBadgeColor, getPlacementConfirmationStatusLabel, getQuestionTypeLabel, getResultStatusBadgeColor, getResultStatusLabel, getScoringMethodLabel, getSpeakingReviewStatusLabel } from '../components/assessmentUi'
 import { completeSpeakingReview, confirmAssessmentPlacement, createSpeakingReviewForResult, getApiMessage, getAssessmentResultCandidatePreview, getAssessmentResultDetail, recalculateAssessmentResult, rescoreAssessmentAttempt, saveSpeakingReview, setManualAnswerScore, startSpeakingReview } from '../services/assessmentService'
+import StimulusContent, { StimulusInstruction } from '../../learning-management/components/StimulusContent'
 
 const TABS = [
   { key: 'overview', label: 'Tổng quan' },
@@ -566,8 +567,16 @@ export default function AssessmentResultDetailPage() {
                 <CBadge color={getAnswerScoreStatusBadgeColor(item.status)}>{getAnswerScoreStatusLabel(item.status)}</CBadge>
               </CCardHeader>
               <CCardBody>
-                <div className='mb-3'><strong>Câu hỏi:</strong> {item.questionPrompt || '-'}</div>
-                {item.stimulus?.instruction || item.stimulus?.content ? <div className='small text-body-secondary mb-3'>{item.stimulus?.instruction || item.stimulus?.content}</div> : null}
+                <div className='mb-3'>
+                  <strong>Câu hỏi:</strong>
+                  <StimulusContent value={item.questionPrompt} contentType={item.questionPromptType} className='mt-2' />
+                </div>
+                {item.stimulus?.instruction || item.stimulus?.content ? (
+                  <div className='small text-body-secondary mb-3'>
+                    <StimulusInstruction value={item.stimulus?.instruction} className='mb-2' />
+                    <StimulusContent value={item.stimulus?.content} contentType={item.stimulus?.contentType} />
+                  </div>
+                ) : null}
                 <div className='mb-3'><strong>Bài làm:</strong></div>
                 <div className='border rounded-3 p-3 bg-body-tertiary text-break'>{renderCandidateAnswer(item)}</div>
                 <div className='small text-body-secondary mt-3'>Điểm: {item.awardedPoints === null || item.awardedPoints === undefined ? `- / ${item.maxPoints ?? '-'}` : `${item.awardedPoints} / ${item.maxPoints ?? '-'}`}</div>
@@ -594,8 +603,13 @@ export default function AssessmentResultDetailPage() {
                   <CRow className='g-3'>
                     <CCol lg={8}>
                       <div className='mb-2'><strong>Đề bài</strong></div>
-                      <div className='mb-3'>{item.questionPrompt || '-'}</div>
-                      {item.stimulus?.instruction || item.stimulus?.content ? <div className='small text-body-secondary mb-3'>{item.stimulus?.instruction || item.stimulus?.content}</div> : null}
+                      <div className='mb-3'><StimulusContent value={item.questionPrompt} contentType={item.questionPromptType} /></div>
+                      {item.stimulus?.instruction || item.stimulus?.content ? (
+                        <div className='small text-body-secondary mb-3'>
+                          <StimulusInstruction value={item.stimulus?.instruction} className='mb-2' />
+                          <StimulusContent value={item.stimulus?.content} contentType={item.stimulus?.contentType} />
+                        </div>
+                      ) : null}
                       <div className='mb-2'><strong>Bài làm của thí sinh</strong></div>
                       <div className='border rounded-3 p-3 bg-body-tertiary text-break'>{renderCandidateAnswer(item)}</div>
                     </CCol>

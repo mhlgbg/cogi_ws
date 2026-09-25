@@ -1,4 +1,5 @@
 import { CBadge } from '@coreui/react'
+import StimulusContent from './StimulusContent'
 import StimulusPreview from './StimulusPreview'
 import { getFileAssetUrl, getQuestionTypeLabel, getStatusBadgeColor } from '../utils/questionBankUi'
 
@@ -6,6 +7,8 @@ export default function QuestionPreview({ question }) {
   if (!question) {
     return <div className='small text-body-secondary'>Chua co du lieu xem truoc.</div>
   }
+
+  const questionImageUrl = getFileAssetUrl(question.questionImageAsset)
 
   return (
     <div className='border rounded-3 p-3 bg-body-tertiary'>
@@ -21,7 +24,8 @@ export default function QuestionPreview({ question }) {
 
       <div className='mb-3'>
         <div className='small text-body-secondary mb-1'>{getQuestionTypeLabel(question.type)}</div>
-        <div dangerouslySetInnerHTML={{ __html: question.questionText || '' }} />
+        {questionImageUrl ? <img className='mb-3' src={questionImageUrl} alt={question.questionImageAsset?.originalName || question.title || question.code || 'question-image'} style={{ width: '100%', maxWidth: 320, maxHeight: 220, objectFit: 'contain', borderRadius: 12 }} /> : null}
+        <StimulusContent value={question.questionText} contentType={question.questionTextType} />
       </div>
 
       {Array.isArray(question.options) && question.options.length > 0 ? (

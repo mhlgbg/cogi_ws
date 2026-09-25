@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   CAlert,
   CBadge,
@@ -21,12 +22,13 @@ import {
   CTableHeaderCell,
   CTableRow,
 } from '@coreui/react'
-import { createQuestionStimulus, deleteQuestionStimulus, getQuestionStimuli, updateQuestionStimulus } from '../services/learningObjectApi'
+import { createQuestionStimulus, deleteQuestionStimulus, getQuestionStimuli, getQuestionStimulusUsage, updateQuestionStimulus } from '../services/learningObjectApi'
 import QuestionStimulusEditorModal from './QuestionStimulusEditorModal'
 import StimulusPreview from './StimulusPreview'
 import { buildPages, formatDateTime, getApiMessage, getEntityId, getStatusBadgeColor, getStimulusTypeLabel, normalizePagination } from '../utils/questionBankUi'
 
 export default function QuestionBankStimuliTab({ setWorkspaceActions }) {
+  const [searchParams] = useSearchParams()
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [rows, setRows] = useState([])
@@ -39,9 +41,13 @@ export default function QuestionBankStimuliTab({ setWorkspaceActions }) {
   const [success, setSuccess] = useState('')
   const [showEditor, setShowEditor] = useState(false)
   const [editingStimulus, setEditingStimulus] = useState(null)
+  const [highlightedStimulusId, setHighlightedStimulusId] = useState('')
+  const highlightedRowRef = useRef(null)
 
   const pagination = normalizePagination(meta?.pagination)
   const pages = useMemo(() => buildPages(page, pagination.pageCount), [page, pagination.pageCount])
+  const requestedStimulusId = String(searchParams.get('stimulusId') || '').trim()
+  const requestedStimulusCode = String(searchParams.get('stimulusCode') || searchParams.get('q') || '').trim()
 
   useEffect(() => {
     setWorkspaceActions?.(<CButton color='primary' onClick={() => { setEditingStimulus(null); setShowEditor(true) }}>+ Tạo Stimulus</CButton>)
@@ -49,8 +55,32 @@ export default function QuestionBankStimuliTab({ setWorkspaceActions }) {
   }, [setWorkspaceActions])
 
   useEffect(() => {
+    if (!requestedStimulusId && !requestedStimulusCode) return
+    if (requestedStimulusCode && qDraft !== requestedStimulusCode) {
+      setQDraft(requestedStimulusCode)
+    }
+    setFilters((prev) => {
+      const nextQ = requestedStimulusCode || prev.q
+      if (prev.q === nextQ) return prev
+      return { ...prev, q: nextQ }
+    })
+    setPage(1)
+  }, [qDraft, requestedStimulusCode, requestedStimulusId])
+
+  useEffect(() => {
     loadRows()
   }, [filters, page, pageSize])
+
+  useEffect(() => {
+    const matchedRow = rows.find((item) => String(getEntityId(item)) === requestedStimulusId || (requestedStimulusCode && String(item?.code || '').trim() === requestedStimulusCode))
+    if (!matchedRow) {
+      if (!requestedStimulusId && !requestedStimulusCode) setHighlightedStimulusId('')
+      return
+    }
+
+    setHighlightedStimulusId(String(getEntityId(matchedRow) || ''))
+    highlightedRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [rows, requestedStimulusCode, requestedStimulusId])
 
   async function loadRows() {
     setLoading(true)
@@ -92,12 +122,30 @@ export default function QuestionBankStimuliTab({ setWorkspaceActions }) {
   }
 
   async function handleDelete(row) {
-    if (!window.confirm(`Bạn chắc chắn muốn xóa stimulus ${row?.code || ''}?`)) return
     setError('')
     setSuccess('')
     try {
-      await deleteQuestionStimulus(getEntityId(row))
-      setSuccess('Xóa stimulus thành công')
+      const usage = await getQuestionStimulusUsage(getEntityId(row))
+      if (Number(usage?.totalLiveReferences || 0) > 0) {
+        setError(`Không thể xóa stimulus. Đang được dùng bởi ${usage?.questionCount || 0} Question và ${usage?.partCount || 0} Part.`)
+        return
+      }
+
+      const orphanMediaLabels = [usage?.media?.audioAsset, usage?.media?.imageAsset]
+        .filter((item) => item?.asset?.id && item?.canDelete === true)
+        .map((item) => item?.asset?.code || item?.asset?.fileName || item?.asset?.originalName)
+        .filter(Boolean)
+
+      if (!window.confirm(`Bạn chắc chắn muốn xóa stimulus ${row?.code || ''}?`)) return
+
+      let deleteUnusedMedia = false
+      if (orphanMediaLabels.length > 0) {
+        deleteUnusedMedia = window.confirm(`Stimulus này không còn được sử dụng. Có ${orphanMediaLabels.length} file media cũng không còn reference:\n- ${orphanMediaLabels.join('\n- ')}\n\nBạn có muốn xóa luôn các file media không dùng này không?`)
+      }
+
+      const result = await deleteQuestionStimulus(getEntityId(row), { deleteUnusedMedia })
+      const deletedMediaCount = Array.isArray(result?.deletedMediaAssetIds) ? result.deletedMediaAssetIds.length : 0
+      setSuccess(deletedMediaCount > 0 ? `Xóa stimulus thành công. Đã dọn ${deletedMediaCount} file media không còn được sử dụng.` : 'Xóa stimulus thành công')
       await loadRows()
     } catch (requestError) {
       const message = getApiMessage(requestError, 'Không xóa được stimulus')
@@ -151,7 +199,11 @@ export default function QuestionBankStimuliTab({ setWorkspaceActions }) {
                   {rows.length === 0 ? (
                     <CTableRow><CTableDataCell colSpan={7} className='text-center text-body-secondary'>Chưa có stimulus.</CTableDataCell></CTableRow>
                   ) : rows.map((item) => (
-                    <CTableRow key={getEntityId(item) || item.code}>
+                    <CTableRow
+                      key={getEntityId(item) || item.code}
+                      ref={String(getEntityId(item) || '') === highlightedStimulusId ? highlightedRowRef : null}
+                      style={String(getEntityId(item) || '') === highlightedStimulusId ? { boxShadow: 'inset 0 0 0 9999px rgba(13, 110, 253, 0.08)' } : undefined}
+                    >
                       <CTableDataCell>{item.code || '-'}</CTableDataCell>
                       <CTableDataCell>
                         <div className='fw-semibold'>{item.title || '-'}</div>

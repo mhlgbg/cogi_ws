@@ -19,7 +19,7 @@ function getAudioUiState({
   const normalizedPlayCount = Math.max(0, Number(playCount || 0))
   const normalizedPlayLimit = hasLimit ? Math.max(0, Number(playLimit || 0)) : null
   const playbackState = loadingAudio ? 'loading' : isPlaying ? 'playing' : normalizedPlayCount > 0 && hasAudioCapability && normalizedRemaining === 0 && listenSatisfied !== true ? 'inactive_after_last_registered' : 'idle'
-  const isPlaybackActive = playbackState === 'loading' || playbackState === 'playing' || playbackState === 'paused'
+  const isPlaybackActive = playbackState === 'loading' || playbackState === 'playing'
   const isLastPlayActive = hasLimit && normalizedRemaining === 0 && (loadingAudio || isPlaying)
   const isExhausted = hasLimit && normalizedRemaining === 0 && !isLastPlayActive
   const canStartNewPlay = hasAudioCapability && (!hasLimit || normalizedRemaining > 0)
@@ -31,11 +31,9 @@ function getAudioUiState({
     canStartNewPlay,
     playbackState,
     statusLabel: hasLimit
-      ? isLastPlayActive
-        ? `Đang sử dụng lượt ${normalizedPlayCount}/${normalizedPlayLimit}`
-        : normalizedRemaining > 0
-          ? `Còn ${normalizedRemaining} lượt nghe`
-          : 'Đã hết lượt nghe'
+      ? normalizedRemaining > 0
+        ? `Còn ${normalizedRemaining} lượt nghe`
+        : 'Đã hết lượt nghe'
       : 'Không giới hạn lượt nghe',
     playButtonLabel: loadingAudio
       ? 'Đang chuẩn bị...'
@@ -71,7 +69,6 @@ const AudioStimulusPlayer = forwardRef(function AudioStimulusPlayer({ attemptId,
   const requirementEnabled = hasAudioCapability && threshold > 0
   const listenSatisfied = audioState?.listenRequirementSatisfied === true
   const progressRatio = Number(audioState?.currentPlaybackRatio || 0)
-  const paused = audioState?.isPaused === true
   const uiState = getAudioUiState({
     hasAudioCapability,
     hasLimit,
@@ -79,7 +76,7 @@ const AudioStimulusPlayer = forwardRef(function AudioStimulusPlayer({ attemptId,
     playCount: audioState?.audioPlayCount,
     playLimit: audioState?.audioPlayLimit,
     loadingAudio,
-    isPlaying: audioState?.isPlaying === true || paused,
+    isPlaying: audioState?.isPlaying === true,
     listenSatisfied,
     requirementEnabled,
   })
@@ -105,10 +102,10 @@ const AudioStimulusPlayer = forwardRef(function AudioStimulusPlayer({ attemptId,
       playbackRef.current.maxListenedTime = Math.max(playbackRef.current.maxListenedTime, currentTime)
     }
     const currentPlaybackRatio = duration > 0 ? Math.min(1, playbackRef.current.maxListenedTime / duration) : 0
-    onSyncState?.({ currentPlaybackRatio })
+    onSyncState?.(assessmentQuestionId, { currentPlaybackRatio })
     if (requirementEnabled && listenSatisfied !== true && playbackRef.current.thresholdNotified === false && duration > 0 && currentPlaybackRatio >= threshold) {
       playbackRef.current.thresholdNotified = true
-      onMarkListenSatisfied?.(playbackRef.current.playId)
+      onMarkListenSatisfied?.(assessmentQuestionId, playbackRef.current.playId)
     }
   }
 
@@ -117,17 +114,17 @@ const AudioStimulusPlayer = forwardRef(function AudioStimulusPlayer({ attemptId,
       preparedMediaUrlRef.current = ''
       playbackRef.current.playbackStarted = true
       playbackRef.current.listening = true
-      onSyncState?.({ isPlaying: true })
+      onSyncState?.(assessmentQuestionId, { isPlaying: true })
     }
     audio.onplaying = () => {
       playbackRef.current.playbackStarted = true
       playbackRef.current.listening = true
-      onSyncState?.({ isPlaying: true })
+      onSyncState?.(assessmentQuestionId, { isPlaying: true })
     }
     audio.onpause = () => {
       playbackRef.current.listening = false
       syncProgress(audio)
-      onSyncState?.({ isPlaying: false, isPaused: audio.ended !== true })
+      onSyncState?.(assessmentQuestionId, { isPlaying: false, isPaused: audio.ended !== true })
     }
     audio.ontimeupdate = () => {
       syncProgress(audio)
@@ -144,15 +141,15 @@ const AudioStimulusPlayer = forwardRef(function AudioStimulusPlayer({ attemptId,
     audio.onended = () => {
       playbackRef.current.listening = false
       syncProgress(audio)
-      onSyncState?.({ isPlaying: false, isPaused: false, currentPlaybackRatio: 1 })
+      onSyncState?.(assessmentQuestionId, { isPlaying: false, isPaused: false, currentPlaybackRatio: 1 })
       clearPlaybackSession()
       audioRef.current = null
     }
     audio.onerror = () => {
       const started = playbackRef.current.playbackStarted === true
       setAudioError('Không thể tải tệp âm thanh. Vui lòng thử lại hoặc liên hệ bộ phận hỗ trợ.')
-      onSyncState?.({ isPlaying: false, isPaused: false })
-      if (!started) onSyncState?.({ mediaFailedBeforePlayback: true })
+      onSyncState?.(assessmentQuestionId, { isPlaying: false, isPaused: false })
+      if (!started) onSyncState?.(assessmentQuestionId, { mediaFailedBeforePlayback: true })
       clearPlaybackSession()
       audioRef.current = null
     }
@@ -166,7 +163,7 @@ const AudioStimulusPlayer = forwardRef(function AudioStimulusPlayer({ attemptId,
       audioRef.current.load?.()
       audioRef.current = null
     }
-    onSyncState?.({ isPlaying: false, isPaused: false, currentPlaybackRatio: 0 })
+    onSyncState?.(assessmentQuestionId, { isPlaying: false, isPaused: false, currentPlaybackRatio: 0 })
     clearPlaybackSession()
   }
 
@@ -190,7 +187,7 @@ const AudioStimulusPlayer = forwardRef(function AudioStimulusPlayer({ attemptId,
     setAudioError('')
     try {
       let playState = null
-      playState = await onRegisterPlay?.(attemptId, assessmentQuestionId)
+      playState = await onRegisterPlay?.(assessmentQuestionId)
       let nextAudioUrl = toAbsoluteUrl(playState?.mediaUrl || stimulus?.audioAsset?.runtimeUrl || '')
       preparedMediaUrlRef.current = nextAudioUrl
       if (!nextAudioUrl) throw new Error('MEDIA_URL_MISSING')
@@ -200,30 +197,14 @@ const AudioStimulusPlayer = forwardRef(function AudioStimulusPlayer({ attemptId,
       audioRef.current = audio
       playbackRef.current.playId = String(playState?.playId || '')
       attachAudioEvents(audio)
-      onSyncState?.({ ...(playState || {}), isPlaying: false, isPaused: false, currentPlaybackRatio: 0, mediaFailedBeforePlayback: false })
+      onSyncState?.(assessmentQuestionId, { ...(playState || {}), isPlaying: false, isPaused: false, currentPlaybackRatio: 0, mediaFailedBeforePlayback: false })
       await audio.play()
     } catch (error) {
       setAudioError('Không thể tải tệp âm thanh. Vui lòng thử lại hoặc liên hệ bộ phận hỗ trợ.')
-      onSyncState?.({ isPlaying: false, isPaused: false })
+      onSyncState?.(assessmentQuestionId, { isPlaying: false, isPaused: false })
       clearPlaybackSession()
     } finally {
       setLoadingAudio(false)
-    }
-  }
-
-  function handlePause() {
-    if (audioRef.current) {
-      audioRef.current.pause()
-    }
-  }
-
-  async function handleResume() {
-    if (!audioRef.current || disabled) return
-    try {
-      await audioRef.current.play()
-    } catch {
-      setAudioError('Không thể tiếp tục phát tệp âm thanh. Vui lòng thử lại hoặc liên hệ bộ phận hỗ trợ.')
-      onSyncState?.({ isPlaying: false, isPaused: false })
     }
   }
 
@@ -231,10 +212,9 @@ const AudioStimulusPlayer = forwardRef(function AudioStimulusPlayer({ attemptId,
     <div className='assessment-runner-audio-box'>
       {audioError ? <CAlert color='warning' className='mb-0'>{audioError}</CAlert> : null}
       <div className='assessment-runner-audio-actions'>
-        <CButton color='primary' onClick={paused ? handleResume : handlePlay} disabled={disabled || loadingAudio || (!paused && uiState.isExhausted) || !hasAudioCapability}>{readOnly ? 'Audio khóa sau khi nộp' : paused ? 'Tiếp tục' : uiState.playButtonLabel}</CButton>
-        <CButton color='secondary' variant='outline' onClick={handlePause} disabled={disabled || !audioState?.isPlaying}>Tạm dừng</CButton>
+        <CButton color='primary' onClick={handlePlay} disabled={disabled || loadingAudio || uiState.isPlaybackActive || uiState.isExhausted || !hasAudioCapability}>{readOnly ? 'Audio khóa sau khi nộp' : uiState.playButtonLabel}</CButton>
         {hasLimit
-          ? <span className='small text-body-secondary'>{readOnly ? `Đã sử dụng ${audioState?.audioPlayCount || 0}/${audioState?.audioPlayLimit} lượt nghe` : uiState.statusLabel}</span>
+          ? <span className='small text-body-secondary'>{readOnly ? `Còn ${Math.max(0, Number(audioState?.remaining ?? 0))} lượt nghe` : uiState.statusLabel}</span>
           : <span className='small text-body-secondary'>Không giới hạn lượt nghe</span>}
         {audioState?.allowSeek === false ? <span className='small text-body-secondary'>Không cho tua audio</span> : null}
         {requirementEnabled && listenSatisfied ? <span className='small text-body-secondary'>Bạn có thể trả lời.</span> : null}

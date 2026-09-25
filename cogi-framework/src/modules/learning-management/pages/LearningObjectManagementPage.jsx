@@ -3,6 +3,7 @@ import {
   CAlert,
   CBadge,
   CButton,
+  CButtonGroup,
   CCard,
   CCardBody,
   CCardHeader,
@@ -27,6 +28,8 @@ import {
   CTableHeaderCell,
   CTableRow,
 } from '@coreui/react'
+import SimpleHtmlEditor from '../../admission-management/components/SimpleHtmlEditor'
+import { normalizeStimulusContentType, STIMULUS_CONTENT_TYPE_OPTIONS } from '../components/StimulusContent'
 import {
   attachQuestionToLearningObject,
   createContentBlock,
@@ -243,6 +246,7 @@ function emptyQuestionForm() {
     code: '',
     title: '',
     questionText: '',
+    questionTextType: 'plain_text',
     type: 'single_choice',
     subject: '',
     grade: '',
@@ -866,6 +870,7 @@ export default function LearningObjectManagementPage() {
         code: questionForm.code,
         title: questionForm.title,
         questionText: questionForm.questionText,
+        questionTextType: normalizeStimulusContentType(questionForm.questionTextType),
         type: questionForm.type,
         subject: questionForm.subject || null,
         grade: questionForm.grade || null,
@@ -1416,7 +1421,27 @@ export default function LearningObjectManagementPage() {
           <CRow className='g-3'>
             <CCol md={4}><CFormLabel>Code</CFormLabel><CFormInput value={questionForm.code} onChange={(event) => setQuestionForm((prev) => ({ ...prev, code: event.target.value }))} /></CCol>
             <CCol md={8}><CFormLabel>Title</CFormLabel><CFormInput value={questionForm.title} onChange={(event) => setQuestionForm((prev) => ({ ...prev, title: event.target.value }))} /></CCol>
-            <CCol xs={12}><CFormLabel>Question Text</CFormLabel><CFormTextarea rows={4} value={questionForm.questionText} onChange={(event) => setQuestionForm((prev) => ({ ...prev, questionText: event.target.value }))} /></CCol>
+            <CCol xs={12}>
+              <div className='d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2'>
+                <CFormLabel className='mb-0'>Question Text</CFormLabel>
+                <CButtonGroup size='sm' role='group'>
+                  {STIMULUS_CONTENT_TYPE_OPTIONS.map((item) => (
+                    <CButton
+                      key={item.value}
+                      type='button'
+                      color={normalizeStimulusContentType(questionForm.questionTextType) === item.value ? 'primary' : 'secondary'}
+                      variant={normalizeStimulusContentType(questionForm.questionTextType) === item.value ? undefined : 'outline'}
+                      onClick={() => setQuestionForm((prev) => ({ ...prev, questionTextType: item.value }))}
+                    >
+                      {item.label}
+                    </CButton>
+                  ))}
+                </CButtonGroup>
+              </div>
+              {normalizeStimulusContentType(questionForm.questionTextType) === 'html'
+                ? <SimpleHtmlEditor label='' value={questionForm.questionText} onChange={(value) => setQuestionForm((prev) => ({ ...prev, questionText: value }))} rows={8} showImageControls={false} allowHtmlMode helperText='HTML đơn giản sẽ được sanitize an toàn khi lưu.' />
+                : <CFormTextarea rows={4} value={questionForm.questionText} onChange={(event) => setQuestionForm((prev) => ({ ...prev, questionText: event.target.value }))} />}
+            </CCol>
             <CCol md={4}><CFormLabel>Type</CFormLabel><CFormSelect value={questionForm.type} onChange={(event) => setQuestionForm((prev) => ({ ...prev, type: event.target.value }))}>{questionTypes.map((item) => <option key={item} value={item}>{item}</option>)}</CFormSelect></CCol>
             <CCol md={4}><CFormLabel>Subject</CFormLabel><CFormSelect value={questionForm.subject} onChange={(event) => setQuestionForm((prev) => ({ ...prev, subject: event.target.value }))}><option value=''>Chọn</option>{subjects.map((item) => <option key={getEntityId(item)} value={getEntityId(item)}>{item.title || item.code}</option>)}</CFormSelect></CCol>
             <CCol md={4}><CFormLabel>Grade</CFormLabel><CFormSelect value={questionForm.grade} onChange={(event) => setQuestionForm((prev) => ({ ...prev, grade: event.target.value }))}><option value=''>Chọn</option>{grades.map((item) => <option key={getEntityId(item)} value={getEntityId(item)}>{item.title || item.code}</option>)}</CFormSelect></CCol>

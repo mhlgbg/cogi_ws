@@ -17,7 +17,7 @@ import {
   CRow,
   CSpinner,
 } from '@coreui/react'
-import { getLearningManagementBootstrap } from '../../learning-management/services/learningObjectApi'
+import { getLearningManagementBootstrap, getQuestionStimuli } from '../../learning-management/services/learningObjectApi'
 import AssessmentEditorModal from '../components/AssessmentEditorModal'
 import AssessmentPreview from '../components/AssessmentPreview'
 import AssessmentPlacementRulesTab from '../components/AssessmentPlacementRulesTab'
@@ -57,6 +57,7 @@ import {
   getAssessmentStatusLabel,
   getAssessmentTypeLabel,
   getEntityId,
+  getQuestionDisplayModeLabel,
   getQuestionTypeLabel,
   getRuntimeConfigSummary,
   getStatusBadgeColor,
@@ -185,6 +186,9 @@ function SectionCard({ section, currentVersionIsDraft, savingSection = false, on
           <div className='fw-semibold'>{`${section.code || ''} · ${section.title || ''}`}</div>
           <div className='small text-body-secondary'>{`${stats.totalQuestions} câu hỏi · ${stats.totalPoints} điểm`}</div>
           {section.skill?.title ? <div className='small text-body-secondary'>{`Kỹ năng: ${section.skill.title}`}</div> : null}
+          <div className='small text-body-secondary'>{`Stimulus chung: ${section.stimulus?.title || section.stimulus?.code || 'Không'}`}</div>
+          <div className='small text-body-secondary'>{`Số lần nghe: ${section.audioPlayLimit || 'Theo câu hỏi'}`}</div>
+          <div className='small text-body-secondary'>{`Hiển thị: ${getQuestionDisplayModeLabel(section.questionDisplayMode)}`}</div>
         </div>
         <div className='d-flex gap-2 flex-wrap'>
           <CButton size='sm' color='secondary' variant='outline' onClick={onMoveUp} disabled={!currentVersionIsDraft || savingSection}>Lên</CButton>
@@ -264,6 +268,7 @@ export default function AssessmentDetailPage() {
   const [pickerSection, setPickerSection] = useState(null)
   const [showQuestionEditor, setShowQuestionEditor] = useState(false)
   const [editingAssessmentQuestion, setEditingAssessmentQuestion] = useState(null)
+  const [sectionStimuli, setSectionStimuli] = useState([])
 
   const requestedTab = String(searchParams.get('tab') || '').trim()
   const selectedVersionId = String(searchParams.get('version') || '').trim()
@@ -310,11 +315,13 @@ export default function AssessmentDetailPage() {
     setLoading(true)
     setError('')
     try {
-      const [bootstrapPayload, assessmentPayload] = await Promise.all([
+      const [bootstrapPayload, stimuliPayload, assessmentPayload] = await Promise.all([
         getLearningManagementBootstrap(),
+        getQuestionStimuli({ page: 1, pageSize: 200 }),
         getAssessment(id),
       ])
       setBootstrap(bootstrapPayload)
+      setSectionStimuli(Array.isArray(stimuliPayload?.data) ? stimuliPayload.data : [])
       setAssessment(assessmentPayload)
       setSuccess('')
     } catch (requestError) {
@@ -807,7 +814,7 @@ export default function AssessmentDetailPage() {
 
       <AssessmentEditorModal visible={showAssessmentEditor} saving={savingAssessment} assessment={assessment} subjects={subjects} onClose={() => { if (!savingAssessment) setShowAssessmentEditor(false) }} onSubmit={handleAssessmentSubmit} />
       <AssessmentVersionEditorModal visible={showVersionEditor} saving={savingVersion} mode={versionEditorMode} assessment={assessment} version={versionEditorValue} onClose={() => { if (!savingVersion) { setShowVersionEditor(false); setVersionEditorValue(null) } }} onSubmit={handleVersionSubmit} />
-      <AssessmentSectionEditorModal visible={showSectionEditor} saving={savingSection} section={editingSection} versionId={getEntityId(versionDetail || currentVersionSummary)} skills={skills} onClose={() => { if (!savingSection) { setShowSectionEditor(false); setEditingSection(null) } }} onSubmit={handleSectionSubmit} />
+      <AssessmentSectionEditorModal visible={showSectionEditor} saving={savingSection} section={editingSection} versionId={getEntityId(versionDetail || currentVersionSummary)} skills={skills} stimuli={sectionStimuli} onClose={() => { if (!savingSection) { setShowSectionEditor(false); setEditingSection(null) } }} onSubmit={handleSectionSubmit} />
       <AssessmentQuestionPickerModal visible={showQuestionPicker} section={pickerSection} bootstrap={bootstrap} saving={savingQuestion} onClose={() => { if (!savingQuestion) { setShowQuestionPicker(false); setPickerSection(null) } }} onAdd={handleAddQuestions} />
       <AssessmentQuestionEditorModal visible={showQuestionEditor} saving={savingQuestion} item={editingAssessmentQuestion} onClose={() => { if (!savingQuestion) { setShowQuestionEditor(false); setEditingAssessmentQuestion(null) } }} onSubmit={handleQuestionSubmit} />
     </>

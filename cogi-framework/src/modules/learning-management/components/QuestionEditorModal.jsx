@@ -7,6 +7,7 @@ import {
   CAlert,
   CBadge,
   CButton,
+  CButtonGroup,
   CCard,
   CCardBody,
   CCol,
@@ -22,9 +23,11 @@ import {
   CModalTitle,
   CRow,
 } from '@coreui/react'
+import SimpleHtmlEditor from '../../admission-management/components/SimpleHtmlEditor'
 import FileAssetPickerModal from './FileAssetPickerModal'
 import QuestionPreview from './QuestionPreview'
 import QuestionStimulusEditorModal from './QuestionStimulusEditorModal'
+import { normalizeStimulusContentType, STIMULUS_CONTENT_TYPE_OPTIONS } from './StimulusContent'
 import StimulusPreview from './StimulusPreview'
 import { canAccessAnyFeature, getApiMessage, getEntityId, getFileAssetUrl, getQuestionTypeLabel, parseOptionalJson } from '../utils/questionBankUi'
 
@@ -50,6 +53,8 @@ function emptyQuestionForm() {
     code: '',
     title: '',
     questionText: '',
+    questionTextType: 'plain_text',
+    questionImageAsset: null,
     type: 'single_choice',
     difficulty: '',
     subject: '',
@@ -72,6 +77,8 @@ function normalizeQuestionForm(question) {
     code: question?.code || '',
     title: question?.title || '',
     questionText: question?.questionText || '',
+    questionTextType: normalizeStimulusContentType(question?.questionTextType),
+    questionImageAsset: question?.questionImageAsset || null,
     type: question?.type || 'single_choice',
     difficulty: question?.difficulty || '',
     subject: getEntityId(question?.subject),
@@ -134,6 +141,7 @@ function buildQuickStimulusDraft(form) {
     type: inferredType,
     instruction: normalizeText(form?.questionText),
     content: inferredType === 'text' || inferredType === 'mixed' ? normalizeText(form?.explanation) : '',
+    contentType: 'plain_text',
     audioAsset: null,
     imageAsset: null,
     stimulusStatus: 'draft',
@@ -160,6 +168,7 @@ export default function QuestionEditorModal({
   const [form, setForm] = useState(emptyQuestionForm())
   const [error, setError] = useState('')
   const [pickerIndex, setPickerIndex] = useState(-1)
+  const [showQuestionImagePicker, setShowQuestionImagePicker] = useState(false)
   const [quickModal, setQuickModal] = useState('')
   const [quickSaving, setQuickSaving] = useState(false)
   const [quickError, setQuickError] = useState('')
@@ -201,6 +210,7 @@ export default function QuestionEditorModal({
     if (saving) return
     setError('')
     setPickerIndex(-1)
+    setShowQuestionImagePicker(false)
     onClose?.()
   }
 
@@ -267,6 +277,8 @@ export default function QuestionEditorModal({
       code: String(form.code || '').trim(),
       title: String(form.title || '').trim() || null,
       questionText: form.questionText,
+      questionTextType: normalizeStimulusContentType(form.questionTextType),
+      questionImageAsset: form.questionImageAsset ? (form.questionImageAsset.documentId || form.questionImageAsset.id) : null,
       type: form.type,
       difficulty: form.difficulty || null,
       subject: form.subject || null,
@@ -375,7 +387,66 @@ export default function QuestionEditorModal({
               <CRow className='g-3'>
                 <CCol md={4}><CFormLabel>Code</CFormLabel><CFormInput value={form.code} onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value }))} disabled={saving} /></CCol>
                 <CCol md={8}><CFormLabel>Title</CFormLabel><CFormInput value={form.title} onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))} disabled={saving} /></CCol>
-                <CCol xs={12}><CFormLabel>Nội dung câu hỏi</CFormLabel><CFormTextarea rows={4} value={form.questionText} onChange={(event) => setForm((prev) => ({ ...prev, questionText: event.target.value }))} disabled={saving} /></CCol>
+                <CCol xs={12}>
+                  <div className='d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2'>
+                    <CFormLabel className='mb-0'>Nội dung câu hỏi</CFormLabel>
+                    <CButtonGroup size='sm' role='group' aria-label='Question text type'>
+                      {STIMULUS_CONTENT_TYPE_OPTIONS.map((item) => (
+                        <CButton
+                          key={item.value}
+                          type='button'
+                          color={normalizeStimulusContentType(form.questionTextType) === item.value ? 'primary' : 'secondary'}
+                          variant={normalizeStimulusContentType(form.questionTextType) === item.value ? undefined : 'outline'}
+                          onClick={() => setForm((prev) => ({ ...prev, questionTextType: item.value }))}
+                          disabled={saving}
+                        >
+                          {item.label}
+                        </CButton>
+                      ))}
+                    </CButtonGroup>
+                  </div>
+                  {normalizeStimulusContentType(form.questionTextType) === 'html' ? (
+                    <SimpleHtmlEditor
+                      label=''
+                      value={form.questionText}
+                      onChange={(value) => setForm((prev) => ({ ...prev, questionText: value }))}
+                      disabled={saving}
+                      rows={8}
+                      showImageControls={false}
+                      allowHtmlMode
+                      helperText='Ho tro HTML don gian cho noi dung cau hoi. Noi dung se duoc sanitize an toan khi luu va khi render.'
+                      placeholder='<p>Suzie needs to get some fairly cheap sports clothes...</p>'
+                    />
+                  ) : (
+                    <>
+                      <CFormTextarea rows={4} value={form.questionText} onChange={(event) => setForm((prev) => ({ ...prev, questionText: event.target.value }))} disabled={saving} />
+                      <div className='small text-body-secondary mt-1'>Che do van ban thuan giu nguyen xuong dong va khong render the HTML.</div>
+                    </>
+                  )}
+                </CCol>
+                <CCol xs={12}>
+                  <CFormLabel>Ảnh câu hỏi</CFormLabel>
+                  <div className='border rounded-3 p-3 bg-body-tertiary'>
+                    {form.questionImageAsset ? (
+                      <div>
+                        <img src={getFileAssetUrl(form.questionImageAsset)} alt={form.questionImageAsset.originalName || form.title || form.code || 'question-image'} style={{ width: '100%', maxWidth: 320, maxHeight: 220, objectFit: 'contain', borderRadius: 12 }} />
+                        <div className='small text-body-secondary mt-2'>{form.questionImageAsset.originalName || form.questionImageAsset.fileName || 'Đã gắn ảnh câu hỏi'}</div>
+                        <div className='d-flex gap-2 mt-3'>
+                          <CButton color='secondary' variant='outline' onClick={() => setShowQuestionImagePicker(true)} size='sm' disabled={saving}>Thay ảnh</CButton>
+                          <CButton color='danger' variant='outline' onClick={() => setForm((prev) => ({ ...prev, questionImageAsset: null }))} size='sm' disabled={saving}>Xóa ảnh</CButton>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className='small text-body-secondary mb-3'>Chưa có ảnh</div>
+                        <div className='d-flex gap-2 flex-wrap'>
+                          <CButton color='secondary' variant='outline' onClick={() => setShowQuestionImagePicker(true)} size='sm' disabled={saving}>Chọn từ thư viện</CButton>
+                          <CButton color='secondary' variant='outline' onClick={() => setShowQuestionImagePicker(true)} size='sm' disabled={saving}>Upload ảnh</CButton>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CCol>
                 <CCol md={4}><CFormLabel>Loại</CFormLabel><CFormSelect value={form.type} onChange={(event) => setForm((prev) => ({ ...prev, type: event.target.value }))} disabled={saving}>{questionTypes.map((item) => <option key={item} value={item}>{getQuestionTypeLabel(item)}</option>)}</CFormSelect></CCol>
                 <CCol md={4}><CFormLabel>Độ khó</CFormLabel><CFormSelect value={form.difficulty} onChange={(event) => setForm((prev) => ({ ...prev, difficulty: event.target.value }))} disabled={saving}><option value=''>Chọn</option>{difficulties.map((item) => <option key={item} value={item}>{item}</option>)}</CFormSelect></CCol>
                 <CCol md={4}><CFormLabel>Trạng thái</CFormLabel><CFormSelect value={form.questionStatus} onChange={(event) => setForm((prev) => ({ ...prev, questionStatus: event.target.value }))} disabled={saving}>{questionStatuses.map((item) => <option key={item} value={item}>{item}</option>)}</CFormSelect></CCol>
@@ -416,6 +487,7 @@ export default function QuestionEditorModal({
                       {questionStimuli.map((item) => <option key={getEntityId(item)} value={getEntityId(item)}>{`${item.code || '-'} • ${item.title || '-'} • ${item.type || '-'}`}</option>)}
                     </CFormSelect>
                     {canCreateStimulus ? <CButton color='secondary' variant='outline' onClick={openQuickStimulusModal}>Tạo nhanh</CButton> : null}
+                    {selectedStimulus ? <CButton color='warning' variant='outline' onClick={() => setForm((prev) => ({ ...prev, stimulus: '', stimulusEntity: null }))} disabled={saving}>Bỏ stimulus khỏi câu hỏi</CButton> : null}
                   </div>
                   {selectedStimulus ? <StimulusPreview stimulus={selectedStimulus} compact /> : <div className='small text-body-secondary'>Câu hỏi này không sử dụng stimulus.</div>}
                 </CCol>
@@ -500,6 +572,18 @@ export default function QuestionEditorModal({
         onSelect={(fileAsset) => {
           updateOption(pickerIndex, { imageAsset: fileAsset })
           setPickerIndex(-1)
+        }}
+      />
+
+      <FileAssetPickerModal
+        visible={showQuestionImagePicker}
+        acceptedKind='image'
+        title='Chọn ảnh câu hỏi'
+        moduleKey='question-bank'
+        onClose={() => setShowQuestionImagePicker(false)}
+        onSelect={(fileAsset) => {
+          setForm((prev) => ({ ...prev, questionImageAsset: fileAsset }))
+          setShowQuestionImagePicker(false)
         }}
       />
 

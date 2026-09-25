@@ -29,6 +29,7 @@ import {
   createSkill,
   createSubject,
   deleteQuestion,
+  getQuestionStimulusUsage,
   getQuestions,
   getQuestionStimuli,
   updateQuestion,
@@ -36,8 +37,42 @@ import {
 } from '../services/learningObjectApi'
 import QuestionBankImportModal from './QuestionBankImportModal'
 import QuestionEditorModal from './QuestionEditorModal'
+import QuestionStimulusEditorModal from './QuestionStimulusEditorModal'
 import StimulusPreview from './StimulusPreview'
 import { buildPages, getApiMessage, getEntityId, getQuestionTypeLabel, getStatusBadgeColor, normalizePagination, truncateText } from '../utils/questionBankUi'
+
+const QUESTION_TEXT_CLAMP_STYLE = {
+  display: '-webkit-box',
+  WebkitBoxOrient: 'vertical',
+  WebkitLineClamp: 3,
+  overflow: 'hidden',
+}
+
+function QuestionTextCell({ question }) {
+  return (
+    <div>
+      <div className='fw-semibold text-truncate'>{question?.title || 'Không có tiêu đề'}</div>
+      <div className='small text-body-secondary' style={QUESTION_TEXT_CLAMP_STYLE}>{truncateText(question?.questionText, 220)}</div>
+    </div>
+  )
+}
+
+function StimulusTableCell({ stimulus, onOpenStimulus }) {
+  if (!stimulus) {
+    return <span className='small text-body-secondary'>Không dùng</span>
+  }
+
+  return (
+    <div className='d-grid gap-2'>
+      <button type='button' className='btn p-0 border-0 bg-transparent text-start text-body w-100' onClick={() => onOpenStimulus?.(stimulus)}>
+        <StimulusPreview stimulus={stimulus} compact previewMode='summary' />
+      </button>
+      <div>
+        <CButton size='sm' color='primary' variant='outline' onClick={() => onOpenStimulus?.(stimulus)}>Xem stimulus</CButton>
+      </div>
+    </div>
+  )
+}
 
 export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorkspaceActions, onRefreshBootstrap }) {
   const [loading, setLoading] = useState(false)
@@ -53,6 +88,8 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
   const [success, setSuccess] = useState('')
   const [showEditor, setShowEditor] = useState(false)
   const [editingQuestion, setEditingQuestion] = useState(null)
+  const [showStimulusPreview, setShowStimulusPreview] = useState(false)
+  const [previewingStimulus, setPreviewingStimulus] = useState(null)
   const [showImport, setShowImport] = useState(false)
   const [reloadTick, setReloadTick] = useState(0)
 
@@ -153,9 +190,21 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
     setError('')
     setSuccess('')
     try {
+      const previousStimulus = editingQuestion?.stimulus || null
       if (editingQuestion) {
         await updateQuestion(getEntityId(editingQuestion), payload)
-        setSuccess('Cập nhật câu hỏi thành công')
+        let successMessage = 'Cập nhật câu hỏi thành công'
+        const previousStimulusId = getEntityId(previousStimulus)
+        const nextStimulusId = String(payload?.stimulus || '').trim()
+        if (previousStimulusId && previousStimulusId !== nextStimulusId) {
+          const usage = await getQuestionStimulusUsage(previousStimulusId)
+          if (Number(usage?.totalLiveReferences || 0) > 0) {
+            successMessage = `Đã gỡ stimulus khỏi câu hỏi. Stimulus vẫn đang được dùng bởi ${usage?.questionCount || 0} Question và ${usage?.partCount || 0} Part.`
+          } else {
+            successMessage = 'Đã gỡ stimulus khỏi câu hỏi. Stimulus này hiện không còn được sử dụng và có thể xóa trong tab Stimulus.'
+          }
+        }
+        setSuccess(successMessage)
       } else {
         await createQuestion(payload)
         setSuccess('Tạo câu hỏi thành công')
@@ -190,6 +239,11 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
       return updateQuestionStimulus(getEntityId(existingStimulus), payload)
     }
     return createQuestionStimulus(payload)
+  }
+
+  function openStimulusPreview(stimulus) {
+    setPreviewingStimulus(stimulus || null)
+    setShowStimulusPreview(Boolean(stimulus))
   }
 
   return (
@@ -255,15 +309,12 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
                     ) : rows.map((item) => (
                       <CTableRow key={getEntityId(item) || item.code}>
                         <CTableDataCell>{item.code || '-'}</CTableDataCell>
-                        <CTableDataCell>
-                          <div className='fw-semibold'>{item.title || 'Không có tiêu đề'}</div>
-                          <div className='small text-body-secondary'>{truncateText(item.questionText, 120)}</div>
-                        </CTableDataCell>
+                        <CTableDataCell><QuestionTextCell question={item} /></CTableDataCell>
                         <CTableDataCell>{getQuestionTypeLabel(item.type)}</CTableDataCell>
                         <CTableDataCell>{item.subject?.title || '-'}</CTableDataCell>
                         <CTableDataCell>{item.grade?.title || '-'}</CTableDataCell>
                         <CTableDataCell>{Array.isArray(item.skills) && item.skills.length > 0 ? item.skills.map((skill) => skill.title || skill.code).join(', ') : '-'}</CTableDataCell>
-                        <CTableDataCell>{item.stimulus ? <StimulusPreview stimulus={item.stimulus} compact /> : <span className='small text-body-secondary'>Không dùng</span>}</CTableDataCell>
+                        <CTableDataCell><StimulusTableCell stimulus={item.stimulus} onOpenStimulus={openStimulusPreview} /></CTableDataCell>
                         <CTableDataCell>{Array.isArray(item.options) ? item.options.length : 0}</CTableDataCell>
                         <CTableDataCell><CBadge color={getStatusBadgeColor(item.questionStatus)}>{item.questionStatus || '-'}</CBadge></CTableDataCell>
                         <CTableDataCell>
@@ -289,8 +340,8 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
                         </div>
                         <CBadge color={getStatusBadgeColor(item.questionStatus)}>{item.questionStatus || '-'}</CBadge>
                       </div>
-                      <div className='mb-2'>{truncateText(item.questionText, 140)}</div>
-                      {item.stimulus ? <div className='mb-2'><StimulusPreview stimulus={item.stimulus} compact /></div> : null}
+                      <div className='mb-2'><QuestionTextCell question={item} /></div>
+                      {item.stimulus ? <div className='mb-2'><StimulusTableCell stimulus={item.stimulus} onOpenStimulus={openStimulusPreview} /></div> : null}
                       <div className='small text-body-secondary mb-3'>{`Môn học: ${item.subject?.title || '-'} • Khối: ${item.grade?.title || '-'}`}</div>
                       <div className='d-flex gap-2'>
                         <CButton size='sm' color='info' variant='outline' onClick={() => { setEditingQuestion(item); setShowEditor(true) }}>Sửa</CButton>
@@ -335,6 +386,17 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
         onRefreshStimuli={loadStimuli}
         onRefreshSupportData={onRefreshBootstrap}
         feature={feature}
+      />
+
+      <QuestionStimulusEditorModal
+        visible={showStimulusPreview}
+        saving={false}
+        editingStimulus={previewingStimulus}
+        readOnly
+        onClose={() => {
+          setShowStimulusPreview(false)
+          setPreviewingStimulus(null)
+        }}
       />
 
       <QuestionBankImportModal visible={showImport} onClose={() => setShowImport(false)} onImported={async (summary) => {

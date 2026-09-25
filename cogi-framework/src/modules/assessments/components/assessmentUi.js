@@ -27,6 +27,10 @@ export const RESULT_MODE_LABELS = {
   provisional: 'Tạm thời',
   final: 'Chính thức',
 }
+export const QUESTION_DISPLAY_MODE_LABELS = {
+  single: 'Từng câu',
+  all: 'Tất cả câu',
+}
 export const RESULT_STATUS_LABELS = {
   pending: 'Chờ xử lý',
   partially_scored: 'Chờ hoàn tất',
@@ -93,6 +97,9 @@ export function getAssessmentStatusLabel(value) {
 
 export function getResultModeLabel(value) {
   return RESULT_MODE_LABELS[String(value || '').trim()] || value || '-'
+}
+export function getQuestionDisplayModeLabel(value) {
+  return QUESTION_DISPLAY_MODE_LABELS[String(value || '').trim()] || QUESTION_DISPLAY_MODE_LABELS.single
 }
 export function getResultStatusLabel(value) {
   return RESULT_STATUS_LABELS[String(value || '').trim()] || value || '-'

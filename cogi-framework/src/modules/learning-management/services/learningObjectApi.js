@@ -208,6 +208,11 @@ export async function getQuestionStimulus(id) {
   return unwrapSuccess(res.data)
 }
 
+export async function getQuestionStimulusUsage(id) {
+  const res = await api.get(`/learning-management/question-stimuli/${id}/usage`)
+  return unwrapSuccess(res.data)
+}
+
 export async function createQuestionStimulus(data) {
   const res = await api.post('/learning-management/question-stimuli', data)
   return unwrapSuccess(res.data)
@@ -218,8 +223,8 @@ export async function updateQuestionStimulus(id, data) {
   return unwrapSuccess(res.data)
 }
 
-export async function deleteQuestionStimulus(id) {
-  const res = await api.delete(`/learning-management/question-stimuli/${id}`)
+export async function deleteQuestionStimulus(id, options = {}) {
+  const res = await api.delete(`/learning-management/question-stimuli/${id}`, { params: options })
   return unwrapSuccess(res.data)
 }
 

@@ -44,6 +44,12 @@ import {
 } from '../services/learningObjectApi'
 import { TAB_DEFINITIONS, canAccessAnyFeature, getApiMessage, getStatusBadgeColor } from '../utils/questionBankUi'
 
+function normalizeTabKey(key) {
+  const normalized = String(key || '').trim().toLowerCase()
+  if (normalized === 'stimulus') return 'stimuli'
+  return normalized
+}
+
 function buildTabPath(key) {
   return `/learning/questions?tab=${encodeURIComponent(key)}`
 }
@@ -71,7 +77,7 @@ export default function QuestionBankWorkspacePage() {
 
   const availableTabs = useMemo(() => TAB_DEFINITIONS.filter((tab) => canAccessAnyFeature(feature, tab.featureKeys)), [feature])
   const defaultTab = availableTabs[0]?.key || 'questions'
-  const requestedTab = String(searchParams.get('tab') || '').trim()
+  const requestedTab = normalizeTabKey(searchParams.get('tab'))
   const activeTab = availableTabs.some((tab) => tab.key === requestedTab) ? requestedTab : defaultTab
 
   useEffect(() => {

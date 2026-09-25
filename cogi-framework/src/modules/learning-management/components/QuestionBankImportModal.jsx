@@ -78,6 +78,7 @@ function normalizeImportedQuestionPayload(item, lookupMaps = {}) {
   const correctAnswerTokens = usesOptions ? toImportedCorrectAnswerTokens(item?.correctAnswer) : new Set()
   const hasDerivedCorrectAnswer = correctAnswerTokens.size > 0
   const existingQuestion = lookupMaps.existingQuestion || null
+  const questionImageAssetCode = normalizeText(item?.questionImageAssetCode)
 
   const options = usesOptions
     ? normalizeArray(item?.options).map((option, index) => {
@@ -104,6 +105,8 @@ function normalizeImportedQuestionPayload(item, lookupMaps = {}) {
     code: item.code,
     title: item.title || item.code,
     questionText: item.questionText,
+    questionTextType: normalizeText(item?.questionTextType) === 'html' ? 'html' : normalizeText(existingQuestion?.questionTextType) === 'html' ? 'html' : 'plain_text',
+    ...(questionImageAssetCode ? { questionImageAssetCode } : {}),
     type: item.type,
     difficulty: item.difficulty || null,
     subject: getEntityId(lookupMaps.subjectsByCode?.get(normalizeText(item.subjectCode))) || null,
@@ -127,6 +130,7 @@ function buildStimulusImportPayload(item, existingStimulus = null) {
     type: item.type || 'text',
     instruction: item.instruction || '',
     content: item.content || '',
+    contentType: normalizeText(item?.contentType) === 'html' ? 'html' : normalizeText(existingStimulus?.contentType) === 'html' ? 'html' : 'plain_text',
     stimulusStatus: item.stimulusStatus || 'draft',
     audioAsset: item?.audioAssetCode || getEntityId(existingStimulus?.audioAsset) || null,
     imageAsset: item?.imageAssetCode || getEntityId(existingStimulus?.imageAsset) || null,

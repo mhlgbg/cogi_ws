@@ -1,5 +1,6 @@
 import AudioStimulusPlayer from './AudioStimulusPlayer'
 import { getFileAssetUrl } from './assessmentUi'
+import StimulusContent, { StimulusInstruction } from '../../learning-management/components/StimulusContent'
 import ZoomableAssessmentImage from './ZoomableAssessmentImage'
 
 export default function StimulusRenderer({ audioPlayerRef, attemptId, assessmentQuestionId, stimulus, audioState, disabled, onRegisterPlay, onMarkListenSatisfied, onSyncAudioState }) {
@@ -8,8 +9,8 @@ export default function StimulusRenderer({ audioPlayerRef, attemptId, assessment
 
   return (
     <div className='assessment-runner-stimulus'>
-      {stimulus?.instruction ? <div className='mb-3' dangerouslySetInnerHTML={{ __html: stimulus.instruction }} /> : null}
-      {stimulus?.content ? <div className='mb-3' dangerouslySetInnerHTML={{ __html: stimulus.content }} /> : null}
+      <StimulusInstruction value={stimulus?.instruction} className='mb-3' />
+      <StimulusContent value={stimulus?.content} contentType={stimulus?.contentType} className='mb-3' />
       {imageUrl ? (
         <div className='mb-3'>
           <ZoomableAssessmentImage src={imageUrl} alt={stimulus?.imageAsset?.originalName || stimulus?.title || stimulus?.code || 'stimulus-image'} title={stimulus?.title || stimulus?.code || 'Stimulus image'} />

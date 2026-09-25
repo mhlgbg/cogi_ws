@@ -5,6 +5,7 @@ import RunnerHeader from '../components/RunnerHeader'
 import RunnerProgress from '../components/RunnerProgress'
 import RunnerQuestion from '../components/RunnerQuestion'
 import RunnerSectionNav from '../components/RunnerSectionNav'
+import StimulusRenderer from '../components/StimulusRenderer'
 import ResumeStateNotice from '../components/ResumeStateNotice'
 import SubmitAssessmentModal from '../components/SubmitAssessmentModal'
 import AssessmentCampaignRecoveryCard from '../../../features/public-assessment/components/AssessmentCampaignRecoveryCard'
@@ -13,6 +14,7 @@ import { getApiMessage, restorePublicAssessmentAttemptAccess, startPublicAssessm
 import { buildAssessmentRunnerPath } from '../../../features/public-assessment/utils/assessmentRoutes'
 import { getRuntimeApiDetails, getRuntimeApiMessage, getAssessmentAttempt, getAssessmentAttemptResult, markAudioListenRequirementSatisfied, registerAssessmentAudioPlay, resumeAssessmentAttempt, saveAssessmentAnswer, submitAssessmentAttempt, updateAssessmentProgress } from '../services/assessmentRuntimeApi'
 import { getFlowState, patchFlowState } from '../../../features/public-assessment/utils/assessmentFlowStorage'
+import { StimulusInstruction } from '../../learning-management/components/StimulusContent'
 import '../components/assessment-runner.css'
 
 function flattenQuestions(sections = []) {
@@ -111,11 +113,36 @@ function buildAssessmentVersionPath(attempt) {
   return `/assessments/${assessmentId}?tab=structure&version=${versionId}`
 }
 
+function getSectionQuestionDisplayMode(section) {
+  return String(section?.questionDisplayMode || '').trim() === 'all' ? 'all' : 'single'
+}
+
+function getQuestionRef(item) {
+  return String(item?.assessmentQuestionId || item?.assessmentQuestionDocumentId || '')
+}
+
+function buildDefaultAudioState(entry, options = {}) {
+  const resolvedAudioPlayLimit = options.audioPlayLimit ?? entry?.audioPlayLimit ?? null
+  const resolvedAllowSeek = options.allowSeek ?? entry?.allowSeek !== false
+  const resolvedMinListenRatio = options.minListenRatioBeforeAnswer ?? entry?.minListenRatioBeforeAnswer ?? null
+  return {
+    audioPlayCount: 0,
+    audioPlayLimit: resolvedAudioPlayLimit,
+    remaining: resolvedAudioPlayLimit,
+    allowSeek: resolvedAllowSeek,
+    minListenRatioBeforeAnswer: resolvedMinListenRatio,
+    listenRequirementSatisfied: false,
+    currentPlaybackRatio: 0,
+    isPlaying: false,
+  }
+}
+
 export default function AssessmentRunnerPage() {
   const navigate = useNavigate()
   const { attemptId, tenantCode } = useParams()
   const questionViewportRef = useRef(null)
   const audioPlayerRef = useRef(null)
+  const questionItemRefs = useRef({})
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [autoSubmitting, setAutoSubmitting] = useState(false)
@@ -177,8 +204,11 @@ export default function AssessmentRunnerPage() {
   const currentEntry = useMemo(() => findQuestionEntry(sections, currentAssessmentQuestionId) || flatQuestions[0] || null, [currentAssessmentQuestionId, flatQuestions, sections])
   const currentSection = currentEntry?.section || null
   const currentSectionIndex = Math.max(0, sections.findIndex((item) => item?.code === currentSection?.code))
-  const currentSectionQuestions = Array.isArray(currentSection?.questions) ? currentSection.questions : []
-  const currentQuestionIndex = Math.max(0, currentSectionQuestions.findIndex((item) => String(item?.assessmentQuestionId || item?.assessmentQuestionDocumentId || '') === String(currentEntry?.assessmentQuestionId || '')))
+  const currentSectionEntries = useMemo(() => flatQuestions.filter((item) => item?.section?.code === currentSection?.code), [currentSection?.code, flatQuestions])
+  const currentSectionDisplayMode = getSectionQuestionDisplayMode(currentSection)
+  const currentSectionSharedStimulus = currentSection?.stimulus || null
+  const currentSectionAudioAnchorEntry = currentSectionEntries[0] || null
+  const currentQuestionIndex = Math.max(0, currentSectionEntries.findIndex((item) => String(item?.assessmentQuestionId || item?.assessmentQuestionDocumentId || '') === String(currentEntry?.assessmentQuestionId || '')))
   const currentAnswerDraft = currentEntry ? answerDrafts[String(currentEntry.assessmentQuestionId || currentEntry.assessmentQuestionDocumentId || '')] ?? answerMap[String(currentEntry.assessmentQuestionId || '')]?.answerData ?? {} : {}
   const flatQuestionIndex = Math.max(0, flatQuestions.findIndex((item) => String(item?.assessmentQuestionId || '') === String(currentEntry?.assessmentQuestionId || '')))
   const previousRequiredUnanswered = useMemo(() => {
@@ -208,9 +238,43 @@ export default function AssessmentRunnerPage() {
   const readOnly = ['submitted', 'expired', 'cancelled'].includes(String(attempt?.status || '').trim())
   const submitted = String(attempt?.status || '').trim() === 'submitted'
   const expired = String(attempt?.status || '').trim() === 'expired' || remainingSeconds === 0
-  const currentAudioState = audioStates[String(currentEntry?.assessmentQuestionId || '')] || { audioPlayCount: 0, audioPlayLimit: currentEntry?.audioPlayLimit ?? null, remaining: currentEntry?.audioPlayLimit ?? null, allowSeek: currentEntry?.allowSeek !== false, minListenRatioBeforeAnswer: currentEntry?.minListenRatioBeforeAnswer ?? null, listenRequirementSatisfied: false, currentPlaybackRatio: 0, isPlaying: false }
-  const currentMinListenRatio = Number(currentEntry?.minListenRatioBeforeAnswer || 0)
-  const currentHasAudio = Boolean(currentEntry?.question?.stimulus?.audioAsset)
+  function getEntryAudioContext(entry) {
+    const useSharedStimulus = Boolean(currentSectionSharedStimulus)
+    const anchorEntry = useSharedStimulus ? currentSectionAudioAnchorEntry : entry
+    const stimulus = useSharedStimulus ? currentSectionSharedStimulus : entry?.question?.stimulus || null
+    const audioStateKey = getQuestionRef(anchorEntry)
+    const sharedAudioPlayLimit = useSharedStimulus ? currentSection?.audioPlayLimit ?? anchorEntry?.audioPlayLimit ?? null : anchorEntry?.audioPlayLimit ?? null
+    const audioState = audioStates[audioStateKey] || buildDefaultAudioState(anchorEntry, { audioPlayLimit: sharedAudioPlayLimit })
+    const minListenRatio = Number(anchorEntry?.minListenRatioBeforeAnswer || 0)
+    const hasAudio = Boolean(stimulus?.audioAsset)
+    const requiresListenThreshold = hasAudio && minListenRatio > 0
+    const canAnswer = canAnswerAudioQuestion({
+      hasAudio,
+      audioPlayCount: audioState?.audioPlayCount,
+      minListenRatioBeforeAnswer: minListenRatio,
+      listenRequirementSatisfied: audioState?.listenRequirementSatisfied === true,
+    })
+    const locked = !readOnly && !expired && canAnswer === false
+    return {
+      stimulus,
+      anchorEntry,
+      audioState,
+      minListenRatio,
+      hasAudio,
+      requiresListenThreshold,
+      locked,
+      answerLockedMessage: locked
+        ? requiresListenThreshold
+          ? `Nghe ít nhất ${Math.round(minListenRatio * 100)}% để chọn đáp án.`
+          : 'Hãy nhấn Nghe trước khi trả lời.'
+        : '',
+    }
+  }
+
+  const currentAudioContext = getEntryAudioContext(currentEntry)
+  const currentAudioState = currentAudioContext.audioState
+  const currentMinListenRatio = currentAudioContext.minListenRatio
+  const currentHasAudio = currentAudioContext.hasAudio
   const currentRequiresListenThreshold = currentHasAudio && currentMinListenRatio > 0
   const currentCanAnswerAudio = canAnswerAudioQuestion({
     hasAudio: currentHasAudio,
@@ -220,11 +284,7 @@ export default function AssessmentRunnerPage() {
   })
   const answersLockedByListenRequirement = !readOnly && !expired && currentCanAnswerAudio === false
   const audioDisabled = readOnly || expired
-  const answerLockedMessage = answersLockedByListenRequirement
-    ? currentRequiresListenThreshold
-        ? `Nghe ít nhất ${Math.round(currentMinListenRatio * 100)}% để chọn đáp án.`
-        : 'Hãy nhấn Nghe trước khi trả lời.'
-    : ''
+  const answerLockedMessage = currentAudioContext.answerLockedMessage
 
   useEffect(() => {
     mountedRef.current = true
@@ -336,12 +396,16 @@ export default function AssessmentRunnerPage() {
   }, [expiresAtMs])
 
   useEffect(() => {
-    if (!currentEntry?.assessmentQuestionId || !questionViewportRef.current) return undefined
+    if (!currentEntry?.assessmentQuestionId) return undefined
     const timerId = window.requestAnimationFrame(() => {
+      if (currentSectionDisplayMode === 'all') {
+        questionItemRefs.current[String(currentEntry?.assessmentQuestionId || '')]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        return
+      }
       questionViewportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
     return () => window.cancelAnimationFrame(timerId)
-  }, [currentEntry?.assessmentQuestionId])
+  }, [currentEntry?.assessmentQuestionId, currentSectionDisplayMode])
 
   function hydrateRuntime(payload) {
     setRuntime(payload)
@@ -598,14 +662,15 @@ export default function AssessmentRunnerPage() {
     await goToQuestion(target.section, target)
   }
 
-  async function handleRegisterAudioPlay() {
-    if (!attempt?.id || !currentEntry) return null
+  async function handleRegisterAudioPlay(targetQuestionId) {
+    const targetEntry = targetQuestionId ? flatQuestions.find((item) => getQuestionRef(item) === String(targetQuestionId)) : currentAudioContext.anchorEntry
+    if (!attempt?.id || !targetEntry) return null
     try {
-      const payload = await registerAssessmentAudioPlay(attempt.id, currentEntry.assessmentQuestionId, {}, runtimeRequestOptions)
+      const payload = await registerAssessmentAudioPlay(attempt.id, targetEntry.assessmentQuestionId, {}, runtimeRequestOptions)
       setAudioStates((prev) => ({
         ...prev,
-        [String(currentEntry.assessmentQuestionId)]: {
-          ...(prev[String(currentEntry.assessmentQuestionId)] || {}),
+        [String(targetEntry.assessmentQuestionId)]: {
+          ...(prev[String(targetEntry.assessmentQuestionId)] || {}),
           ...payload,
           currentPlaybackRatio: 0,
           mediaFailedBeforePlayback: false,
@@ -618,14 +683,15 @@ export default function AssessmentRunnerPage() {
     }
   }
 
-  async function handleMarkListenSatisfied(playId) {
-    if (!attempt?.id || !currentEntry || !playId) return
+  async function handleMarkListenSatisfied(targetQuestionId, playId) {
+    const targetEntry = flatQuestions.find((item) => getQuestionRef(item) === String(targetQuestionId || '')) || currentAudioContext.anchorEntry
+    if (!attempt?.id || !targetEntry || !playId) return
     try {
-      const payload = await markAudioListenRequirementSatisfied(attempt.id, currentEntry.assessmentQuestionId, { playId }, runtimeRequestOptions)
+      const payload = await markAudioListenRequirementSatisfied(attempt.id, targetEntry.assessmentQuestionId, { playId }, runtimeRequestOptions)
       setAudioStates((prev) => ({
         ...prev,
-        [String(currentEntry.assessmentQuestionId)]: {
-          ...(prev[String(currentEntry.assessmentQuestionId)] || {}),
+        [String(targetEntry.assessmentQuestionId)]: {
+          ...(prev[String(targetEntry.assessmentQuestionId)] || {}),
           listenRequirementSatisfied: payload?.listenRequirementSatisfied === true,
           listenRequirementSatisfiedAt: payload?.listenRequirementSatisfiedAt || null,
         },
@@ -634,7 +700,7 @@ export default function AssessmentRunnerPage() {
         ...prev,
         answers: (() => {
           const map = toAnswerMap(prev.answers || [])
-          const key = String(currentEntry.assessmentQuestionId || '')
+          const key = String(targetEntry.assessmentQuestionId || '')
           const existing = map[key] || { assessmentQuestionId: key, answerData: null, audioPlayCount: prev.answers?.find?.((item) => String(item?.assessmentQuestionId || '') === key)?.audioPlayCount || 0 }
           map[key] = {
             ...existing,
@@ -648,8 +714,8 @@ export default function AssessmentRunnerPage() {
       const message = getRuntimeApiMessage(requestError, 'Không thể xác nhận thời lượng nghe tối thiểu.')
       setAudioStates((prev) => ({
         ...prev,
-        [String(currentEntry.assessmentQuestionId)]: {
-          ...(prev[String(currentEntry.assessmentQuestionId)] || {}),
+        [String(targetEntry.assessmentQuestionId)]: {
+          ...(prev[String(targetEntry.assessmentQuestionId)] || {}),
           isPlaying: false,
         },
       }))
@@ -657,15 +723,21 @@ export default function AssessmentRunnerPage() {
     }
   }
 
-  function handleSyncAudioState(nextState) {
-    if (!currentEntry) return
+  function handleSyncAudioState(targetQuestionId, nextState) {
+    const targetKey = String(targetQuestionId || '')
+    if (!targetKey) return
     setAudioStates((prev) => ({
       ...prev,
-      [String(currentEntry.assessmentQuestionId)]: {
-        ...(prev[String(currentEntry.assessmentQuestionId)] || {}),
+      [targetKey]: {
+        ...(prev[targetKey] || {}),
         ...nextState,
       },
     }))
+  }
+
+  function handleQuestionChange(entry, nextValue) {
+    setCurrentAssessmentQuestionId(getQuestionRef(entry))
+    scheduleSave(entry, nextValue)
   }
 
   async function handleSubmit() {
@@ -827,40 +899,94 @@ export default function AssessmentRunnerPage() {
 
         <div className='assessment-runner-main'>
           <div ref={questionViewportRef} className='assessment-runner-question-stage'>
-            <RunnerQuestion
-              audioPlayerRef={audioPlayerRef}
-              attemptId={attempt?.id}
-              item={currentEntry}
-              sectionIndex={currentSectionIndex}
-              questionIndex={currentQuestionIndex}
-              totalQuestions={totalQuestions}
-              value={currentAnswerDraft}
-              disabled={readOnly || expired || answersLockedByListenRequirement}
-              audioDisabled={audioDisabled}
-              answerLockedMessage={answerLockedMessage}
-              saveState={saveStates[String(currentEntry?.assessmentQuestionId || '')] || { status: 'saved' }}
-              audioState={currentAudioState}
-              onChange={(nextValue) => scheduleSave(currentEntry, nextValue)}
-              onRegisterPlay={handleRegisterAudioPlay}
-              onMarkListenSatisfied={handleMarkListenSatisfied}
-              onSyncAudioState={handleSyncAudioState}
-            />
+            <div className='assessment-runner-question-card mb-3'>
+              <div className='small text-body-secondary mb-2'>{`Phần ${currentSectionIndex + 1}`}</div>
+              <div className='fw-semibold mb-3'>{currentSection?.title || currentSection?.code || 'Phần'}</div>
+              {currentSection?.instruction ? <StimulusInstruction value={currentSection.instruction} className='mb-0' /> : null}
+            </div>
+            {currentSectionSharedStimulus ? (
+              <StimulusRenderer
+                audioPlayerRef={audioPlayerRef}
+                attemptId={attempt?.id}
+                assessmentQuestionId={getQuestionRef(currentSectionAudioAnchorEntry)}
+                stimulus={currentSectionSharedStimulus}
+                audioState={currentAudioState}
+                disabled={audioDisabled}
+                onRegisterPlay={handleRegisterAudioPlay}
+                onMarkListenSatisfied={handleMarkListenSatisfied}
+                onSyncAudioState={handleSyncAudioState}
+              />
+            ) : null}
+
+            {currentSectionDisplayMode === 'all'
+              ? currentSectionEntries.map((entry) => {
+                  const entryAudioContext = currentSectionSharedStimulus
+                    ? currentAudioContext
+                    : getEntryAudioContext(entry)
+                  const questionId = getQuestionRef(entry)
+                  return (
+                    <div key={questionId} ref={(node) => { questionItemRefs.current[questionId] = node }}>
+                      <RunnerQuestion
+                        audioPlayerRef={audioPlayerRef}
+                        attemptId={attempt?.id}
+                        item={entry}
+                        sectionIndex={currentSectionIndex}
+                        questionIndex={entry.questionIndex}
+                        sectionQuestionCount={currentSectionEntries.length}
+                        value={answerDrafts[questionId] ?? answerMap[String(entry?.assessmentQuestionId || '')]?.answerData ?? {}}
+                        disabled={readOnly || expired || entryAudioContext.locked}
+                        audioDisabled={audioDisabled}
+                        answerLockedMessage={entryAudioContext.answerLockedMessage}
+                        saveState={saveStates[questionId] || { status: 'saved' }}
+                        audioState={entryAudioContext.audioState}
+                        stimulus={currentSectionSharedStimulus ? null : entryAudioContext.stimulus}
+                        onChange={(nextValue) => handleQuestionChange(entry, nextValue)}
+                        onRegisterPlay={handleRegisterAudioPlay}
+                        onMarkListenSatisfied={handleMarkListenSatisfied}
+                        onSyncAudioState={handleSyncAudioState}
+                      />
+                    </div>
+                  )
+                })
+              : (
+                <RunnerQuestion
+                  audioPlayerRef={audioPlayerRef}
+                  attemptId={attempt?.id}
+                  item={currentEntry}
+                  sectionIndex={currentSectionIndex}
+                  questionIndex={currentQuestionIndex}
+                  sectionQuestionCount={currentSectionEntries.length}
+                  value={currentAnswerDraft}
+                  disabled={readOnly || expired || answersLockedByListenRequirement}
+                  audioDisabled={audioDisabled}
+                  answerLockedMessage={answerLockedMessage}
+                  saveState={saveStates[String(currentEntry?.assessmentQuestionId || '')] || { status: 'saved' }}
+                  audioState={currentAudioState}
+                  stimulus={currentSectionSharedStimulus ? null : currentAudioContext.stimulus}
+                  onChange={(nextValue) => handleQuestionChange(currentEntry, nextValue)}
+                  onRegisterPlay={handleRegisterAudioPlay}
+                  onMarkListenSatisfied={handleMarkListenSatisfied}
+                  onSyncAudioState={handleSyncAudioState}
+                />
+              )}
           </div>
 
           <div className='assessment-runner-bottom-bar'>
             <div className='assessment-runner-navigation'>
-              <CButton
-                type='button'
-                color='secondary'
-                variant='outline'
-                onClick={() => void moveToRequiredUnanswered(previousRequiredUnanswered)}
-                disabled={readOnly || !previousRequiredUnanswered}
-                title='Đi tới câu chưa làm gần nhất phía trước'
-                aria-label='Đi tới câu chưa làm gần nhất phía trước'
-              >
-                <span className='assessment-runner-nav-label-desktop'>← Trước</span>
-                <span className='assessment-runner-nav-label-mobile'>← Trước</span>
-              </CButton>
+              {currentSectionDisplayMode === 'single' ? (
+                <CButton
+                  type='button'
+                  color='secondary'
+                  variant='outline'
+                  onClick={() => void moveToRequiredUnanswered(previousRequiredUnanswered)}
+                  disabled={readOnly || !previousRequiredUnanswered}
+                  title='Đi tới câu chưa làm gần nhất phía trước'
+                  aria-label='Đi tới câu chưa làm gần nhất phía trước'
+                >
+                  <span className='assessment-runner-nav-label-desktop'>← Trước</span>
+                  <span className='assessment-runner-nav-label-mobile'>← Trước</span>
+                </CButton>
+              ) : <span />}
               <div className='assessment-runner-statusline small text-body-secondary'>
                 {readOnly
                   ? submitted ? 'Chế độ xem lại bài đã nộp' : 'Chế độ chỉ đọc'
@@ -868,7 +994,7 @@ export default function AssessmentRunnerPage() {
                   : saveStates[String(currentEntry?.assessmentQuestionId || '')]?.status === 'error' ? saveStates[String(currentEntry?.assessmentQuestionId || '')]?.message || 'Lỗi lưu. Vui lòng thử lại.' : saveStates[String(currentEntry?.assessmentQuestionId || '')]?.status === 'saving' ? 'Đang lưu...' : 'Đã lưu tự động'}
               </div>
               <div className='d-flex gap-2 flex-wrap assessment-runner-navigation-actions'>
-                {!readOnly ? (
+                {!readOnly && currentSectionDisplayMode === 'single' ? (
                   <CButton
                     type='button'
                     color='primary'
