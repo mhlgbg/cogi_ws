@@ -30,6 +30,7 @@ export const RESULT_MODE_LABELS = {
 export const QUESTION_DISPLAY_MODE_LABELS = {
   single: 'Từng câu',
   all: 'Tất cả câu',
+  inline_fill: 'Điền trực tiếp trong nội dung',
 }
 export const RESULT_STATUS_LABELS = {
   pending: 'Chờ xử lý',

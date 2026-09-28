@@ -1,6 +1,9 @@
 import { CBadge, CCard, CCardBody, CCardHeader } from '@coreui/react'
 import QuestionPreview from '../../learning-management/components/QuestionPreview'
 import StimulusPreview from '../../learning-management/components/StimulusPreview'
+import StimulusContent from '../../learning-management/components/StimulusContent'
+import InlineFillQuestionLayout from './InlineFillQuestionLayout'
+import { getInlineFillQuestionCode } from './inlineFillLayoutUtils'
 import { computeSectionStats, computeVersionStats, formatCandidateRange, formatGradeRange, getResultModeLabel, getRuntimeConfigSummary, getVersionStatusLabel } from './assessmentUi'
 
 export default function AssessmentPreview({ assessment, version, showAdminAnswers = false }) {
@@ -44,8 +47,29 @@ export default function AssessmentPreview({ assessment, version, showAdminAnswer
               <div className='small text-body-secondary'>{`${sectionStats.totalQuestions} câu hỏi · ${sectionStats.totalPoints} điểm`}</div>
             </CCardHeader>
             <CCardBody className='d-grid gap-3'>
-              {section.instruction ? <div dangerouslySetInnerHTML={{ __html: section.instruction }} /> : null}
-              {(section.assessmentQuestions || []).map((item, index) => {
+              {section.instruction ? <StimulusContent value={section.instruction} contentType={section.instructionContentType} /> : null}
+              {section.questionDisplayMode === 'inline_fill' && section.questionLayoutContent ? (
+                <>
+                  {section.stimulus ? <StimulusPreview stimulus={section.stimulus} compact /> : null}
+                  <InlineFillQuestionLayout
+                    html={section.questionLayoutContent}
+                    entries={section.assessmentQuestions || []}
+                    className='assessment-inline-fill-layout'
+                    renderPlaceholder={({ entry, code }) => (
+                      <span className='assessment-inline-fill-preview-token' data-question-code={code}>
+                        <input
+                          type='text'
+                          disabled
+                          value=''
+                          placeholder={getInlineFillQuestionCode(entry) || code}
+                          aria-label={getInlineFillQuestionCode(entry) || code}
+                        />
+                      </span>
+                    )}
+                    renderUnknownPlaceholder={({ code }) => <span className='assessment-inline-fill-preview-token is-invalid'>{`[${code}]`}</span>}
+                  />
+                </>
+              ) : (section.assessmentQuestions || []).map((item, index) => {
                 const stimulus = item?.question?.stimulus || null
                 const stimulusId = stimulus?.documentId || stimulus?.id || ''
                 const shouldRenderStimulus = Boolean(stimulusId) && stimulusId !== previousStimulusId

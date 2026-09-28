@@ -125,6 +125,127 @@
   line-height: 1.7;
 }
 
+.assessment-runner-part-instruction.quick-message-html-content,
+.assessment-runner-part-instruction.quick-message-text-content {
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.assessment-runner-part-instruction.quick-message-html-content > :first-child {
+  margin-top: 0;
+}
+
+.assessment-runner-part-instruction.quick-message-html-content > :last-child {
+  margin-bottom: 0;
+}
+
+.assessment-runner-part-instruction.quick-message-html-content p,
+.assessment-runner-part-instruction.quick-message-html-content ul,
+.assessment-runner-part-instruction.quick-message-html-content ol {
+  margin-bottom: 0.875rem;
+}
+
+.assessment-runner-part-instruction.quick-message-html-content h1,
+.assessment-runner-part-instruction.quick-message-html-content h2,
+.assessment-runner-part-instruction.quick-message-html-content h3,
+.assessment-runner-part-instruction.quick-message-html-content h4 {
+  margin-bottom: 0.75rem;
+  line-height: 1.35;
+}
+
+.assessment-runner-part-instruction.quick-message-html-content h1 {
+  font-size: clamp(1.35rem, 2.8vw, 1.65rem);
+}
+
+.assessment-runner-part-instruction.quick-message-html-content h2 {
+  font-size: clamp(1.2rem, 2.5vw, 1.4rem);
+}
+
+.assessment-runner-part-instruction.quick-message-html-content h3,
+.assessment-runner-part-instruction.quick-message-html-content h4 {
+  font-size: clamp(1.05rem, 2.2vw, 1.2rem);
+}
+
+.assessment-inline-fill-layout.quick-message-html-content p,
+.assessment-inline-fill-layout.quick-message-html-content li,
+.assessment-inline-fill-layout.quick-message-html-content div {
+  line-height: 1.8;
+}
+
+.assessment-inline-fill-layout.quick-message-html-content p,
+.assessment-inline-fill-layout.quick-message-html-content ul,
+.assessment-inline-fill-layout.quick-message-html-content ol {
+  margin-bottom: 1rem;
+}
+
+.assessment-inline-fill-field {
+  display: inline-flex;
+  vertical-align: middle;
+  align-items: center;
+  max-width: 100%;
+  margin: 0 0.2rem;
+}
+
+.assessment-inline-fill-field__input {
+  min-width: 10ch;
+  max-width: min(100%, 28ch);
+  display: inline-block;
+}
+
+.assessment-inline-fill-field.is-answered .assessment-inline-fill-field__input,
+.assessment-inline-fill-preview-token input {
+  border-color: rgba(25, 135, 84, 0.45);
+  background: rgba(25, 135, 84, 0.08);
+}
+
+.assessment-inline-fill-field.is-saving .assessment-inline-fill-field__input {
+  border-color: rgba(13, 110, 253, 0.45);
+  background: rgba(13, 110, 253, 0.06);
+}
+
+.assessment-inline-fill-field.is-error .assessment-inline-fill-field__input {
+  border-color: rgba(220, 53, 69, 0.55);
+  background: rgba(220, 53, 69, 0.06);
+}
+
+.assessment-inline-fill-field__input:focus {
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.16);
+}
+
+.assessment-inline-fill-field__block {
+  display: inline-flex;
+  max-width: 100%;
+}
+
+.assessment-inline-fill-preview-token {
+  display: inline-flex;
+  vertical-align: middle;
+  margin: 0 0.2rem;
+}
+
+.assessment-inline-fill-preview-token input {
+  min-width: 10ch;
+  max-width: min(100%, 28ch);
+}
+
+.assessment-inline-fill-preview-token.is-invalid {
+  color: #b02a37;
+  font-weight: 600;
+}
+
+@media (max-width: 576px) {
+  .assessment-inline-fill-field,
+  .assessment-inline-fill-preview-token {
+    max-width: 100%;
+  }
+
+  .assessment-inline-fill-field__input,
+  .assessment-inline-fill-preview-token input {
+    width: min(100%, 18ch) !important;
+  }
+}
+
 .assessment-runner-stimulus .quick-message-html-content table {
   display: block;
   overflow-x: auto;

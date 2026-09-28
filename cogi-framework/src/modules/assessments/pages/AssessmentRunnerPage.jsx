@@ -5,7 +5,10 @@ import RunnerHeader from '../components/RunnerHeader'
 import RunnerProgress from '../components/RunnerProgress'
 import RunnerQuestion from '../components/RunnerQuestion'
 import RunnerSectionNav from '../components/RunnerSectionNav'
+import RunnerInlineFillQuestionField from '../components/RunnerInlineFillQuestionField'
 import StimulusRenderer from '../components/StimulusRenderer'
+import ZoomableAssessmentImage from '../components/ZoomableAssessmentImage'
+import InlineFillQuestionLayout from '../components/InlineFillQuestionLayout'
 import ResumeStateNotice from '../components/ResumeStateNotice'
 import SubmitAssessmentModal from '../components/SubmitAssessmentModal'
 import AssessmentCampaignRecoveryCard from '../../../features/public-assessment/components/AssessmentCampaignRecoveryCard'
@@ -14,7 +17,9 @@ import { getApiMessage, restorePublicAssessmentAttemptAccess, startPublicAssessm
 import { buildAssessmentRunnerPath } from '../../../features/public-assessment/utils/assessmentRoutes'
 import { getRuntimeApiDetails, getRuntimeApiMessage, getAssessmentAttempt, getAssessmentAttemptResult, markAudioListenRequirementSatisfied, registerAssessmentAudioPlay, resumeAssessmentAttempt, saveAssessmentAnswer, submitAssessmentAttempt, updateAssessmentProgress } from '../services/assessmentRuntimeApi'
 import { getFlowState, patchFlowState } from '../../../features/public-assessment/utils/assessmentFlowStorage'
-import { StimulusInstruction } from '../../learning-management/components/StimulusContent'
+import StimulusContent from '../../learning-management/components/StimulusContent'
+import { getFileAssetUrl } from '../components/assessmentUi'
+import { validateInlineFillLayout } from '../components/inlineFillLayoutUtils'
 import '../components/assessment-runner.css'
 
 function flattenQuestions(sections = []) {
@@ -114,15 +119,29 @@ function buildAssessmentVersionPath(attempt) {
 }
 
 function getSectionQuestionDisplayMode(section) {
-  return String(section?.questionDisplayMode || '').trim() === 'all' ? 'all' : 'single'
+  const mode = String(section?.questionDisplayMode || '').trim()
+  if (mode === 'all') return 'all'
+  if (mode === 'inline_fill') return 'inline_fill'
+  return 'single'
 }
 
 function getQuestionRef(item) {
   return String(item?.assessmentQuestionId || item?.assessmentQuestionDocumentId || '')
 }
 
+function getStimulusRef(stimulus) {
+  return String(stimulus?.code || stimulus?.documentId || stimulus?.id || '').trim()
+}
+
+function resolveEntryAudioPlayLimit(entry, sectionOverride = null) {
+  const section = sectionOverride || entry?.section || null
+  const sectionListenLimit = section?.listenLimit ?? section?.audioPlayLimit
+  if (section?.stimulus && sectionListenLimit !== null && sectionListenLimit !== undefined) return sectionListenLimit
+  return entry?.audioPlayLimit ?? null
+}
+
 function buildDefaultAudioState(entry, options = {}) {
-  const resolvedAudioPlayLimit = options.audioPlayLimit ?? entry?.audioPlayLimit ?? null
+  const resolvedAudioPlayLimit = options.audioPlayLimit ?? resolveEntryAudioPlayLimit(entry, options.section)
   const resolvedAllowSeek = options.allowSeek ?? entry?.allowSeek !== false
   const resolvedMinListenRatio = options.minListenRatioBeforeAnswer ?? entry?.minListenRatioBeforeAnswer ?? null
   return {
@@ -207,6 +226,23 @@ export default function AssessmentRunnerPage() {
   const currentSectionEntries = useMemo(() => flatQuestions.filter((item) => item?.section?.code === currentSection?.code), [currentSection?.code, flatQuestions])
   const currentSectionDisplayMode = getSectionQuestionDisplayMode(currentSection)
   const currentSectionSharedStimulus = currentSection?.stimulus || null
+  const currentSectionInlineFillSharedStimulus = useMemo(() => {
+    if (currentSectionDisplayMode !== 'inline_fill' || currentSectionSharedStimulus) return null
+    const stimuli = currentSectionEntries.map((entry) => entry?.question?.stimulus || null).filter(Boolean)
+    if (stimuli.length === 0 || stimuli.length !== currentSectionEntries.length) return null
+    const firstRef = getStimulusRef(stimuli[0])
+    if (!firstRef) return null
+    return stimuli.every((item) => getStimulusRef(item) === firstRef) ? stimuli[0] : null
+  }, [currentSectionDisplayMode, currentSectionEntries, currentSectionSharedStimulus])
+  const currentSectionLayoutStimulus = currentSectionDisplayMode === 'inline_fill'
+    ? (currentSectionSharedStimulus || currentSectionInlineFillSharedStimulus || null)
+    : currentSectionSharedStimulus
+  const currentSectionInstructionImage = currentSection?.instructionImage || currentSection?.instructionImageAsset || null
+  const currentSectionInstructionImageUrl = getFileAssetUrl(currentSectionInstructionImage)
+  const inlineFillValidation = useMemo(() => validateInlineFillLayout(currentSection?.questionLayoutContent, currentSectionEntries), [currentSection?.questionLayoutContent, currentSectionEntries])
+  const inlineFillHasUnsupportedQuestionStimulus = useMemo(() => currentSectionDisplayMode === 'inline_fill' && !currentSectionLayoutStimulus && currentSectionEntries.some((entry) => entry?.question?.stimulus), [currentSectionDisplayMode, currentSectionEntries, currentSectionLayoutStimulus])
+  const canRenderInlineFill = currentSectionDisplayMode === 'inline_fill' && String(currentSection?.questionLayoutContent || '').trim().length > 0 && inlineFillValidation.hasRenderablePlaceholders && inlineFillHasUnsupportedQuestionStimulus === false
+  const effectiveSectionDisplayMode = currentSectionDisplayMode === 'inline_fill' && !canRenderInlineFill ? 'all' : currentSectionDisplayMode
   const currentSectionAudioAnchorEntry = currentSectionEntries[0] || null
   const currentQuestionIndex = Math.max(0, currentSectionEntries.findIndex((item) => String(item?.assessmentQuestionId || item?.assessmentQuestionDocumentId || '') === String(currentEntry?.assessmentQuestionId || '')))
   const currentAnswerDraft = currentEntry ? answerDrafts[String(currentEntry.assessmentQuestionId || currentEntry.assessmentQuestionDocumentId || '')] ?? answerMap[String(currentEntry.assessmentQuestionId || '')]?.answerData ?? {} : {}
@@ -239,12 +275,13 @@ export default function AssessmentRunnerPage() {
   const submitted = String(attempt?.status || '').trim() === 'submitted'
   const expired = String(attempt?.status || '').trim() === 'expired' || remainingSeconds === 0
   function getEntryAudioContext(entry) {
-    const useSharedStimulus = Boolean(currentSectionSharedStimulus)
+    const sharedStimulus = effectiveSectionDisplayMode === 'inline_fill' ? currentSectionLayoutStimulus : currentSectionSharedStimulus
+    const useSharedStimulus = Boolean(sharedStimulus)
     const anchorEntry = useSharedStimulus ? currentSectionAudioAnchorEntry : entry
-    const stimulus = useSharedStimulus ? currentSectionSharedStimulus : entry?.question?.stimulus || null
+    const stimulus = useSharedStimulus ? sharedStimulus : entry?.question?.stimulus || null
     const audioStateKey = getQuestionRef(anchorEntry)
-    const sharedAudioPlayLimit = useSharedStimulus ? currentSection?.audioPlayLimit ?? anchorEntry?.audioPlayLimit ?? null : anchorEntry?.audioPlayLimit ?? null
-    const audioState = audioStates[audioStateKey] || buildDefaultAudioState(anchorEntry, { audioPlayLimit: sharedAudioPlayLimit })
+    const sharedAudioPlayLimit = useSharedStimulus ? resolveEntryAudioPlayLimit(anchorEntry, currentSection) : resolveEntryAudioPlayLimit(anchorEntry)
+    const audioState = audioStates[audioStateKey] || buildDefaultAudioState(anchorEntry, { audioPlayLimit: sharedAudioPlayLimit, section: useSharedStimulus ? currentSection : null })
     const minListenRatio = Number(anchorEntry?.minListenRatioBeforeAnswer || 0)
     const hasAudio = Boolean(stimulus?.audioAsset)
     const requiresListenThreshold = hasAudio && minListenRatio > 0
@@ -275,7 +312,6 @@ export default function AssessmentRunnerPage() {
   const currentAudioState = currentAudioContext.audioState
   const currentMinListenRatio = currentAudioContext.minListenRatio
   const currentHasAudio = currentAudioContext.hasAudio
-  const currentRequiresListenThreshold = currentHasAudio && currentMinListenRatio > 0
   const currentCanAnswerAudio = canAnswerAudioQuestion({
     hasAudio: currentHasAudio,
     audioPlayCount: currentAudioState?.audioPlayCount,
@@ -398,14 +434,29 @@ export default function AssessmentRunnerPage() {
   useEffect(() => {
     if (!currentEntry?.assessmentQuestionId) return undefined
     const timerId = window.requestAnimationFrame(() => {
-      if (currentSectionDisplayMode === 'all') {
+      if (effectiveSectionDisplayMode === 'all' || effectiveSectionDisplayMode === 'inline_fill') {
         questionItemRefs.current[String(currentEntry?.assessmentQuestionId || '')]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        if (effectiveSectionDisplayMode === 'inline_fill') {
+          questionItemRefs.current[String(currentEntry?.assessmentQuestionId || '')]?.querySelector?.('input, textarea, select, button')?.focus?.({ preventScroll: true })
+        }
         return
       }
       questionViewportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
     return () => window.cancelAnimationFrame(timerId)
-  }, [currentEntry?.assessmentQuestionId, currentSectionDisplayMode])
+  }, [currentEntry?.assessmentQuestionId, effectiveSectionDisplayMode])
+
+  useEffect(() => {
+    if (currentSectionDisplayMode !== 'inline_fill' || canRenderInlineFill) return
+    if (!import.meta.env.DEV) return
+    console.warn('Assessment runner fell back from inline_fill to all', {
+      sectionCode: currentSection?.code || '',
+      hasLayout: Boolean(String(currentSection?.questionLayoutContent || '').trim()),
+      hasRenderablePlaceholders: inlineFillValidation.hasRenderablePlaceholders,
+      hasUnsupportedQuestionStimulus: inlineFillHasUnsupportedQuestionStimulus,
+      unknownCodes: inlineFillValidation.unknownCodes,
+    })
+  }, [canRenderInlineFill, currentSection?.code, currentSection?.questionLayoutContent, currentSectionDisplayMode, inlineFillHasUnsupportedQuestionStimulus, inlineFillValidation])
 
   function hydrateRuntime(payload) {
     setRuntime(payload)
@@ -417,7 +468,7 @@ export default function AssessmentRunnerPage() {
     setAudioStates(flattenQuestions(payload?.candidateDefinition?.sections || []).reduce((result, item) => {
       const key = String(item?.assessmentQuestionId || item?.assessmentQuestionDocumentId || '')
       const current = mappedAnswers[key] || null
-      const audioPlayLimit = item?.audioPlayLimit ?? null
+      const audioPlayLimit = resolveEntryAudioPlayLimit(item)
       result[key] = {
         audioPlayCount: current?.audioPlayCount || 0,
         audioPlayLimit,
@@ -655,6 +706,14 @@ export default function AssessmentRunnerPage() {
     }
     setCurrentAssessmentQuestionId(questionId)
     handleUpdateProgress(section, item)
+  }
+
+  function handleInlineEntryFocus(entry) {
+    if (!entry) return
+    const questionId = getQuestionRef(entry)
+    if (!questionId) return
+    setCurrentAssessmentQuestionId(questionId)
+    void handleUpdateProgress(entry.section, entry)
   }
 
   async function moveToRequiredUnanswered(target) {
@@ -902,14 +961,29 @@ export default function AssessmentRunnerPage() {
             <div className='assessment-runner-question-card mb-3'>
               <div className='small text-body-secondary mb-2'>{`Phần ${currentSectionIndex + 1}`}</div>
               <div className='fw-semibold mb-3'>{currentSection?.title || currentSection?.code || 'Phần'}</div>
-              {currentSection?.instruction ? <StimulusInstruction value={currentSection.instruction} className='mb-0' /> : null}
+              {currentSection?.instruction ? (
+                <StimulusContent
+                  value={currentSection.instruction}
+                  contentType={currentSection?.instructionContentType}
+                  className='assessment-runner-part-instruction'
+                />
+              ) : null}
+              {currentSectionInstructionImageUrl ? (
+                <div className={currentSection?.instruction ? 'mt-3' : ''}>
+                  <ZoomableAssessmentImage
+                    src={currentSectionInstructionImageUrl}
+                    alt={currentSectionInstructionImage?.originalName || currentSection?.title || currentSection?.code || 'instruction-image'}
+                    title={currentSection?.title || currentSection?.code || 'Instruction image'}
+                  />
+                </div>
+              ) : null}
             </div>
-            {currentSectionSharedStimulus ? (
+            {currentSectionLayoutStimulus ? (
               <StimulusRenderer
                 audioPlayerRef={audioPlayerRef}
                 attemptId={attempt?.id}
                 assessmentQuestionId={getQuestionRef(currentSectionAudioAnchorEntry)}
-                stimulus={currentSectionSharedStimulus}
+                stimulus={currentSectionLayoutStimulus}
                 audioState={currentAudioState}
                 disabled={audioDisabled}
                 onRegisterPlay={handleRegisterAudioPlay}
@@ -918,7 +992,35 @@ export default function AssessmentRunnerPage() {
               />
             ) : null}
 
-            {currentSectionDisplayMode === 'all'
+            {effectiveSectionDisplayMode === 'inline_fill' ? (
+              <div className='assessment-runner-question-card'>
+                {currentSectionLayoutStimulus && answerLockedMessage ? <div className='assessment-runner-answer-lock-note'>{answerLockedMessage}</div> : null}
+                <InlineFillQuestionLayout
+                  html={currentSection?.questionLayoutContent}
+                  entries={currentSectionEntries}
+                  className='assessment-inline-fill-layout'
+                  renderPlaceholder={({ entry, code }) => {
+                    const questionId = getQuestionRef(entry)
+                    const entryAudioContext = currentSectionLayoutStimulus ? currentAudioContext : getEntryAudioContext(entry)
+                    return (
+                      <RunnerInlineFillQuestionField
+                        key={questionId || code}
+                        entry={entry}
+                        value={answerDrafts[questionId] ?? answerMap[String(entry?.assessmentQuestionId || '')]?.answerData ?? {}}
+                        disabled={readOnly || expired || entryAudioContext.locked}
+                        answered={answeredMap[questionId] === true}
+                        saveState={saveStates[questionId] || { status: 'saved' }}
+                        onFocus={() => handleInlineEntryFocus(entry)}
+                        onChange={(nextValue) => handleQuestionChange(entry, nextValue)}
+                        registerField={(node) => { questionItemRefs.current[questionId] = node }}
+                      />
+                    )
+                  }}
+                  renderUnknownPlaceholder={({ code }) => <span className='assessment-inline-fill-preview-token is-invalid'>{`[${code}]`}</span>}
+                  fallback={<div className='text-body-secondary'>Bố cục câu hỏi không hợp lệ. Hệ thống đang dùng chế độ hiển thị dự phòng.</div>}
+                />
+              </div>
+            ) : effectiveSectionDisplayMode === 'all'
               ? currentSectionEntries.map((entry) => {
                   const entryAudioContext = currentSectionSharedStimulus
                     ? currentAudioContext
@@ -973,7 +1075,7 @@ export default function AssessmentRunnerPage() {
 
           <div className='assessment-runner-bottom-bar'>
             <div className='assessment-runner-navigation'>
-              {currentSectionDisplayMode === 'single' ? (
+              {effectiveSectionDisplayMode === 'single' ? (
                 <CButton
                   type='button'
                   color='secondary'
@@ -994,7 +1096,7 @@ export default function AssessmentRunnerPage() {
                   : saveStates[String(currentEntry?.assessmentQuestionId || '')]?.status === 'error' ? saveStates[String(currentEntry?.assessmentQuestionId || '')]?.message || 'Lỗi lưu. Vui lòng thử lại.' : saveStates[String(currentEntry?.assessmentQuestionId || '')]?.status === 'saving' ? 'Đang lưu...' : 'Đã lưu tự động'}
               </div>
               <div className='d-flex gap-2 flex-wrap assessment-runner-navigation-actions'>
-                {!readOnly && currentSectionDisplayMode === 'single' ? (
+                {!readOnly && effectiveSectionDisplayMode === 'single' ? (
                   <CButton
                     type='button'
                     color='primary'

@@ -187,8 +187,10 @@ function SectionCard({ section, currentVersionIsDraft, savingSection = false, on
           <div className='small text-body-secondary'>{`${stats.totalQuestions} câu hỏi · ${stats.totalPoints} điểm`}</div>
           {section.skill?.title ? <div className='small text-body-secondary'>{`Kỹ năng: ${section.skill.title}`}</div> : null}
           <div className='small text-body-secondary'>{`Stimulus chung: ${section.stimulus?.title || section.stimulus?.code || 'Không'}`}</div>
-          <div className='small text-body-secondary'>{`Số lần nghe: ${section.audioPlayLimit || 'Theo câu hỏi'}`}</div>
+          <div className='small text-body-secondary'>{`Số lần nghe: ${section.listenLimit || section.audioPlayLimit || 'Theo câu hỏi'}`}</div>
           <div className='small text-body-secondary'>{`Hiển thị: ${getQuestionDisplayModeLabel(section.questionDisplayMode)}`}</div>
+          <div className='small text-body-secondary'>{`Hướng dẫn: ${section.instruction ? 'Có' : 'Không'}`}</div>
+          <div className='small text-body-secondary'>{`Ảnh hướng dẫn: ${section.instructionImageAsset ? 'Có' : 'Không'}`}</div>
         </div>
         <div className='d-flex gap-2 flex-wrap'>
           <CButton size='sm' color='secondary' variant='outline' onClick={onMoveUp} disabled={!currentVersionIsDraft || savingSection}>Lên</CButton>
@@ -201,7 +203,6 @@ function SectionCard({ section, currentVersionIsDraft, savingSection = false, on
       </CCardHeader>
       <CCardBody>
         {section.description ? <div className='small mb-2'>{truncateText(section.description, 180)}</div> : null}
-        {section.instruction ? <div className='small text-body-secondary mb-3'>{truncateText(section.instruction, 180)}</div> : null}
         {questions.length === 0 ? <div className='text-body-secondary'>Chưa có câu hỏi trong phần này.</div> : (
           <div className='d-grid gap-3'>
             {questions.map((item, index) => (
@@ -814,7 +815,7 @@ export default function AssessmentDetailPage() {
 
       <AssessmentEditorModal visible={showAssessmentEditor} saving={savingAssessment} assessment={assessment} subjects={subjects} onClose={() => { if (!savingAssessment) setShowAssessmentEditor(false) }} onSubmit={handleAssessmentSubmit} />
       <AssessmentVersionEditorModal visible={showVersionEditor} saving={savingVersion} mode={versionEditorMode} assessment={assessment} version={versionEditorValue} onClose={() => { if (!savingVersion) { setShowVersionEditor(false); setVersionEditorValue(null) } }} onSubmit={handleVersionSubmit} />
-      <AssessmentSectionEditorModal visible={showSectionEditor} saving={savingSection} section={editingSection} versionId={getEntityId(versionDetail || currentVersionSummary)} skills={skills} stimuli={sectionStimuli} onClose={() => { if (!savingSection) { setShowSectionEditor(false); setEditingSection(null) } }} onSubmit={handleSectionSubmit} />
+      <AssessmentSectionEditorModal visible={showSectionEditor} saving={savingSection} section={editingSection} versionId={getEntityId(versionDetail || currentVersionSummary)} skills={skills} stimuli={sectionStimuli} assessmentQuestions={editingSection?.assessmentQuestions || []} onClose={() => { if (!savingSection) { setShowSectionEditor(false); setEditingSection(null) } }} onSubmit={handleSectionSubmit} />
       <AssessmentQuestionPickerModal visible={showQuestionPicker} section={pickerSection} bootstrap={bootstrap} saving={savingQuestion} onClose={() => { if (!savingQuestion) { setShowQuestionPicker(false); setPickerSection(null) } }} onAdd={handleAddQuestions} />
       <AssessmentQuestionEditorModal visible={showQuestionEditor} saving={savingQuestion} item={editingAssessmentQuestion} onClose={() => { if (!savingQuestion) { setShowQuestionEditor(false); setEditingAssessmentQuestion(null) } }} onSubmit={handleQuestionSubmit} />
     </>
