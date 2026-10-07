@@ -31,6 +31,11 @@ function getApiMessage(error, fallback) {
   return error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || fallback
 }
 
+function isLearnerContextMismatchError(error) {
+  const message = toText(getApiMessage(error, '')).toLowerCase()
+  return message.includes('learner context does not belong to current user in this tenant')
+}
+
 export default function useStudentPortalContext() {
   const tenant = useTenant()
   const tenantCode = tenant?.currentTenant?.tenantCode || ''
@@ -45,19 +50,36 @@ export default function useStudentPortalContext() {
 
   useEffect(() => {
     let active = true
+    async function fetchContext(learnerId) {
+      const data = await getStudentContext({ learnerId })
+      if (!active) return
+      setContext(data)
+      const resolvedLearnerId = toText(data?.learnerContext?.id)
+      if (resolvedLearnerId !== learnerId) {
+        setSelectedLearnerId(resolvedLearnerId)
+      }
+      writeStoredLearnerId(tenantCode, resolvedLearnerId)
+    }
+
     async function load() {
       setLoading(true)
       setError('')
       try {
-        const data = await getStudentContext({ learnerId: selectedLearnerId })
-        if (!active) return
-        setContext(data)
-        const resolvedLearnerId = toText(data?.learnerContext?.id)
-        if (resolvedLearnerId !== selectedLearnerId) {
-          setSelectedLearnerId(resolvedLearnerId)
-        }
-        writeStoredLearnerId(tenantCode, resolvedLearnerId)
+        await fetchContext(selectedLearnerId)
       } catch (requestError) {
+        if (selectedLearnerId && isLearnerContextMismatchError(requestError)) {
+          try {
+            writeStoredLearnerId(tenantCode, '')
+            if (active) setSelectedLearnerId('')
+            await fetchContext('')
+            return
+          } catch (retryError) {
+            if (!active) return
+            setContext(null)
+            setError(getApiMessage(retryError, 'Không thể tải hồ sơ học tập.'))
+            return
+          }
+        }
         if (!active) return
         setContext(null)
         setError(getApiMessage(requestError, 'Không thể tải hồ sơ học tập.'))

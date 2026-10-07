@@ -51,17 +51,7 @@ export default function TeacherClassDetailPage() {
   }, [success])
 
   async function openSession(item) {
-    setShowSessionModal(true)
-    setSelectedSessionLoading(true)
-    setError('')
-    try {
-      setSelectedSession(await getTeacherSessionDetail(item.id))
-    } catch (requestError) {
-      setSelectedSession(null)
-      setError(getApiMessage(requestError, 'Không thể tải buổi học.'))
-    } finally {
-      setSelectedSessionLoading(false)
-    }
+    navigate(`/teacher/sessions/${item.id}`)
   }
 
   async function refreshSelectedSession(sessionId) {

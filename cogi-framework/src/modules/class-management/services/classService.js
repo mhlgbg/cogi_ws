@@ -109,7 +109,7 @@ function normalizeAttendance(raw) {
   return {
     id: raw.id,
     learner: normalizeLearnerLite(raw.learner),
-    status: toText(raw.status) || 'present',
+    status: toText(raw.status) || 'not_marked',
     note: toText(raw.note),
     markedAt: raw.markedAt || null,
     markedBy: normalizeUserLite(raw.markedBy),
@@ -383,7 +383,7 @@ function normalizeClassSession(raw) {
       : { isToday: false, isUpcoming: false, needsReport: false, isPast: false },
     myAttendance: raw.myAttendance ? {
       id: Number(raw.myAttendance.id || 0) || 0,
-      status: toText(raw.myAttendance.status) || 'present',
+      status: toText(raw.myAttendance.status) || 'not_marked',
       note: toText(raw.myAttendance.note),
       markedAt: raw.myAttendance.markedAt || null,
       markedBy: normalizeUserLite(raw.myAttendance.markedBy),
@@ -555,7 +555,10 @@ export async function createEnrollment(classId, payload) {
     : payload
 
   const response = await api.post(`/classes/${classId}/enrollments`, { data })
-  return normalizeEnrollment(response?.data?.data || null)
+  return {
+    enrollment: normalizeEnrollment(response?.data?.data || null),
+    reconcile: response?.data?.meta?.reconcile || null,
+  }
 }
 
 export async function updateEnrollment(classId, enrollmentId, payload) {
@@ -564,7 +567,10 @@ export async function updateEnrollment(classId, enrollmentId, payload) {
     : payload
 
   const response = await api.put(`/classes/${classId}/enrollments/${enrollmentId}`, { data })
-  return normalizeEnrollment(response?.data?.data || null)
+  return {
+    enrollment: normalizeEnrollment(response?.data?.data || null),
+    reconcile: response?.data?.meta?.reconcile || null,
+  }
 }
 
 export async function deleteEnrollment(classId, enrollmentId) {
@@ -986,6 +992,33 @@ export async function getStudentAssignmentDetail(assignmentId, { learnerId = '' 
     },
   })
   return normalizeAssignmentSummary(response?.data?.data || null)
+}
+
+export async function getStudentAssignmentTaskDetail(taskId, { learnerId = '' } = {}) {
+  const response = await api.get(`/student/assignment-tasks/${taskId}`, {
+    params: {
+      learnerId: learnerId || undefined,
+    },
+  })
+  const data = response?.data?.data || null
+  return {
+    learner: normalizeLearnerLite(data?.learner || null),
+    assignment: normalizeAssignmentSummary(data?.assignment || null),
+    task: normalizeAssignmentTask(data?.task || null),
+  }
+}
+
+export async function getStudentSubmissionVersionDetail(submissionId, { learnerId = '' } = {}) {
+  const response = await api.get(`/student/submissions/${submissionId}`, {
+    params: {
+      learnerId: learnerId || undefined,
+    },
+  })
+  return {
+    learner: normalizeLearnerLite(response?.data?.data?.learner || null),
+    task: normalizeAssignmentTask(response?.data?.data?.task || null),
+    submission: normalizeAssignmentSubmission(response?.data?.data?.submission || null),
+  }
 }
 
 export async function updateStudentAssignmentTodoProgress(taskId, payload, { learnerId = '' } = {}) {

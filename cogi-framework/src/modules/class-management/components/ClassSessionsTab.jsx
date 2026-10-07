@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   CAlert,
   CBadge,
@@ -61,6 +62,7 @@ function getApiMessage(error, fallback) {
 }
 
 export default function ClassSessionsTab({ classId, classDetail, onMessage }) {
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState([])
   const [teachers, setTeachers] = useState([])
@@ -232,19 +234,8 @@ export default function ClassSessionsTab({ classId, classDetail, onMessage }) {
     }
   }
 
-  async function openSessionDetail(session) {
-    setShowDetailModal(true)
-    setDetailLoading(true)
-    setError('')
-    try {
-      const detail = await getClassSessionDetail(classId, session.id)
-      setSessionDetail(detail)
-    } catch (requestError) {
-      setSessionDetail(null)
-      setError(getApiMessage(requestError, 'Không thể tải chi tiết buổi học.'))
-    } finally {
-      setDetailLoading(false)
-    }
+  function openSessionDetail(session) {
+    navigate(`/classes/${classId}/sessions/${session.id}`)
   }
 
   function closeSessionDetail() {

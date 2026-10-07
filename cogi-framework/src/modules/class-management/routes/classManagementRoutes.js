@@ -8,6 +8,7 @@ import StudentSessionWorkspacePage from '../pages/StudentSessionWorkspacePage'
 import StudentWorkspaceOverviewPage from '../pages/StudentWorkspaceOverviewPage'
 import TeacherClassWorkspacePage from '../pages/TeacherClassWorkspacePage'
 import TeacherClassDetailPage from '../pages/TeacherClassDetailPage'
+import TeacherSessionDetailPage from '../pages/TeacherSessionDetailPage'
 import TeacherSessionWorkspacePage from '../pages/TeacherSessionWorkspacePage'
 
 const classManagementRoutes = [
@@ -22,6 +23,12 @@ const classManagementRoutes = [
     title: 'Chi tiết lớp học',
     featureKey: 'class.manage',
     component: ClassDetailPage,
+  },
+  {
+    path: '/classes/:classId/sessions/:sessionId',
+    title: 'Chi tiết buổi học lớp',
+    featureKey: 'class.manage',
+    component: TeacherSessionDetailPage,
   },
   {
     path: '/teacher/classes',
@@ -40,6 +47,12 @@ const classManagementRoutes = [
     title: 'Buổi học của tôi',
     featureKey: 'class.teacher-sessions',
     component: TeacherSessionWorkspacePage,
+  },
+  {
+    path: '/teacher/sessions/:sessionId',
+    title: 'Chi tiết buổi học của tôi',
+    featureKey: 'class.teacher-sessions',
+    component: TeacherSessionDetailPage,
   },
   {
     path: '/student',

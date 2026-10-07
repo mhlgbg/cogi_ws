@@ -374,6 +374,27 @@ export default function ClassDetailPage() {
     setSavingEnrollment(true)
     setError('')
     try {
+      const buildEnrollmentReconcileMessage = (reconcileResult, isUpdateAction) => {
+        if (!reconcileResult?.triggered) {
+          return isUpdateAction ? 'Cập nhật enrollment thành công' : (mode === 'existing' ? 'Thêm học viên vào lớp thành công' : 'Tạo học viên và thêm vào lớp thành công')
+        }
+
+        const summary = reconcileResult?.summary || {}
+        const attendanceAdded = Number(summary?.attendanceAdded || 0) || 0
+        const assignmentsAdded = Number(summary?.assignmentsAdded || 0) || 0
+
+        if (attendanceAdded > 0 || assignmentsAdded > 0) {
+          if (isUpdateAction) {
+            return `Đã cập nhật ngày vào lớp. Đã bổ sung learner vào ${attendanceAdded} buổi học và ${assignmentsAdded} bài tập còn thiếu.`
+          }
+          return `Đã thêm học viên vào lớp. Đã bổ sung learner vào ${attendanceAdded} buổi học và ${assignmentsAdded} bài tập còn thiếu.`
+        }
+
+        return isUpdateAction
+          ? 'Đã cập nhật ngày vào lớp. Không có dữ liệu cần bổ sung.'
+          : 'Đã thêm học viên vào lớp thành công. Không có dữ liệu cần bổ sung.'
+      }
+
       if (mode === 'existing') {
         const selectedLearner = learners.find((l) => String(l.id) === String(enrollmentForm.learner)) || (selectedLearnerOption ? { id: selectedLearnerOption.value, status: selectedLearnerOption.status } : null)
         if (selectedLearner && (selectedLearner.status === 'inactive' || selectedLearner.learnerStatus === 'inactive')) {
@@ -412,11 +433,11 @@ export default function ClassDetailPage() {
       }
 
       if (editingEnrollmentId) {
-        await updateEnrollment(id, editingEnrollmentId, payload)
-        setSuccess('Cập nhật enrollment thành công')
+        const result = await updateEnrollment(id, editingEnrollmentId, payload)
+        setSuccess(buildEnrollmentReconcileMessage(result?.reconcile, true))
       } else {
-        await createEnrollment(id, payload)
-        setSuccess(mode === 'existing' ? 'Thêm học viên vào lớp thành công' : 'Tạo học viên và thêm vào lớp thành công')
+        const result = await createEnrollment(id, payload)
+        setSuccess(buildEnrollmentReconcileMessage(result?.reconcile, false))
       }
 
       closeEnrollmentModal()

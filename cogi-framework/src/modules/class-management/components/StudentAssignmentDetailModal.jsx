@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { CAlert, CBadge, CButton, CCard, CCardBody, CCardHeader, CModal, CModalBody, CModalFooter, CModalHeader, CModalTitle, CSpinner } from '@coreui/react'
-import { getStudentAssignmentDetail, saveStudentAssignmentSubmissionDraft, startStudentAssignmentAssessmentAttempt, submitStudentAssignmentSubmission, updateStudentAssignmentTodoProgress } from '../services/classService'
+import { getStudentAssignmentDetail, getStudentSubmissionVersionDetail, saveStudentAssignmentSubmissionDraft, startStudentAssignmentAssessmentAttempt, submitStudentAssignmentSubmission, updateStudentAssignmentTodoProgress } from '../services/classService'
 import { sanitizeClassSessionContentHtml } from '../utils/classSessionContentHtml'
 import { formatSessionDateTime } from '../utils/classSessionUi'
+import SubmissionViewer from './SubmissionViewer'
 import StudentSubmissionEditorModal from './StudentSubmissionEditorModal'
+import { getSubmissionStatusMeta, getSubmissionVersionLabel } from './submissionViewerMeta'
 
 const STATUS_META = {
   assigned: { label: 'Chưa bắt đầu', color: 'secondary' },
@@ -29,6 +31,17 @@ function getAssessmentTaskActionLabel(task) {
   return 'Làm bài kiểm tra'
 }
 
+function getSubmissionGroups(task) {
+  const submissions = Array.isArray(task?.submissions) ? task.submissions : []
+  const currentDraft = submissions.find((item) => item?.status === 'draft') || null
+  const submittedHistory = submissions.filter((item) => item?.status !== 'draft')
+  return {
+    currentDraft,
+    submittedHistory,
+    latestSubmitted: submittedHistory[0] || null,
+  }
+}
+
 export default function StudentAssignmentDetailModal({ visible = false, assignmentId = null, learnerId = '', onClose, onChanged }) {
   const [loading, setLoading] = useState(false)
   const [detail, setDetail] = useState(null)
@@ -36,6 +49,7 @@ export default function StudentAssignmentDetailModal({ visible = false, assignme
   const [saving, setSaving] = useState('')
   const [submitError, setSubmitError] = useState('')
   const [submissionTask, setSubmissionTask] = useState(null)
+  const [viewerState, setViewerState] = useState({ open: false, loading: false, error: '', data: null, submissionId: null })
 
   const load = useCallback(async () => {
     if (!assignmentId || !learnerId) {
@@ -58,6 +72,23 @@ export default function StudentAssignmentDetailModal({ visible = false, assignme
     if (!visible) return
     load()
   }, [load, visible])
+
+  async function openSubmissionViewer(submission) {
+    const submissionId = Number(submission?.id || 0) || 0
+    if (!submissionId || !learnerId) return
+    setViewerState({ open: true, loading: true, error: '', data: null, submissionId })
+    try {
+      const data = await getStudentSubmissionVersionDetail(submissionId, { learnerId })
+      setViewerState({ open: true, loading: false, error: '', data, submissionId })
+    } catch (requestError) {
+      setViewerState({ open: true, loading: false, error: getApiMessage(requestError, 'Không thể tải nội dung bài đã nộp.'), data: null, submissionId })
+    }
+  }
+
+  function closeSubmissionViewer() {
+    if (viewerState.loading) return
+    setViewerState({ open: false, loading: false, error: '', data: null, submissionId: null })
+  }
 
   return (
     <>
@@ -124,12 +155,82 @@ export default function StudentAssignmentDetailModal({ visible = false, assignme
 
                     {task.taskType === 'submission' ? (
                       <div className='d-flex flex-column gap-2'>
-                        <div className='d-flex gap-2 flex-wrap'>
-                          <CButton size='sm' color='primary' onClick={() => { setSubmitError(''); setSubmissionTask(task) }}>Mở bài nộp</CButton>
-                        </div>
-                        {(task.submissions || []).map((submission) => (
-                          <div key={submission.id} className='small text-body-secondary'>Version {submission.version} · {submission.status} · {formatSessionDateTime(submission.submittedAt)}</div>
-                        ))}
+                        {(() => {
+                          const { currentDraft, submittedHistory, latestSubmitted } = getSubmissionGroups(task)
+                          const latestStatusMeta = latestSubmitted ? getSubmissionStatusMeta(latestSubmitted.status) : null
+                          const canCreateNewVersion = detail?.status === 'published' && !currentDraft
+
+                          return (
+                            <div className='d-flex flex-column gap-3'>
+                              <CCard className='border-0 shadow-sm bg-body-tertiary'>
+                                <CCardHeader className='bg-transparent'><strong>Nộp bài</strong></CCardHeader>
+                                <CCardBody className='d-flex flex-column gap-3'>
+                                  {currentDraft ? (
+                                    <div className='border rounded-3 p-3 bg-white'>
+                                      <div className='fw-semibold mb-1'>Bản nháp hiện tại</div>
+                                      <div className='small text-body-secondary'>{getSubmissionVersionLabel(currentDraft.version)} đang được soạn và chưa nộp.</div>
+                                    </div>
+                                  ) : null}
+                                  {!currentDraft && !latestSubmitted ? <div className='small text-body-secondary'>Bạn chưa có bài nộp cho task này.</div> : null}
+                                  <div className='d-flex gap-2 flex-wrap'>
+                                    {!latestSubmitted && !currentDraft ? <CButton size='sm' color='primary' onClick={() => { setSubmitError(''); setSubmissionTask(task) }}>Nộp bài</CButton> : null}
+                                    {currentDraft ? <CButton size='sm' color='primary' onClick={() => { setSubmitError(''); setSubmissionTask(task) }}>Tiếp tục soạn</CButton> : null}
+                                    {latestSubmitted ? <CButton size='sm' color='secondary' variant='outline' onClick={() => openSubmissionViewer(latestSubmitted)}>Xem bài đã nộp</CButton> : null}
+                                    {latestSubmitted && canCreateNewVersion ? <CButton size='sm' color='primary' onClick={() => { setSubmitError(''); setSubmissionTask(task) }}>Nộp phiên bản mới</CButton> : null}
+                                  </div>
+                                </CCardBody>
+                              </CCard>
+
+                              {latestSubmitted ? (
+                                <CCard className='border-0 shadow-sm' style={{ background: '#fcfcfd' }}>
+                                  <CCardHeader className='d-flex justify-content-between align-items-center gap-2 flex-wrap'>
+                                    <strong>Bài đã nộp</strong>
+                                    <CBadge color={latestStatusMeta?.color || 'warning'}>{latestStatusMeta?.label || 'Đã nộp'}</CBadge>
+                                  </CCardHeader>
+                                  <CCardBody className='d-flex flex-column gap-3'>
+                                    <div>
+                                      <div className='small text-body-secondary mb-1'>Lần nộp gần nhất</div>
+                                      <div className='fw-semibold'>{getSubmissionVersionLabel(latestSubmitted.version)}</div>
+                                    </div>
+                                    <div className='d-grid gap-3' style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+                                      <div className='border rounded-3 p-3'>
+                                        <div className='small text-body-secondary mb-1'>Nộp lúc</div>
+                                        <div className='fw-semibold'>{formatSessionDateTime(latestSubmitted.submittedAt)}</div>
+                                      </div>
+                                      <div className='border rounded-3 p-3'>
+                                        <div className='small text-body-secondary mb-1'>Trạng thái</div>
+                                        <div className='fw-semibold'>{latestStatusMeta?.label || 'Đã nộp'}</div>
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <CButton size='sm' color='secondary' variant='outline' onClick={() => openSubmissionViewer(latestSubmitted)}>Xem nội dung đã nộp</CButton>
+                                    </div>
+                                  </CCardBody>
+                                </CCard>
+                              ) : null}
+
+                              {submittedHistory.length > 1 ? (
+                                <CCard className='border-0 shadow-sm'>
+                                  <CCardHeader><strong>Lịch sử nộp bài</strong></CCardHeader>
+                                  <CCardBody className='d-flex flex-column gap-3'>
+                                    {submittedHistory.map((submission) => {
+                                      const statusMeta = getSubmissionStatusMeta(submission.status)
+                                      return (
+                                        <div key={submission.id} className='border rounded-3 p-3 d-flex justify-content-between align-items-center gap-3 flex-wrap'>
+                                          <div className='d-flex flex-column gap-1'>
+                                            <div className='fw-semibold'>{getSubmissionVersionLabel(submission.version)}</div>
+                                            <div className='small text-body-secondary'>{`${formatSessionDateTime(submission.submittedAt)} · ${statusMeta.label}`}</div>
+                                          </div>
+                                          <CButton size='sm' color='secondary' variant='outline' onClick={() => openSubmissionViewer(submission)}>Xem</CButton>
+                                        </div>
+                                      )
+                                    })}
+                                  </CCardBody>
+                                </CCard>
+                              ) : null}
+                            </div>
+                          )
+                        })()}
                       </div>
                     ) : null}
 
@@ -217,6 +318,19 @@ export default function StudentAssignmentDetailModal({ visible = false, assignme
           }
         }}
       />
+
+      <CModal visible={viewerState.open} onClose={closeSubmissionViewer} size='xl'>
+        <CModalHeader>
+          <CModalTitle>{viewerState?.data?.submission ? `Bài đã nộp - ${getSubmissionVersionLabel(viewerState.data.submission.version)}` : 'Bài đã nộp'}</CModalTitle>
+        </CModalHeader>
+        <CModalBody className='d-flex flex-column gap-3' style={{ background: '#f7f8fa' }}>
+          {viewerState.error ? <CAlert color='danger'>{viewerState.error}</CAlert> : null}
+          {viewerState.loading ? <div className='text-center py-4'><CSpinner color='primary' /></div> : <SubmissionViewer submission={viewerState?.data?.submission || null} />}
+        </CModalBody>
+        <CModalFooter>
+          <CButton color='secondary' variant='outline' onClick={closeSubmissionViewer}>Đóng</CButton>
+        </CModalFooter>
+      </CModal>
     </>
   )
 }

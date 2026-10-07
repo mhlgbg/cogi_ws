@@ -70,6 +70,22 @@ const contentManagementFeatures = {
       path: '/public-pages',
       showInMenu: true,
     },
+    {
+      name: 'Quan ly Frame Campaign',
+      key: 'photo-frame-campaign.manage',
+      order: 9,
+      description: 'Tenant quan ly chien dich khung hinh cua minh',
+      path: '/frame-campaigns',
+      showInMenu: true,
+    },
+    {
+      name: 'Quan ly tat ca Frame Campaign',
+      key: 'photo-frame-campaign.manage.all',
+      order: 10,
+      description: 'Cho phep xem va quan ly toan bo frame campaign trong tenant hien tai',
+      path: '/frame-campaigns',
+      showInMenu: false,
+    },
   ],
 }
 

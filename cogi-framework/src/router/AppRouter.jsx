@@ -23,6 +23,7 @@ import CandidateExamRecheckLookupPage from '../modules/admission-v1/pages/Candid
 import AdmissionPublicExamCardPage from '../modules/admission-v1/pages/AdmissionPublicExamCardPage'
 import CandidateExamCardPage from '../modules/admission-management/pages/CandidateExamCardPage'
 import LuckyWheelPresentationPage from '../modules/lucky-wheel-management/pages/LuckyWheelPresentationPage'
+import PhotoFramePublicPage from '../pages/public/PhotoFramePublicPage'
 import PublicPageDetailPage from '../pages/public/PublicPageDetailPage'
 import LuckyWheelPublicPage from '../pages/public/LuckyWheelPublicPage'
 import QuickMessagePublicPage from '../pages/public/QuickMessagePublicPage'
@@ -197,6 +198,7 @@ export default function AppRouter() {
             </TenantRoute>
           )}
         >
+          <Route path="frame/:slug" element={<PhotoFramePublicPage />} />
           <Route path="lucky-wheel/:code" element={<LuckyWheelPublicPage />} />
           <Route path="msg/:code" element={<QuickMessagePublicPage />} />
           <Route path="join/:campaignCode" element={<RegistrationCampaignJoinPage />} />
@@ -219,6 +221,7 @@ export default function AppRouter() {
             </TenantRoute>
           )}
         >
+          <Route path="frame/:slug" element={<PhotoFramePublicPage />} />
           <Route path="lucky-wheel/:code" element={<LuckyWheelPublicPage />} />
           <Route path="msg/:code" element={<QuickMessagePublicPage />} />
           <Route path="join/:campaignCode" element={<RegistrationCampaignJoinPage />} />

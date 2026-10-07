@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   CAlert,
@@ -19,8 +19,10 @@ import {
 } from '@coreui/react'
 import SimplePagination from '../../../components/SimplePagination'
 import StudentAssignmentDetailModal from '../components/StudentAssignmentDetailModal'
+import StudentSubmissionEditorModal from '../components/StudentSubmissionEditorModal'
+import StudentSubmissionViewerModal from '../components/StudentSubmissionViewerModal'
 import StudentPortalContextCard from '../components/StudentPortalContextCard'
-import { getStudentAssignments, getStudentClasses, startStudentAssignmentAssessmentAttempt, updateStudentAssignmentTodoProgress } from '../services/classService'
+import { getStudentAssignmentTaskDetail, getStudentAssignments, getStudentClasses, startStudentAssignmentAssessmentAttempt, submitStudentAssignmentSubmission, saveStudentAssignmentSubmissionDraft, updateStudentAssignmentTodoProgress } from '../services/classService'
 import { getClassSessionContentPreview } from '../utils/classSessionContentHtml'
 import { formatSessionDate, formatSessionDateTime, formatSessionTime, formatTeacherDisplay } from '../utils/classSessionUi'
 import useStudentPortalContext from '../utils/useStudentPortalContext'
@@ -95,13 +97,21 @@ function getPrimaryAction(item) {
     return { label: 'Làm bài', type: 'assessment' }
   }
   if (item?.taskType === 'submission') {
-    return { label: item?.latestSubmissionId ? 'Xem/Nộp bài' : 'Nhập bài', type: 'detail' }
+    if (item?.latestSubmissionStatus === 'draft') return { label: 'Tiếp tục', type: 'submission-edit' }
+    return { label: item?.latestSubmissionId ? 'Xem bài đã nộp' : 'Nộp bài', type: item?.latestSubmissionId ? 'submission-view' : 'submission-edit' }
   }
   if (item?.taskType === 'todo') {
     if (item?.learnerTaskStatus === 'completed') return { label: 'Đã hoàn thành', type: 'detail', disabled: true }
     return { label: 'Đánh dấu hoàn thành', type: 'todo' }
   }
   return { label: 'Mở', type: 'detail' }
+}
+
+function getSubmissionSecondaryAction(item) {
+  if (item?.taskType !== 'submission') return null
+  if (!item?.latestSubmissionId || item?.latestSubmissionStatus === 'draft') return null
+  if (item?.assignmentStatus !== 'published') return null
+  return { label: 'Nộp phiên bản mới', type: 'submission-edit' }
 }
 
 export default function StudentAssignmentsPage() {
@@ -120,12 +130,13 @@ export default function StudentAssignmentsPage() {
   const [detailAssignmentId, setDetailAssignmentId] = useState(null)
   const [actionError, setActionError] = useState('')
   const [actionKey, setActionKey] = useState('')
+  const [taskModalState, setTaskModalState] = useState({ open: false, loading: false, error: '', mode: 'edit', taskId: null, submissionId: null, data: null })
 
   const hasLearners = Array.isArray(portal.context?.learners) && portal.context.learners.length > 0
   const selectedLearnerName = portal.context?.learnerContext?.fullName || 'Hồ sơ hiện tại'
   const tenantName = portal.context?.tenant?.name || 'tenant hiện tại'
 
-  async function loadData(page = pagination.page, activeFilters = filters, activeStatus = status) {
+  const loadData = useCallback(async (page = pagination.page, activeFilters = filters, activeStatus = status) => {
     if (!portal.context || !portal.selectedLearnerId) {
       setRows([])
       setSummary({ countsByStatus: { pending: 0, in_progress: 0, completed: 0, overdue: 0 } })
@@ -162,7 +173,7 @@ export default function StudentAssignmentsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [filters, pagination.page, pagination.pageSize, portal.context, portal.selectedLearnerId, status])
 
   useEffect(() => {
     setFilters(buildInitialFilters())
@@ -173,11 +184,9 @@ export default function StudentAssignmentsPage() {
 
   useEffect(() => {
     loadData(1, filters, status)
-  }, [portal.context, portal.selectedLearnerId, filters, status])
+  }, [filters, loadData, status])
 
-  const activeClassIds = useMemo(() => new Set(classes.filter((item) => item?.enrollmentContext?.isCurrent).map((item) => item.id)), [classes])
   const selectedLearnerHasClasses = classes.length > 0
-  const selectedLearnerHasCurrentClasses = activeClassIds.size > 0
   const emptyMessage = !hasLearners
     ? 'Bạn chưa có hồ sơ học tập được liên kết trong không gian số này.'
     : !selectedLearnerHasClasses
@@ -191,8 +200,33 @@ export default function StudentAssignmentsPage() {
         ? 'Không có bài tập phù hợp với bộ lọc hiện tại.'
         : ''
 
-  async function handlePrimaryAction(item) {
-    const action = getPrimaryAction(item)
+  async function loadTaskModalDetail(taskId, mode = 'edit', submissionId = null) {
+    if (!taskId || !portal.selectedLearnerId) return
+    setTaskModalState({ open: true, loading: true, error: '', mode, taskId, submissionId, data: null })
+    try {
+      const data = await getStudentAssignmentTaskDetail(taskId, { learnerId: portal.selectedLearnerId })
+      setTaskModalState({ open: true, loading: false, error: '', mode, taskId, submissionId, data })
+    } catch (requestError) {
+      setTaskModalState({ open: true, loading: false, error: getApiMessage(requestError, 'Không thể tải task nộp bài.'), mode, taskId, submissionId, data: null })
+    }
+  }
+
+  function closeTaskModal() {
+    if (taskModalState.loading) return
+    setTaskModalState({ open: false, loading: false, error: '', mode: 'edit', taskId: null, submissionId: null, data: null })
+  }
+
+  function getViewerSubmission() {
+    const submissions = Array.isArray(taskModalState?.data?.task?.submissions) ? taskModalState.data.task.submissions : []
+    if (taskModalState.submissionId) {
+      const matched = submissions.find((item) => Number(item?.id || 0) === Number(taskModalState.submissionId))
+      if (matched) return matched
+    }
+    return submissions.find((item) => item?.status !== 'draft') || null
+  }
+
+  async function handleTaskAction(item, explicitAction = null) {
+    const action = explicitAction || getPrimaryAction(item)
     if (!item?.taskId || action?.disabled) return
     setActionError('')
     setActionKey(`${action.type}-${item.taskId}`)
@@ -211,6 +245,14 @@ export default function StudentAssignmentsPage() {
       if (action.type === 'todo') {
         await updateStudentAssignmentTodoProgress(item.taskId, { status: 'completed' }, { learnerId: portal.selectedLearnerId })
         await loadData(pagination.page, filters, status)
+        return
+      }
+      if (action.type === 'submission-edit') {
+        await loadTaskModalDetail(item.taskId, 'edit', item?.latestSubmissionStatus === 'draft' ? item?.latestSubmissionId : null)
+        return
+      }
+      if (action.type === 'submission-view') {
+        await loadTaskModalDetail(item.taskId, 'view', item?.latestSubmissionId || null)
         return
       }
       setDetailAssignmentId(item.assignmentId)
@@ -303,6 +345,7 @@ export default function StudentAssignmentsPage() {
               {rows.map((item) => {
                 const statusMeta = getStatusMeta(item.normalizedStatus)
                 const action = getPrimaryAction(item)
+                const secondaryTaskAction = getSubmissionSecondaryAction(item)
                 const buttonDisabled = action.disabled || actionKey === `${action.type}-${item.taskId}`
                 return (
                   <CCard key={item.id} className='border rounded-3'>
@@ -325,7 +368,8 @@ export default function StudentAssignmentsPage() {
                           {item.taskType === 'assessment' && item.showScoreAfterSubmit !== false && item.score !== null ? <div className='small mt-2'><strong>Điểm:</strong> {item.score}{item.maxScore ? `/${item.maxScore}` : ''}</div> : null}
                         </div>
                         <div className='d-flex flex-column align-items-start align-items-md-end gap-2'>
-                          <CButton size='sm' color='primary' disabled={buttonDisabled} onClick={() => handlePrimaryAction(item)}>{action.label}</CButton>
+                          <CButton size='sm' color='primary' disabled={buttonDisabled} onClick={() => handleTaskAction(item)}>{action.label}</CButton>
+                          {secondaryTaskAction ? <CButton size='sm' color='secondary' variant='outline' disabled={actionKey === `${secondaryTaskAction.type}-${item.taskId}`} onClick={() => handleTaskAction(item, secondaryTaskAction)}>{secondaryTaskAction.label}</CButton> : null}
                           <CButton size='sm' color='secondary' variant='outline' onClick={() => setDetailAssignmentId(item.assignmentId)}>Xem chi tiết</CButton>
                         </div>
                       </div>
@@ -348,6 +392,58 @@ export default function StudentAssignmentsPage() {
         learnerId={portal.selectedLearnerId}
         onClose={() => setDetailAssignmentId(null)}
         onChanged={() => loadData(pagination.page, filters, status)}
+      />
+
+      <StudentSubmissionEditorModal
+        visible={taskModalState.open && taskModalState.mode === 'edit'}
+        loading={taskModalState.loading}
+        task={taskModalState?.data?.task || null}
+        assignment={taskModalState?.data?.assignment || null}
+        showTaskContext
+        learnerId={portal.selectedLearnerId}
+        saving={Boolean(actionKey) && actionKey.startsWith('task-modal-')}
+        submitError={taskModalState.error}
+        onClose={closeTaskModal}
+        onSaveDraft={async (payload) => {
+          const taskId = Number(taskModalState?.data?.task?.id || 0)
+          if (!taskId) return
+          setActionKey(`task-modal-draft-${taskId}`)
+          setTaskModalState((prev) => ({ ...prev, error: '' }))
+          try {
+            await saveStudentAssignmentSubmissionDraft(taskId, payload, { learnerId: portal.selectedLearnerId })
+            await loadData(pagination.page, filters, status)
+            await loadTaskModalDetail(taskId, 'edit', null)
+          } catch (requestError) {
+            setTaskModalState((prev) => ({ ...prev, error: getApiMessage(requestError, 'Không thể lưu nháp bài nộp.') }))
+          } finally {
+            setActionKey('')
+          }
+        }}
+        onSubmit={async (payload) => {
+          const taskId = Number(taskModalState?.data?.task?.id || 0)
+          if (!taskId) return
+          setActionKey(`task-modal-submit-${taskId}`)
+          setTaskModalState((prev) => ({ ...prev, error: '' }))
+          try {
+            await submitStudentAssignmentSubmission(taskId, payload, { learnerId: portal.selectedLearnerId })
+            await loadData(pagination.page, filters, status)
+            closeTaskModal()
+          } catch (requestError) {
+            setTaskModalState((prev) => ({ ...prev, error: getApiMessage(requestError, 'Không thể nộp bài.') }))
+          } finally {
+            setActionKey('')
+          }
+        }}
+      />
+
+      <StudentSubmissionViewerModal
+        visible={taskModalState.open && taskModalState.mode === 'view'}
+        loading={taskModalState.loading}
+        error={taskModalState.error}
+        assignment={taskModalState?.data?.assignment || null}
+        task={taskModalState?.data?.task || null}
+        submission={getViewerSubmission()}
+        onClose={closeTaskModal}
       />
     </div>
   )

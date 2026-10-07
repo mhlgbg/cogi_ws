@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { CAlert, CBadge, CButton, CCard, CCardBody, CCardHeader, CCol, CFormInput, CFormLabel, CFormSelect, CRow, CSpinner, CTable, CTableBody, CTableDataCell, CTableHead, CTableHeaderCell, CTableRow } from '@coreui/react'
 import { completeTeacherSession, getTeacherClasses, getTeacherSessionDetail, getTeacherSessions, saveTeacherSessionAttendance, saveTeacherSessionReport } from '../services/classService'
 import ClassSessionDetailModal from '../components/ClassSessionDetailModal'
@@ -74,6 +75,7 @@ function SessionSection({ title, rows, onOpen }) {
 }
 
 export default function TeacherSessionWorkspacePage() {
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [rows, setRows] = useState([])
   const [classes, setClasses] = useState([])
@@ -115,17 +117,7 @@ export default function TeacherSessionWorkspacePage() {
   }, [success])
 
   async function openSession(item) {
-    setShowSessionModal(true)
-    setSelectedSessionLoading(true)
-    setError('')
-    try {
-      setSelectedSession(await getTeacherSessionDetail(item.id))
-    } catch (requestError) {
-      setSelectedSession(null)
-      setError(getApiMessage(requestError, 'Không thể tải buổi học.'))
-    } finally {
-      setSelectedSessionLoading(false)
-    }
+    navigate(`/teacher/sessions/${item.id}`)
   }
 
   return (

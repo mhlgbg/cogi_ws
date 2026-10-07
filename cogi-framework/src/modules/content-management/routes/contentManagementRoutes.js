@@ -3,6 +3,7 @@ import CategoryManagementPage from '../pages/CategoryManagementPage'
 import AuthorManagementPage from '../pages/AuthorManagementPage'
 import JournalCategoryManagementPage from '../pages/JournalCategoryManagementPage'
 import JournalIssueManagementPage from '../pages/JournalIssueManagementPage'
+import PhotoFrameCampaignManagementPage from '../pages/PhotoFrameCampaignManagementPage'
 import PublicPageManagementPage from '../pages/PublicPageManagementPage'
 import TenantPaymentProfileCreatePage from '../pages/TenantPaymentProfileCreatePage'
 import TenantPaymentProfileDetailPage from '../pages/TenantPaymentProfileDetailPage'
@@ -83,6 +84,12 @@ const contentManagementRoutes = [
     title: 'PublicPage',
     featureKey: 'public-page.manage',
     component: PublicPageManagementPage,
+  },
+  {
+    path: '/frame-campaigns',
+    title: 'Frame Campaigns',
+    featureKey: 'photo-frame-campaign.manage',
+    component: PhotoFrameCampaignManagementPage,
   },
 ]
 

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { CAlert, CBadge, CButton, CCard, CCardBody, CCardHeader, CCol, CFormInput, CFormLabel, CFormSelect, CModal, CModalBody, CModalFooter, CModalHeader, CModalTitle, CRow, CSpinner, CTable, CTableBody, CTableDataCell, CTableHead, CTableHeaderCell, CTableRow } from '@coreui/react'
-import { getFileAssetUrl } from '../../learning-management/utils/questionBankUi'
 import { getTeacherAssignmentDetail, getTeacherAssignmentLearnerTaskDetail, publishTeacherAssignment, closeTeacherAssignment, cancelTeacherAssignment, reviewTeacherAssignmentLearnerTask, startTeacherAssignmentAssessmentPreview, updateTeacherAssignment } from '../services/classService'
 import { sanitizeClassSessionContentHtml } from '../utils/classSessionContentHtml'
 import { formatSessionDateTime } from '../utils/classSessionUi'
+import SubmissionViewer from './SubmissionViewer'
 import TeacherAssignmentEditorModal from './TeacherAssignmentEditorModal'
+import { getSubmissionStatusMeta, getSubmissionVersionLabel } from './submissionViewerMeta'
 
 const STATUS_META = {
   draft: { label: 'Draft', color: 'secondary' },
@@ -255,23 +256,12 @@ export default function TeacherAssignmentDetailModal({ visible = false, assignme
               </div>
               {(reviewDetail.submissions || []).map((submission) => (
                 <CCard key={submission.id} className='border-0 shadow-sm'>
-                  <CCardHeader><strong>Version {submission.version}</strong> · <CBadge color={(STATUS_META[submission.status] || STATUS_META.draft).color}>{(STATUS_META[submission.status] || STATUS_META.draft).label}</CBadge></CCardHeader>
-                  <CCardBody className='d-flex flex-column gap-2'>
-                    {submission.comment ? <div><strong>Ghi chú:</strong> {submission.comment}</div> : null}
-                    {(submission.items || []).map((item) => {
-                      const assetUrl = item?.fileAsset ? getFileAssetUrl(item.fileAsset) : ''
-                      return (
-                        <div key={item.id} className='border rounded-3 p-3'>
-                          <div className='fw-semibold mb-2'>{item.type.toUpperCase()} {item.caption ? `· ${item.caption}` : ''}</div>
-                          {item.type === 'html' ? <HtmlView value={item.contentHtml} /> : null}
-                          {item.type === 'link' && item.url ? <a href={item.url} target='_blank' rel='noreferrer'>{item.url}</a> : null}
-                          {item.type === 'image' && assetUrl ? <img src={assetUrl} alt={item.caption || 'submission'} style={{ maxWidth: 240, borderRadius: 8 }} /> : null}
-                          {item.type === 'audio' && assetUrl ? <audio controls preload='none' src={assetUrl} style={{ width: '100%' }} /> : null}
-                          {item.type === 'video' && assetUrl ? <video controls preload='metadata' src={assetUrl} style={{ width: '100%', maxHeight: 260 }} /> : null}
-                          {item.type === 'file' && assetUrl ? <a href={assetUrl} target='_blank' rel='noreferrer'>{item?.fileAsset?.originalName || item?.fileAsset?.fileName || 'Mở file'}</a> : null}
-                        </div>
-                      )
-                    })}
+                  <CCardHeader className='d-flex justify-content-between align-items-center gap-2 flex-wrap'>
+                    <strong>{getSubmissionVersionLabel(submission.version)}</strong>
+                    <CBadge color={getSubmissionStatusMeta(submission.status).color}>{getSubmissionStatusMeta(submission.status).label}</CBadge>
+                  </CCardHeader>
+                  <CCardBody className='d-flex flex-column gap-2' style={{ background: '#f7f8fa' }}>
+                    <SubmissionViewer submission={submission} showHeader={false} />
                   </CCardBody>
                 </CCard>
               ))}

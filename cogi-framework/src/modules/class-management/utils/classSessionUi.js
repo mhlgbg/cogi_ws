@@ -9,6 +9,7 @@ export const CLASS_SESSION_WEEKDAY_OPTIONS = [
 ]
 
 export const CLASS_SESSION_ATTENDANCE_OPTIONS = [
+  { value: 'not_marked', label: 'Chưa điểm danh' },
   { value: 'present', label: 'Có mặt' },
   { value: 'absent', label: 'Vắng' },
   { value: 'late', label: 'Đi muộn' },
@@ -121,7 +122,7 @@ export function buildAttendanceDraft(session) {
   return (Array.isArray(session?.eligibleLearners) ? session.eligibleLearners : []).map((item) => ({
     learnerId: item?.learner?.id || 0,
     learner: item?.learner || null,
-    status: toText(item?.attendance?.status) || 'present',
+    status: toText(item?.attendance?.status) || 'not_marked',
     note: toText(item?.attendance?.note),
     historicalOnly: item?.historicalOnly === true,
     joinDate: item?.joinDate || null,
