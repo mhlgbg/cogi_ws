@@ -938,12 +938,7 @@ function CommunityComposerModal({
   const isHtmlMode = form.contentType === 'html'
   const canSubmit = Boolean(toText(stripHtmlToPlainText(form.content)))
   const selectedGroupName = composerGroups.find((group) => Number(group.id) === Number(form.group))?.name || groupName
-
-  useEffect(() => {
-    if (!visible) return
-    setYoutubeInput('')
-    setShowYoutubeInput(Boolean(form.youtube))
-  }, [form.youtube, visible])
+  const youtubeInputVisible = showYoutubeInput || Boolean(form.youtube)
 
   useEffect(() => {
     if (!visible || initialFocus !== 'image') return
@@ -1127,7 +1122,7 @@ function CommunityComposerModal({
                 ▶ YouTube
               </button>
             </div>
-            {showYoutubeInput ? (
+            {youtubeInputVisible ? (
               <div className='community-youtube-input-row'>
                 <CFormInput
                   placeholder='Dán liên kết YouTube...'
