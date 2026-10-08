@@ -3,7 +3,7 @@ import { CAlert, CBadge, CButton, CCard, CCardBody, CCardHeader, CSpinner, CTabl
 import { createTeacherSessionAssignment, getTeacherSessionAssignments } from '../services/classService'
 import { getClassSessionContentPreview } from '../utils/classSessionContentHtml'
 import { formatSessionDateTime } from '../utils/classSessionUi'
-import TeacherAssignmentDetailModal from './TeacherAssignmentDetailModal'
+import { TeacherAssignmentDetailModal, TeacherAssignmentProgressModal } from './TeacherAssignmentDetailModal'
 import TeacherAssignmentEditorModal from './TeacherAssignmentEditorModal'
 
 function getApiMessage(error, fallback) {
@@ -22,6 +22,7 @@ export default function TeacherSessionAssignmentsPanel({ sessionId, canManage = 
   const [rows, setRows] = useState([])
   const [error, setError] = useState('')
   const [detailId, setDetailId] = useState(null)
+  const [progressId, setProgressId] = useState(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [createError, setCreateError] = useState('')
   const [createSaving, setCreateSaving] = useState(false)
@@ -81,7 +82,12 @@ export default function TeacherSessionAssignmentsPanel({ sessionId, canManage = 
                     <CTableDataCell><CBadge color={(STATUS_META[item.status] || STATUS_META.draft).color}>{(STATUS_META[item.status] || STATUS_META.draft).label}</CBadge></CTableDataCell>
                     <CTableDataCell>{item.taskCount || 0}</CTableDataCell>
                     <CTableDataCell>{item.completedCount || 0}/{item.learnerCount || 0}</CTableDataCell>
-                    <CTableDataCell><CButton size='sm' color='primary' variant='outline' onClick={() => setDetailId(item.id)}>Mở</CButton></CTableDataCell>
+                    <CTableDataCell>
+                      <div className='d-flex flex-wrap gap-2'>
+                        <CButton size='sm' color='primary' variant='outline' onClick={() => setDetailId(item.id)}>Xem bài tập</CButton>
+                        <CButton size='sm' color='secondary' variant='outline' onClick={() => setProgressId(item.id)}>Tiến độ</CButton>
+                      </div>
+                    </CTableDataCell>
                   </CTableRow>
                 ))}
               </CTableBody>
@@ -113,6 +119,7 @@ export default function TeacherSessionAssignmentsPanel({ sessionId, canManage = 
       />
 
       <TeacherAssignmentDetailModal visible={Boolean(detailId)} assignmentId={detailId} onClose={() => setDetailId(null)} onChanged={load} />
+      <TeacherAssignmentProgressModal visible={Boolean(progressId)} assignmentId={progressId} onClose={() => setProgressId(null)} onChanged={load} />
     </>
   )
 }

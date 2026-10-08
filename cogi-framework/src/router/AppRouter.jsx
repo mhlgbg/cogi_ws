@@ -42,6 +42,7 @@ import CategoryArchiveTreePage from '../pages/journal/CategoryArchiveTreePage'
 import JournalIssueCategoryPage from '../pages/journal/JournalIssueCategoryPage'
 import JournalIssueArchiveTreePage from '../pages/journal/JournalIssueArchiveTreePage'
 import JournalIssueDetailPage from '../pages/journal/JournalIssueDetailPage'
+import CommunityPage from '../modules/community/pages/CommunityPage'
 import AssessmentPublicLayout from '../features/public-assessment/components/AssessmentPublicLayout'
 import AssessmentPreliminaryResultPage from '../features/public-assessment/pages/AssessmentPreliminaryResultPage'
 import CandidateAssessmentResultPage from '../features/public-assessment/pages/CandidateAssessmentResultPage'
@@ -176,6 +177,12 @@ export default function AppRouter() {
         <Route path="/tra-cuu-diem/:campaignCode" element={<TenantRoute requireAuth={false}><PublicChatShell><CandidateExamScoreLookupPage /></PublicChatShell></TenantRoute>} />
         <Route path="/tra-cuu-phuc-khao/:campaignCode" element={<TenantRoute requireAuth={false}><CandidateExamRecheckLookupPage /></TenantRoute>} />
         <Route path="/tra-cuu-tuyen-sinh/:campaignCode/the-du-kiem-tra" element={<TenantRoute requireAuth={false}><AdmissionPublicExamCardPage /></TenantRoute>} />
+        <Route path="/community" element={<TenantRoute requireAuth={false}><CommunityPage /></TenantRoute>} />
+        <Route path="/community/public" element={<TenantRoute requireAuth={false}><CommunityPage /></TenantRoute>} />
+        <Route path="/community/community" element={<TenantRoute requireAuth={false}><CommunityPage /></TenantRoute>} />
+        <Route path="/community/groups" element={<TenantRoute requireAuth={false}><CommunityPage /></TenantRoute>} />
+        <Route path="/community/group/:groupId" element={<TenantRoute requireAuth={false}><CommunityPage /></TenantRoute>} />
+        <Route path="/community/my-posts" element={<TenantRoute requireAuth={false}><CommunityPage /></TenantRoute>} />
         <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode" element={<TenantRoute requireAuth={false}><AdmissionV1EntryPage /></TenantRoute>} />
         <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/nguoi-khai" element={<TenantRoute requireAuth={false}><AdmissionV1DeclarantPage /></TenantRoute>} />
         <Route path="/t/:tenantCode/dang-ky-tuyen-sinh-v1/:campaignCode/ma-ho-so" element={<TenantRoute requireAuth={false}><AdmissionV1EmailVerifyPage /></TenantRoute>} />
@@ -189,6 +196,12 @@ export default function AppRouter() {
         <Route path="/t/:tenantCode/tra-cuu-diem/:campaignCode" element={<TenantRoute requireAuth={false}><PublicChatShell><CandidateExamScoreLookupPage /></PublicChatShell></TenantRoute>} />
         <Route path="/t/:tenantCode/tra-cuu-phuc-khao/:campaignCode" element={<TenantRoute requireAuth={false}><CandidateExamRecheckLookupPage /></TenantRoute>} />
         <Route path="/t/:tenantCode/tra-cuu-tuyen-sinh/:campaignCode/the-du-kiem-tra" element={<TenantRoute requireAuth={false}><AdmissionPublicExamCardPage /></TenantRoute>} />
+        <Route path="/t/:tenantCode/community" element={<TenantRoute requireAuth={false}><CommunityPage /></TenantRoute>} />
+        <Route path="/t/:tenantCode/community/public" element={<TenantRoute requireAuth={false}><CommunityPage /></TenantRoute>} />
+        <Route path="/t/:tenantCode/community/community" element={<TenantRoute requireAuth={false}><CommunityPage /></TenantRoute>} />
+        <Route path="/t/:tenantCode/community/groups" element={<TenantRoute requireAuth={false}><CommunityPage /></TenantRoute>} />
+        <Route path="/t/:tenantCode/community/group/:groupId" element={<TenantRoute requireAuth={false}><CommunityPage /></TenantRoute>} />
+        <Route path="/t/:tenantCode/community/my-posts" element={<TenantRoute requireAuth={false}><CommunityPage /></TenantRoute>} />
 
         <Route
           path="/"

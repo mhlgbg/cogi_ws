@@ -37,6 +37,7 @@ import * as mailMonitor from './mail-monitor'
 import * as luckyWheel from './lucky-wheel-management'
 import * as fitness from './fitness'
 import * as sports from './sports'
+import * as community from './community'
 import * as registrationCampaign from './registration-campaign'
 import * as assessmentCampaigns from './assessment-campaigns'
 import * as examManagement from './exam-management'
@@ -70,6 +71,7 @@ export const allModules = [
   slider,
   fitness,
   sports,
+  community,
   registrationCampaign,
   assessmentCampaigns,
   examManagement,
