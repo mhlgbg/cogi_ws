@@ -9,9 +9,13 @@ export default function AsyncCombobox({
   isClearable = true,
   defaultOptions = true,
   cacheOptions = true,
+  isLoading = false,
+  noOptionsMessage = () => 'No options found',
+  ...rest
 }) {
   return (
     <AsyncSelect
+      {...rest}
       cacheOptions={cacheOptions}
       defaultOptions={defaultOptions}
       loadOptions={loadOptions}
@@ -21,7 +25,14 @@ export default function AsyncCombobox({
       onChange={onChange}
       placeholder={placeholder}
       isClearable={isClearable}
-      styles={{ menu: (provided) => ({ ...provided, zIndex: 9999 }) }}
+      isLoading={isLoading}
+      noOptionsMessage={noOptionsMessage}
+      menuPortalTarget={typeof document !== 'undefined' ? document.body : null}
+      menuPosition='fixed'
+      styles={{
+        menu: (provided) => ({ ...provided, zIndex: 9999 }),
+        menuPortal: (provided) => ({ ...provided, zIndex: 9999 }),
+      }}
     />
   )
 }
