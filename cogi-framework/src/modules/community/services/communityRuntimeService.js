@@ -1,5 +1,5 @@
 import api from '../../../api/axios'
-import { resolveMediaUrl } from '../../../utils/mediaUrl'
+import { buildProtectedFileUrl, resolveMediaUrl } from '../../../utils/mediaUrl'
 
 function unwrapData(payload) {
   if (payload && typeof payload === 'object' && 'data' in payload) return payload.data
@@ -30,16 +30,28 @@ function normalizeMedia(value) {
     }
   }
 
+  const rawUrl = String(value.url || value.attributes?.url || value.path || '').trim()
+  const fileAssetId = Number(value.id || value.fileAssetId || value.attributes?.id || 0) || null
+  const provider = String(value.provider || value.attributes?.provider || '').trim().toLowerCase()
+  const mimeType = String(value.mimeType || value.mime || value.attributes?.mimeType || value.attributes?.mime || '').trim()
+  const extension = String(value.extension || value.ext || value.attributes?.extension || value.attributes?.ext || '').trim()
+  const normalizedType = String(value.type || (mimeType && mimeType.startsWith('image/') ? 'image' : '') || '').trim().toLowerCase()
+  const resolvedUrl = buildProtectedFileUrl({
+    fileAssetId,
+    storageProvider: provider,
+    url: rawUrl,
+  }) || resolveMediaUrl(rawUrl) || rawUrl
+
   return {
-    id: Number(value.id || 0) || null,
-    type: 'image',
-    name: String(value.name || '').trim(),
-    url: resolveMediaUrl(String(value.url || value.attributes?.url || '').trim()) || '',
-    mime: String(value.mime || '').trim(),
-    ext: String(value.ext || '').trim(),
-    width: Number(value.width || 0) || null,
-    height: Number(value.height || 0) || null,
-    formats: value.formats && typeof value.formats === 'object' ? value.formats : null,
+    id: Number(value.id || value.fileAssetId || value.attributes?.id || 0) || null,
+    type: normalizedType || 'image',
+    name: String(value.name || value.originalName || value.fileName || value.attributes?.name || '').trim(),
+    url: resolvedUrl,
+    mime: mimeType,
+    ext: extension,
+    width: Number(value.width || value.attributes?.width || 0) || null,
+    height: Number(value.height || value.attributes?.height || 0) || null,
+    formats: value.formats && typeof value.formats === 'object' ? value.formats : (value.attributes?.formats && typeof value.attributes.formats === 'object' ? value.attributes.formats : null),
     order: Number(value.order || 0) || 0,
   }
 }
@@ -105,6 +117,7 @@ function normalizeComment(value) {
     parentCommentId: Number(value.parentCommentId || value.parentComment?.id || 0) || null,
     content: String(value.content || ''),
     status: String(value.status || 'active').trim().toLowerCase(),
+    media: Array.isArray(value.media) ? value.media.map(normalizeMedia).filter(Boolean).sort((a, b) => (a.order || 0) - (b.order || 0)) : [],
     createdAt: value.createdAt || null,
     updatedAt: value.updatedAt || null,
     author: value.author || null,
@@ -234,14 +247,27 @@ export async function createCommunityPost(payload) {
   return normalizePost(unwrapData(response.data))
 }
 
-export async function uploadCommunityPostImages(files) {
+export async function uploadCommunityPostImages(files, options = {}) {
   const rows = Array.isArray(files) ? files : []
   if (rows.length === 0) return []
 
+  const moduleKey = String(options.moduleKey || options.category || 'community').trim() || 'community'
   const formData = new FormData()
-  rows.forEach((file) => formData.append('files', file))
-  const response = await api.post('/upload', formData)
-  const uploadedRows = Array.isArray(response?.data) ? response.data : []
+  rows.forEach((file) => formData.append('file', file))
+  formData.append('moduleKey', moduleKey)
+  formData.append('entityType', String(options.entityType || 'community-post').trim() || 'community-post')
+  formData.append('isPublic', String(options.isPublic !== undefined ? options.isPublic : true))
+  if (options.entityId) formData.append('entityId', String(options.entityId))
+
+  const response = await api.post('/tenant/storage/upload', formData)
+  const rawPayload = response?.data?.data ?? response?.data ?? []
+
+  const uploadedRows = Array.isArray(rawPayload)
+    ? rawPayload
+    : rawPayload && typeof rawPayload === 'object'
+      ? [rawPayload]
+      : []
+
   return uploadedRows.map(normalizeMedia).filter(Boolean)
 }
 

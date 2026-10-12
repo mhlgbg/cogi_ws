@@ -41,6 +41,7 @@ import {
   inactivePlatformTenantAdmin,
   invitePlatformTenantAdmin,
   uploadPlatformTenantLogo,
+  testPlatformTenantStorageConfigConnection,
   updatePlatformTenant,
   updatePlatformTenantDefaultStorageConfig,
   updatePlatformTenantFeature,
@@ -246,6 +247,8 @@ export default function TenantManager() {
   const [storageTenant, setStorageTenant] = useState(null)
   const [storageConfigs, setStorageConfigs] = useState([])
   const [storageDefaultConfigId, setStorageDefaultConfigId] = useState(null)
+  const [storageConnectionLoadingId, setStorageConnectionLoadingId] = useState(null)
+  const [storageConnectionResult, setStorageConnectionResult] = useState(null)
   const [storageFormVisible, setStorageFormVisible] = useState(false)
   const [editingStorageId, setEditingStorageId] = useState(null)
   const [storageForm, setStorageForm] = useState(createTenantStorageFormState(null))
@@ -365,6 +368,8 @@ export default function TenantManager() {
     setStorageTenant(tenantRow || null)
     setStorageConfigs([])
     setStorageDefaultConfigId(tenantRow?.storageDefaultConfigId || null)
+    setStorageConnectionLoadingId(null)
+    setStorageConnectionResult(null)
     setStorageFormVisible(false)
     setEditingStorageId(null)
     setStorageForm(createTenantStorageFormState(null))
@@ -389,9 +394,66 @@ export default function TenantManager() {
     setStorageTenant(null)
     setStorageConfigs([])
     setStorageDefaultConfigId(null)
+    setStorageConnectionLoadingId(null)
+    setStorageConnectionResult(null)
     setStorageFormVisible(false)
     setEditingStorageId(null)
     setStorageForm(createTenantStorageFormState(null))
+  }
+
+  async function handleTestStorageConfigConnection(item) {
+    if (!storageTenant?.id || !item?.id) return
+
+    setStorageConnectionLoadingId(item.id)
+    setStorageConnectionResult(null)
+    setError('')
+    setSuccess('')
+
+    try {
+      const result = await testPlatformTenantStorageConfigConnection(storageTenant.id, item.id)
+      const summary = String(result?.summary || 'FAIL').toUpperCase()
+
+      setStorageConnectionResult({
+        storageConfigId: item.id,
+        result,
+      })
+
+      if (summary === 'PASS') {
+        setSuccess('Kiem tra ket noi S3 thanh cong')
+      } else if (summary === 'UNVERIFIED') {
+        setError('Kiem tra ket noi S3 chua duoc xac minh hoan toan')
+      } else {
+        setError('Kiem tra ket noi S3 that bai. Vui long kiem tra endpoint, bucket, region, credentialRef va quyen truy cap.')
+      }
+    } catch (requestError) {
+      const message = getApiMessage(requestError, 'Khong kiem tra duoc ket noi S3. Vui long kiem tra mang, token, endpoint, bucket va quyen truy cap.')
+
+      setStorageConnectionResult({
+        storageConfigId: item.id,
+        result: {
+          summary: 'FAIL',
+          steps: {
+            configuration: { status: 'FAIL', message: message },
+            authentication: { status: 'FAIL', message: message },
+            bucketAccess: { status: 'FAIL', message: message },
+            upload: { status: 'FAIL', message: message },
+            download: { status: 'FAIL', message: message },
+            delete: { status: 'FAIL', message: message },
+          },
+        },
+      })
+
+      setError(message)
+      console.error('[TenantManager] Storage S3 connection test failed', {
+        tenantId: storageTenant.id,
+        storageConfigId: item.id,
+        message,
+        status: requestError?.response?.status,
+        response: requestError?.response?.data,
+      })
+    } finally {
+      setStorageConnectionLoadingId(null)
+    }
   }
 
   function handleStartCreateStorageConfig() {
@@ -1420,9 +1482,43 @@ export default function TenantManager() {
                         </div>
                       </CTableDataCell>
                       <CTableDataCell>
-                        <CButton color='info' variant='outline' size='sm' onClick={() => handleStartEditStorageConfig(item)} disabled={Boolean(storageActionKey)}>
-                          Sua
-                        </CButton>
+                        <div className='d-flex flex-column gap-2'>
+                          {String(item.provider || '').toLowerCase() === 's3' ? (
+                            <CButton
+                              color='warning'
+                              variant='outline'
+                              size='sm'
+                              onClick={() => handleTestStorageConfigConnection(item)}
+                              disabled={Boolean(storageActionKey) || storageConnectionLoadingId === item.id}
+                            >
+                              {storageConnectionLoadingId === item.id ? 'Dang kiem tra...' : 'Kiem tra ket noi'}
+                            </CButton>
+                          ) : null}
+                          <CButton color='info' variant='outline' size='sm' onClick={() => handleStartEditStorageConfig(item)} disabled={Boolean(storageActionKey)}>
+                            Sua
+                          </CButton>
+                        </div>
+                        {storageConnectionResult?.storageConfigId === item.id ? (
+                          <div className='mt-2 border rounded p-2 bg-light small'>
+                            <div className='d-flex align-items-center justify-content-between gap-2 mb-2'>
+                              <span className='fw-semibold'>Ket qua</span>
+                              <CBadge
+                                color={String(storageConnectionResult.result?.summary || 'FAIL').toUpperCase() === 'PASS' ? 'success' : String(storageConnectionResult.result?.summary || 'FAIL').toUpperCase() === 'UNVERIFIED' ? 'warning' : 'danger'}
+                              >
+                                {String(storageConnectionResult.result?.summary || 'FAIL').toUpperCase()}
+                              </CBadge>
+                            </div>
+                            {Object.entries(storageConnectionResult.result?.steps || {}).map(([stepKey, stepValue]) => {
+                              const status = String(stepValue?.status || 'FAIL').toUpperCase()
+                              return (
+                                <div key={stepKey} className='d-flex justify-content-between gap-2 align-items-center mb-1'>
+                                  <span className='text-medium-emphasis'>{stepKey}</span>
+                                  <CBadge color={status === 'PASS' ? 'success' : status === 'UNVERIFIED' ? 'warning' : 'danger'}>{status}</CBadge>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        ) : null}
                       </CTableDataCell>
                     </CTableRow>
                   ))}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useRef, useMemo, useState } from 'react'
 import {
   CAlert,
   CBadge,
@@ -36,8 +36,10 @@ import {
   rejectCommunityPost,
   unfeatureCommunityPost,
   unpinCommunityPost,
+  uploadCommunityPostImages,
   updateCommunityPost,
 } from '../services/communityRuntimeService'
+import { resolveMediaUrl } from '../../../utils/mediaUrl'
 
 function toText(value) {
   if (value === null || value === undefined) return ''
@@ -72,6 +74,12 @@ function excerpt(post) {
   if (!content) return '(Không có tiêu đề)'
   if (content.length <= 120) return content
   return `${content.slice(0, 117)}...`
+}
+
+function resolveImageCardUrl(media) {
+  if (!media || media.type !== 'image') return ''
+  const candidate = media.formats?.medium?.url || media.formats?.small?.url || media.formats?.thumbnail?.url || media.url
+  return resolveMediaUrl(candidate) || media.url || ''
 }
 
 function sanitizeHtml(html) {
@@ -143,6 +151,8 @@ export default function CommunityPostModerationPage() {
   const [viewPost, setViewPost] = useState(null)
   const [viewOpen, setViewOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+  const [mediaUploading, setMediaUploading] = useState(false)
+  const editImageInputRef = useRef(null)
   const [editForm, setEditForm] = useState({
     id: null,
     title: '',
@@ -151,6 +161,7 @@ export default function CommunityPostModerationPage() {
     scope: 'community',
     group: '',
     allowComment: true,
+    media: [],
     isPinned: false,
     isFeatured: false,
   })
@@ -224,12 +235,50 @@ export default function CommunityPostModerationPage() {
         scope: detail.scope || 'community',
         group: detail.group?.id ? String(detail.group.id) : '',
         allowComment: detail.allowComment !== false,
+        media: Array.isArray(detail.media) ? detail.media.filter((item) => item?.type === 'image') : [],
         isPinned: detail.isPinned === true,
         isFeatured: detail.isFeatured === true,
       })
       setEditOpen(true)
     } catch (requestError) {
       setError(getCommunityApiMessage(requestError, 'Không tải được bài viết để chỉnh sửa.'))
+    }
+  }
+
+  async function uploadEditImages(files) {
+    const selectedFiles = Array.isArray(files) ? files : []
+    if (selectedFiles.length === 0) return
+
+    const imageFiles = []
+    for (const file of selectedFiles) {
+      const fileName = toText(file?.name).toLowerCase()
+      const mime = toText(file?.type).toLowerCase()
+      const isImageMime = ['image/jpeg', 'image/png', 'image/webp'].includes(mime)
+      const isImageExt = ['.jpg', '.jpeg', '.png', '.webp'].some((ext) => fileName.endsWith(ext))
+      if (!isImageMime || !isImageExt) {
+        setError('Community hiện chỉ hỗ trợ ảnh JPG, JPEG, PNG, WEBP.')
+        return
+      }
+      imageFiles.push(file)
+    }
+
+    setMediaUploading(true)
+    setError('')
+    try {
+      const uploaded = await uploadCommunityPostImages(imageFiles)
+      const nextMedia = Array.isArray(uploaded) ? uploaded : (uploaded ? [uploaded] : [])
+      if (nextMedia.length === 0) {
+        setError('Không thể tải ảnh lên. Vui lòng thử lại.')
+        return
+      }
+      setEditForm((previous) => ({
+        ...previous,
+        media: [...(Array.isArray(previous.media) ? previous.media : []), ...nextMedia],
+      }))
+    } catch (requestError) {
+      setError(getCommunityApiMessage(requestError, 'Không thể tải ảnh lên. Vui lòng thử lại.'))
+    } finally {
+      setMediaUploading(false)
     }
   }
 
@@ -282,6 +331,9 @@ export default function CommunityPostModerationPage() {
     setSaving(true)
     setError('')
     try {
+      const imageMediaIds = Array.isArray(editForm.media)
+        ? editForm.media.map((item) => Number(item?.id || 0)).filter((id) => Number.isInteger(id) && id > 0)
+        : []
       await updateCommunityPost(editForm.id, {
         title: toText(editForm.title) || null,
         content: editForm.content,
@@ -289,6 +341,7 @@ export default function CommunityPostModerationPage() {
         scope: editForm.scope,
         group: editForm.scope === 'group' ? Number(editForm.group) : null,
         allowComment: editForm.allowComment,
+        media: imageMediaIds,
         isPinned: editForm.isPinned,
         isFeatured: editForm.isFeatured,
       })
@@ -558,6 +611,18 @@ export default function CommunityPostModerationPage() {
         <CModalHeader><CModalTitle>Chỉnh sửa bài viết</CModalTitle></CModalHeader>
         <CModalBody>
           <div className='d-flex flex-column gap-2'>
+            <input
+              ref={editImageInputRef}
+              type='file'
+              accept='.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp'
+              multiple
+              className='d-none'
+              onChange={(event) => {
+                const rows = Array.from(event.target.files || [])
+                uploadEditImages(rows)
+                event.target.value = ''
+              }}
+            />
             <CFormInput placeholder='Tiêu đề (không bắt buộc)' value={editForm.title} onChange={(event) => setEditForm((previous) => ({ ...previous, title: event.target.value }))} />
             <CFormSelect value={editForm.scope} onChange={(event) => setEditForm((previous) => ({ ...previous, scope: event.target.value, group: event.target.value === 'group' ? previous.group : '' }))}>
               <option value='public'>Công khai</option>
@@ -577,14 +642,45 @@ export default function CommunityPostModerationPage() {
               <option value='html'>HTML</option>
             </CFormSelect>
             <CFormTextarea rows={6} placeholder='Nội dung bài viết' value={editForm.content} onChange={(event) => setEditForm((previous) => ({ ...previous, content: event.target.value }))} />
+            <div className='d-flex align-items-center gap-2 flex-wrap'>
+              <strong className='small'>Ảnh bài viết:</strong>
+              <CButton
+                size='sm'
+                color='secondary'
+                variant='outline'
+                onClick={() => editImageInputRef.current?.click?.()}
+                disabled={saving || mediaUploading}
+              >
+                {mediaUploading ? 'Đang tải ảnh...' : 'Thêm ảnh'}
+              </CButton>
+            </div>
+            {Array.isArray(editForm.media) && editForm.media.length > 0 ? (
+              <div className='community-composer-media-preview'>
+                {editForm.media.filter((item) => item?.type === 'image').map((media, index) => (
+                  <div key={`edit-post-image:${media.id || index}`} className='community-composer-media-thumb'>
+                    <img src={resolveImageCardUrl(media)} alt={media.name || `Ảnh ${index + 1}`} />
+                    <button
+                      type='button'
+                      onClick={() => setEditForm((previous) => ({
+                        ...previous,
+                        media: (Array.isArray(previous.media) ? previous.media : []).filter((_, mediaIndex) => mediaIndex !== index),
+                      }))}
+                      disabled={saving || mediaUploading}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <CFormCheck label='Cho phép bình luận' checked={editForm.allowComment} onChange={(event) => setEditForm((previous) => ({ ...previous, allowComment: event.target.checked }))} />
             <CFormCheck label='Ghim bài viết' checked={editForm.isPinned} onChange={(event) => setEditForm((previous) => ({ ...previous, isPinned: event.target.checked }))} />
             <CFormCheck label='Đánh dấu nổi bật' checked={editForm.isFeatured} onChange={(event) => setEditForm((previous) => ({ ...previous, isFeatured: event.target.checked }))} />
           </div>
         </CModalBody>
         <CModalFooter>
-          <CButton color='secondary' variant='outline' onClick={() => setEditOpen(false)} disabled={saving}>Hủy</CButton>
-          <CButton color='primary' onClick={submitEdit} disabled={saving || !toText(editForm.content)}>{saving ? 'Đang lưu...' : 'Lưu'}</CButton>
+          <CButton color='secondary' variant='outline' onClick={() => setEditOpen(false)} disabled={saving || mediaUploading}>Hủy</CButton>
+          <CButton color='primary' onClick={submitEdit} disabled={saving || mediaUploading || !toText(editForm.content)}>{saving ? 'Đang lưu...' : 'Lưu'}</CButton>
         </CModalFooter>
       </CModal>
     </CCard>

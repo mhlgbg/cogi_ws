@@ -80,9 +80,48 @@ export function buildProtectedFileUrl(fileMeta) {
   const storageProvider = String(fileMeta.storageProvider || '').trim().toLowerCase()
 
   if (!rawUrl) return ''
-  if (!rawUrl.startsWith('/storage/')) return resolveMediaUrl(rawUrl)
+
+  if (rawUrl.startsWith('s3://')) {
+    if (!Number.isInteger(fileAssetId) || fileAssetId <= 0) return ''
+    const jwt = readStoredJwt()
+    if (jwt) {
+      return toAbsoluteUrl(`/api/storage/files/${fileAssetId}/download?jwt=${encodeURIComponent(jwt)}`)
+    }
+
+    const admissionToken = readAdmissionV1SessionToken()
+    if (admissionToken) {
+      return toAbsoluteUrl(`/api/storage/files/${fileAssetId}/download?token=${encodeURIComponent(admissionToken)}`)
+    }
+
+    return toAbsoluteUrl(`/api/storage/files/${fileAssetId}/download`)
+  }
+
+  if (fileAssetId && Number.isInteger(fileAssetId) && fileAssetId > 0) {
+    const jwt = readStoredJwt()
+    if (jwt) {
+      return toAbsoluteUrl(`/api/storage/files/${fileAssetId}/download?jwt=${encodeURIComponent(jwt)}`)
+    }
+
+    const admissionToken = readAdmissionV1SessionToken()
+    if (admissionToken) {
+      return toAbsoluteUrl(`/api/storage/files/${fileAssetId}/download?token=${encodeURIComponent(admissionToken)}`)
+    }
+
+    if (rawUrl.startsWith('/storage/') || rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+      return toAbsoluteUrl(`/api/storage/files/${fileAssetId}/download`)
+    }
+  }
+
+  if (!rawUrl.startsWith('/storage/') && !rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+    return ''
+  }
+
+  if (storageProvider && storageProvider !== 'local') {
+    if (!Number.isInteger(fileAssetId) || fileAssetId <= 0) return ''
+    return toAbsoluteUrl(`/api/storage/files/${fileAssetId}/download`)
+  }
+
   if (!Number.isInteger(fileAssetId) || fileAssetId <= 0) return resolveMediaUrl(rawUrl)
-  if (storageProvider && storageProvider !== 'local') return resolveMediaUrl(rawUrl)
 
   const jwt = readStoredJwt()
   if (jwt) {

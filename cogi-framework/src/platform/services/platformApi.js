@@ -8,6 +8,7 @@ function readStoredToken() {
 
 const platformApi = axios.create({
   baseURL: apiBaseUrl,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -54,7 +55,11 @@ platformApi.interceptors.response.use(
 )
 
 export function getApiMessage(error, fallback) {
-  return error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || fallback
+  const data = error?.response?.data
+  const directMessage = data?.error?.message || data?.message || data?.error || data?.detail
+  const message = typeof directMessage === 'string' && directMessage.trim() ? directMessage.trim() : error?.message
+  if (typeof message === 'string' && message.trim()) return message.trim()
+  return typeof fallback === 'string' && fallback.trim() ? fallback.trim() : 'Yeu cau khong thanh cong.'
 }
 
 export async function getPlatformTenants() {
@@ -477,6 +482,15 @@ export async function updatePlatformTenantDefaultStorageConfig(tenantId, storage
   return response?.data?.data || {
     tenant: null,
     storageConfigs: [],
+  }
+}
+
+export async function testPlatformTenantStorageConfigConnection(tenantId, storageConfigId) {
+  const response = await platformApi.post(`/platform/tenants/${tenantId}/storage-configs/${storageConfigId}/test-connection`)
+  return response?.data?.data || {
+    provider: 's3',
+    summary: 'FAIL',
+    steps: {},
   }
 }
 

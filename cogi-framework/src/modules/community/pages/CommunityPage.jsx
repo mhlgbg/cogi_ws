@@ -228,6 +228,46 @@ function resolveImageViewerUrl(media) {
   return resolveMediaUrl(candidate) || media.url || ''
 }
 
+export function resolveCommunityComposerSubmitAction({
+  allowMemberPost = true,
+  memberPostRequiresApproval,
+  isTenantMember = false,
+  communityRole = 'guest',
+  isAdmin = false,
+}) {
+  const canDirectPublish = Boolean(
+    isAdmin ||
+    communityRole === 'moderator' ||
+    (isTenantMember && memberPostRequiresApproval === false)
+  )
+
+  const canShowSubmitAction = Boolean(
+    isAdmin ||
+    communityRole === 'moderator' ||
+    (isTenantMember && allowMemberPost !== false)
+  )
+
+  return {
+    canDirectPublish,
+    canShowSubmitAction,
+    actionLabel: canDirectPublish ? 'Lưu và đăng ngay' : 'Lưu và đề nghị phê duyệt',
+  }
+}
+
+export function resolveCommunityComposerCanSubmit(form = {}) {
+  return Boolean(toText(stripHtmlToPlainText(form.content)))
+}
+
+function applyValidatedImageSelection(files, currentMediaCount, maxCount = 10) {
+  const selectedFiles = Array.isArray(files) ? files : []
+  if (selectedFiles.length === 0) return []
+
+  const remainingSlots = Math.max(0, maxCount - currentMediaCount)
+  if (remainingSlots <= 0) return []
+
+  return selectedFiles.slice(0, remainingSlots)
+}
+
 function resolveUserAvatarUrl(user) {
   const raw = toText(
     user?.avatarUrl
@@ -427,37 +467,111 @@ function CommunityCommentSection({
   isTenantMember,
   isAdmin,
   busy,
+  mediaUploading,
   onLoad,
   onCreate,
   onUpdate,
   onDelete,
   onHide,
+  onUploadImages,
 }) {
   const isOpen = commentsState?.open === true
   const rows = Array.isArray(commentsState?.rows) ? commentsState.rows : []
   const loading = commentsState?.loading === true
   const canComment = isTenantMember && post.allowComment && post.status === 'published'
   const [draft, setDraft] = useState('')
+  const [draftMedia, setDraftMedia] = useState([])
   const [replyDrafts, setReplyDrafts] = useState({})
+  const [replyMedia, setReplyMedia] = useState({})
   const [editing, setEditing] = useState({})
+  const [editingMedia, setEditingMedia] = useState({})
+  const [commentViewer, setCommentViewer] = useState({ commentId: null, index: 0 })
+  const [commentMessage, setCommentMessage] = useState('')
+  const draftImageInputRef = useRef(null)
+  const replyImageInputRefs = useRef({})
+  const editImageInputRefs = useRef({})
+
+  const allCommentNodes = rows.flatMap((comment) => [comment, ...(Array.isArray(comment.replies) ? comment.replies : [])])
+  const activeCommentViewer = allCommentNodes.find((comment) => Number(comment.id) === Number(commentViewer.commentId)) || null
+  const activeCommentViewerImages = Array.isArray(activeCommentViewer?.media)
+    ? activeCommentViewer.media.filter((item) => item?.type === 'image' && toText(item.url))
+    : []
+  const activeCommentViewerImage = activeCommentViewerImages[commentViewer.index] || null
 
   useEffect(() => {
     if (!isOpen || commentsState?.loaded || loading) return
     onLoad?.()
   }, [isOpen, commentsState?.loaded, loading, onLoad])
 
+  function extractImageMediaIds(mediaRows) {
+    return Array.isArray(mediaRows)
+      ? mediaRows.map((item) => Number(item?.id || 0)).filter((id) => Number.isInteger(id) && id > 0)
+      : []
+  }
+
+  async function uploadCommentImages(files, applyResult) {
+    const selectedFiles = Array.isArray(files) ? files : []
+    if (selectedFiles.length === 0) return
+    setCommentMessage('')
+    if (typeof onUploadImages !== 'function') return
+    await onUploadImages(selectedFiles, applyResult, setCommentMessage)
+  }
+
   const submitComment = async () => {
     const content = toText(draft)
     if (!content) return
-    await onCreate?.({ content })
+    const created = await onCreate?.({
+      content,
+      media: extractImageMediaIds(draftMedia),
+    })
+    if (created === false) return
     setDraft('')
+    setDraftMedia([])
   }
 
   const submitReply = async (parentId) => {
     const content = toText(replyDrafts[parentId] || '')
     if (!content) return
-    await onCreate?.({ content, parentCommentId: parentId })
+    const created = await onCreate?.({
+      content,
+      parentCommentId: parentId,
+      media: extractImageMediaIds(replyMedia[parentId]),
+    })
+    if (created === false) return
     setReplyDrafts((previous) => ({ ...previous, [parentId]: '' }))
+    setReplyMedia((previous) => ({ ...previous, [parentId]: [] }))
+  }
+
+  function openEditComment(comment) {
+    setEditing((previous) => ({ ...previous, [comment.id]: comment.content || '' }))
+    setEditingMedia((previous) => ({
+      ...previous,
+      [comment.id]: Array.isArray(comment.media) ? comment.media.filter((item) => item?.type === 'image') : [],
+    }))
+  }
+
+  function cancelEditComment(commentId) {
+    setEditing((previous) => {
+      const next = { ...previous }
+      delete next[commentId]
+      return next
+    })
+    setEditingMedia((previous) => {
+      const next = { ...previous }
+      delete next[commentId]
+      return next
+    })
+  }
+
+  async function saveEditedComment(commentId) {
+    const content = toText(editing[commentId])
+    if (!content) return
+    const updated = await onUpdate?.(commentId, {
+      content,
+      media: extractImageMediaIds(editingMedia[commentId]),
+    })
+    if (updated === false) return
+    cancelEditComment(commentId)
   }
 
   return (
@@ -465,20 +579,58 @@ function CommunityCommentSection({
       {!isOpen ? null : (
         <div className='community-comments-panel'>
           {canComment ? (
-            <div className='community-comment-composer'>
+            <div className='community-comment-composer-wrap'>
               <input
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                placeholder='Viết bình luận...'
-                disabled={busy}
+                ref={draftImageInputRef}
+                type='file'
+                accept='.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp'
+                multiple
+                className='d-none'
+                onChange={(event) => {
+                  const fileRows = Array.from(event.target.files || [])
+                  uploadCommentImages(fileRows, (uploaded) => {
+                    setDraftMedia((previous) => [...(Array.isArray(previous) ? previous : []), ...uploaded])
+                  })
+                  event.target.value = ''
+                }}
               />
-              <button type='button' onClick={submitComment} disabled={busy || !toText(draft)}>Gửi</button>
+              <div className='community-comment-composer'>
+                <input
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  placeholder='Viết bình luận...'
+                  disabled={busy || mediaUploading}
+                />
+                <button type='button' onClick={submitComment} disabled={busy || mediaUploading || !toText(draft)}>Gửi</button>
+              </div>
+              <div className='community-comment-composer-tools'>
+                <button type='button' onClick={() => draftImageInputRef.current?.click?.()} disabled={busy || mediaUploading}>
+                  {mediaUploading ? 'Đang tải ảnh...' : '📷 Ảnh'}
+                </button>
+              </div>
+              {draftMedia.length > 0 ? (
+                <div className='community-comment-media-list'>
+                  {draftMedia.map((media, mediaIndex) => (
+                    <div key={`draft-comment-image:${media.id || mediaIndex}`} className='community-comment-media-thumb'>
+                      <img src={resolveImageCardUrl(media)} alt={media.name || `Ảnh ${mediaIndex + 1}`} />
+                      <button
+                        type='button'
+                        onClick={() => setDraftMedia((previous) => previous.filter((_, index) => index !== mediaIndex))}
+                        disabled={busy || mediaUploading}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className='community-comment-note'>
               {!isTenantMember ? 'Chỉ thành viên Community mới có thể bình luận.' : (post.allowComment ? 'Bài viết này hiện không nhận bình luận.' : 'Bình luận đã tắt cho bài viết này.')}
             </div>
           )}
+          {commentMessage ? <div className='community-comment-note'>{commentMessage}</div> : null}
 
           {loading ? <div className='community-comment-note'>Đang tải bình luận...</div> : null}
           {!loading && rows.length === 0 ? <div className='community-comment-note'>Chưa có bình luận nào.</div> : null}
@@ -494,13 +646,81 @@ function CommunityCommentSection({
                   <div className='community-comment-bubble'>
                     <div className='community-comment-author'>{authorName}</div>
                     {editing[comment.id] !== undefined ? (
-                      <textarea
-                        value={editValue}
-                        onChange={(event) => setEditing((previous) => ({ ...previous, [comment.id]: event.target.value }))}
-                        disabled={busy}
-                      />
+                      <>
+                        <input
+                          ref={(element) => {
+                            if (element) editImageInputRefs.current[comment.id] = element
+                          }}
+                          type='file'
+                          accept='.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp'
+                          multiple
+                          className='d-none'
+                          onChange={(event) => {
+                            const fileRows = Array.from(event.target.files || [])
+                            uploadCommentImages(fileRows, (uploaded) => {
+                              setEditingMedia((previous) => ({
+                                ...previous,
+                                [comment.id]: [...(Array.isArray(previous[comment.id]) ? previous[comment.id] : []), ...uploaded],
+                              }))
+                            })
+                            event.target.value = ''
+                          }}
+                        />
+                        <textarea
+                          value={editValue}
+                          onChange={(event) => setEditing((previous) => ({ ...previous, [comment.id]: event.target.value }))}
+                          disabled={busy || mediaUploading}
+                        />
+                        <div className='community-comment-composer-tools'>
+                          <button type='button' onClick={() => editImageInputRefs.current[comment.id]?.click?.()} disabled={busy || mediaUploading}>
+                            {mediaUploading ? 'Đang tải ảnh...' : '📷 Thêm ảnh'}
+                          </button>
+                        </div>
+                        {Array.isArray(editingMedia[comment.id]) && editingMedia[comment.id].length > 0 ? (
+                          <div className='community-comment-media-list'>
+                            {editingMedia[comment.id].map((media, mediaIndex) => (
+                              <div key={`editing-comment-image:${comment.id}:${media.id || mediaIndex}`} className='community-comment-media-thumb'>
+                                <img src={resolveImageCardUrl(media)} alt={media.name || `Ảnh ${mediaIndex + 1}`} />
+                                <button
+                                  type='button'
+                                  onClick={() => setEditingMedia((previous) => ({
+                                    ...previous,
+                                    [comment.id]: (Array.isArray(previous[comment.id]) ? previous[comment.id] : []).filter((_, index) => index !== mediaIndex),
+                                  }))}
+                                  disabled={busy || mediaUploading}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </>
                     ) : (
-                      <div className='community-comment-content'>{comment.content}</div>
+                      <>
+                        <div className='community-comment-content'>{comment.content}</div>
+                        {Array.isArray(comment.media) && comment.media.length > 0 ? (
+                          <div className='community-comment-media-list'>
+                            {comment.media.filter((item) => item?.type === 'image' && toText(item.url)).map((media, mediaIndex) => (
+                              <div
+                                key={`comment-image:${comment.id}:${media.id || mediaIndex}`}
+                                className='community-comment-media-thumb'
+                                role='button'
+                                tabIndex={0}
+                                onClick={() => setCommentViewer({ commentId: comment.id, index: mediaIndex })}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault()
+                                    setCommentViewer({ commentId: comment.id, index: mediaIndex })
+                                  }
+                                }}
+                              >
+                                <img src={resolveImageCardUrl(media)} alt={media.name || `Ảnh ${mediaIndex + 1}`} />
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </>
                     )}
                     {edited ? <div className='community-comment-edited'>Đã chỉnh sửa</div> : null}
                   </div>
@@ -526,30 +746,19 @@ function CommunityCommentSection({
                         <>
                           <button
                             type='button'
-                            disabled={busy || !toText(editValue)}
-                            onClick={async () => {
-                              await onUpdate?.(comment.id, { content: editValue })
-                              setEditing((previous) => {
-                                const next = { ...previous }
-                                delete next[comment.id]
-                                return next
-                              })
-                            }}
+                            disabled={busy || mediaUploading || !toText(editValue)}
+                            onClick={() => saveEditedComment(comment.id)}
                           >
                             Lưu
                           </button>
                           <button
                             type='button'
-                            onClick={() => setEditing((previous) => {
-                              const next = { ...previous }
-                              delete next[comment.id]
-                              return next
-                            })}
+                            onClick={() => cancelEditComment(comment.id)}
                           >
                             Hủy
                           </button>
                         </>
-                      ) : <button type='button' onClick={() => setEditing((previous) => ({ ...previous, [comment.id]: comment.content }))}>Sửa</button>
+                      ) : <button type='button' onClick={() => openEditComment(comment)}>Sửa</button>
                     ) : null}
                     {comment.canDelete ? <button type='button' onClick={() => onDelete?.(comment.id)} disabled={busy}>Xóa</button> : null}
                     {(isAdmin || comment.canModerate) && comment.status === 'active' ? (
@@ -558,14 +767,59 @@ function CommunityCommentSection({
                   </div>
 
                   {replyDrafts[comment.id] !== undefined ? (
-                    <div className='community-comment-reply-composer'>
+                    <div className='community-comment-reply-composer-wrap'>
                       <input
-                        value={replyDrafts[comment.id] || ''}
-                        onChange={(event) => setReplyDrafts((previous) => ({ ...previous, [comment.id]: event.target.value }))}
-                        placeholder='Trả lời bình luận...'
-                        disabled={busy}
+                        ref={(element) => {
+                          if (element) replyImageInputRefs.current[comment.id] = element
+                        }}
+                        type='file'
+                        accept='.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp'
+                        multiple
+                        className='d-none'
+                        onChange={(event) => {
+                          const fileRows = Array.from(event.target.files || [])
+                          uploadCommentImages(fileRows, (uploaded) => {
+                            setReplyMedia((previous) => ({
+                              ...previous,
+                              [comment.id]: [...(Array.isArray(previous[comment.id]) ? previous[comment.id] : []), ...uploaded],
+                            }))
+                          })
+                          event.target.value = ''
+                        }}
                       />
-                      <button type='button' disabled={busy || !toText(replyDrafts[comment.id])} onClick={() => submitReply(comment.id)}>Gửi</button>
+                      <div className='community-comment-reply-composer'>
+                        <input
+                          value={replyDrafts[comment.id] || ''}
+                          onChange={(event) => setReplyDrafts((previous) => ({ ...previous, [comment.id]: event.target.value }))}
+                          placeholder='Trả lời bình luận...'
+                          disabled={busy || mediaUploading}
+                        />
+                        <button type='button' disabled={busy || mediaUploading || !toText(replyDrafts[comment.id])} onClick={() => submitReply(comment.id)}>Gửi</button>
+                      </div>
+                      <div className='community-comment-composer-tools'>
+                        <button type='button' onClick={() => replyImageInputRefs.current[comment.id]?.click?.()} disabled={busy || mediaUploading}>
+                          {mediaUploading ? 'Đang tải ảnh...' : '📷 Ảnh'}
+                        </button>
+                      </div>
+                      {Array.isArray(replyMedia[comment.id]) && replyMedia[comment.id].length > 0 ? (
+                        <div className='community-comment-media-list'>
+                          {replyMedia[comment.id].map((media, mediaIndex) => (
+                            <div key={`reply-draft-image:${comment.id}:${media.id || mediaIndex}`} className='community-comment-media-thumb'>
+                              <img src={resolveImageCardUrl(media)} alt={media.name || `Ảnh ${mediaIndex + 1}`} />
+                              <button
+                                type='button'
+                                onClick={() => setReplyMedia((previous) => ({
+                                  ...previous,
+                                  [comment.id]: (Array.isArray(previous[comment.id]) ? previous[comment.id] : []).filter((_, index) => index !== mediaIndex),
+                                }))}
+                                disabled={busy || mediaUploading}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
 
@@ -582,13 +836,81 @@ function CommunityCommentSection({
                               <div className='community-comment-bubble'>
                                 <div className='community-comment-author'>{replyAuthorName}</div>
                                 {editing[reply.id] !== undefined ? (
-                                  <textarea
-                                    value={replyEditValue}
-                                    onChange={(event) => setEditing((previous) => ({ ...previous, [reply.id]: event.target.value }))}
-                                    disabled={busy}
-                                  />
+                                  <>
+                                    <input
+                                      ref={(element) => {
+                                        if (element) editImageInputRefs.current[reply.id] = element
+                                      }}
+                                      type='file'
+                                      accept='.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp'
+                                      multiple
+                                      className='d-none'
+                                      onChange={(event) => {
+                                        const fileRows = Array.from(event.target.files || [])
+                                        uploadCommentImages(fileRows, (uploaded) => {
+                                          setEditingMedia((previous) => ({
+                                            ...previous,
+                                            [reply.id]: [...(Array.isArray(previous[reply.id]) ? previous[reply.id] : []), ...uploaded],
+                                          }))
+                                        })
+                                        event.target.value = ''
+                                      }}
+                                    />
+                                    <textarea
+                                      value={replyEditValue}
+                                      onChange={(event) => setEditing((previous) => ({ ...previous, [reply.id]: event.target.value }))}
+                                      disabled={busy || mediaUploading}
+                                    />
+                                    <div className='community-comment-composer-tools'>
+                                      <button type='button' onClick={() => editImageInputRefs.current[reply.id]?.click?.()} disabled={busy || mediaUploading}>
+                                        {mediaUploading ? 'Đang tải ảnh...' : '📷 Thêm ảnh'}
+                                      </button>
+                                    </div>
+                                    {Array.isArray(editingMedia[reply.id]) && editingMedia[reply.id].length > 0 ? (
+                                      <div className='community-comment-media-list'>
+                                        {editingMedia[reply.id].map((media, mediaIndex) => (
+                                          <div key={`editing-reply-image:${reply.id}:${media.id || mediaIndex}`} className='community-comment-media-thumb'>
+                                            <img src={resolveImageCardUrl(media)} alt={media.name || `Ảnh ${mediaIndex + 1}`} />
+                                            <button
+                                              type='button'
+                                              onClick={() => setEditingMedia((previous) => ({
+                                                ...previous,
+                                                [reply.id]: (Array.isArray(previous[reply.id]) ? previous[reply.id] : []).filter((_, index) => index !== mediaIndex),
+                                              }))}
+                                              disabled={busy || mediaUploading}
+                                            >
+                                              ×
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                  </>
                                 ) : (
-                                  <div className='community-comment-content'>{reply.content}</div>
+                                  <>
+                                    <div className='community-comment-content'>{reply.content}</div>
+                                    {Array.isArray(reply.media) && reply.media.length > 0 ? (
+                                      <div className='community-comment-media-list'>
+                                        {reply.media.filter((item) => item?.type === 'image' && toText(item.url)).map((media, mediaIndex) => (
+                                              <div
+                                                key={`reply-image:${reply.id}:${media.id || mediaIndex}`}
+                                                className='community-comment-media-thumb'
+                                                role='button'
+                                                tabIndex={0}
+                                                onClick={() => setCommentViewer({ commentId: reply.id, index: mediaIndex })}
+                                                onKeyDown={(event) => {
+                                                  if (event.key === 'Enter' || event.key === ' ') {
+                                                    event.preventDefault()
+                                                    setCommentViewer({ commentId: reply.id, index: mediaIndex })
+                                                  }
+                                                }}
+                                              >
+                                                <img src={resolveImageCardUrl(media)} alt={media.name || `Ảnh ${mediaIndex + 1}`} />
+                                              </div>
+                                            ))}
+                                      </div>
+                                    ) : null}
+                                  </>
                                 )}
                                 {replyEdited ? <div className='community-comment-edited'>Đã chỉnh sửa</div> : null}
                               </div>
@@ -598,30 +920,19 @@ function CommunityCommentSection({
                                     <>
                                       <button
                                         type='button'
-                                        disabled={busy || !toText(replyEditValue)}
-                                        onClick={async () => {
-                                          await onUpdate?.(reply.id, { content: replyEditValue })
-                                          setEditing((previous) => {
-                                            const next = { ...previous }
-                                            delete next[reply.id]
-                                            return next
-                                          })
-                                        }}
+                                        disabled={busy || mediaUploading || !toText(replyEditValue)}
+                                        onClick={() => saveEditedComment(reply.id)}
                                       >
                                         Lưu
                                       </button>
                                       <button
                                         type='button'
-                                        onClick={() => setEditing((previous) => {
-                                          const next = { ...previous }
-                                          delete next[reply.id]
-                                          return next
-                                        })}
+                                        onClick={() => cancelEditComment(reply.id)}
                                       >
                                         Hủy
                                       </button>
                                     </>
-                                  ) : <button type='button' onClick={() => setEditing((previous) => ({ ...previous, [reply.id]: reply.content }))}>Sửa</button>
+                                  ) : <button type='button' onClick={() => openEditComment(reply)}>Sửa</button>
                                 ) : null}
                                 {reply.canDelete ? <button type='button' onClick={() => onDelete?.(reply.id)} disabled={busy}>Xóa</button> : null}
                                 {(isAdmin || reply.canModerate) && reply.status === 'active' ? <button type='button' onClick={() => onHide?.(reply.id)} disabled={busy}>Ẩn</button> : null}
@@ -638,6 +949,40 @@ function CommunityCommentSection({
           })}
         </div>
       )}
+
+      {activeCommentViewerImage ? (
+        <div className='community-lightbox' role='dialog' aria-modal='true'>
+          <button type='button' className='community-lightbox-backdrop' onClick={() => setCommentViewer({ commentId: null, index: 0 })} aria-label='Đóng' />
+          <div className='community-lightbox-body'>
+            <button type='button' className='community-lightbox-close' onClick={() => setCommentViewer({ commentId: null, index: 0 })}>×</button>
+            <button
+              type='button'
+              className='community-lightbox-nav'
+              onClick={() => setCommentViewer((previous) => ({
+                ...previous,
+                index: previous.index <= 0 ? Math.max(activeCommentViewerImages.length - 1, 0) : previous.index - 1,
+              }))}
+              disabled={activeCommentViewerImages.length <= 1}
+              aria-label='Ảnh trước'
+            >
+              ‹
+            </button>
+            <img src={resolveImageViewerUrl(activeCommentViewerImage)} alt={activeCommentViewerImage?.name || 'media'} className='community-lightbox-image' />
+            <button
+              type='button'
+              className='community-lightbox-nav'
+              onClick={() => setCommentViewer((previous) => ({
+                ...previous,
+                index: previous.index >= activeCommentViewerImages.length - 1 ? 0 : previous.index + 1,
+              }))}
+              disabled={activeCommentViewerImages.length <= 1}
+              aria-label='Ảnh sau'
+            >
+              ›
+            </button>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -648,6 +993,7 @@ function CommunityPostCard({
   actions = [],
   allowReaction,
   isTenantMember,
+  mediaUploading,
   reactionBusy,
   onReact,
   commentsState,
@@ -658,6 +1004,7 @@ function CommunityPostCard({
   onUpdateComment,
   onDeleteComment,
   onHideComment,
+  onUploadCommentImages,
   isAdmin,
 }) {
   const [expanded, setExpanded] = useState(false)
@@ -855,11 +1202,13 @@ function CommunityPostCard({
             isTenantMember={isTenantMember}
             isAdmin={isAdmin}
             busy={commentsBusy}
+            mediaUploading={mediaUploading}
             onLoad={onLoadComments}
             onCreate={onCreateComment}
             onUpdate={onUpdateComment}
             onDelete={onDeleteComment}
             onHide={onHideComment}
+            onUploadImages={onUploadCommentImages}
           />
         </>
       ) : null}
@@ -919,7 +1268,11 @@ function CommunityComposerModal({
   submitting,
   mediaUploading,
   message,
-  canDirectPublish,
+  memberPostRequiresApproval,
+  allowMemberPost,
+  isTenantMember,
+  communityRole,
+  isAdmin,
   initialFocus,
   onClose,
   onSaveDraft,
@@ -936,9 +1289,27 @@ function CommunityComposerModal({
   const [showYoutubeInput, setShowYoutubeInput] = useState(false)
   const isGroupRoute = routeMode === 'group-feed' && routeGroupId
   const isHtmlMode = form.contentType === 'html'
-  const canSubmit = Boolean(toText(stripHtmlToPlainText(form.content)))
+  const canSubmit = resolveCommunityComposerCanSubmit(form)
   const selectedGroupName = composerGroups.find((group) => Number(group.id) === Number(form.group))?.name || groupName
   const youtubeInputVisible = showYoutubeInput || Boolean(form.youtube)
+  const submitAction = resolveCommunityComposerSubmitAction({
+    allowMemberPost,
+    memberPostRequiresApproval,
+    isTenantMember,
+    communityRole,
+    isAdmin,
+  })
+  const canShowSubmitAction = submitAction.canShowSubmitAction
+  const submitActionDisabled = !canSubmit || submitting || mediaUploading
+  const submitActionAccent = 'var(--community-accent, #4f46e5)'
+  const applySubmitActionStyle = useCallback((node) => {
+    if (!node || typeof window === 'undefined') return
+    const accent = window.getComputedStyle(node).getPropertyValue('--community-accent').trim() || '#4f46e5'
+    node.style.setProperty('background', accent, 'important')
+    node.style.setProperty('background-color', accent, 'important')
+    node.style.setProperty('border', `1px solid ${accent}`, 'important')
+    node.style.setProperty('color', '#fff', 'important')
+  }, [])
 
   useEffect(() => {
     if (!visible || initialFocus !== 'image') return
@@ -1182,16 +1553,26 @@ function CommunityComposerModal({
       </CModalBody>
       <CModalFooter className='d-flex gap-2 justify-content-end'>
         <button type='button' className='community-ghost-btn' onClick={onClose} disabled={submitting}>Hủy</button>
-        <button type='button' className='community-owner-action-btn' onClick={onSaveDraft} disabled={submitting || !canSubmit}>Lưu nháp</button>
-        {canDirectPublish ? (
-          <CButton className='community-primary-btn' onClick={onPublishNow} disabled={submitting || !canSubmit}>
-            {submitting ? 'Đang xử lý...' : 'Đăng ngay'}
-          </CButton>
-        ) : (
-          <CButton className='community-primary-btn' onClick={onSubmitForReview} disabled={submitting || !canSubmit}>
-            {submitting ? 'Đang xử lý...' : 'Lưu và đề nghị duyệt'}
-          </CButton>
-        )}
+        <button type='button' className='community-owner-action-btn' onClick={onSaveDraft} disabled={submitting || mediaUploading || !canSubmit}>
+          Lưu nháp
+        </button>
+        {canShowSubmitAction ? (
+          <button
+            ref={applySubmitActionStyle}
+            type='button'
+            className='community-primary-btn'
+            onClick={submitAction.canDirectPublish ? onPublishNow : onSubmitForReview}
+            disabled={submitActionDisabled}
+            style={{
+              border: `1px solid ${submitActionAccent}`,
+              background: submitActionAccent,
+              color: '#fff',
+              opacity: submitActionDisabled ? 0.65 : 1,
+            }}
+          >
+            {submitting ? 'Đang xử lý...' : submitAction.actionLabel}
+          </button>
+        ) : null}
       </CModalFooter>
     </CModal>
   )
@@ -1256,6 +1637,15 @@ export default function CommunityPage() {
   const tenantMemberRequiredError = isAuthenticated && isTenantMemberRequiredMessage(errorMessage)
   const isTenantMember = communityActor?.tenantMember === true
   const userAvatarUrl = resolveUserAvatarUrl(auth?.user)
+  const activePolicyConfig = postingContext?.policyConfig || snapshot?.config?.policyConfig || {}
+  const routeGroupRequiresApproval = routeMode === 'group-feed' && routeGroupId && routeGroup
+    ? routeGroup?.memberPostRequiresApproval
+    : null
+  const routeGroupAllowMemberPost = routeMode === 'group-feed' && routeGroupId && routeGroup
+    ? routeGroup?.allowMemberPost
+    : null
+  const allowMemberPost = routeGroupAllowMemberPost ?? (activePolicyConfig?.allowMemberPost ?? postingContext?.allowMemberPost ?? true)
+  const memberPostRequiresApproval = routeGroupRequiresApproval ?? (activePolicyConfig?.memberPostRequiresApproval ?? true)
 
   useEffect(() => {
     let cancelled = false
@@ -1595,7 +1985,7 @@ export default function CommunityPage() {
     setComposerModalOpen(true)
   }
 
-  async function uploadImages(files, applyResult) {
+  async function uploadImages(files, applyResult, setMessage = setComposerMessage) {
     const selectedFiles = Array.isArray(files) ? files : []
     if (selectedFiles.length === 0) return
 
@@ -1606,22 +1996,52 @@ export default function CommunityPage() {
       const isImageMime = ['image/jpeg', 'image/png', 'image/webp'].includes(mime)
       const isImageExt = ['.jpg', '.jpeg', '.png', '.webp'].some((ext) => fileName.endsWith(ext))
       if (!isImageMime || !isImageExt) {
-        setComposerMessage('Hiện Community chưa hỗ trợ tải video trực tiếp. Vui lòng tải video lên YouTube và dán liên kết vào bài viết.')
+        setMessage('Hiện Community chỉ hỗ trợ ảnh JPG, JPEG, PNG, WEBP.')
         return
       }
       imageFiles.push(file)
     }
 
-    setMediaUploading(true)
-    setComposerMessage('')
-    try {
-      const uploaded = await uploadCommunityPostImages(imageFiles)
-      applyResult(uploaded)
-    } catch (requestError) {
-      setComposerMessage(getCommunityApiMessage(requestError, 'Không thể tải ảnh lên.'))
-    } finally {
-      setMediaUploading(false)
+    const maxImageCount = 10
+    const existingCount = Array.isArray(composerForm?.media) ? composerForm.media.filter((item) => item?.type === 'image').length : 0
+    const limitedFiles = applyValidatedImageSelection(imageFiles, existingCount, maxImageCount)
+    if (limitedFiles.length === 0) {
+      setMessage(`Mỗi bài viết tối đa ${maxImageCount} ảnh.`)
+      return
     }
+
+    if (limitedFiles.length < imageFiles.length) {
+      setMessage(`Mỗi bài viết tối đa ${maxImageCount} ảnh. Chỉ ${limitedFiles.length} ảnh mới được thêm.`)
+    }
+
+    setMediaUploading(true)
+    setMessage('')
+
+    const uploadedGroups = []
+    for (const fileGroup of limitedFiles) {
+      try {
+        const uploaded = await uploadCommunityPostImages([fileGroup])
+        const nextMedia = Array.isArray(uploaded) ? uploaded : (uploaded ? [uploaded] : [])
+        if (nextMedia.length > 0) {
+          uploadedGroups.push(...nextMedia)
+        }
+      } catch (requestError) {
+        setMessage(getCommunityApiMessage(requestError, 'Không thể tải ảnh lên. Vui lòng thử lại.'))
+        setMediaUploading(false)
+        return
+      }
+    }
+
+    if (uploadedGroups.length === 0) {
+      setMessage('Không thể tải ảnh lên. Vui lòng thử lại.')
+      setMediaUploading(false)
+      return
+    }
+
+    const normalizedMessage = uploadedGroups.length > 1 ? `Đã tải lên ${uploadedGroups.length} ảnh.` : 'Đã tải lên 1 ảnh.'
+    setMessage(normalizedMessage)
+    applyResult(uploadedGroups)
+    setMediaUploading(false)
   }
 
   function applyYoutubeInput(inputValue, applyResult) {
@@ -1833,8 +2253,10 @@ export default function CommunityPage() {
       await createCommunityComment(postId, payload)
       await loadComments(postId)
       mergePostInteraction(postId, (current) => ({ commentCount: Number(current.commentCount || 0) + 1 }))
+      return true
     } catch (requestError) {
       setComposerMessage(getCommunityApiMessage(requestError, 'Không thể gửi bình luận.'))
+      return false
     } finally {
       setCommentBusyPosts((previous) => ({ ...previous, [postId]: false }))
     }
@@ -1845,8 +2267,10 @@ export default function CommunityPage() {
     try {
       await updateCommunityComment(commentId, payload)
       await loadComments(postId)
+      return true
     } catch (requestError) {
       setComposerMessage(getCommunityApiMessage(requestError, 'Không thể cập nhật bình luận.'))
+      return false
     } finally {
       setCommentBusyPosts((previous) => ({ ...previous, [postId]: false }))
     }
@@ -2080,6 +2504,7 @@ export default function CommunityPage() {
                           actions={postActions}
                           allowReaction={allowReaction}
                           isTenantMember={isTenantMember}
+                          mediaUploading={mediaUploading}
                           reactionBusy={reactionBusyPosts[post.id] === true}
                           onReact={(type) => reactPost(post, type)}
                           commentsState={commentsState}
@@ -2090,6 +2515,7 @@ export default function CommunityPage() {
                           onUpdateComment={(commentId, payload) => updateComment(post.id, commentId, payload)}
                           onDeleteComment={(commentId) => deleteComment(post.id, commentId)}
                           onHideComment={(commentId) => hideComment(post.id, commentId)}
+                          onUploadCommentImages={(files, applyResult, setMessage) => uploadImages(files, applyResult, setMessage)}
                           isAdmin={isAdmin}
                         />
                       )
@@ -2115,7 +2541,11 @@ export default function CommunityPage() {
         submitting={composerSubmitting}
         mediaUploading={mediaUploading}
         message={composerMessage}
-        canDirectPublish={isAdmin}
+        memberPostRequiresApproval={memberPostRequiresApproval}
+        allowMemberPost={allowMemberPost}
+        isTenantMember={isTenantMember}
+        communityRole={communityActor?.communityRole || 'guest'}
+        isAdmin={isAdmin}
         initialFocus={composerModalFocus}
         onClose={() => closeComposerModal(false)}
         onSaveDraft={saveDraftComposer}

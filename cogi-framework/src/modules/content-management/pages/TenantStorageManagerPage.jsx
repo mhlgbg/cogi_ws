@@ -254,10 +254,33 @@ export default function TenantStorageManagerPage() {
   }
 
   async function handleCopyUrl(item) {
-    const url = String(item?.resolvedUrl || item?.url || '').trim()
-    if (!url) {
-      setError('File này chưa có URL hợp lệ')
+    const fileAssetId = Number(item?.id || 0)
+    const provider = String(item?.provider || '').trim().toLowerCase()
+    const isPublic = item?.isPublic !== false
+
+    if (!fileAssetId) {
+      setError('File này chưa có định danh hợp lệ để tạo URL')
       setSuccess('')
+      return
+    }
+
+    const url = String(item?.resolvedUrl || item?.url || '').trim()
+    if (!url || url.startsWith('s3://')) {
+      const appUrl = `${window.location.origin}/api/storage/files/${fileAssetId}/download`
+      if (provider === 's3' && !isPublic) {
+        setError('File private không được copy URL công khai. Vui lòng dùng luồng xem/tải được kiểm tra quyền hoặc mở qua API protected.')
+        setSuccess('')
+        return
+      }
+
+      try {
+        await navigator.clipboard.writeText(appUrl)
+        setSuccess('Đã copy URL truy cập file public')
+        setError('')
+      } catch {
+        setError('Không thể copy URL')
+        setSuccess('')
+      }
       return
     }
 
@@ -272,7 +295,28 @@ export default function TenantStorageManagerPage() {
   }
 
   function handleOpenFile(item) {
+    const fileAssetId = Number(item?.id || 0)
+    const provider = String(item?.provider || '').trim().toLowerCase()
+    const isPublic = item?.isPublic !== false
+
+    if (!fileAssetId) {
+      setError('File này chưa có định danh hợp lệ')
+      setSuccess('')
+      return
+    }
+
     const url = String(item?.resolvedUrl || item?.url || '').trim()
+    if (url.startsWith('s3://')) {
+      const protectedUrl = `${window.location.origin}/api/storage/files/${fileAssetId}/download`
+      if (provider === 's3' && !isPublic) {
+        setError('File private yêu cầu kiểm tra quyền trước khi mở. Vui lòng dùng luồng download có xác thực.')
+        setSuccess('')
+        return
+      }
+      window.open(protectedUrl, '_blank', 'noopener,noreferrer')
+      return
+    }
+
     if (!url) {
       setError('File này chưa có URL hợp lệ')
       setSuccess('')
