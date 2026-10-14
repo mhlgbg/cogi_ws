@@ -27,14 +27,26 @@ export const ACHIEVEMENT_TYPE_OPTIONS = [
   { value: 'other', label: 'Khác' },
 ]
 
+export const RUNNING_V1_ACHIEVEMENT_TYPES = ['race_result', 'personal_best']
+
+export const RUNNING_ACHIEVEMENT_TYPE_OPTIONS = ACHIEVEMENT_TYPE_OPTIONS.filter((option) => RUNNING_V1_ACHIEVEMENT_TYPES.includes(option.value))
+
+export const RUNNING_DISTANCE_OPTIONS = [
+  { value: '42.195', label: 'FM' },
+  { value: '21.0975', label: 'HM' },
+  { value: '10', label: '10KM' },
+  { value: '5', label: '5KM' },
+  { value: 'other', label: 'Khác' },
+]
+
 export const ACHIEVEMENT_STATUS_OPTIONS = [
-  { value: 'active', label: 'Đang hiệu lực' },
+  { value: 'active', label: 'Đã ghi nhận' },
   { value: 'revoked', label: 'Đã thu hồi' },
 ]
 
 export const ACHIEVEMENT_STATUS_FILTER_OPTIONS = [
   { value: '', label: 'Tất cả' },
-  { value: 'active', label: 'Đang ghi nhận' },
+  { value: 'active', label: 'Đã ghi nhận' },
   { value: 'revoked', label: 'Đã rút ghi nhận' },
 ]
 
@@ -61,7 +73,7 @@ export const SUBMISSION_SOURCE_OPTIONS = [
 
 export const SUBMISSION_STATUS_OPTIONS = [
   { value: 'draft', label: 'Nháp' },
-  { value: 'submitted', label: 'Đã gửi' },
+  { value: 'submitted', label: 'Chờ xác minh' },
   { value: 'verified', label: 'Đã xác minh' },
   { value: 'rejected', label: 'Từ chối' },
   { value: 'cancelled', label: 'Đã hủy' },
@@ -86,16 +98,16 @@ export function getSubmissionSourceLabel(value) {
 export function getAchievementStatusMeta(value) {
   const normalized = toText(value).toLowerCase()
   if (normalized === 'revoked') return { color: 'dark', label: 'Đã rút ghi nhận' }
-  return { color: 'success', label: 'Đang ghi nhận' }
+  return { color: 'success', label: 'Đã ghi nhận' }
 }
 
 export function getSubmissionStatusMeta(value) {
   const normalized = toText(value).toLowerCase()
-  if (normalized === 'submitted') return { color: 'warning', label: 'Đã gửi' }
+  if (normalized === 'submitted') return { color: 'warning', label: 'Chờ xác minh' }
   if (normalized === 'verified') return { color: 'success', label: 'Đã xác minh' }
   if (normalized === 'rejected') return { color: 'danger', label: 'Từ chối' }
   if (normalized === 'cancelled') return { color: 'dark', label: 'Đã hủy' }
-  return { color: 'secondary', label: 'Nháp' }
+  return { color: 'secondary', label: 'Bản nháp' }
 }
 
 export function formatSportsDate(value) {
@@ -161,4 +173,45 @@ export function getSportsClubOptionLabel(club) {
 export function getUserLabel(user) {
   if (!user) return '-'
   return [toText(user.fullName), toText(user.username), toText(user.email)].filter(Boolean).join(' - ') || `User #${user.id}`
+}
+
+export function isRunningV1AchievementType(value) {
+  return RUNNING_V1_ACHIEVEMENT_TYPES.includes(toText(value).toLowerCase())
+}
+
+export function formatDurationSeconds(value) {
+  const total = Number(value)
+  if (!Number.isInteger(total) || total <= 0) return '-'
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const seconds = total % 60
+  return [hours, minutes, seconds].map((item) => String(item).padStart(2, '0')).join(':')
+}
+
+export function formatDistanceKm(value) {
+  const distance = Number(value)
+  if (!Number.isFinite(distance) || distance <= 0) return '-'
+  if (Math.abs(distance - 42.195) < 0.0001) return 'FM'
+  if (Math.abs(distance - 21.0975) < 0.0001) return 'HM'
+  if (Math.abs(distance - 10) < 0.0001) return '10KM'
+  if (Math.abs(distance - 5) < 0.0001) return '5KM'
+  return `${distance} km`
+}
+
+export function getAchievementResultPrimary(item) {
+  if (!item) return '-'
+  if (toText(item.sportType).toLowerCase() === 'running' && Number.isInteger(Number(item.durationSeconds)) && Number(item.durationSeconds) > 0) {
+    return formatDurationSeconds(Number(item.durationSeconds))
+  }
+  return toText(item.resultText) || '-'
+}
+
+export function getAchievementResultSecondary(item) {
+  if (!item) return '-'
+  if (toText(item.sportType).toLowerCase() === 'running' && Number(item.distanceKm) > 0) {
+    return formatDistanceKm(Number(item.distanceKm))
+  }
+  const value = item.resultValue === null || item.resultValue === undefined || item.resultValue === '' ? '-' : String(item.resultValue)
+  const unit = toText(item.resultUnit)
+  return [value, unit].filter(Boolean).join(' ')
 }

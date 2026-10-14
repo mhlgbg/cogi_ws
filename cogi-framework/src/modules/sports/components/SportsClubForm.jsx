@@ -97,7 +97,7 @@ export default function SportsClubForm({ initialValues, submitting = false, subm
     setUploadingField(field)
     setUploadError('')
     try {
-      const uploaded = await uploadSportsClubMedia(file)
+      const uploaded = await uploadSportsClubMedia(file, { entityId: initialValues?.id || null })
       if (!uploaded?.id) throw new Error('Không nhận được dữ liệu media sau khi upload')
       setForm((current) => ({ ...current, [field]: uploaded }))
     } catch (error) {

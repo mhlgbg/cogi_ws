@@ -5,6 +5,8 @@ import { listSportsAchievementSubmissions } from '../services/sportsAchievementS
 import {
   ACHIEVEMENT_TYPE_OPTIONS,
   formatSportsDateTime,
+  getAchievementResultPrimary,
+  getAchievementResultSecondary,
   getAchievementTypeLabel,
   getSportTypeLabel,
   getSubmissionSourceLabel,
@@ -122,7 +124,7 @@ export default function SportsAchievementSubmissionsPage() {
                     <CTableDataCell><div>{row.club?.name || '-'}</div><div className='small text-body-secondary'>{row.club?.code || '-'}</div></CTableDataCell>
                     <CTableDataCell><div className='fw-semibold'>{row.title || '-'}</div><div className='small text-body-secondary'>{getSportTypeLabel(row.sportType)}</div></CTableDataCell>
                     <CTableDataCell>{getAchievementTypeLabel(row.achievementType)}</CTableDataCell>
-                    <CTableDataCell><div>{row.resultText || '-'}</div><div className='small text-body-secondary'>{row.resultValue ?? '-'} {row.resultUnit || ''}</div></CTableDataCell>
+                    <CTableDataCell><div>{getAchievementResultPrimary(row)}</div><div className='small text-body-secondary'>{getAchievementResultSecondary(row)}</div></CTableDataCell>
                     <CTableDataCell>{formatSportsDateTime(row.achievedAt)}</CTableDataCell>
                     <CTableDataCell>{getSubmissionSourceLabel(row.source)}</CTableDataCell>
                     <CTableDataCell><CBadge color={statusMeta.color}>{statusMeta.label}</CBadge></CTableDataCell>

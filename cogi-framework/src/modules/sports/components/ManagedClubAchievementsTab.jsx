@@ -27,6 +27,8 @@ import {
   CTableHeaderCell,
   CTableRow,
 } from '@coreui/react'
+import RunningAchievementFields, { buildRunningAchievementPayload, buildRunningAchievementState, validateRunningAchievementForm } from './RunningAchievementFields'
+import AchievementPosterModal from './AchievementPosterModal'
 import {
   createManagedClubAchievementCorrectionSubmission,
   createManagedClubAchievementSubmission,
@@ -36,11 +38,11 @@ import {
   listManagedClubAchievementProfileOptions,
   listManagedClubAchievements,
   listManagedClubAchievementSubmissions,
-  listManagedClubProfileOptions,
   revokeManagedClubAchievement,
   rejectManagedClubAchievementSubmission,
   submitManagedClubAchievementSubmission,
   updateManagedClubAchievementSubmission,
+  updateManagedClubAchievementShareTemplate,
   verifyManagedClubAchievementSubmission,
 } from '../services/sportsClubManagementService'
 import { uploadSportsAchievementSubmissionEvidence } from '../services/sportsAchievementSubmissionService'
@@ -48,6 +50,8 @@ import {
   ACHIEVEMENT_STATUS_FILTER_OPTIONS,
   ACHIEVEMENT_TYPE_OPTIONS,
   formatSportsDateTime,
+  getAchievementResultPrimary,
+  getAchievementResultSecondary,
   getAchievementStatusMeta,
   getAchievementTypeLabel,
   getSportTypeLabel,
@@ -58,6 +62,7 @@ import {
   getUserLabel,
   SPORT_TYPE_OPTIONS,
   SUBMISSION_STATUS_OPTIONS,
+  isRunningV1AchievementType,
   toDateTimeInputValue,
   fromDateTimeInputValue,
 } from '../utils/sportsAchievementUi'
@@ -96,10 +101,16 @@ function buildSubmissionFormState(initialSubmission = null) {
     note: String(initialSubmission?.note || '').trim(),
     reviewNote: String(initialSubmission?.reviewNote || '').trim(),
     evidence: Array.isArray(initialSubmission?.evidence) ? initialSubmission.evidence : [],
+    distanceKm: initialSubmission?.distanceKm ?? null,
+    durationSeconds: initialSubmission?.durationSeconds ?? null,
+    ...buildRunningAchievementState(initialSubmission),
   }
 }
 
 function buildSubmissionPayload(form, saveMode) {
+  const runningPayload = isRunningV1AchievementType(form.achievementType) && form.sportType === 'running'
+    ? buildRunningAchievementPayload(form)
+    : {}
   return {
     sportsProfile: form.sportsProfile?.id || null,
     achievementType: form.achievementType || 'other',
@@ -107,9 +118,11 @@ function buildSubmissionPayload(form, saveMode) {
     title: form.title || null,
     description: form.description || null,
     achievedAt: fromDateTimeInputValue(form.achievedAt),
-    resultValue: form.resultValue === '' ? null : Number(form.resultValue),
-    resultUnit: form.resultUnit || null,
-    resultText: form.resultText || null,
+    resultValue: runningPayload.resultValue ?? (form.resultValue === '' ? null : Number(form.resultValue)),
+    distanceKm: runningPayload.distanceKm ?? form.distanceKm ?? null,
+    durationSeconds: runningPayload.durationSeconds ?? form.durationSeconds ?? null,
+    resultUnit: runningPayload.resultUnit ?? (form.resultUnit || null),
+    resultText: runningPayload.resultText ?? (form.resultText || null),
     sourceReference: form.sourceReference || null,
     note: form.note || null,
     evidence: Array.isArray(form.evidence) ? form.evidence.map((item) => item.id).filter(Boolean) : [],
@@ -120,7 +133,11 @@ function buildSubmissionPayload(form, saveMode) {
 function validateSubmissionForm(form) {
   const errors = {}
   if (!form.sportsProfile?.id) errors.sportsProfile = 'Sports Profile là bắt buộc'
-  if (!form.title) errors.title = 'Tiêu đề là bắt buộc'
+  if (form.sportType === 'running' && isRunningV1AchievementType(form.achievementType)) {
+    Object.assign(errors, validateRunningAchievementForm(form))
+  } else if (!form.title) {
+    errors.title = 'Tiêu đề là bắt buộc'
+  }
   return errors
 }
 
@@ -153,12 +170,11 @@ function SubmissionEditorModal({ visible = false, club = null, initialSubmission
   const [uploading, setUploading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [profileSearch, setProfileSearch] = useState('')
   const [memberProfileOptions, setMemberProfileOptions] = useState(defaultProfiles)
-  const [tenantProfileOptions, setTenantProfileOptions] = useState([])
 
   const isEdit = Boolean(initialSubmission?.id)
   const isProfileLocked = Boolean(lockedProfile?.id)
+  const isRunningMode = form.sportType === 'running' && isRunningV1AchievementType(form.achievementType)
 
   useEffect(() => {
     if (!visible) return
@@ -169,9 +185,7 @@ function SubmissionEditorModal({ visible = false, club = null, initialSubmission
     setError('')
     setUploading(false)
     setSubmitting(false)
-    setProfileSearch('')
     setMemberProfileOptions(defaultProfiles)
-    setTenantProfileOptions([])
   }, [visible, initialSubmission, defaultProfiles, lockedProfile])
 
   useEffect(() => {
@@ -179,7 +193,7 @@ function SubmissionEditorModal({ visible = false, club = null, initialSubmission
     let mounted = true
     async function loadMemberProfiles() {
       try {
-        const rows = await listManagedClubAchievementProfileOptions(club.id, { pageSize: 100 })
+        const rows = await listManagedClubAchievementProfileOptions(club.id, { pageSize: 500 })
         if (!mounted) return
         setMemberProfileOptions(Array.isArray(rows) ? rows : [])
       } catch {
@@ -189,30 +203,7 @@ function SubmissionEditorModal({ visible = false, club = null, initialSubmission
     }
     loadMemberProfiles()
     return () => { mounted = false }
-  }, [visible, club?.id])
-
-  useEffect(() => {
-    if (!visible || !club?.id) return
-    const keyword = String(profileSearch || '').trim()
-    if (!keyword) {
-      setTenantProfileOptions([])
-      return
-    }
-    let mounted = true
-    async function searchProfiles() {
-      try {
-        const result = await listManagedClubProfileOptions(club.id, { page: 1, pageSize: 20, search: keyword })
-        if (!mounted) return
-        setTenantProfileOptions(Array.isArray(result?.rows) ? result.rows : [])
-      } catch (requestError) {
-        if (!mounted) return
-        setTenantProfileOptions([])
-        setError(getSportsClubManagementApiMessage(requestError, 'Không tìm được Sports Profile trong tenant.'))
-      }
-    }
-    searchProfiles()
-    return () => { mounted = false }
-  }, [visible, club?.id, profileSearch])
+  }, [visible, club?.id, defaultProfiles])
 
   const profileOptions = useMemo(() => {
     const map = new Map()
@@ -225,16 +216,8 @@ function SubmissionEditorModal({ visible = false, club = null, initialSubmission
         })
       }
     })
-    ;(tenantProfileOptions || []).forEach((profile) => {
-      if (profile?.id && !map.has(profile.id)) {
-        map.set(profile.id, {
-          profile,
-          membership: null,
-        })
-      }
-    })
     return Array.from(map.values())
-  }, [memberProfileOptions, tenantProfileOptions])
+  }, [memberProfileOptions])
 
   function updateField(key, value) {
     setForm((current) => ({ ...current, [key]: value }))
@@ -304,34 +287,37 @@ function SubmissionEditorModal({ visible = false, club = null, initialSubmission
                 {lockedMembership?.memberCode || lockedMembership?.status ? <div className='small text-body-secondary'>Membership hiện tại: {lockedMembership?.memberCode || '-'} · {lockedMembership?.status || '-'}</div> : null}
               </>
             ) : (
-              <>
-                <CFormInput value={profileSearch} placeholder='Tìm thêm hồ sơ ngoài danh sách member hiện tại nếu cần' onChange={(event) => setProfileSearch(event.target.value)} disabled={submitting || uploading} className='mb-2' />
-                <CFormSelect value={form.sportsProfile?.id ? String(form.sportsProfile.id) : ''} onChange={(event) => {
-                  const selected = profileOptions.find((item) => String(item.profile?.id) === event.target.value) || null
-                  updateField('sportsProfile', selected?.profile || null)
-                }} disabled={submitting || uploading} invalid={Boolean(fieldErrors.sportsProfile)}>
-                  <option value=''>Chọn Sports Profile</option>
-                  {profileOptions.map((option) => (
-                    <option key={option.profile.id} value={option.profile.id}>
-                      {option.membership?.memberCode
-                        ? `${option.membership.memberCode} - ${getSportsProfileOptionLabel(option.profile)}`
-                        : getSportsProfileOptionLabel(option.profile)}
-                    </option>
-                  ))}
-                </CFormSelect>
-              </>
+              <CFormSelect value={form.sportsProfile?.id ? String(form.sportsProfile.id) : ''} onChange={(event) => {
+                const selected = profileOptions.find((item) => String(item.profile?.id) === event.target.value) || null
+                updateField('sportsProfile', selected?.profile || null)
+              }} disabled={submitting || uploading} invalid={Boolean(fieldErrors.sportsProfile)}>
+                <option value=''>Chọn Sports Profile</option>
+                {profileOptions.map((option) => (
+                  <option key={option.profile.id} value={option.profile.id}>
+                    {option.membership?.memberCode
+                      ? `${option.membership.memberCode} - ${getSportsProfileOptionLabel(option.profile)}`
+                      : getSportsProfileOptionLabel(option.profile)}
+                  </option>
+                ))}
+              </CFormSelect>
             )}
             {fieldErrors.sportsProfile ? <div className='text-danger small mt-1'>{fieldErrors.sportsProfile}</div> : null}
           </CCol>
           <CCol md={4}><CFormLabel>Loại thành tích</CFormLabel><CFormSelect value={form.achievementType} onChange={(event) => updateField('achievementType', event.target.value)} disabled={submitting || uploading}>{ACHIEVEMENT_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</CFormSelect></CCol>
           <CCol md={4}><CFormLabel>Môn</CFormLabel><CFormSelect value={form.sportType} onChange={(event) => updateField('sportType', event.target.value)} disabled={submitting || uploading}>{SPORT_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</CFormSelect></CCol>
           <CCol md={4}><CFormLabel>CLB</CFormLabel><CFormInput value={getSportsClubOptionLabel(club)} disabled readOnly /></CCol>
-          <CCol md={8}><CFormLabel>Tiêu đề *</CFormLabel><CFormInput value={form.title} onChange={(event) => updateField('title', event.target.value)} disabled={submitting || uploading} invalid={Boolean(fieldErrors.title)} />{fieldErrors.title ? <div className='text-danger small mt-1'>{fieldErrors.title}</div> : null}</CCol>
-          <CCol md={4}><CFormLabel>Achieved At</CFormLabel><CFormInput type='datetime-local' value={form.achievedAt} onChange={(event) => updateField('achievedAt', event.target.value)} disabled={submitting || uploading} /></CCol>
-          <CCol md={4}><CFormLabel>Result Value</CFormLabel><CFormInput type='number' step='any' value={form.resultValue} onChange={(event) => updateField('resultValue', event.target.value)} disabled={submitting || uploading} /></CCol>
-          <CCol md={4}><CFormLabel>Result Unit</CFormLabel><CFormInput value={form.resultUnit} onChange={(event) => updateField('resultUnit', event.target.value)} disabled={submitting || uploading} /></CCol>
-          <CCol md={4}><CFormLabel>Result Text</CFormLabel><CFormInput value={form.resultText} onChange={(event) => updateField('resultText', event.target.value)} disabled={submitting || uploading} /></CCol>
-          <CCol md={8}><CFormLabel>Source Reference</CFormLabel><CFormInput value={form.sourceReference} onChange={(event) => updateField('sourceReference', event.target.value)} disabled={submitting || uploading} /></CCol>
+          {isRunningMode ? (
+            <RunningAchievementFields form={form} errors={fieldErrors} disabled={submitting || uploading} onChange={updateField} />
+          ) : (
+            <>
+              <CCol md={8}><CFormLabel>Tiêu đề *</CFormLabel><CFormInput value={form.title} onChange={(event) => updateField('title', event.target.value)} disabled={submitting || uploading} invalid={Boolean(fieldErrors.title)} />{fieldErrors.title ? <div className='text-danger small mt-1'>{fieldErrors.title}</div> : null}</CCol>
+              <CCol md={4}><CFormLabel>Achieved At</CFormLabel><CFormInput type='datetime-local' value={form.achievedAt} onChange={(event) => updateField('achievedAt', event.target.value)} disabled={submitting || uploading} /></CCol>
+              <CCol md={4}><CFormLabel>Result Value</CFormLabel><CFormInput type='number' step='any' value={form.resultValue} onChange={(event) => updateField('resultValue', event.target.value)} disabled={submitting || uploading} /></CCol>
+              <CCol md={4}><CFormLabel>Result Unit</CFormLabel><CFormInput value={form.resultUnit} onChange={(event) => updateField('resultUnit', event.target.value)} disabled={submitting || uploading} /></CCol>
+              <CCol md={4}><CFormLabel>Result Text</CFormLabel><CFormInput value={form.resultText} onChange={(event) => updateField('resultText', event.target.value)} disabled={submitting || uploading} /></CCol>
+              <CCol md={8}><CFormLabel>Source Reference</CFormLabel><CFormInput value={form.sourceReference} onChange={(event) => updateField('sourceReference', event.target.value)} disabled={submitting || uploading} /></CCol>
+            </>
+          )}
           <CCol xs={12}><CFormLabel>Mô tả</CFormLabel><CFormTextarea rows={3} value={form.description} onChange={(event) => updateField('description', event.target.value)} disabled={submitting || uploading} /></CCol>
           <CCol xs={12}><CFormLabel>Ghi chú</CFormLabel><CFormTextarea rows={3} value={form.note} onChange={(event) => updateField('note', event.target.value)} disabled={submitting || uploading} /></CCol>
           <CCol xs={12}>
@@ -353,7 +339,7 @@ function SubmissionEditorModal({ visible = false, club = null, initialSubmission
       </CModalBody>
       <CModalFooter>
         <CButton color='secondary' variant='outline' onClick={() => onClose?.()} disabled={submitting || uploading}>Hủy</CButton>
-        <CButton color='primary' variant='outline' onClick={() => handleSave('submitted')} disabled={submitting || uploading}>{submitting ? 'Đang lưu...' : 'Lưu đề nghị'}</CButton>
+        <CButton color='primary' variant='outline' onClick={() => handleSave('submitted')} disabled={submitting || uploading}>{submitting ? 'Đang lưu...' : 'Gửi đề nghị'}</CButton>
         {!isEdit ? <CButton color='success' onClick={() => handleSave('verify_now')} disabled={submitting || uploading}>{submitting ? 'Đang xử lý...' : 'Ghi nhận ngay'}</CButton> : null}
       </CModalFooter>
     </CModal>
@@ -458,7 +444,7 @@ function SubmissionDetailModal({ visible = false, club = null, submissionId = nu
               <CCol md={4}><CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Member Code / Membership</div><div className='fw-semibold'>{submission.clubMembership?.memberCode || '-'}</div><div className='small text-body-secondary mt-1'>{submission.clubMembership?.status || 'Chưa có membership hiện tại'}</div></CCardBody></CCard></CCol>
               <CCol md={4}><CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Loại thành tích</div><div className='fw-semibold'>{getAchievementTypeLabel(submission.achievementType)}</div><div className='small text-body-secondary mt-1'>{getSportTypeLabel(submission.sportType)}</div></CCardBody></CCard></CCol>
               <CCol md={4}><CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Achieved At</div><div className='fw-semibold'>{formatSportsDateTime(submission.achievedAt)}</div></CCardBody></CCard></CCol>
-              <CCol md={4}><CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Kết quả</div><div className='fw-semibold'>{submission.resultText || '-'}</div><div className='small text-body-secondary mt-1'>{submission.resultValue ?? '-'} {submission.resultUnit || ''}</div></CCardBody></CCard></CCol>
+              <CCol md={4}><CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Kết quả</div><div className='fw-semibold'>{getAchievementResultPrimary(submission)}</div><div className='small text-body-secondary mt-1'>{getAchievementResultSecondary(submission)}</div></CCardBody></CCard></CCol>
               <CCol md={4}><CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Nguồn</div><div className='fw-semibold'>{getSubmissionSourceLabel(submission.source)}</div><div className='small text-body-secondary mt-1'>{submission.sourceReference || '-'}</div></CCardBody></CCard></CCol>
               <CCol md={6}><CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Submitted By</div><div className='fw-semibold'>{getUserLabel(submission.submittedBy)}</div><div className='small text-body-secondary mt-1'>{formatSportsDateTime(submission.submittedAt)}</div></CCardBody></CCard></CCol>
               <CCol md={6}><CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Review</div><div className='fw-semibold'>{getUserLabel(submission.reviewedBy)}</div><div className='small text-body-secondary mt-1'>{formatSportsDateTime(submission.reviewedAt)}</div></CCardBody></CCard></CCol>
@@ -494,6 +480,9 @@ function AchievementDetailModal({ visible = false, club = null, achievementId = 
   const [achievement, setAchievement] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [revokeModal, setRevokeModal] = useState({ visible: false, reason: '' })
+  const [posterModalVisible, setPosterModalVisible] = useState(false)
+  const [templateMode, setTemplateMode] = useState('auto')
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
 
   useEffect(() => {
     if (!visible || !club?.id || !achievementId) return
@@ -505,6 +494,8 @@ function AchievementDetailModal({ visible = false, club = null, achievementId = 
         const result = await getManagedClubAchievement(club.id, achievementId)
         if (!mounted) return
         setAchievement(result || null)
+        setTemplateMode((result?.shareTemplateSource || '').toLowerCase() === 'explicit' ? 'explicit' : 'auto')
+        setSelectedTemplateId(String(result?.shareTemplate?.id || result?.effectiveTemplate?.id || ''))
       } catch (requestError) {
         if (!mounted) return
         setAchievement(null)
@@ -516,6 +507,25 @@ function AchievementDetailModal({ visible = false, club = null, achievementId = 
     load()
     return () => { mounted = false }
   }, [visible, club?.id, achievementId])
+
+  async function handleUpdateTemplateMode() {
+    if (!achievement?.id) return
+    setSubmitting(true)
+    setError('')
+    try {
+      const payload = templateMode === 'explicit'
+        ? { mode: 'explicit', templateId: selectedTemplateId || null }
+        : { mode: 'auto' }
+      const updated = await updateManagedClubAchievementShareTemplate(club.id, achievement.id, payload)
+      setAchievement(updated || null)
+      setTemplateMode((updated?.shareTemplateSource || '').toLowerCase() === 'explicit' ? 'explicit' : 'auto')
+      setSelectedTemplateId(String(updated?.shareTemplate?.id || updated?.effectiveTemplate?.id || ''))
+    } catch (requestError) {
+      setError(getSportsClubManagementApiMessage(requestError, 'Không thể cập nhật mẫu ảnh cho thành tích.'))
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   async function handleRevoke() {
     if (!achievement?.id) return
@@ -567,6 +577,7 @@ function AchievementDetailModal({ visible = false, club = null, achievementId = 
                 {renderMembershipBadge(achievement.clubMembership)}
               </div>
               <div className='d-flex gap-2 flex-wrap'>
+                <CButton color='primary' variant='outline' onClick={() => setPosterModalVisible(true)} disabled={submitting}>Ảnh thành tích</CButton>
                 {achievement.status === 'active' ? <CButton color='danger' variant='outline' onClick={() => setRevokeModal({ visible: true, reason: '' })} disabled={submitting}>Rút ghi nhận</CButton> : null}
                 {achievement.status === 'revoked' ? <CButton color='primary' variant='outline' onClick={handleCreateCorrectionSubmission} disabled={submitting}>Tạo đề nghị sửa</CButton> : null}
               </div>
@@ -576,12 +587,42 @@ function AchievementDetailModal({ visible = false, club = null, achievementId = 
               <CCol md={4}><CCard className='h-100'><CCardBody><div className='small text-body-secondary'>CLB</div><div className='fw-semibold'>{getSportsClubOptionLabel(achievement.club)}</div></CCardBody></CCard></CCol>
               <CCol md={4}><CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Submission nguồn</div><div className='fw-semibold'>{achievement.submission?.title || '-'}</div><div className='small text-body-secondary mt-1'>{achievement.submission?.status || '-'}</div></CCardBody></CCard></CCol>
               <CCol md={4}><CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Loại thành tích</div><div className='fw-semibold'>{getAchievementTypeLabel(achievement.achievementType)}</div><div className='small text-body-secondary mt-1'>{getSportTypeLabel(achievement.sportType)}</div></CCardBody></CCard></CCol>
-              <CCol md={4}><CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Kết quả</div><div className='fw-semibold'>{achievement.resultText || '-'}</div><div className='small text-body-secondary mt-1'>{achievement.resultValue ?? '-'} {achievement.resultUnit || ''}</div></CCardBody></CCard></CCol>
+              <CCol md={4}><CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Kết quả</div><div className='fw-semibold'>{getAchievementResultPrimary(achievement)}</div><div className='small text-body-secondary mt-1'>{getAchievementResultSecondary(achievement)}</div></CCardBody></CCard></CCol>
               <CCol md={4}><CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Verified</div><div className='fw-semibold'>{formatSportsDateTime(achievement.verifiedAt)}</div><div className='small text-body-secondary mt-1'>{getUserLabel(achievement.verifiedBy)}</div></CCardBody></CCard></CCol>
               {achievement.status === 'revoked' ? <CCol md={4}><CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Rút lúc</div><div className='fw-semibold'>{formatSportsDateTime(achievement.revokedAt)}</div><div className='small text-body-secondary mt-1'>{getUserLabel(achievement.revokedBy)}</div></CCardBody></CCard></CCol> : null}
               {achievement.status === 'revoked' ? <CCol md={8}><CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Lý do rút ghi nhận</div><div className='fw-semibold' style={{ whiteSpace: 'pre-wrap' }}>{achievement.revokeReason || '-'}</div></CCardBody></CCard></CCol> : null}
             </CRow>
             <CCard className='mb-4'><CCardBody><div className='small text-body-secondary mb-2'>Mô tả</div><div style={{ whiteSpace: 'pre-wrap' }}>{achievement.description || 'Không có.'}</div><div className='small text-body-secondary mt-3 mb-2'>Nguồn / Source Reference</div><div>{achievement.source || '-'} · {achievement.sourceReference || '-'}</div><div className='small text-body-secondary mt-3 mb-2'>Ghi chú</div><div style={{ whiteSpace: 'pre-wrap' }}>{achievement.note || 'Không có.'}</div></CCardBody></CCard>
+            <CCard className='mb-4'>
+              <CCardBody>
+                <div className='small text-body-secondary mb-2'>Mẫu ảnh chia sẻ</div>
+                <CRow className='g-3'>
+                  <CCol md={4}>
+                    <CFormLabel>Chế độ</CFormLabel>
+                    <CFormSelect value={templateMode} onChange={(event) => setTemplateMode(event.target.value)} disabled={submitting}>
+                      <option value='auto'>Tự động</option>
+                      <option value='explicit'>Chỉ định thủ công</option>
+                    </CFormSelect>
+                  </CCol>
+                  <CCol md={8}>
+                    <CFormLabel>Mẫu ảnh</CFormLabel>
+                    <CFormSelect value={selectedTemplateId} onChange={(event) => setSelectedTemplateId(event.target.value)} disabled={submitting || templateMode !== 'explicit'}>
+                      {(achievement.templateOptions || []).map((item) => (
+                        <option key={item.id} value={item.id}>{item.name || item.code || `Template #${item.id}`}</option>
+                      ))}
+                    </CFormSelect>
+                  </CCol>
+                </CRow>
+                <div className='small text-body-secondary mt-2'>
+                  Nguồn hiện tại: {(achievement.templateResolution?.source || '-')} · Trạng thái: {(achievement.templateResolution?.status || '-')}
+                </div>
+                {achievement.templateResolution?.reason ? <div className='small text-warning mt-1'>{achievement.templateResolution.reason}</div> : null}
+                <div className='d-flex gap-2 mt-3'>
+                  <CButton size='sm' color='primary' variant='outline' onClick={handleUpdateTemplateMode} disabled={submitting || (templateMode === 'explicit' && !selectedTemplateId)}>Lưu mẫu ảnh</CButton>
+                  <CButton size='sm' color='secondary' variant='outline' onClick={() => setPosterModalVisible(true)} disabled={submitting}>Xem ảnh</CButton>
+                </div>
+              </CCardBody>
+            </CCard>
             <CCard><CCardBody><div className='small text-body-secondary mb-2'>Evidence</div>{renderEvidenceList(achievement.evidence)}</CCardBody></CCard>
           </>
         ) : null}
@@ -603,6 +644,17 @@ function AchievementDetailModal({ visible = false, club = null, achievementId = 
           <CButton color='danger' onClick={handleRevoke} disabled={submitting}>{submitting ? 'Đang xử lý...' : 'Xác nhận rút ghi nhận'}</CButton>
         </CModalFooter>
       </CModal>
+      <AchievementPosterModal
+        visible={posterModalVisible}
+        title='Ảnh thành tích (Quản trị CLB)'
+        achievement={achievement}
+        profile={achievement?.sportsProfile || null}
+        templateOptions={Array.isArray(achievement?.templateOptions) ? achievement.templateOptions : (achievement?.effectiveTemplate ? [achievement.effectiveTemplate] : [])}
+        selectedTemplateId={selectedTemplateId}
+        onTemplateChange={setSelectedTemplateId}
+        readOnlyTemplate={false}
+        onClose={() => setPosterModalVisible(false)}
+      />
     </CModal>
   )
 }
@@ -659,7 +711,7 @@ export default function ManagedClubAchievementsTab({ club, membership = null }) 
     let mounted = true
     async function loadProfileOptions() {
       try {
-        const rows = await listManagedClubAchievementProfileOptions(club.id, { pageSize: 100 })
+        const rows = await listManagedClubAchievementProfileOptions(club.id, { pageSize: 500 })
         if (!mounted) return
         setProfileFilterOptions(Array.isArray(rows) ? rows : [])
       } catch {
@@ -783,7 +835,7 @@ export default function ManagedClubAchievementsTab({ club, membership = null }) 
                       <CTableDataCell><div>{row.sportsProfile?.fullName || '-'}</div><div className='small text-body-secondary'>{row.sportsProfile?.code || '-'}</div><div className='small text-body-secondary'>{row.clubMembership?.memberCode || '-'}</div></CTableDataCell>
                       <CTableDataCell><div className='fw-semibold'>{row.title || '-'}</div><div className='small text-body-secondary'>{getSportTypeLabel(row.sportType)}</div></CTableDataCell>
                       <CTableDataCell>{getAchievementTypeLabel(row.achievementType)}</CTableDataCell>
-                      <CTableDataCell><div>{row.resultText || '-'}</div><div className='small text-body-secondary'>{row.resultValue ?? '-'} {row.resultUnit || ''}</div></CTableDataCell>
+                      <CTableDataCell><div>{getAchievementResultPrimary(row)}</div><div className='small text-body-secondary'>{getAchievementResultSecondary(row)}</div></CTableDataCell>
                       <CTableDataCell>{formatSportsDateTime(row.achievedAt)}</CTableDataCell>
                       <CTableDataCell>{getSubmissionSourceLabel(row.source)}</CTableDataCell>
                       <CTableDataCell>{formatSportsDateTime(row.submittedAt)}</CTableDataCell>
@@ -855,7 +907,7 @@ export default function ManagedClubAchievementsTab({ club, membership = null }) 
                       <CTableDataCell><div>{row.sportsProfile?.fullName || '-'}</div><div className='small text-body-secondary'>{row.sportsProfile?.code || '-'}</div><div className='small text-body-secondary'>{row.clubMembership?.memberCode || '-'}</div></CTableDataCell>
                       <CTableDataCell><div className='fw-semibold'>{row.title || '-'}</div><div className='small text-body-secondary'>{getSportTypeLabel(row.sportType)}</div></CTableDataCell>
                       <CTableDataCell>{getAchievementTypeLabel(row.achievementType)}</CTableDataCell>
-                      <CTableDataCell><div>{row.resultText || '-'}</div><div className='small text-body-secondary'>{row.resultValue ?? '-'} {row.resultUnit || ''}</div></CTableDataCell>
+                      <CTableDataCell><div>{getAchievementResultPrimary(row)}</div><div className='small text-body-secondary'>{getAchievementResultSecondary(row)}</div></CTableDataCell>
                       <CTableDataCell>{formatSportsDateTime(row.achievedAt)}</CTableDataCell>
                       <CTableDataCell>{row.source || '-'}</CTableDataCell>
                       <CTableDataCell><div className='d-flex gap-2 flex-wrap'><CBadge color={getAchievementStatusMeta(row.status).color}>{getAchievementStatusMeta(row.status).label}</CBadge>{renderMembershipBadge(row.clubMembership)}</div><div className='small text-body-secondary mt-1'>{formatSportsDateTime(row.verifiedAt)}</div><div className='small text-body-secondary'>{getUserLabel(row.verifiedBy)}</div></CTableDataCell>

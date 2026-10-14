@@ -7,6 +7,8 @@ import {
   ACHIEVEMENT_STATUS_OPTIONS,
   ACHIEVEMENT_TYPE_OPTIONS,
   formatSportsDateTime,
+  getAchievementResultPrimary,
+  getAchievementResultSecondary,
   getAchievementSourceLabel,
   getAchievementStatusMeta,
   getAchievementTypeLabel,
@@ -120,7 +122,7 @@ export default function SportsAchievementsPage() {
                     <CTableDataCell><div>{row.club?.name || '-'}</div><div className='small text-body-secondary'>{row.club?.code || '-'}</div></CTableDataCell>
                     <CTableDataCell><div className='fw-semibold'>{row.title || '-'}</div><div className='small text-body-secondary'>{getSportTypeLabel(row.sportType)}</div></CTableDataCell>
                     <CTableDataCell>{getAchievementTypeLabel(row.achievementType)}</CTableDataCell>
-                    <CTableDataCell><div>{row.resultText || '-'}</div><div className='small text-body-secondary'>{row.resultValue ?? '-'} {row.resultUnit || ''}</div></CTableDataCell>
+                    <CTableDataCell><div>{getAchievementResultPrimary(row)}</div><div className='small text-body-secondary'>{getAchievementResultSecondary(row)}</div></CTableDataCell>
                     <CTableDataCell>{formatSportsDateTime(row.achievedAt)}</CTableDataCell>
                     <CTableDataCell>{getAchievementSourceLabel(row.source)}</CTableDataCell>
                     <CTableDataCell><CBadge color={statusMeta.color}>{statusMeta.label}</CBadge></CTableDataCell>

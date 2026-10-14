@@ -23,7 +23,7 @@ import {
   CSpinner,
 } from '@coreui/react'
 import {
-  createMySportsProfile,
+  createMySportsAchievementSubmission,
   getMySportsAchievement,
   getMySportsAchievementSubmission,
   getMySportsClubMembership,
@@ -37,7 +37,8 @@ import {
   updateMySportsProfile,
   uploadMySportsProfileAvatar,
 } from '../services/sportsMeService'
-import SportsProfileQuickCreateFields from '../components/SportsProfileQuickCreateFields'
+import SportsAchievementSubmissionForm from '../components/SportsAchievementSubmissionForm'
+import AchievementPosterModal from '../components/AchievementPosterModal'
 import {
   formatSportsDate,
   formatSportsDateTime,
@@ -47,6 +48,9 @@ import {
 } from '../utils/clubMembershipUi'
 import {
   ACHIEVEMENT_STATUS_FILTER_OPTIONS,
+  RUNNING_V1_ACHIEVEMENT_TYPES,
+  formatDistanceKm,
+  formatDurationSeconds,
   getAchievementSourceLabel,
   getAchievementTypeLabel,
   getSportTypeLabel,
@@ -57,7 +61,6 @@ import {
   getSportsProfileGenderLabel,
   getSportsProfileStatusMeta,
 } from '../utils/sportsProfileUi'
-import { buildInitialQuickSportsProfileForm, buildQuickSportsProfilePayload, validateQuickSportsProfileForm } from '../utils/sportsProfileQuickCreate'
 import './SportsMePage.css'
 
 const TABS = [
@@ -74,7 +77,7 @@ const ACHIEVEMENT_VIEWS = [
 const SUBMISSION_FILTER_OPTIONS = [
   { value: 'all', label: 'Tất cả' },
   { value: 'draft', label: 'Bản nháp' },
-  { value: 'submitted', label: 'Đã gửi' },
+  { value: 'submitted', label: 'Chờ xác minh' },
   { value: 'verified', label: 'Đã xác minh' },
   { value: 'rejected', label: 'Đã từ chối' },
   { value: 'cancelled', label: 'Đã hủy' },
@@ -88,7 +91,7 @@ function toText(value) {
 function getMemberAchievementStatusMeta(status) {
   const normalized = toText(status).toLowerCase()
   if (normalized === 'revoked') return { color: 'dark', label: 'Đã rút ghi nhận' }
-  return { color: 'success', label: 'Đang ghi nhận' }
+  return { color: 'success', label: 'Đã ghi nhận' }
 }
 
 function getMemberSubmissionStatusMeta(status) {
@@ -97,7 +100,7 @@ function getMemberSubmissionStatusMeta(status) {
   if (normalized === 'rejected') return { color: 'danger', label: 'Đã từ chối' }
   if (normalized === 'cancelled') return { color: 'dark', label: 'Đã hủy' }
   if (normalized === 'draft') return { color: 'secondary', label: 'Bản nháp' }
-  return { color: 'warning', label: 'Đã gửi' }
+  return { color: 'warning', label: 'Chờ xác minh' }
 }
 
 function getMembershipHistoryEventLabel(eventType) {
@@ -118,6 +121,10 @@ function getMembershipHistoryEventLabel(eventType) {
 }
 
 function resolveAchievementResultText(item) {
+  if (toText(item?.sportType).toLowerCase() === 'running' && Number.isInteger(Number(item?.durationSeconds)) && Number(item.durationSeconds) > 0) {
+    const distanceLabel = Number(item?.distanceKm) > 0 ? ` · ${formatDistanceKm(item.distanceKm)}` : ''
+    return `${formatDurationSeconds(item.durationSeconds)}${distanceLabel}`
+  }
   const resultText = toText(item?.resultText)
   if (resultText) return resultText
   const value = item?.resultValue === null || item?.resultValue === undefined ? '' : String(item.resultValue)
@@ -143,7 +150,6 @@ function buildProfileFormValues(profile = null) {
 
 function buildProfileUpdatePayload(form) {
   return {
-    code: toText(form.code).toUpperCase() || null,
     displayName: toText(form.displayName) || null,
     avatar: form.avatar?.id || null,
     gender: toText(form.gender) || 'unspecified',
@@ -157,32 +163,19 @@ function buildProfileUpdatePayload(form) {
 }
 
 function validateProfileForm(form) {
-  const errors = validateQuickSportsProfileForm({
-    code: form.code,
-    fullName: form.fullName || 'profile-owner',
-    birthYear: form.birthYear,
-    contactEmail: form.contactEmail,
-  })
-  delete errors.fullName
+  const errors = {}
+  const birthYear = toText(form?.birthYear)
+  if (birthYear) {
+    const parsed = Number(birthYear)
+    if (!Number.isInteger(parsed) || parsed < 1900 || parsed > 2100) {
+      errors.birthYear = 'Năm sinh phải là số nguyên từ 1900 đến 2100'
+    }
+  }
+  const email = toText(form?.contactEmail).toLowerCase()
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    errors.contactEmail = 'Email liên hệ không hợp lệ'
+  }
   return errors
-}
-
-function CreateSportsProfileCard({ form, errors, submitting, onChange, onSubmit }) {
-  return (
-    <CCard className='sports-me-section-card border-0 shadow-sm'>
-      <CCardBody>
-        <div className='d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3'>
-          <div>
-            <div className='sports-me-section-title mb-1'>Tạo hồ sơ thể thao</div>
-            <div className='small text-body-secondary'>Tạo hồ sơ thể thao gắn trực tiếp với tài khoản đang đăng nhập của bạn trong tenant hiện tại.</div>
-          </div>
-          <CButton color='primary' onClick={onSubmit} disabled={submitting}>{submitting ? 'Đang tạo hồ sơ...' : 'Tạo hồ sơ thể thao'}</CButton>
-        </div>
-
-        <SportsProfileQuickCreateFields form={form} errors={errors} disabled={submitting} onChange={onChange} />
-      </CCardBody>
-    </CCard>
-  )
 }
 
 function SummaryCard({ label, value }) {
@@ -283,22 +276,25 @@ function ProfileEditCard({ profile, form, errors, submitting, uploading, onChang
             <CRow className='g-3'>
               <CCol md={6}>
                 <CFormLabel>Mã hồ sơ</CFormLabel>
-                <CFormInput value={form.code} onChange={(event) => onChange('code', event.target.value.toUpperCase())} disabled={submitting || uploading} />
-                {errors.code ? <div className='small text-danger mt-1'>{errors.code}</div> : null}
+                <CFormInput value={form.code} disabled readOnly />
+              </CCol>
+              <CCol md={6}>
+                <CFormLabel>Họ và tên chính thức</CFormLabel>
+                <CFormInput value={form.fullName} disabled readOnly />
               </CCol>
               <CCol md={6}>
                 <CFormLabel>Tên hiển thị</CFormLabel>
                 <CFormInput value={form.displayName} onChange={(event) => onChange('displayName', event.target.value)} disabled={submitting || uploading} />
               </CCol>
               <CCol md={6}>
+                <CFormLabel>Ngày sinh</CFormLabel>
+                <CFormInput type='date' value={form.dateOfBirth} onChange={(event) => onChange('dateOfBirth', event.target.value)} disabled={submitting || uploading} />
+              </CCol>
+              <CCol md={6}>
                 <CFormLabel>Giới tính</CFormLabel>
                 <CFormSelect value={form.gender} onChange={(event) => onChange('gender', event.target.value)} disabled={submitting || uploading}>
                   {GENDER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </CFormSelect>
-              </CCol>
-              <CCol md={6}>
-                <CFormLabel>Ngày sinh</CFormLabel>
-                <CFormInput type='date' value={form.dateOfBirth} onChange={(event) => onChange('dateOfBirth', event.target.value)} disabled={submitting || uploading} />
               </CCol>
               <CCol md={6}>
                 <CFormLabel>Năm sinh</CFormLabel>
@@ -356,7 +352,7 @@ function ClubCard({ item, onOpen }) {
   )
 }
 
-function AchievementCard({ item, onOpen }) {
+function AchievementCard({ item, onOpen, onOpenPoster }) {
   const statusMeta = getMemberAchievementStatusMeta(item.status)
   return (
     <CCard className={`sports-me-card border-0 shadow-sm h-100 ${item.status === 'revoked' ? 'sports-me-card-muted' : ''}`}>
@@ -372,7 +368,8 @@ function AchievementCard({ item, onOpen }) {
         {(item.resultValue !== null && item.resultValue !== undefined && toText(item.resultText)) ? <div className='sports-me-card-meta'>{String(item.resultValue)} {item.resultUnit || ''}</div> : null}
         <div className='sports-me-card-detail'>{item.club?.name || 'Không gắn câu lạc bộ'}</div>
         <div className='sports-me-card-meta'>{formatSportsDate(item.achievedAt)}{item.sourceReference ? ` · ${item.sourceReference}` : ''}</div>
-        <div className='d-flex justify-content-end mt-3'>
+        <div className='d-flex justify-content-end mt-3 gap-2'>
+          {item.status === 'active' ? <CButton color='primary' variant='outline' onClick={() => onOpenPoster?.(item)}>Xem ảnh</CButton> : null}
           <CButton color='secondary' variant='outline' onClick={() => onOpen(item)}>Xem chi tiết</CButton>
         </div>
       </CCardBody>
@@ -562,17 +559,18 @@ export default function SportsMePage() {
   const [editing, setEditing] = useState(false)
   const [profileForm, setProfileForm] = useState(buildProfileFormValues())
   const [profileFormErrors, setProfileFormErrors] = useState({})
-  const [createForm, setCreateForm] = useState(buildInitialQuickSportsProfileForm())
-  const [createFormErrors, setCreateFormErrors] = useState({})
   const [submittingProfile, setSubmittingProfile] = useState(false)
-  const [creatingProfile, setCreatingProfile] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [success, setSuccess] = useState('')
   const [achievementStatusFilter, setAchievementStatusFilter] = useState('active')
   const [submissionStatusFilter, setSubmissionStatusFilter] = useState('all')
   const [achievementView, setAchievementView] = useState('records')
+  const [showSubmissionCreateModal, setShowSubmissionCreateModal] = useState(false)
+  const [submittingSubmission, setSubmittingSubmission] = useState(false)
+  const [submissionCreateError, setSubmissionCreateError] = useState('')
   const [membershipModal, setMembershipModal] = useState({ visible: false, membership: null, history: [], loading: false })
   const [achievementModal, setAchievementModal] = useState({ visible: false, achievement: null })
+  const [achievementPosterModal, setAchievementPosterModal] = useState({ visible: false, achievement: null })
   const [submissionModal, setSubmissionModal] = useState({ visible: false, submission: null })
 
   const filteredAchievements = useMemo(() => {
@@ -584,6 +582,19 @@ export default function SportsMePage() {
     if (submissionStatusFilter === 'all') return submissions
     return submissions.filter((item) => item.status === submissionStatusFilter)
   }, [submissionStatusFilter, submissions])
+
+  const activeClubMemberships = useMemo(
+    () => clubs.filter((item) => item?.status === 'active' && item?.club?.id),
+    [clubs],
+  )
+
+  const submissionClubOptions = useMemo(
+    () => activeClubMemberships.map((item) => ({
+      ...item.club,
+      membershipLabel: [item.memberCode, item.club?.name || item.club?.code].filter(Boolean).join(' - '),
+    })),
+    [activeClubMemberships],
+  )
 
   async function loadSecondaryData() {
     const [clubsResult, achievementsResult, submissionsResult] = await Promise.allSettled([
@@ -626,8 +637,6 @@ export default function SportsMePage() {
       setNoProfile(false)
       setProfileBundle(data)
       setProfileForm(buildProfileFormValues(data.profile))
-      setCreateForm(buildInitialQuickSportsProfileForm())
-      setCreateFormErrors({})
       await loadSecondaryData()
     } catch (requestError) {
       const code = getSportsMeApiCode(requestError)
@@ -669,14 +678,6 @@ export default function SportsMePage() {
     })
   }
 
-  function updateCreateField(field, value) {
-    setCreateForm((current) => ({ ...current, [field]: value }))
-    setCreateFormErrors((current) => {
-      if (!current[field]) return current
-      return { ...current, [field]: '' }
-    })
-  }
-
   async function handleAvatarChange(file) {
     if (!file) return
     setUploadingAvatar(true)
@@ -712,28 +713,6 @@ export default function SportsMePage() {
     }
   }
 
-  async function handleCreateProfile() {
-    const nextErrors = validateQuickSportsProfileForm(createForm)
-    setCreateFormErrors(nextErrors)
-    if (Object.keys(nextErrors).length > 0) return
-
-    setCreatingProfile(true)
-    setError('')
-    try {
-      const created = await createMySportsProfile(buildQuickSportsProfilePayload(createForm))
-      setProfileBundle(created)
-      setNoProfile(false)
-      setProfileForm(buildProfileFormValues(created.profile))
-      setCreateForm(buildInitialQuickSportsProfileForm())
-      setCreateFormErrors({})
-      setSuccess('Đã tạo hồ sơ thể thao của bạn.')
-      await loadPage(true)
-    } catch (requestError) {
-      setError(getSportsMeApiMessage(requestError, 'Không thể tạo hồ sơ thể thao của bạn.'))
-    } finally {
-      setCreatingProfile(false)
-    }
-  }
 
   async function openMembershipDetail(item) {
     setMembershipModal({ visible: true, membership: null, history: [], loading: true })
@@ -758,6 +737,17 @@ export default function SportsMePage() {
     }
   }
 
+  async function openAchievementPoster(item) {
+    setAchievementPosterModal({ visible: true, achievement: null })
+    try {
+      const detail = await getMySportsAchievement(item.id)
+      setAchievementPosterModal({ visible: true, achievement: detail })
+    } catch (requestError) {
+      setAchievementPosterModal({ visible: false, achievement: null })
+      setAchievementsError(getSportsMeApiMessage(requestError, 'Không tải được ảnh thành tích.'))
+    }
+  }
+
   async function openSubmissionDetail(item) {
     setSubmissionModal({ visible: true, submission: null })
     try {
@@ -766,6 +756,23 @@ export default function SportsMePage() {
     } catch (requestError) {
       setSubmissionModal({ visible: false, submission: null })
       setSubmissionsError(getSportsMeApiMessage(requestError, 'Không tải được chi tiết đề nghị.'))
+    }
+  }
+
+  async function handleCreateSubmission(payload) {
+    setSubmittingSubmission(true)
+    setSubmissionCreateError('')
+    try {
+      const created = await createMySportsAchievementSubmission(payload)
+      setSubmissions((current) => [created, ...current.filter((item) => item.id !== created.id)])
+      setShowSubmissionCreateModal(false)
+      setAchievementView('submissions')
+      setSubmissionStatusFilter('all')
+      setSuccess('Đã gửi đề nghị ghi nhận thành tích.')
+    } catch (requestError) {
+      setSubmissionCreateError(getSportsMeApiMessage(requestError, 'Không thể gửi đề nghị ghi nhận thành tích.'))
+    } finally {
+      setSubmittingSubmission(false)
     }
   }
 
@@ -843,6 +850,7 @@ export default function SportsMePage() {
             ))}
           </CNav>
           <div className='sports-me-filter-toolbar'>
+            {!isRecordsView ? <CButton color='primary' onClick={() => { setSubmissionCreateError(''); setShowSubmissionCreateModal(true) }} disabled={submissionClubOptions.length === 0}>Đề nghị ghi nhận thành tích</CButton> : null}
             <div className='sports-me-filter-control'>
               <CFormLabel>{isRecordsView ? 'Trạng thái thành tích' : 'Trạng thái đề nghị'}</CFormLabel>
               {isRecordsView ? (
@@ -858,13 +866,14 @@ export default function SportsMePage() {
             </div>
           </div>
         </div>
+        {!isRecordsView && submissionClubOptions.length === 0 ? <CAlert color='warning'>Bạn chỉ có thể gửi đề nghị khi đang có Club Membership hoạt động trong ít nhất một CLB.</CAlert> : null}
 
         {isRecordsView ? (
           <>
             {achievementsError ? <CAlert color='danger'>{achievementsError}</CAlert> : null}
             {filteredAchievements.length === 0 ? <CAlert color='secondary' className='mb-0'>Bạn chưa có thành tích nào được ghi nhận.</CAlert> : (
               <div className='sports-me-card-grid'>
-                {filteredAchievements.map((item) => <AchievementCard key={item.id} item={item} onOpen={openAchievementDetail} />)}
+                {filteredAchievements.map((item) => <AchievementCard key={item.id} item={item} onOpen={openAchievementDetail} onOpenPoster={openAchievementPoster} />)}
               </div>
             )}
           </>
@@ -893,9 +902,9 @@ export default function SportsMePage() {
         {error ? <CAlert color='danger'>{error}</CAlert> : null}
         {success ? <CAlert color='success'>{success}</CAlert> : null}
         <div className='mb-3'>
-          <CAlert color='secondary' className='mb-0'>Bạn chưa có hồ sơ thể thao trong tenant hiện tại. Bạn có thể tự tạo hồ sơ cho chính mình.</CAlert>
+          <CAlert color='secondary' className='mb-0'>Tài khoản của bạn chưa được liên kết với hồ sơ thể thao. Vui lòng liên hệ quản trị viên để được tạo hoặc liên kết hồ sơ thể thao. Sau khi hoàn tất, bạn có thể xem các câu lạc bộ đang tham gia và thành tích của mình.</CAlert>
         </div>
-        <CreateSportsProfileCard form={createForm} errors={createFormErrors} submitting={creatingProfile} onChange={updateCreateField} onSubmit={handleCreateProfile} />
+        <CButton color='secondary' variant='outline' onClick={() => loadPage(true)} disabled={refreshing}>{refreshing ? 'Đang tải...' : 'Làm mới'}</CButton>
       </div>
     )
   }
@@ -932,7 +941,43 @@ export default function SportsMePage() {
 
       <MembershipDetailModal visible={membershipModal.visible} membership={membershipModal.membership} historyRows={membershipModal.history} loadingHistory={membershipModal.loading} onClose={() => setMembershipModal({ visible: false, membership: null, history: [], loading: false })} />
       <AchievementDetailModal visible={achievementModal.visible} achievement={achievementModal.achievement} onClose={() => setAchievementModal({ visible: false, achievement: null })} />
+      <AchievementPosterModal
+        visible={achievementPosterModal.visible}
+        title='Ảnh thành tích của tôi'
+        achievement={achievementPosterModal.achievement}
+        profile={achievementPosterModal.achievement?.athleteProfile || profileBundle.profile}
+        templateOptions={achievementPosterModal.achievement?.effectiveTemplate ? [achievementPosterModal.achievement.effectiveTemplate] : []}
+        selectedTemplateId={achievementPosterModal.achievement?.effectiveTemplate?.id || ''}
+        readOnlyTemplate
+        onClose={() => setAchievementPosterModal({ visible: false, achievement: null })}
+      />
       <SubmissionDetailModal visible={submissionModal.visible} submission={submissionModal.submission} onClose={() => setSubmissionModal({ visible: false, submission: null })} />
+      <CModal visible={showSubmissionCreateModal} onClose={() => !submittingSubmission && setShowSubmissionCreateModal(false)} size='xl' scrollable>
+        <CModalHeader>
+          <CModalTitle>Đề nghị ghi nhận thành tích</CModalTitle>
+        </CModalHeader>
+        <CModalBody>
+          <SportsAchievementSubmissionForm
+            initialValues={null}
+            submitting={submittingSubmission}
+            submitError={submissionCreateError}
+            onCancel={() => setShowSubmissionCreateModal(false)}
+            onSubmit={handleCreateSubmission}
+            lockedSportsProfile={profileBundle.profile}
+            clubOptions={submissionClubOptions}
+            clubOptionLabel={(option) => option.membershipLabel || option.name || option.code || '-'}
+            allowedAchievementTypes={RUNNING_V1_ACHIEVEMENT_TYPES}
+            lockedSportType='running'
+            hideStatusField
+            hideSourceField
+            omitSportsProfileInPayload
+            omitStatusInPayload
+            omitSourceInPayload
+            noteLabel='Ghi chú bổ sung'
+            submitLabel='Gửi đề nghị'
+          />
+        </CModalBody>
+      </CModal>
     </div>
   )
 }

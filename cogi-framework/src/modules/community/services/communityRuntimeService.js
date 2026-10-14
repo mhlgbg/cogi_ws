@@ -31,7 +31,15 @@ function normalizeMedia(value) {
   }
 
   const rawUrl = String(value.url || value.attributes?.url || value.path || '').trim()
-  const fileAssetId = Number(value.id || value.fileAssetId || value.attributes?.id || 0) || null
+  const fileAssetId = Number(
+    value.fileAssetId
+    || value.provider_metadata?.bridgedFromFileAssetId
+    || value.providerMetadata?.bridgedFromFileAssetId
+    || value.attributes?.fileAssetId
+    || value.attributes?.provider_metadata?.bridgedFromFileAssetId
+    || value.attributes?.providerMetadata?.bridgedFromFileAssetId
+    || 0
+  ) || null
   const provider = String(value.provider || value.attributes?.provider || '').trim().toLowerCase()
   const mimeType = String(value.mimeType || value.mime || value.attributes?.mimeType || value.attributes?.mime || '').trim()
   const extension = String(value.extension || value.ext || value.attributes?.extension || value.attributes?.ext || '').trim()
@@ -44,6 +52,7 @@ function normalizeMedia(value) {
 
   return {
     id: Number(value.id || value.fileAssetId || value.attributes?.id || 0) || null,
+    fileAssetId,
     type: normalizedType || 'image',
     name: String(value.name || value.originalName || value.fileName || value.attributes?.name || '').trim(),
     url: resolvedUrl,

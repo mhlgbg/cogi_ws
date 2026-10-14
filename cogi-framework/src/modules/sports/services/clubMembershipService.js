@@ -1,5 +1,5 @@
 import api from '../../../api/axios'
-import { resolveMediaUrl } from '../../../utils/mediaUrl'
+import { buildProtectedFileUrl, resolveMediaUrl } from '../../../utils/mediaUrl'
 
 function toText(value) {
   if (value === null || value === undefined) return ''
@@ -18,10 +18,26 @@ function unwrapSuccess(payload) {
 
 function normalizeMedia(value) {
   if (!value || typeof value !== 'object') return null
+  const rawUrl = toText(value.url || value.attributes?.url)
+  const fileAssetId = normalizePositiveId(
+    value.fileAssetId
+    || value.provider_metadata?.bridgedFromFileAssetId
+    || value.providerMetadata?.bridgedFromFileAssetId
+    || value.attributes?.fileAssetId
+    || value.attributes?.provider_metadata?.bridgedFromFileAssetId
+    || value.attributes?.providerMetadata?.bridgedFromFileAssetId
+  )
+  const provider = toText(value.provider || value.attributes?.provider).toLowerCase()
   return {
     id: normalizePositiveId(value.id),
+    fileAssetId,
     name: toText(value.name),
-    url: resolveMediaUrl(toText(value.url || value.attributes?.url)) || '',
+    provider,
+    url: buildProtectedFileUrl({
+      fileAssetId,
+      storageProvider: provider,
+      url: rawUrl,
+    }) || resolveMediaUrl(rawUrl) || '',
     mime: toText(value.mime),
   }
 }

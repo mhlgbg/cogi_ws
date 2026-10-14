@@ -1,5 +1,5 @@
 import api from '../../../api/axios'
-import { resolveMediaUrl } from '../../../utils/mediaUrl'
+import { buildProtectedFileUrl, resolveMediaUrl } from '../../../utils/mediaUrl'
 
 function toText(value) {
   if (value === null || value === undefined) return ''
@@ -18,10 +18,26 @@ function unwrapSuccess(payload) {
 
 function normalizeMedia(value) {
   if (!value || typeof value !== 'object') return null
+  const rawUrl = toText(value.url || value.attributes?.url)
+  const fileAssetId = normalizePositiveId(
+    value.fileAssetId
+    || value.provider_metadata?.bridgedFromFileAssetId
+    || value.providerMetadata?.bridgedFromFileAssetId
+    || value.attributes?.fileAssetId
+    || value.attributes?.provider_metadata?.bridgedFromFileAssetId
+    || value.attributes?.providerMetadata?.bridgedFromFileAssetId
+  )
+  const provider = toText(value.provider || value.attributes?.provider).toLowerCase()
   return {
     id: normalizePositiveId(value.id),
+    fileAssetId,
     name: toText(value.name),
-    url: resolveMediaUrl(toText(value.url || value.attributes?.url)) || '',
+    provider,
+    url: buildProtectedFileUrl({
+      fileAssetId,
+      storageProvider: provider,
+      url: rawUrl,
+    }) || resolveMediaUrl(rawUrl) || '',
     mime: toText(value.mime),
   }
 }
@@ -127,10 +143,24 @@ function normalizeAchievement(value) {
     sportType: toText(value.sportType),
     achievedAt: value.achievedAt || null,
     resultValue: value.resultValue === null || value.resultValue === undefined || value.resultValue === '' ? null : Number(value.resultValue),
+    distanceKm: value.distanceKm === null || value.distanceKm === undefined || value.distanceKm === '' ? null : Number(value.distanceKm),
+    durationSeconds: value.durationSeconds === null || value.durationSeconds === undefined || value.durationSeconds === '' ? null : Number(value.durationSeconds),
     resultUnit: toText(value.resultUnit),
     resultText: toText(value.resultText),
     source: toText(value.source) || 'manual',
     sourceReference: toText(value.sourceReference),
+    shareTemplateSource: toText(value.shareTemplateSource) || 'none',
+    shareTemplate: normalizeAchievementTemplate(value.shareTemplate),
+    effectiveTemplate: normalizeAchievementTemplate(value.effectiveTemplate),
+    templateResolution: value.templateResolution && typeof value.templateResolution === 'object'
+      ? {
+          source: toText(value.templateResolution.source),
+          status: toText(value.templateResolution.status),
+          reason: toText(value.templateResolution.reason),
+          template: normalizeAchievementTemplate(value.templateResolution.template),
+        }
+      : null,
+    templateOptions: Array.isArray(value.templateOptions) ? value.templateOptions.map(normalizeAchievementTemplate).filter(Boolean) : [],
     evidence: Array.isArray(value.evidence) ? value.evidence.map(normalizeMedia).filter(Boolean) : [],
     note: toText(value.note),
     status: toText(value.status) || 'active',
@@ -175,6 +205,8 @@ function normalizeSubmission(value) {
     sportType: toText(value.sportType),
     achievedAt: value.achievedAt || null,
     resultValue: value.resultValue === null || value.resultValue === undefined || value.resultValue === '' ? null : Number(value.resultValue),
+    distanceKm: value.distanceKm === null || value.distanceKm === undefined || value.distanceKm === '' ? null : Number(value.distanceKm),
+    durationSeconds: value.durationSeconds === null || value.durationSeconds === undefined || value.durationSeconds === '' ? null : Number(value.durationSeconds),
     resultUnit: toText(value.resultUnit),
     resultText: toText(value.resultText),
     evidence: Array.isArray(value.evidence) ? value.evidence.map(normalizeMedia).filter(Boolean) : [],
@@ -263,6 +295,52 @@ function normalizeHistoryMutationResult(payload) {
     history: normalizeHistory(unwrapped),
     membership: null,
     success: Boolean(payload?.success),
+  }
+}
+
+function normalizeAchievementTemplate(value) {
+  if (!value || typeof value !== 'object') return null
+  return {
+    id: normalizePositiveId(value.id),
+    documentId: toText(value.documentId),
+    code: toText(value.code),
+    name: toText(value.name),
+    sportType: toText(value.sportType),
+    achievementTypes: Array.isArray(value.achievementTypes) ? value.achievementTypes.map((item) => toText(item)).filter(Boolean) : [],
+    distanceLabels: Array.isArray(value.distanceLabels) ? value.distanceLabels.map((item) => toText(item)).filter(Boolean) : [],
+    priority: Number.isInteger(Number(value.priority)) ? Number(value.priority) : 100,
+    status: toText(value.status) || 'draft',
+    layoutKey: toText(value.layoutKey) || 'default',
+    layoutConfig: value.layoutConfig && typeof value.layoutConfig === 'object' ? value.layoutConfig : null,
+    backgroundAsset: normalizeMedia(value.backgroundAsset),
+    previewAsset: normalizeMedia(value.previewAsset),
+    club: normalizeClub(value.club),
+    createdAt: value.createdAt || null,
+    updatedAt: value.updatedAt || null,
+  }
+}
+
+function normalizeTemplateAssetUpload(value) {
+  if (!value || typeof value !== 'object') return null
+  const rawUrl = toText(value.url)
+  const provider = toText(value.provider).toLowerCase()
+  const fileAssetId = normalizePositiveId(value.id)
+  return {
+    id: fileAssetId,
+    code: toText(value.code),
+    moduleKey: toText(value.moduleKey),
+    originalName: toText(value.originalName),
+    fileName: toText(value.fileName),
+    mimeType: toText(value.mimeType),
+    size: Number(value.size || 0) || 0,
+    provider,
+    url: buildProtectedFileUrl({
+      fileAssetId,
+      storageProvider: provider,
+      url: rawUrl,
+    }) || resolveMediaUrl(rawUrl) || '',
+    status: toText(value.status),
+    isDeleted: Boolean(value.isDeleted),
   }
 }
 
@@ -442,6 +520,39 @@ export async function listManagedClubAchievements(clubId, params = {}) {
   }
 }
 
+export async function listManagedClubAchievementTemplates(clubId, params = {}) {
+  const response = await api.get(`/sports/my-managed-clubs/${clubId}/achievement-templates`, { params: buildListParams(params) })
+  return {
+    rows: normalizeCollection(response.data, normalizeAchievementTemplate),
+    pagination: normalizePagination(response.data),
+  }
+}
+
+export async function getManagedClubAchievementTemplate(clubId, templateId) {
+  const response = await api.get(`/sports/my-managed-clubs/${clubId}/achievement-templates/${templateId}`)
+  return normalizeAchievementTemplate(unwrapSuccess(response.data))
+}
+
+export async function createManagedClubAchievementTemplate(clubId, payload) {
+  const response = await api.post(`/sports/my-managed-clubs/${clubId}/achievement-templates`, { data: payload })
+  return normalizeAchievementTemplate(unwrapSuccess(response.data))
+}
+
+export async function updateManagedClubAchievementTemplate(clubId, templateId, payload) {
+  const response = await api.put(`/sports/my-managed-clubs/${clubId}/achievement-templates/${templateId}`, { data: payload })
+  return normalizeAchievementTemplate(unwrapSuccess(response.data))
+}
+
+export async function uploadManagedClubAchievementTemplateAsset(clubId, payload) {
+  const formData = new FormData()
+  formData.append('file', payload.file)
+  if (payload.usage) {
+    formData.append('usage', String(payload.usage))
+  }
+  const response = await api.post(`/sports/my-managed-clubs/${clubId}/achievement-templates/upload-asset`, formData)
+  return normalizeTemplateAssetUpload(unwrapSuccess(response.data))
+}
+
 export async function getManagedClubAchievement(clubId, achievementId) {
   const response = await api.get(`/sports/my-managed-clubs/${clubId}/achievements/${achievementId}`)
   return normalizeAchievement(unwrapSuccess(response.data))
@@ -449,6 +560,11 @@ export async function getManagedClubAchievement(clubId, achievementId) {
 
 export async function revokeManagedClubAchievement(clubId, achievementId, payload = {}) {
   const response = await api.post(`/sports/my-managed-clubs/${clubId}/achievements/${achievementId}/revoke`, { data: payload })
+  return normalizeAchievement(unwrapSuccess(response.data))
+}
+
+export async function updateManagedClubAchievementShareTemplate(clubId, achievementId, payload = {}) {
+  const response = await api.put(`/sports/my-managed-clubs/${clubId}/achievements/${achievementId}/share-template`, { data: payload })
   return normalizeAchievement(unwrapSuccess(response.data))
 }
 

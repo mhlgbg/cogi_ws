@@ -11,7 +11,7 @@ import {
   updateSportsAchievementSubmission,
   verifySportsAchievementSubmission,
 } from '../services/sportsAchievementSubmissionService'
-import { formatSportsDateTime, getAchievementTypeLabel, getSportTypeLabel, getSubmissionSourceLabel, getSubmissionStatusMeta, getUserLabel } from '../utils/sportsAchievementUi'
+import { formatDistanceKm, formatDurationSeconds, formatSportsDateTime, getAchievementTypeLabel, getSportTypeLabel, getSubmissionSourceLabel, getSubmissionStatusMeta, getUserLabel } from '../utils/sportsAchievementUi'
 
 function InfoCard({ label, value }) {
   return (
@@ -183,9 +183,9 @@ export default function SportsAchievementSubmissionDetailPage() {
             <CCol md={4}><InfoCard label='Reviewed At' value={formatSportsDateTime(submission.reviewedAt)} /></CCol>
             <CCol md={4}><InfoCard label='Submitted By' value={getUserLabel(submission.submittedBy)} /></CCol>
             <CCol md={4}><InfoCard label='Reviewed By' value={getUserLabel(submission.reviewedBy)} /></CCol>
-            <CCol md={4}><InfoCard label='Result Value' value={submission.resultValue === null ? '-' : String(submission.resultValue)} /></CCol>
-            <CCol md={4}><InfoCard label='Result Unit' value={submission.resultUnit || '-'} /></CCol>
-            <CCol md={4}><InfoCard label='Result Text' value={submission.resultText || '-'} /></CCol>
+            <CCol md={4}><InfoCard label='Cự ly' value={submission.distanceKm ? formatDistanceKm(submission.distanceKm) : '-'} /></CCol>
+            <CCol md={4}><InfoCard label='Thời gian hoàn thành' value={submission.durationSeconds ? formatDurationSeconds(submission.durationSeconds) : (submission.resultText || '-')} /></CCol>
+            <CCol md={4}><InfoCard label='Kết quả thô' value={submission.resultValue === null ? '-' : `${submission.resultValue} ${submission.resultUnit || ''}`.trim()} /></CCol>
             <CCol md={4}><InfoCard label='Achievement linked' value={submission.achievement?.title || '-'} /></CCol>
           </CRow>
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { CAlert, CNav, CNavItem, CNavLink, CSpinner } from '@coreui/react'
 import ManagedClubHeader from '../components/ManagedClubHeader'
+import ManagedClubAchievementTemplatesTab from '../components/ManagedClubAchievementTemplatesTab'
 import ManagedClubAchievementsTab from '../components/ManagedClubAchievementsTab'
 import ManagedClubMembersTab from '../components/ManagedClubMembersTab'
 import { getMyManagedClub, getSportsClubManagementApiMessage } from '../services/sportsClubManagementService'
@@ -9,6 +10,7 @@ import { getMyManagedClub, getSportsClubManagementApiMessage } from '../services
 const TABS = [
   { key: 'members', label: 'Thành viên' },
   { key: 'achievements', label: 'Thành tích' },
+  { key: 'achievement-templates', label: 'Mẫu ảnh thành tích' },
 ]
 
 export default function ManagedClubWorkspacePage() {
@@ -74,6 +76,7 @@ export default function ManagedClubWorkspacePage() {
       </CNav>
       {activeTab === 'members' ? <ManagedClubMembersTab club={club} /> : null}
       {activeTab === 'achievements' ? <ManagedClubAchievementsTab club={club} /> : null}
+      {activeTab === 'achievement-templates' ? <ManagedClubAchievementTemplatesTab club={club} /> : null}
     </div>
   )
 }

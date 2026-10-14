@@ -1,5 +1,5 @@
 import api from '../../../api/axios'
-import { resolveMediaUrl } from '../../../utils/mediaUrl'
+import { buildProtectedFileUrl, resolveMediaUrl } from '../../../utils/mediaUrl'
 
 function toText(value) {
   if (value === null || value === undefined) return ''
@@ -18,10 +18,26 @@ function unwrapSuccess(payload) {
 
 function normalizeMedia(value) {
   if (!value || typeof value !== 'object') return null
+  const rawUrl = toText(value.url || value.attributes?.url)
+  const fileAssetId = normalizePositiveId(
+    value.fileAssetId
+    || value.provider_metadata?.bridgedFromFileAssetId
+    || value.providerMetadata?.bridgedFromFileAssetId
+    || value.attributes?.fileAssetId
+    || value.attributes?.provider_metadata?.bridgedFromFileAssetId
+    || value.attributes?.providerMetadata?.bridgedFromFileAssetId
+  )
+  const provider = toText(value.provider || value.attributes?.provider).toLowerCase()
   return {
     id: normalizePositiveId(value.id),
+    fileAssetId,
     name: toText(value.name),
-    url: resolveMediaUrl(toText(value.url || value.attributes?.url)) || '',
+    provider,
+    url: buildProtectedFileUrl({
+      fileAssetId,
+      storageProvider: provider,
+      url: rawUrl,
+    }) || resolveMediaUrl(rawUrl) || '',
     mime: toText(value.mime),
   }
 }
@@ -110,6 +126,21 @@ function normalizeMembership(value) {
   }
 }
 
+function normalizeMembershipSummary(value) {
+  if (!value || typeof value !== 'object') return null
+  return {
+    id: normalizePositiveId(value.id),
+    documentId: toText(value.documentId),
+    memberCode: toText(value.memberCode),
+    oldMemberCode: toText(value.oldMemberCode),
+    status: toText(value.status),
+    role: toText(value.role),
+    positionTitle: toText(value.positionTitle),
+    joinedAt: value.joinedAt || null,
+    leftAt: value.leftAt || null,
+  }
+}
+
 function normalizeHistory(value) {
   if (!value || typeof value !== 'object') return null
   return {
@@ -140,11 +171,51 @@ function normalizeAchievement(value) {
     sportType: toText(value.sportType),
     achievedAt: value.achievedAt || null,
     resultValue: value.resultValue === null || value.resultValue === undefined || value.resultValue === '' ? null : Number(value.resultValue),
+    distanceKm: value.distanceKm === null || value.distanceKm === undefined || value.distanceKm === '' ? null : Number(value.distanceKm),
+    durationSeconds: value.durationSeconds === null || value.durationSeconds === undefined || value.durationSeconds === '' ? null : Number(value.durationSeconds),
     resultUnit: toText(value.resultUnit),
     resultText: toText(value.resultText),
     status: toText(value.status) || 'active',
     source: toText(value.source) || 'manual',
     sourceReference: toText(value.sourceReference),
+    shareTemplateSource: toText(value.shareTemplateSource) || 'none',
+    shareTemplate: value.shareTemplate && typeof value.shareTemplate === 'object'
+      ? {
+          id: normalizePositiveId(value.shareTemplate.id),
+          documentId: toText(value.shareTemplate.documentId),
+          name: toText(value.shareTemplate.name),
+          code: toText(value.shareTemplate.code),
+          layoutKey: toText(value.shareTemplate.layoutKey),
+          layoutConfig: value.shareTemplate.layoutConfig && typeof value.shareTemplate.layoutConfig === 'object' ? value.shareTemplate.layoutConfig : null,
+          backgroundAsset: normalizeMedia(value.shareTemplate.backgroundAsset),
+          previewAsset: normalizeMedia(value.shareTemplate.previewAsset),
+        }
+      : null,
+    effectiveTemplate: value.effectiveTemplate && typeof value.effectiveTemplate === 'object'
+      ? {
+          id: normalizePositiveId(value.effectiveTemplate.id),
+          documentId: toText(value.effectiveTemplate.documentId),
+          name: toText(value.effectiveTemplate.name),
+          code: toText(value.effectiveTemplate.code),
+          layoutKey: toText(value.effectiveTemplate.layoutKey),
+          layoutConfig: value.effectiveTemplate.layoutConfig && typeof value.effectiveTemplate.layoutConfig === 'object' ? value.effectiveTemplate.layoutConfig : null,
+          backgroundAsset: normalizeMedia(value.effectiveTemplate.backgroundAsset),
+          previewAsset: normalizeMedia(value.effectiveTemplate.previewAsset),
+        }
+      : null,
+    templateResolution: value.templateResolution && typeof value.templateResolution === 'object'
+      ? {
+          source: toText(value.templateResolution.source),
+          status: toText(value.templateResolution.status),
+          reason: toText(value.templateResolution.reason),
+        }
+      : null,
+    athleteProfile: value.athleteProfile && typeof value.athleteProfile === 'object'
+      ? normalizeProfile(value.athleteProfile)
+      : null,
+    clubMembership: value.clubMembership && typeof value.clubMembership === 'object'
+      ? normalizeMembershipSummary(value.clubMembership)
+      : null,
     evidence: Array.isArray(value.evidence) ? value.evidence.map(normalizeMedia).filter(Boolean) : [],
     verifiedAt: value.verifiedAt || null,
     revokedAt: value.revokedAt || null,
@@ -166,6 +237,8 @@ function normalizeSubmission(value) {
     sportType: toText(value.sportType),
     achievedAt: value.achievedAt || null,
     resultValue: value.resultValue === null || value.resultValue === undefined || value.resultValue === '' ? null : Number(value.resultValue),
+    distanceKm: value.distanceKm === null || value.distanceKm === undefined || value.distanceKm === '' ? null : Number(value.distanceKm),
+    durationSeconds: value.durationSeconds === null || value.durationSeconds === undefined || value.durationSeconds === '' ? null : Number(value.durationSeconds),
     resultUnit: toText(value.resultUnit),
     resultText: toText(value.resultText),
     source: toText(value.source) || 'other',
@@ -201,6 +274,15 @@ export async function getMySportsProfile() {
 
 export async function createMySportsProfile(payload) {
   const response = await api.post('/sports/me', { data: payload })
+  const data = unwrapSuccess(response.data)
+  return {
+    profile: normalizeProfile(data?.profile),
+    summary: normalizeSummary(data?.summary),
+  }
+}
+
+export async function claimMyExistingSportsProfile(payload) {
+  const response = await api.post('/sports/me/link-existing-profile', { data: payload })
   const data = unwrapSuccess(response.data)
   return {
     profile: normalizeProfile(data?.profile),
@@ -265,6 +347,11 @@ export async function listMySportsAchievementSubmissions(params = {}) {
   const response = await api.get('/sports/me/achievement-submissions', { params })
   const rows = Array.isArray(response.data?.data) ? response.data.data : []
   return rows.map(normalizeSubmission).filter(Boolean)
+}
+
+export async function createMySportsAchievementSubmission(payload) {
+  const response = await api.post('/sports/me/achievement-submissions', { data: payload })
+  return normalizeSubmission(unwrapSuccess(response.data))
 }
 
 export async function getMySportsAchievementSubmission(id) {

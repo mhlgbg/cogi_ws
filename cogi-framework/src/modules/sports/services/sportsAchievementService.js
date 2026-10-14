@@ -75,6 +75,8 @@ function normalizeAchievement(raw) {
     sportType: toText(raw.sportType),
     achievedAt: raw.achievedAt || null,
     resultValue: raw.resultValue === null || raw.resultValue === undefined || raw.resultValue === '' ? null : Number(raw.resultValue),
+    distanceKm: raw.distanceKm === null || raw.distanceKm === undefined || raw.distanceKm === '' ? null : Number(raw.distanceKm),
+    durationSeconds: raw.durationSeconds === null || raw.durationSeconds === undefined || raw.durationSeconds === '' ? null : Number(raw.durationSeconds),
     resultUnit: toText(raw.resultUnit),
     resultText: toText(raw.resultText),
     source: toText(raw.source) || 'manual',

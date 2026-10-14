@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { CAlert, CButton, CCol, CForm, CFormInput, CFormLabel, CFormSelect, CFormTextarea, CRow, CSpinner } from '@coreui/react'
+import RunningAchievementFields, { buildRunningAchievementPayload, buildRunningAchievementState, validateRunningAchievementForm } from './RunningAchievementFields'
 import { listSportsClubs } from '../services/sportsClubService'
 import { listSportsProfiles } from '../services/sportsProfileService'
 import { getSportsAchievementApiMessage, uploadSportsAchievementEvidence } from '../services/sportsAchievementService'
 import {
   ACHIEVEMENT_SOURCE_OPTIONS,
-  ACHIEVEMENT_STATUS_OPTIONS,
   ACHIEVEMENT_TYPE_OPTIONS,
   formatSportsDateTime,
   fromDateTimeInputValue,
@@ -13,6 +13,7 @@ import {
   getSportsClubOptionLabel,
   getSportsProfileOptionLabel,
   SPORT_TYPE_OPTIONS,
+  isRunningV1AchievementType,
   toDateTimeInputValue,
 } from '../utils/sportsAchievementUi'
 
@@ -31,13 +32,17 @@ function buildInitialForm(initialValues = null) {
     source: String(initialValues?.source || 'manual').trim() || 'manual',
     sourceReference: String(initialValues?.sourceReference || '').trim(),
     note: String(initialValues?.note || '').trim(),
-    status: String(initialValues?.status || 'active').trim() || 'active',
-    verifiedAt: toDateTimeInputValue(initialValues?.verifiedAt),
     evidence: Array.isArray(initialValues?.evidence) ? initialValues.evidence : [],
+    distanceKm: initialValues?.distanceKm ?? null,
+    durationSeconds: initialValues?.durationSeconds ?? null,
+    ...buildRunningAchievementState(initialValues),
   }
 }
 
 function buildPayload(form) {
+  const runningPayload = isRunningV1AchievementType(form.achievementType) && form.sportType === 'running'
+    ? buildRunningAchievementPayload(form)
+    : {}
   return {
     sportsProfile: form.sportsProfile?.id || null,
     club: form.club?.id || null,
@@ -46,14 +51,14 @@ function buildPayload(form) {
     title: form.title || null,
     description: form.description || null,
     achievedAt: fromDateTimeInputValue(form.achievedAt),
-    resultValue: form.resultValue === '' ? null : Number(form.resultValue),
-    resultUnit: form.resultUnit || null,
-    resultText: form.resultText || null,
+    resultValue: runningPayload.resultValue ?? (form.resultValue === '' ? null : Number(form.resultValue)),
+    distanceKm: runningPayload.distanceKm ?? form.distanceKm ?? null,
+    durationSeconds: runningPayload.durationSeconds ?? form.durationSeconds ?? null,
+    resultUnit: runningPayload.resultUnit ?? (form.resultUnit || null),
+    resultText: runningPayload.resultText ?? (form.resultText || null),
     source: form.source || 'manual',
     sourceReference: form.sourceReference || null,
     note: form.note || null,
-    status: form.status || 'active',
-    verifiedAt: fromDateTimeInputValue(form.verifiedAt),
     evidence: Array.isArray(form.evidence) ? form.evidence.map((item) => item.id).filter(Boolean) : [],
   }
 }
@@ -61,7 +66,11 @@ function buildPayload(form) {
 function validateForm(form) {
   const errors = {}
   if (!form.sportsProfile?.id) errors.sportsProfile = 'Sports Profile là bắt buộc'
-  if (!form.title) errors.title = 'Tiêu đề là bắt buộc'
+  if (form.sportType === 'running' && isRunningV1AchievementType(form.achievementType)) {
+    Object.assign(errors, validateRunningAchievementForm(form))
+  } else if (!form.title) {
+    errors.title = 'Tiêu đề là bắt buộc'
+  }
   return errors
 }
 
@@ -154,15 +163,20 @@ export default function SportsAchievementForm({ initialValues = null, submitting
         <CCol md={6}><CFormLabel>CLB</CFormLabel><CFormSelect value={form.club?.id ? String(form.club.id) : ''} onChange={(event) => updateField('club', clubs.find((item) => String(item.id) === event.target.value) || null)} disabled={submitting || uploading}><option value=''>Không gắn CLB</option>{clubs.map((option) => <option key={option.id} value={option.id}>{getSportsClubOptionLabel(option)}</option>)}</CFormSelect></CCol>
         <CCol md={4}><CFormLabel>Loại thành tích</CFormLabel><CFormSelect value={form.achievementType} onChange={(event) => updateField('achievementType', event.target.value)} disabled={submitting || uploading}>{ACHIEVEMENT_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</CFormSelect></CCol>
         <CCol md={4}><CFormLabel>Môn</CFormLabel><CFormSelect value={form.sportType} onChange={(event) => updateField('sportType', event.target.value)} disabled={submitting || uploading}>{SPORT_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</CFormSelect></CCol>
-        <CCol md={4}><CFormLabel>Trạng thái</CFormLabel><CFormSelect value={form.status} onChange={(event) => updateField('status', event.target.value)} disabled={submitting || uploading}>{ACHIEVEMENT_STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</CFormSelect></CCol>
-        <CCol md={8}><CFormLabel>Tiêu đề *</CFormLabel><CFormInput value={form.title} onChange={(event) => updateField('title', event.target.value)} disabled={submitting || uploading} invalid={Boolean(fieldErrors.title)} />{fieldErrors.title ? <div className='text-danger small mt-1'>{fieldErrors.title}</div> : null}</CCol>
-        <CCol md={4}><CFormLabel>Achieved At</CFormLabel><CFormInput type='datetime-local' value={form.achievedAt} onChange={(event) => updateField('achievedAt', event.target.value)} disabled={submitting || uploading} /></CCol>
-        <CCol md={4}><CFormLabel>Result Value</CFormLabel><CFormInput type='number' step='any' value={form.resultValue} onChange={(event) => updateField('resultValue', event.target.value)} disabled={submitting || uploading} /></CCol>
-        <CCol md={4}><CFormLabel>Result Unit</CFormLabel><CFormInput value={form.resultUnit} onChange={(event) => updateField('resultUnit', event.target.value)} disabled={submitting || uploading} /></CCol>
+        {form.sportType === 'running' && isRunningV1AchievementType(form.achievementType) ? (
+          <RunningAchievementFields form={form} errors={fieldErrors} disabled={submitting || uploading} onChange={updateField} />
+        ) : (
+          <>
+            <CCol md={8}><CFormLabel>Tiêu đề *</CFormLabel><CFormInput value={form.title} onChange={(event) => updateField('title', event.target.value)} disabled={submitting || uploading} invalid={Boolean(fieldErrors.title)} />{fieldErrors.title ? <div className='text-danger small mt-1'>{fieldErrors.title}</div> : null}</CCol>
+            <CCol md={4}><CFormLabel>Achieved At</CFormLabel><CFormInput type='datetime-local' value={form.achievedAt} onChange={(event) => updateField('achievedAt', event.target.value)} disabled={submitting || uploading} /></CCol>
+            <CCol md={4}><CFormLabel>Result Value</CFormLabel><CFormInput type='number' step='any' value={form.resultValue} onChange={(event) => updateField('resultValue', event.target.value)} disabled={submitting || uploading} /></CCol>
+            <CCol md={4}><CFormLabel>Result Unit</CFormLabel><CFormInput value={form.resultUnit} onChange={(event) => updateField('resultUnit', event.target.value)} disabled={submitting || uploading} /></CCol>
+            <CCol md={8}><CFormLabel>Result Text</CFormLabel><CFormInput value={form.resultText} onChange={(event) => updateField('resultText', event.target.value)} disabled={submitting || uploading} /></CCol>
+            <CCol md={6}><CFormLabel>Source Reference</CFormLabel><CFormInput value={form.sourceReference} onChange={(event) => updateField('sourceReference', event.target.value)} disabled={submitting || uploading} /></CCol>
+          </>
+        )}
         <CCol md={4}><CFormLabel>Nguồn</CFormLabel><CFormSelect value={form.source} onChange={(event) => updateField('source', event.target.value)} disabled={submitting || uploading}>{ACHIEVEMENT_SOURCE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</CFormSelect></CCol>
-        <CCol md={8}><CFormLabel>Result Text</CFormLabel><CFormInput value={form.resultText} onChange={(event) => updateField('resultText', event.target.value)} disabled={submitting || uploading} /></CCol>
-        <CCol md={6}><CFormLabel>Source Reference</CFormLabel><CFormInput value={form.sourceReference} onChange={(event) => updateField('sourceReference', event.target.value)} disabled={submitting || uploading} /></CCol>
-        <CCol md={6}><CFormLabel>Verified At</CFormLabel><CFormInput type='datetime-local' value={form.verifiedAt} onChange={(event) => updateField('verifiedAt', event.target.value)} disabled={submitting || uploading} /></CCol>
+        <CCol md={6}><div className='small text-body-secondary mt-4'>Trạng thái và thời điểm xác minh được backend quản lý theo workflow hiện tại.</div></CCol>
         <CCol xs={12}><CFormLabel>Mô tả</CFormLabel><CFormTextarea rows={3} value={form.description} onChange={(event) => updateField('description', event.target.value)} disabled={submitting || uploading} /></CCol>
         <CCol xs={12}><CFormLabel>Ghi chú</CFormLabel><CFormTextarea rows={3} value={form.note} onChange={(event) => updateField('note', event.target.value)} disabled={submitting || uploading} /></CCol>
       </CRow>
