@@ -18,7 +18,7 @@ import {
   CTableHeaderCell,
   CTableRow,
 } from '@coreui/react'
-import { listSportsProfiles } from '../services/sportsProfileService'
+import { downloadSportsProfileImportTemplate, listSportsProfiles, previewSportsProfileImport, confirmSportsProfileImport } from '../services/sportsProfileService'
 import {
   formatSportsBirthDateOrYear,
   GENDER_OPTIONS,
@@ -53,6 +53,11 @@ export default function SportsProfilesPage() {
   const [filters, setFilters] = useState({ search: '', status: '', gender: '', hasUser: '' })
   const [appliedFilters, setAppliedFilters] = useState({ search: '', status: '', gender: '', hasUser: '' })
   const [pagination, setPagination] = useState({ page: 1, pageSize: 10, total: 0, pageCount: 1 })
+  const [importing, setImporting] = useState(false)
+  const [importFile, setImportFile] = useState(null)
+  const [importPreview, setImportPreview] = useState(null)
+  const [importError, setImportError] = useState('')
+  const [importSuccess, setImportSuccess] = useState('')
   const pages = useMemo(() => buildPages(pagination.page, pagination.pageCount), [pagination.page, pagination.pageCount])
 
   useEffect(() => {
@@ -86,6 +91,59 @@ export default function SportsProfilesPage() {
     setPagination((current) => ({ ...current, page: 1 }))
   }
 
+  async function handleDownloadTemplate() {
+    try {
+      await downloadSportsProfileImportTemplate()
+    } catch (requestError) {
+      setImportError(requestError?.response?.data?.error?.message || requestError?.message || 'Không thể tải mẫu Excel.')
+    }
+  }
+
+  async function handlePreviewImport() {
+    if (!importFile) {
+      setImportError('Vui lòng chọn file Excel để xem trước.')
+      return
+    }
+
+    setImporting(true)
+    setImportError('')
+    setImportSuccess('')
+    try {
+      const result = await previewSportsProfileImport(importFile)
+      setImportPreview(result)
+      setImportSuccess(`Đã xem trước ${result?.summary?.totalRows || 0} dòng.`)
+    } catch (requestError) {
+      setImportPreview(null)
+      setImportError(requestError?.response?.data?.error?.message || requestError?.message || 'Không thể xem trước file import.')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  async function handleConfirmImport() {
+    if (!importFile || !importPreview) {
+      setImportError('Vui lòng xem trước file trước khi xác nhận import.')
+      return
+    }
+
+    setImporting(true)
+    setImportError('')
+    setImportSuccess('')
+    try {
+      const result = await confirmSportsProfileImport(importFile)
+      setImportSuccess(`Import hoàn tất: tạo ${result?.summary?.createdCount || 0}, cập nhật ${result?.summary?.updatedCount || 0}, không đổi ${result?.summary?.unchangedCount || 0}.`)
+      setImportPreview(null)
+      setImportFile(null)
+      setPagination((current) => ({ ...current, page: 1 }))
+      setAppliedFilters((current) => ({ ...current }))
+      await listSportsProfiles({ page: 1, pageSize: pagination.pageSize, sort: 'updatedAt:desc', ...appliedFilters })
+    } catch (requestError) {
+      setImportError(requestError?.response?.data?.error?.message || requestError?.message || 'Không thể xác nhận import Excel.')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   return (
     <div>
       <div className='d-flex justify-content-between align-items-start gap-3 flex-wrap mb-4'>
@@ -93,7 +151,57 @@ export default function SportsProfilesPage() {
           <div className='fs-5 fw-semibold'>Hồ sơ thể thao</div>
           <div className='text-body-secondary'>Quản lý hồ sơ thể thao theo tenant, độc lập với Strava và chưa gắn trực tiếp membership/club trong phạm vi task này.</div>
         </div>
-        <CButton color='primary' onClick={() => navigate(`${basePath}/new`)}>Tạo hồ sơ thể thao</CButton>
+        <div className='d-flex gap-2 flex-wrap'>
+          <CButton color='secondary' variant='outline' onClick={handleDownloadTemplate}>Tải mẫu Excel</CButton>
+          <CButton color='primary' onClick={() => navigate(`${basePath}/new`)}>Tạo hồ sơ thể thao</CButton>
+        </div>
+      </div>
+
+      <div className='card border mb-4'>
+        <div className='card-body'>
+          <div className='fw-semibold mb-2'>Import Excel</div>
+          <div className='d-flex flex-wrap gap-2 align-items-center'>
+            <input type='file' accept='.xlsx,.xls' onChange={(event) => setImportFile(event.target.files?.[0] || null)} />
+            <CButton color='secondary' variant='outline' size='sm' onClick={handleDownloadTemplate} disabled={importing}>Tải mẫu</CButton>
+            <CButton color='primary' size='sm' onClick={handlePreviewImport} disabled={!importFile || importing}>Xem trước</CButton>
+            <CButton color='success' size='sm' onClick={handleConfirmImport} disabled={!importFile || !importPreview || importing}>Xác nhận import</CButton>
+          </div>
+          {importError ? <CAlert color='danger' className='mt-3 mb-0'>{importError}</CAlert> : null}
+          {importSuccess ? <CAlert color='success' className='mt-3 mb-0'>{importSuccess}</CAlert> : null}
+          {importPreview ? (
+            <div className='mt-3'>
+              <div className='small text-body-secondary mb-2'>
+                Tổng dòng: {importPreview?.summary?.totalRows || 0} | Tạo mới: {importPreview?.summary?.createCount || 0} | Cập nhật: {importPreview?.summary?.updateCount || 0} | Không đổi: {importPreview?.summary?.unchangedCount || 0} | Lỗi: {importPreview?.summary?.errorCount || 0}
+              </div>
+              <div className='table-responsive'>
+                <table className='table table-sm table-bordered align-middle mb-0'>
+                  <thead>
+                    <tr>
+                      <th>Dòng</th>
+                      <th>Mã</th>
+                      <th>Họ tên</th>
+                      <th>Trạng thái</th>
+                      <th>Thay đổi</th>
+                      <th>Lý do</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(importPreview?.rows || []).map((row) => (
+                      <tr key={`${row.rowNumber}-${row.profileCode || 'empty'}`}>
+                        <td>{row.rowNumber}</td>
+                        <td>{row.profileCode || '-'}</td>
+                        <td>{row.fullName || '-'}</td>
+                        <td>{row.status}</td>
+                        <td>{row.action}</td>
+                        <td>{row.reason || (row.errors?.length ? row.errors.join('; ') : row.warnings?.join('; ')) || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <CRow className='g-3 mb-3'>

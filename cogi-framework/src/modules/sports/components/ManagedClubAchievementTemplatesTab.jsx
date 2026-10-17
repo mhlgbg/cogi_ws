@@ -447,7 +447,8 @@ function TemplateEditorModal({ visible = false, club = null, initialTemplate = n
                             position: 'absolute',
                             left: `${Math.max(0, Math.min(1, Number(item?.x || 0))) * 100}%`,
                             top: `${Math.max(0, Math.min(1, Number(item?.y || 0))) * 100}%`,
-                            transform: 'translate(-50%, -50%)',
+                            width: item?.type === 'image' ? undefined : `${Math.max(0.05, Math.min(1, Number(item?.width || 0.3))) * 100}%`,
+                            transform: item?.textAlign === 'center' ? 'translateX(-50%)' : item?.textAlign === 'right' ? 'translateX(-100%)' : 'none',
                             fontSize: 11,
                             padding: '2px 6px',
                             borderRadius: 4,
@@ -456,7 +457,8 @@ function TemplateEditorModal({ visible = false, club = null, initialTemplate = n
                             border: String(selectedFieldKey) === String(item.id) ? '1px solid #fff' : '1px solid rgba(255,255,255,0.5)',
                             userSelect: 'none',
                             cursor: 'grab',
-                            whiteSpace: 'nowrap',
+                            whiteSpace: item?.type === 'image' ? 'nowrap' : 'normal',
+                            textAlign: item?.textAlign || 'left',
                           }}
                         >
                           {item.type === 'text' ? (item.content || item.id) : (item.field || item.id)}

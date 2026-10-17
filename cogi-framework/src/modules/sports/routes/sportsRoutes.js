@@ -18,6 +18,8 @@ import SportsClubUserAssignmentsPage from '../pages/SportsClubUserAssignmentsPag
 import MyManagedClubsPage from '../pages/MyManagedClubsPage'
 import ManagedClubWorkspacePage from '../pages/ManagedClubWorkspacePage'
 import ManagedClubMemberDetailPage from '../pages/ManagedClubMemberDetailPage'
+import ManagedClubMembersImportPage from '../pages/ManagedClubMembersImportPage'
+import ManagedClubAchievementsImportPage from '../pages/ManagedClubAchievementsImportPage'
 
 function withFeatureKey(featureKey, routes) {
   return routes.map((route) => ({
@@ -151,6 +153,16 @@ const managedClubRoutes = withFeatureKey(MANAGED_CLUB_FEATURE_KEY, [
     path: '/sports/my-clubs/:clubId',
     title: 'Club Management Workspace',
     component: ManagedClubWorkspacePage,
+  },
+  {
+    path: '/sports/my-clubs/:clubId/members/import',
+    title: 'Import thành viên CLB',
+    component: ManagedClubMembersImportPage,
+  },
+  {
+    path: '/sports/my-clubs/:clubId/achievements/import',
+    title: 'Import thành tích CLB',
+    component: ManagedClubAchievementsImportPage,
   },
   {
     path: '/sports/my-clubs/:clubId/members/:membershipId',

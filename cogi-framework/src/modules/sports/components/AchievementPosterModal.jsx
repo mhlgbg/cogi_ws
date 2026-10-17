@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CAlert, CButton, CFormLabel, CFormSelect, CModal, CModalBody, CModalFooter, CModalHeader, CModalTitle, CSpinner } from '@coreui/react'
-import { exportAchievementPosterPngBlob, renderAchievementPosterToCanvas } from '../utils/achievementPosterRenderer'
+import { exportAchievementPosterPngBlob } from '../utils/achievementPosterRenderer'
 
 function toText(value) {
   if (value === null || value === undefined) return ''
@@ -18,10 +18,11 @@ export default function AchievementPosterModal({
   readOnlyTemplate = true,
   onClose,
 }) {
-  const canvasRef = useRef(null)
   const [rendering, setRendering] = useState(false)
   const [error, setError] = useState('')
   const [downloading, setDownloading] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState('')
+  const previewUrlRef = useRef('')
 
   const selectedTemplate = useMemo(() => {
     if (!Array.isArray(templateOptions) || templateOptions.length === 0) return null
@@ -30,29 +31,59 @@ export default function AchievementPosterModal({
   }, [templateOptions, selectedTemplateId])
 
   useEffect(() => {
-    if (!visible) return
+    if (!visible) return undefined
     let mounted = true
+    let objectUrl = ''
     async function run() {
-      if (!achievement || !selectedTemplate || !canvasRef.current) return
+      if (!achievement || !selectedTemplate) {
+        if (mounted) setPreviewUrl('')
+        return
+      }
       setRendering(true)
       setError('')
       try {
-        await renderAchievementPosterToCanvas({
-          canvas: canvasRef.current,
+        const blob = await exportAchievementPosterPngBlob({
           template: selectedTemplate,
           achievement,
           profile: profile || achievement?.sportsProfile || null,
         })
+        objectUrl = URL.createObjectURL(blob)
+        if (!mounted) {
+          URL.revokeObjectURL(objectUrl)
+          objectUrl = ''
+          return
+        }
+        setPreviewUrl((current) => {
+          if (current) URL.revokeObjectURL(current)
+          return objectUrl
+        })
+        previewUrlRef.current = objectUrl
+        objectUrl = ''
       } catch (renderError) {
         if (!mounted) return
+        setPreviewUrl((current) => {
+          if (current) URL.revokeObjectURL(current)
+          return ''
+        })
+        previewUrlRef.current = ''
         setError(toText(renderError?.message) || 'Không thể render ảnh thành tích.')
       } finally {
         if (mounted) setRendering(false)
       }
     }
     run()
-    return () => { mounted = false }
+    return () => {
+      mounted = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
   }, [visible, achievement, selectedTemplate, profile])
+
+  useEffect(() => () => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current)
+      previewUrlRef.current = ''
+    }
+  }, [])
 
   async function handleDownloadPng() {
     if (!achievement || !selectedTemplate) return
@@ -104,7 +135,11 @@ export default function AchievementPosterModal({
         {selectedTemplate ? (
           <div className='border rounded p-2'>
             {rendering ? <div className='d-flex align-items-center gap-2 mb-2'><CSpinner size='sm' />Đang render ảnh...</div> : null}
-            <canvas ref={canvasRef} style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', background: '#111', borderRadius: 8 }} />
+            {previewUrl ? (
+              <img src={previewUrl} alt='Achievement poster preview' style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', background: '#111', borderRadius: 8 }} />
+            ) : (
+              <div style={{ width: '100%', minHeight: '40vh', background: '#111', borderRadius: 8 }} />
+            )}
           </div>
         ) : null}
       </CModalBody>

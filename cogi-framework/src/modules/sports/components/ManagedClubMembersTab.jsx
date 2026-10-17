@@ -76,7 +76,10 @@ export default function ManagedClubMembersTab({ club }) {
           <div className='fs-5 fw-semibold'>Thành viên</div>
           <div className='text-body-secondary'>Quản lý Club Membership của CLB này. Dữ liệu lõi Sports Profile chỉ hiển thị read-only trong workspace.</div>
         </div>
-        <CButton color='primary' onClick={() => { setEditingRow(null); setShowModal(true) }}>Thêm thành viên</CButton>
+        <div className='d-flex gap-2 flex-wrap'>
+          <CButton color='secondary' variant='outline' onClick={() => navigate(`${basePath}/import`)}>Import Excel</CButton>
+          <CButton color='primary' onClick={() => { setEditingRow(null); setShowModal(true) }}>Thêm thành viên</CButton>
+        </div>
       </div>
 
       <CRow className='g-3 mb-3'>

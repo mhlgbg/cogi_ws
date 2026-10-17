@@ -182,6 +182,49 @@ export async function unlinkSportsProfileUser(id) {
   return normalizeSportsProfile(unwrapSuccess(response.data))
 }
 
+export async function downloadSportsProfileImportTemplate() {
+  const response = await api.get('/sports/profiles/import-template', {
+    responseType: 'blob',
+  })
+
+  const blob = new Blob([response.data], {
+    type: response.headers?.['content-type'] || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+  const fileName = response.headers?.['content-disposition']
+    ? decodeURIComponent((response.headers['content-disposition'].match(/filename\*=UTF-8''([^;]+)/) || response.headers['content-disposition'].match(/filename="?([^"]+)"?/) || [])[1] || 'sports-profiles-import-template.xlsx')
+    : 'sports-profiles-import-template.xlsx'
+
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  link.click()
+  URL.revokeObjectURL(url)
+  return { blob, fileName }
+}
+
+export async function previewSportsProfileImport(file) {
+  const formData = new FormData()
+  formData.append('files', file)
+  const response = await api.post('/sports/profiles/import-preview', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return response?.data?.data || response?.data || null
+}
+
+export async function confirmSportsProfileImport(file) {
+  const formData = new FormData()
+  formData.append('files', file)
+  const response = await api.post('/sports/profiles/import-confirm', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return response?.data?.data || response?.data || null
+}
+
 export async function uploadSportsProfileAvatar(file) {
   const formData = new FormData()
   formData.append('files', file)

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
   CAlert,
   CBadge,
@@ -426,6 +427,7 @@ function SubmissionDetailModal({ visible = false, club = null, submissionId = nu
             <div className='d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3'>
               <div>
                 <div className='fs-5 fw-semibold'>{submission.title || '-'}</div>
+                <div className='small text-body-secondary mt-1'>{submission.eventCode || '-'} · BIB: {submission.bib || '-'}</div>
                 <div className='text-body-secondary'>{submission.sportsProfile?.fullName || '-'} · {submission.club?.name || '-'}</div>
                 <div className='d-flex gap-2 mt-2 flex-wrap'>
                   <CBadge color={getSubmissionStatusMeta(submission.status).color}>{getSubmissionStatusMeta(submission.status).label}</CBadge>
@@ -592,7 +594,7 @@ function AchievementDetailModal({ visible = false, club = null, achievementId = 
               {achievement.status === 'revoked' ? <CCol md={4}><CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Rút lúc</div><div className='fw-semibold'>{formatSportsDateTime(achievement.revokedAt)}</div><div className='small text-body-secondary mt-1'>{getUserLabel(achievement.revokedBy)}</div></CCardBody></CCard></CCol> : null}
               {achievement.status === 'revoked' ? <CCol md={8}><CCard className='h-100'><CCardBody><div className='small text-body-secondary'>Lý do rút ghi nhận</div><div className='fw-semibold' style={{ whiteSpace: 'pre-wrap' }}>{achievement.revokeReason || '-'}</div></CCardBody></CCard></CCol> : null}
             </CRow>
-            <CCard className='mb-4'><CCardBody><div className='small text-body-secondary mb-2'>Mô tả</div><div style={{ whiteSpace: 'pre-wrap' }}>{achievement.description || 'Không có.'}</div><div className='small text-body-secondary mt-3 mb-2'>Nguồn / Source Reference</div><div>{achievement.source || '-'} · {achievement.sourceReference || '-'}</div><div className='small text-body-secondary mt-3 mb-2'>Ghi chú</div><div style={{ whiteSpace: 'pre-wrap' }}>{achievement.note || 'Không có.'}</div></CCardBody></CCard>
+            <CCard className='mb-4'><CCardBody><div className='small text-body-secondary mb-2'>Mã sự kiện / BIB</div><div>{achievement.eventCode || '-'} · BIB: {achievement.bib || '-'}</div><div className='small text-body-secondary mt-3 mb-2'>Mô tả</div><div style={{ whiteSpace: 'pre-wrap' }}>{achievement.description || 'Không có.'}</div><div className='small text-body-secondary mt-3 mb-2'>Nguồn / Source Reference</div><div>{achievement.source || '-'} · {achievement.sourceReference || '-'}</div><div className='small text-body-secondary mt-3 mb-2'>Ghi chú</div><div style={{ whiteSpace: 'pre-wrap' }}>{achievement.note || 'Không có.'}</div></CCardBody></CCard>
             <CCard className='mb-4'>
               <CCardBody>
                 <div className='small text-body-secondary mb-2'>Mẫu ảnh chia sẻ</div>
@@ -660,10 +662,13 @@ function AchievementDetailModal({ visible = false, club = null, achievementId = 
 }
 
 export default function ManagedClubAchievementsTab({ club, membership = null }) {
+  const navigate = useNavigate()
+  const { tenantCode } = useParams()
   const lockedSportsProfileId = membership?.sportsProfile?.id ? String(membership.sportsProfile.id) : ''
   const isMemberScoped = Boolean(lockedSportsProfileId)
   const defaultSubmissionStatus = isMemberScoped ? '' : 'submitted'
   const defaultAchievementStatus = isMemberScoped ? '' : 'active'
+  const importPath = tenantCode ? `/t/${encodeURIComponent(tenantCode)}/sports/my-clubs/${club?.id}/achievements/import` : `/sports/my-clubs/${club?.id}/achievements/import`
   const [viewKey, setViewKey] = useState('submissions')
   const [submissionLoading, setSubmissionLoading] = useState(false)
   const [submissionError, setSubmissionError] = useState('')
@@ -775,7 +780,10 @@ export default function ManagedClubAchievementsTab({ club, membership = null }) 
           <div className='fs-5 fw-semibold'>Thành tích</div>
           <div className='text-body-secondary'>Manager chỉ thao tác trên submission và achievement thuộc CLB đang được assignment. Workflow luôn đi qua Submission trước khi thành tích được ghi nhận.</div>
         </div>
-        <CButton color='primary' onClick={() => setShowCreateModal(true)}>Ghi nhận thành tích</CButton>
+        <div className='d-flex gap-2 flex-wrap'>
+          <CButton color='secondary' variant='outline' onClick={() => navigate(importPath)}>Import Excel</CButton>
+          <CButton color='primary' onClick={() => setShowCreateModal(true)}>Ghi nhận thành tích</CButton>
+        </div>
       </div>
       {isMemberScoped ? <div className='small text-body-secondary mb-3'>Đang hiển thị thành tích trong context của member hiện tại: {membership?.memberCode || '-'} · {membership?.sportsProfile?.fullName || membership?.sportsProfile?.code || '-'}.</div> : null}
 
@@ -833,7 +841,7 @@ export default function ManagedClubAchievementsTab({ club, membership = null }) 
                   {submissionRows.map((row) => (
                     <CTableRow key={row.id}>
                       <CTableDataCell><div>{row.sportsProfile?.fullName || '-'}</div><div className='small text-body-secondary'>{row.sportsProfile?.code || '-'}</div><div className='small text-body-secondary'>{row.clubMembership?.memberCode || '-'}</div></CTableDataCell>
-                      <CTableDataCell><div className='fw-semibold'>{row.title || '-'}</div><div className='small text-body-secondary'>{getSportTypeLabel(row.sportType)}</div></CTableDataCell>
+                      <CTableDataCell><div className='fw-semibold'>{row.title || '-'}</div><div className='small text-body-secondary'>{row.eventCode || '-'} · BIB: {row.bib || '-'}</div><div className='small text-body-secondary'>{getSportTypeLabel(row.sportType)}</div></CTableDataCell>
                       <CTableDataCell>{getAchievementTypeLabel(row.achievementType)}</CTableDataCell>
                       <CTableDataCell><div>{getAchievementResultPrimary(row)}</div><div className='small text-body-secondary'>{getAchievementResultSecondary(row)}</div></CTableDataCell>
                       <CTableDataCell>{formatSportsDateTime(row.achievedAt)}</CTableDataCell>
@@ -905,7 +913,7 @@ export default function ManagedClubAchievementsTab({ club, membership = null }) 
                   {achievementRows.map((row) => (
                     <CTableRow key={row.id}>
                       <CTableDataCell><div>{row.sportsProfile?.fullName || '-'}</div><div className='small text-body-secondary'>{row.sportsProfile?.code || '-'}</div><div className='small text-body-secondary'>{row.clubMembership?.memberCode || '-'}</div></CTableDataCell>
-                      <CTableDataCell><div className='fw-semibold'>{row.title || '-'}</div><div className='small text-body-secondary'>{getSportTypeLabel(row.sportType)}</div></CTableDataCell>
+                      <CTableDataCell><div className='fw-semibold'>{row.title || '-'}</div><div className='small text-body-secondary'>{row.eventCode || '-'} · BIB: {row.bib || '-'}</div><div className='small text-body-secondary'>{getSportTypeLabel(row.sportType)}</div></CTableDataCell>
                       <CTableDataCell>{getAchievementTypeLabel(row.achievementType)}</CTableDataCell>
                       <CTableDataCell><div>{getAchievementResultPrimary(row)}</div><div className='small text-body-secondary'>{getAchievementResultSecondary(row)}</div></CTableDataCell>
                       <CTableDataCell>{formatSportsDateTime(row.achievedAt)}</CTableDataCell>

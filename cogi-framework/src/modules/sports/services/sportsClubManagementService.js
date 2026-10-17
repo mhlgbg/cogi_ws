@@ -138,6 +138,10 @@ function normalizeAchievement(value) {
     id: normalizePositiveId(value.id),
     documentId: toText(value.documentId),
     title: toText(value.title),
+    eventCode: toText(value.eventCode),
+    raceType: toText(value.raceType),
+    bib: toText(value.bib),
+    distancePending: Boolean(value.distancePending),
     description: toText(value.description),
     achievementType: toText(value.achievementType) || 'other',
     sportType: toText(value.sportType),
@@ -200,6 +204,10 @@ function normalizeSubmission(value) {
     id: normalizePositiveId(value.id),
     documentId: toText(value.documentId),
     title: toText(value.title),
+    eventCode: toText(value.eventCode),
+    raceType: toText(value.raceType),
+    bib: toText(value.bib),
+    distancePending: Boolean(value.distancePending),
     description: toText(value.description),
     achievementType: toText(value.achievementType) || 'other',
     sportType: toText(value.sportType),
@@ -390,6 +398,49 @@ export async function listManagedClubMembers(clubId, params = {}) {
   }
 }
 
+export async function downloadManagedClubMemberImportTemplate(clubId) {
+  const response = await api.get(`/sports/my-managed-clubs/${clubId}/members/import-template`, {
+    responseType: 'blob',
+  })
+
+  const blob = new Blob([response.data], {
+    type: response.headers?.['content-type'] || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+  const fileName = response.headers?.['content-disposition']
+    ? decodeURIComponent((response.headers['content-disposition'].match(/filename\*=UTF-8''([^;]+)/) || response.headers['content-disposition'].match(/filename="?([^"]+)"?/) || [])[1] || 'club-memberships-import-template.xlsx')
+    : 'club-memberships-import-template.xlsx'
+
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  link.click()
+  URL.revokeObjectURL(url)
+  return { blob, fileName }
+}
+
+export async function previewManagedClubMemberImport(clubId, file) {
+  const formData = new FormData()
+  formData.append('files', file)
+  const response = await api.post(`/sports/my-managed-clubs/${clubId}/members/import-preview`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return response?.data?.data || response?.data || null
+}
+
+export async function confirmManagedClubMemberImport(clubId, file) {
+  const formData = new FormData()
+  formData.append('files', file)
+  const response = await api.post(`/sports/my-managed-clubs/${clubId}/members/import-confirm`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return response?.data?.data || response?.data || null
+}
+
 export async function listManagedClubProfileOptions(clubId, params = {}) {
   const response = await api.get(`/sports/my-managed-clubs/${clubId}/profile-options`, { params: buildListParams(params) })
   return {
@@ -518,6 +569,58 @@ export async function listManagedClubAchievements(clubId, params = {}) {
     rows: normalizeCollection(response.data, normalizeAchievement),
     pagination: normalizePagination(response.data),
   }
+}
+
+export async function downloadManagedClubAchievementImportTemplate(clubId) {
+  const response = await api.get(`/sports/my-managed-clubs/${clubId}/achievements/import-template`, {
+    responseType: 'blob',
+  })
+
+  const blob = new Blob([response.data], {
+    type: response.headers?.['content-type'] || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+  const fileName = response.headers?.['content-disposition']
+    ? decodeURIComponent((response.headers['content-disposition'].match(/filename\*=UTF-8''([^;]+)/) || response.headers['content-disposition'].match(/filename="?([^"]+)"?/) || [])[1] || 'club-achievements-import-template.xlsx')
+    : 'club-achievements-import-template.xlsx'
+
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  link.click()
+  URL.revokeObjectURL(url)
+  return { blob, fileName }
+}
+
+function appendAchievementImportSettings(formData, settings = {}) {
+  if (settings.titleStrategy) formData.append('titleStrategy', String(settings.titleStrategy))
+  if (settings.processingMode) formData.append('processingMode', String(settings.processingMode))
+  if (settings.achievementType) formData.append('achievementType', String(settings.achievementType))
+  if (settings.sportType) formData.append('sportType', String(settings.sportType))
+}
+
+export async function previewManagedClubAchievementImport(clubId, file, settings = {}) {
+  const formData = new FormData()
+  formData.append('files', file)
+  appendAchievementImportSettings(formData, settings)
+  const response = await api.post(`/sports/my-managed-clubs/${clubId}/achievements/import-preview`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return response?.data?.data || response?.data || null
+}
+
+export async function confirmManagedClubAchievementImport(clubId, file, settings = {}) {
+  const formData = new FormData()
+  formData.append('files', file)
+  appendAchievementImportSettings(formData, settings)
+  const response = await api.post(`/sports/my-managed-clubs/${clubId}/achievements/import-confirm`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return response?.data?.data || response?.data || null
 }
 
 export async function listManagedClubAchievementTemplates(clubId, params = {}) {

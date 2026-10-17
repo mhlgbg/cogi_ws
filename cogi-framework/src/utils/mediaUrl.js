@@ -112,7 +112,7 @@ export function buildProtectedFileUrl(fileMeta) {
     }
   }
 
-  if (!rawUrl.startsWith('/storage/') && !rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+  if (!rawUrl.startsWith('/') && !rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
     return ''
   }
 
