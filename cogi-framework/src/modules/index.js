@@ -38,6 +38,7 @@ import * as luckyWheel from './lucky-wheel-management'
 import * as fitness from './fitness'
 import * as sports from './sports'
 import * as community from './community'
+import * as game from './game'
 import * as eventRegistration from './event-registration'
 import * as registrationCampaign from './registration-campaign'
 import * as assessmentCampaigns from './assessment-campaigns'
@@ -73,6 +74,7 @@ export const allModules = [
   fitness,
   sports,
   community,
+  game,
   eventRegistration,
   registrationCampaign,
   assessmentCampaigns,

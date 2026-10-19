@@ -391,6 +391,26 @@ export async function updatePlatformTenantFeature(tenantId, featureId, isEnabled
   return response?.data?.data || null
 }
 
+export async function getPlatformGameTypes() {
+  const response = await platformApi.get('/platform/game-types')
+  return Array.isArray(response?.data?.data) ? response.data.data : []
+}
+
+export async function getPlatformTenantGameTypes(tenantId) {
+  const response = await platformApi.get(`/platform/tenants/${tenantId}/game-types`)
+  return response?.data?.data || {
+    tenant: null,
+    gameTypes: [],
+  }
+}
+
+export async function updatePlatformTenantGameTypeLicense(tenantId, gameTypeId, isLicensed) {
+  const response = await platformApi.patch(`/platform/tenants/${tenantId}/game-types/${gameTypeId}/license`, {
+    isLicensed,
+  })
+  return response?.data?.data || null
+}
+
 export async function getPlatformTenantRoles(id) {
   const response = await platformApi.get(`/platform/tenants/${id}/roles`)
   return response?.data?.data || {

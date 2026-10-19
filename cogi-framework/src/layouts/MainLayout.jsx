@@ -9,6 +9,7 @@ import { useTenant } from '../contexts/TenantContext'
 import { buildNav } from '../navigation/buildNav'
 import { platformNavGroups } from '../platform/routes/platformRoutes'
 import { resolveTenantRouteTitle, setTenantPageTitle } from '../utils/tenantPageTitle'
+import { signalDailyActive } from '../modules/game/services/gameService'
 import './main-layout.css'
 
 function injectExamConfigurationNav(navGroups = [], hasFeature) {
@@ -142,6 +143,51 @@ export default function MainLayout() {
     const routeTitle = resolveTenantRouteTitle(location.pathname)
     setTenantPageTitle(routeTitle, tenant)
   }, [isPlatformWorkspaceRoute, location.pathname, tenant])
+
+  useEffect(() => {
+    if (!auth?.isAuthenticated || auth?.user?.isPlatformAdmin === true) return undefined
+    const tenantCode = String(tenant?.currentTenant?.tenantCode || '').trim().toLowerCase()
+    if (!tenantCode) return undefined
+
+    const storageKey = `game.daily-active.signal:${tenantCode}`
+    let disposed = false
+
+    async function sendSignal(signalSource) {
+      if (disposed) return
+      const now = Date.now()
+      const lastSent = Number(sessionStorage.getItem(storageKey) || 0)
+      if (now - lastSent < 60 * 1000) return
+      sessionStorage.setItem(storageKey, String(now))
+      try {
+        await signalDailyActive(signalSource)
+      } catch {
+        // suppress noisy UX; backend idempotency handles retries on later activity
+      }
+    }
+
+    function handleVisible() {
+      if (document.visibilityState === 'visible') {
+        void sendSignal('visibilitychange')
+      }
+    }
+
+    function handleFocus() {
+      void sendSignal('focus')
+    }
+
+    if (document.visibilityState === 'visible') {
+      void sendSignal('mount')
+    }
+
+    document.addEventListener('visibilitychange', handleVisible)
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      disposed = true
+      document.removeEventListener('visibilitychange', handleVisible)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [auth?.isAuthenticated, auth?.user?.isPlatformAdmin, tenant?.currentTenant?.tenantCode])
 
   function onToggleSidebar() {
     if (window.matchMedia('(max-width: 991.98px)').matches) {
