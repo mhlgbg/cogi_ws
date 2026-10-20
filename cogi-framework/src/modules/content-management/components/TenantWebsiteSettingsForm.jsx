@@ -39,6 +39,20 @@ function normalizeMedia(value) {
   }
 }
 
+function normalizeTenantHomeLinkConfig(value) {
+  const source = value && typeof value === 'object' ? value : {}
+  const url = String(source.url || source.homeUrl || '').trim()
+
+  return {
+    enabled: source.enabled !== false,
+    url,
+    label: String(source.label || 'Về trang chủ').trim() || 'Về trang chủ',
+    logoClickable: source.logoClickable !== false,
+    showInSidebar: source.showInSidebar !== false,
+    showInCommunityHeader: source.showInCommunityHeader !== false,
+  }
+}
+
 function createFormState(payload = {}) {
   return {
     siteTitle: String(payload?.siteTitle || '').trim(),
@@ -51,6 +65,7 @@ function createFormState(payload = {}) {
     defaultMetaImage: normalizeMedia(payload?.defaultMetaImage),
     favicon: normalizeMedia(payload?.favicon),
     chatAvatar: normalizeMedia(payload?.chatAvatar),
+    tenantHomeLink: normalizeTenantHomeLinkConfig(payload?.tenantHomeLink || payload?.settings?.tenantHomeLink),
   }
 }
 
@@ -63,6 +78,19 @@ function validateForm(form) {
   if (String(form.siteShortTitle || '').trim().length > FIELD_LIMITS.siteShortTitle) nextErrors.siteShortTitle = `Tên ngắn tối đa ${FIELD_LIMITS.siteShortTitle} ký tự`
   if (String(form.siteDescription || '').trim().length > FIELD_LIMITS.siteDescription) nextErrors.siteDescription = `Mô tả SEO tối đa ${FIELD_LIMITS.siteDescription} ký tự`
   if (String(form.siteKeywords || '').trim().length > FIELD_LIMITS.siteKeywords) nextErrors.siteKeywords = `Từ khóa SEO tối đa ${FIELD_LIMITS.siteKeywords} ký tự`
+
+  const homeUrl = String(form.tenantHomeLink?.url || '').trim()
+  if (form.tenantHomeLink?.enabled !== false && homeUrl) {
+    const lowerUrl = homeUrl.toLowerCase()
+    if (homeUrl.startsWith('//') || /^(javascript:|data:|vbscript:)/i.test(lowerUrl)) {
+      nextErrors.tenantHomeLinkUrl = 'URL trang chủ không được dùng protocol-relative hoặc javascript/data.'
+    } else {
+      const schemeMatch = lowerUrl.match(/^([a-z][a-z0-9+.-]*):/)
+      if (schemeMatch && !/^https?:$/.test(schemeMatch[1])) {
+        nextErrors.tenantHomeLinkUrl = 'URL trang chủ chỉ hỗ trợ http/https hoặc đường dẫn nội bộ.'
+      }
+    }
+  }
 
   return nextErrors
 }
@@ -179,6 +207,17 @@ export default function TenantWebsiteSettingsForm() {
     }
     setSubmitting(true)
     try {
+      const tenantHomeLink = form.tenantHomeLink?.enabled === false
+        ? { enabled: false }
+        : {
+          enabled: form.tenantHomeLink?.enabled !== false,
+          url: String(form.tenantHomeLink?.url || '').trim(),
+          label: String(form.tenantHomeLink?.label || 'Về trang chủ').trim() || 'Về trang chủ',
+          logoClickable: form.tenantHomeLink?.logoClickable !== false,
+          showInSidebar: form.tenantHomeLink?.showInSidebar !== false,
+          showInCommunityHeader: form.tenantHomeLink?.showInCommunityHeader !== false,
+        }
+
       const payload = {
         siteTitle: String(form.siteTitle || '').trim() || null,
         defaultPageTitle: String(form.defaultPageTitle || '').trim() || null,
@@ -190,6 +229,7 @@ export default function TenantWebsiteSettingsForm() {
         defaultMetaImage: form.defaultMetaImage?.id || null,
         favicon: form.favicon?.id || null,
         chatAvatar: form.chatAvatar?.id || null,
+        tenantHomeLink: tenantHomeLink.url ? tenantHomeLink : null,
       }
       const updated = await updateTenantWebsiteSettings(payload)
       setForm(createFormState(updated))
@@ -254,6 +294,94 @@ export default function TenantWebsiteSettingsForm() {
                 <CCol md={4}><MediaField fieldKey='defaultMetaImage' label='Ảnh mặc định khi chia sẻ' value={form.defaultMetaImage} uploadingField={uploadingField} onFileChange={handleFileChange} onClear={handleClearMedia} /></CCol>
                 <CCol md={4}><MediaField fieldKey='favicon' label='Favicon' value={form.favicon} uploadingField={uploadingField} onFileChange={handleFileChange} onClear={handleClearMedia} /></CCol>
                 <CCol md={4}><MediaField fieldKey='chatAvatar' label='Ảnh đại diện chat' value={form.chatAvatar} uploadingField={uploadingField} onFileChange={handleFileChange} onClear={handleClearMedia} /></CCol>
+
+                <CCol xs={12}>
+                  <div className='border rounded-3 p-3'>
+                    <div className='d-flex align-items-center gap-2 mb-3'>
+                      <input
+                        id='tenant-home-link-enabled'
+                        type='checkbox'
+                        checked={form.tenantHomeLink?.enabled !== false}
+                        onChange={(event) => updateField('tenantHomeLink', {
+                          ...form.tenantHomeLink,
+                          enabled: event.target.checked,
+                        })}
+                      />
+                      <CFormLabel htmlFor='tenant-home-link-enabled' className='mb-0'>Bật liên kết về website chính</CFormLabel>
+                    </div>
+
+                    <CRow className='g-3'>
+                      <CCol md={6}>
+                        <CFormLabel htmlFor='tenant-home-link-url'>URL website chính</CFormLabel>
+                        <CFormInput
+                          id='tenant-home-link-url'
+                          value={form.tenantHomeLink?.url || ''}
+                          placeholder='https://example.com/'
+                          invalid={Boolean(fieldErrors.tenantHomeLinkUrl)}
+                          onChange={(event) => updateField('tenantHomeLink', {
+                            ...form.tenantHomeLink,
+                            url: event.target.value,
+                          })}
+                        />
+                        {fieldErrors.tenantHomeLinkUrl ? <div className='text-danger small mt-1'>{fieldErrors.tenantHomeLinkUrl}</div> : null}
+                      </CCol>
+                      <CCol md={6}>
+                        <CFormLabel htmlFor='tenant-home-link-label'>Nhãn hiển thị</CFormLabel>
+                        <CFormInput
+                          id='tenant-home-link-label'
+                          value={form.tenantHomeLink?.label || 'Về trang chủ'}
+                          onChange={(event) => updateField('tenantHomeLink', {
+                            ...form.tenantHomeLink,
+                            label: event.target.value,
+                          })}
+                        />
+                      </CCol>
+                      <CCol md={4}>
+                        <div className='d-flex align-items-center gap-2'>
+                          <input
+                            id='tenant-home-link-logo-clickable'
+                            type='checkbox'
+                            checked={form.tenantHomeLink?.logoClickable !== false}
+                            onChange={(event) => updateField('tenantHomeLink', {
+                              ...form.tenantHomeLink,
+                              logoClickable: event.target.checked,
+                            })}
+                          />
+                          <CFormLabel htmlFor='tenant-home-link-logo-clickable' className='mb-0'>Logo click về trang chủ</CFormLabel>
+                        </div>
+                      </CCol>
+                      <CCol md={4}>
+                        <div className='d-flex align-items-center gap-2'>
+                          <input
+                            id='tenant-home-link-show-sidebar'
+                            type='checkbox'
+                            checked={form.tenantHomeLink?.showInSidebar !== false}
+                            onChange={(event) => updateField('tenantHomeLink', {
+                              ...form.tenantHomeLink,
+                              showInSidebar: event.target.checked,
+                            })}
+                          />
+                          <CFormLabel htmlFor='tenant-home-link-show-sidebar' className='mb-0'>Hiển thị trong sidebar</CFormLabel>
+                        </div>
+                      </CCol>
+                      <CCol md={4}>
+                        <div className='d-flex align-items-center gap-2'>
+                          <input
+                            id='tenant-home-link-show-community-header'
+                            type='checkbox'
+                            checked={form.tenantHomeLink?.showInCommunityHeader !== false}
+                            onChange={(event) => updateField('tenantHomeLink', {
+                              ...form.tenantHomeLink,
+                              showInCommunityHeader: event.target.checked,
+                            })}
+                          />
+                          <CFormLabel htmlFor='tenant-home-link-show-community-header' className='mb-0'>Hiển thị trên header Community</CFormLabel>
+                        </div>
+                      </CCol>
+                    </CRow>
+                  </div>
+                </CCol>
+
                 <CCol xs={12}><div className='d-flex justify-content-end'><CButton type='submit' color='primary' disabled={submitting || Boolean(uploadingField)}>{submitting ? 'Đang lưu...' : 'Lưu'}</CButton></div></CCol>
               </CRow>
             </CForm>

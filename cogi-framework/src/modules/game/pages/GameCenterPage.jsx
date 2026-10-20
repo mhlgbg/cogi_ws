@@ -19,12 +19,12 @@ import { getGameApiMessage, getGameCenterData } from '../services/gameService'
 import { formatDateTime, getStatusBadgeConfig } from '../utils/gameUi'
 
 const FILTERS = [
-  { key: 'all', label: 'Tat ca' },
-  { key: 'trial_upcoming', label: 'Sap choi thu' },
-  { key: 'trial_running', label: 'Dang choi thu' },
-  { key: 'official_pending', label: 'Cho chinh thuc' },
-  { key: 'official_running', label: 'Dang chinh thuc' },
-  { key: 'ended', label: 'Da ket thuc' },
+  { key: 'all', label: 'Tất cả' },
+  { key: 'trial_upcoming', label: 'Sắp chơi thử' },
+  { key: 'trial_running', label: 'Đang chơi thử' },
+  { key: 'official_pending', label: 'Chờ chính thức' },
+  { key: 'official_running', label: 'Đang chính thức' },
+  { key: 'ended', label: 'Đã kết thúc' },
 ]
 
 function CenterStat({ label, value }) {
@@ -60,7 +60,7 @@ export default function GameCenterPage() {
         setCenterData(result)
       } catch (requestError) {
         if (!active) return
-        setError(getGameApiMessage(requestError, 'Khong tai duoc Game Center'))
+        setError(getGameApiMessage(requestError, 'Không tải được Game Center'))
       } finally {
         if (active) setLoading(false)
       }
@@ -104,7 +104,7 @@ export default function GameCenterPage() {
         <div>
           <h2 className='mb-1'>Game Center</h2>
           <p className='text-body-secondary mb-0'>
-            Khong gian game cua {brandName}, noi thanh vien co the xem lich game, rule va dang ky tham gia XP Challenge.
+            Không gian game của {brandName}, nơi thành viên có thể xem lịch game, luật chơi và đăng ký tham gia XP Challenge.
           </p>
         </div>
       </div>
@@ -112,15 +112,15 @@ export default function GameCenterPage() {
       {error ? <CAlert color='danger'>{error}</CAlert> : null}
 
       <CRow className='g-3 mb-4'>
-        <CenterStat label='Sap choi thu / cho chinh thuc' value={summary.upcomingGames} />
-        <CenterStat label='Dang trial / official' value={summary.runningGames} />
-        <CenterStat label='Da ket thuc' value={summary.endedGames} />
-        <CenterStat label='Ban da tham gia' value={summary.registeredGames} />
+        <CenterStat label='Sắp chơi thử / chờ chính thức' value={summary.upcomingGames} />
+        <CenterStat label='Đang trial / official' value={summary.runningGames} />
+        <CenterStat label='Đã kết thúc' value={summary.endedGames} />
+        <CenterStat label='Bạn đã tham gia' value={summary.registeredGames} />
       </CRow>
 
       <CCard className='border-0 shadow-sm'>
         <CCardHeader className='d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3'>
-          <strong>Danh sach game cong bo</strong>
+          <strong>Danh sách game công bố</strong>
           <CNav variant='underline'>
             {FILTERS.map((item) => (
               <CNavItem key={item.key}>
@@ -140,9 +140,9 @@ export default function GameCenterPage() {
         </CCardHeader>
         <CCardBody>
           {loading ? (
-            <div className='d-flex align-items-center gap-2'><CSpinner size='sm' /> Dang tai Game Center...</div>
+            <div className='d-flex align-items-center gap-2'><CSpinner size='sm' /> Đang tải Game Center...</div>
           ) : filteredGames.length === 0 ? (
-            <div className='text-body-secondary'>Chua co game phu hop voi bo loc hien tai.</div>
+            <div className='text-body-secondary'>Chưa có game phù hợp với bộ lọc hiện tại.</div>
           ) : (
             <CRow className='g-3'>
               {filteredGames.map((game) => {
@@ -159,22 +159,22 @@ export default function GameCenterPage() {
                           </div>
                           <div className='d-flex flex-column gap-2 align-items-end'>
                             <CBadge color={lifecycleBadge.color}>{lifecycleBadge.label}</CBadge>
-                            {game.myParticipation?.id ? <CBadge color='success'>Da tham gia</CBadge> : null}
+                            {game.myParticipation?.id ? <CBadge color='success'>Đã tham gia</CBadge> : null}
                           </div>
                         </div>
 
                         <div className='text-body-secondary small mb-3'>
-                          {game.description || 'Game XP Challenge da duoc cong bo cho tenant.'}
+                          {game.description || 'Game XP Challenge đã được công bố cho tenant.'}
                         </div>
 
                         <div className='small mb-3'>
-                          <div><strong>Dang ky:</strong> {formatDateTime(game.registrationOpenAt)} - {formatDateTime(game.registrationCloseAt)}</div>
+                          <div><strong>Đăng ký:</strong> {formatDateTime(game.registrationOpenAt)} - {formatDateTime(game.registrationCloseAt)}</div>
                           {game.hasTrial ? (
                             <div><strong>Trial:</strong> {formatDateTime(game.trialStartAt)} - {formatDateTime(game.trialEndAt)}</div>
                           ) : null}
                           <div><strong>Official:</strong> {formatDateTime(game.startsAt)} - {formatDateTime(game.endsAt)}</div>
-                          <div><strong>Timezone:</strong> {game.timezone || '-'}</div>
-                          <div><strong>Game type:</strong> {game.gameType?.name || game.gameType?.code || '-'}</div>
+                          <div><strong>Múi giờ:</strong> {game.timezone || '-'}</div>
+                          <div><strong>Loại game:</strong> {game.gameType?.name || game.gameType?.code || '-'}</div>
                         </div>
 
                         <div className='mt-auto d-flex justify-content-between align-items-center gap-2'>
@@ -188,7 +188,7 @@ export default function GameCenterPage() {
                             ) : null}
                           </div>
                           <CButton color='primary' onClick={() => navigate(`/game-center/${game.id}`)}>
-                            Xem chi tiet
+                            Xem chi tiết
                           </CButton>
                         </div>
                       </CCardBody>

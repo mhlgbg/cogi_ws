@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext'
 import { resolveMediaUrl } from '../utils/mediaUrl'
 import { buildTenantUrl, isBrowserOnMainDomain } from '../utils/tenantRouting'
 import { clearTenantTitleSettings, persistTenantTitleSettings } from '../utils/tenantPageTitle'
+import { resolveTenantHomeLink } from '../utils/tenantRouting'
 
 const TenantContext = createContext(null)
 
@@ -88,6 +89,7 @@ function readTenantFromStorage() {
   const tenantFaviconUrl = localStorage.getItem('tenantFaviconUrl')
   const tenantChatAvatarUrl = localStorage.getItem('tenantChatAvatarUrl')
   const tenantLogoRaw = localStorage.getItem('tenantLogo')
+  const tenantHomeLinkRaw = localStorage.getItem('tenantHomeLink')
   const tenantIdRaw = localStorage.getItem('tenantId')
   const userTenantIdRaw = localStorage.getItem('userTenantId')
   const defaultFeatureCode = localStorage.getItem('defaultFeatureCode')
@@ -127,7 +129,20 @@ function readTenantFromStorage() {
     }
   }
 
+  let tenantHomeLink = null
+  if (tenantHomeLinkRaw) {
+    try {
+      tenantHomeLink = JSON.parse(tenantHomeLinkRaw)
+    } catch {
+      tenantHomeLink = null
+    }
+  }
+
   const normalizedTenantLogoUrl = toAbsoluteUrl(tenantLogoUrl) || extractTenantLogoUrlFromMedia(tenantLogo)
+  const resolvedTenantHomeLink = resolveTenantHomeLink({ tenantHomeLink }, {
+    tenantCode,
+    isMainDomain: isMainDomainRaw === 'true' || isBrowserOnMainDomain(),
+  })
 
   return {
     tenantCode,
@@ -142,7 +157,9 @@ function readTenantFromStorage() {
     settings: {
       siteTitle: siteTitle || '',
       titleSuffix: titleSuffix || '',
+      tenantHomeLink: resolvedTenantHomeLink,
     },
+    tenantHomeLink: resolvedTenantHomeLink,
     tenantId,
     userTenantId,
     defaultFeatureCode: defaultFeatureCode || '',
@@ -154,6 +171,17 @@ function readTenantFromStorage() {
 }
 
 function normalizeTenantContextPayload(payload) {
+  const tenantHomeLinkSource = payload?.tenantHomeLink || payload?.settings?.tenantHomeLink || payload?.settings?.tenantHomeLinkConfig || payload?.homeLink || {}
+  const parsedTenantHomeLink = resolveTenantHomeLink({
+    tenantHomeLink: tenantHomeLinkSource,
+    settings: payload?.settings || {},
+    tenantCode: String(payload?.code || '').trim(),
+    isMainDomain: isBrowserOnMainDomain(),
+  }, {
+    tenantCode: String(payload?.code || '').trim(),
+    isMainDomain: isBrowserOnMainDomain(),
+  })
+
   return {
     tenantCode: String(payload?.code || '').trim(),
     tenantName: String(payload?.name || payload?.displayName || '').trim(),
@@ -166,7 +194,9 @@ function normalizeTenantContextPayload(payload) {
     settings: {
       siteTitle: String(payload?.siteTitle || '').trim(),
       titleSuffix: String(payload?.titleSuffix || '').trim(),
+      tenantHomeLink: parsedTenantHomeLink,
     },
+    tenantHomeLink: parsedTenantHomeLink,
     defaultPublicRoute: String(payload?.defaultPublicRoute || '').trim(),
     defaultProtectedRoute: String(payload?.defaultProtectedRoute || '').trim(),
     isMainDomain: isBrowserOnMainDomain(),
@@ -176,6 +206,16 @@ function normalizeTenantContextPayload(payload) {
 function mergeTenantState(baseTenant, resolvedTenant) {
   const base = baseTenant && typeof baseTenant === 'object' ? baseTenant : {}
   const resolved = resolvedTenant && typeof resolvedTenant === 'object' ? resolvedTenant : {}
+
+  const mergedTenantHomeLink = resolveTenantHomeLink({
+    tenantCode: String(resolved.tenantCode || base.tenantCode || '').trim(),
+    tenantHomeLink: resolved.tenantHomeLink || base.tenantHomeLink || resolved.settings?.tenantHomeLink || base.settings?.tenantHomeLink,
+    settings: resolved.settings || base.settings || {},
+    isMainDomain: typeof resolved.isMainDomain === 'boolean' ? resolved.isMainDomain : Boolean(base.isMainDomain),
+  }, {
+    tenantCode: String(resolved.tenantCode || base.tenantCode || '').trim(),
+    isMainDomain: typeof resolved.isMainDomain === 'boolean' ? resolved.isMainDomain : Boolean(base.isMainDomain),
+  })
 
   return {
     tenantCode: String(resolved.tenantCode || base.tenantCode || '').trim(),
@@ -191,7 +231,9 @@ function mergeTenantState(baseTenant, resolvedTenant) {
     settings: {
       siteTitle: String(resolved.siteTitle || base.siteTitle || '').trim(),
       titleSuffix: String(resolved.titleSuffix || base.titleSuffix || '').trim(),
+      tenantHomeLink: mergedTenantHomeLink,
     },
+    tenantHomeLink: mergedTenantHomeLink,
     tenantId: Number(base.tenantId),
     userTenantId: Number(base.userTenantId),
     defaultFeatureCode: String(base.defaultFeatureCode || '').trim(),
@@ -214,6 +256,17 @@ export default function TenantContextProvider({ children }) {
   const [isMainDomain, setIsMainDomain] = useState(() => readTenantFromStorage()?.isMainDomain ?? isBrowserOnMainDomain())
 
   const selectTenant = (tenantContextItem) => {
+    const tenantHomeLinkSource = tenantContextItem?.tenantHomeLink || tenantContextItem?.settings?.tenantHomeLink || tenantContextItem?.homeLink || {}
+    const tenantHomeLink = resolveTenantHomeLink({
+      tenantHomeLink: tenantHomeLinkSource,
+      settings: tenantContextItem?.settings || {},
+      tenantCode: String(tenantContextItem?.tenantCode || '').trim(),
+      isMainDomain: isBrowserOnMainDomain(),
+    }, {
+      tenantCode: String(tenantContextItem?.tenantCode || '').trim(),
+      isMainDomain: isBrowserOnMainDomain(),
+    })
+
     const nextTenant = {
       tenantCode: String(tenantContextItem?.tenantCode || '').trim(),
       tenantName: String(tenantContextItem?.tenantName || '').trim(),
@@ -227,7 +280,9 @@ export default function TenantContextProvider({ children }) {
       settings: {
         siteTitle: String(tenantContextItem?.siteTitle || tenantContextItem?.settings?.siteTitle || '').trim(),
         titleSuffix: String(tenantContextItem?.titleSuffix || tenantContextItem?.settings?.titleSuffix || '').trim(),
+        tenantHomeLink,
       },
+      tenantHomeLink,
       tenantId: Number(tenantContextItem?.tenantId),
       userTenantId: Number(tenantContextItem?.userTenantId),
       defaultFeatureCode: String(tenantContextItem?.defaultFeatureCode || '').trim(),
@@ -253,6 +308,7 @@ export default function TenantContextProvider({ children }) {
     localStorage.setItem('tenantFaviconUrl', nextTenant.tenantFaviconUrl)
     localStorage.setItem('tenantChatAvatarUrl', nextTenant.tenantChatAvatarUrl)
     localStorage.setItem('tenantLogo', JSON.stringify(nextTenant.tenantLogo || null))
+    localStorage.setItem('tenantHomeLink', JSON.stringify(nextTenant.tenantHomeLink || null))
     localStorage.setItem('tenantSiteTitle', nextTenant.siteTitle)
     localStorage.setItem('tenantTitleSuffix', nextTenant.titleSuffix)
     localStorage.setItem('tenantId', String(nextTenant.tenantId))
@@ -276,6 +332,7 @@ export default function TenantContextProvider({ children }) {
     localStorage.removeItem('tenantFaviconUrl')
     localStorage.removeItem('tenantChatAvatarUrl')
     localStorage.removeItem('tenantLogo')
+    localStorage.removeItem('tenantHomeLink')
     localStorage.removeItem('tenantId')
     localStorage.removeItem('userTenantId')
     localStorage.removeItem('defaultFeatureCode')
@@ -335,6 +392,7 @@ export default function TenantContextProvider({ children }) {
         localStorage.setItem('tenantLogoUrl', nextTenant.tenantLogoUrl)
         localStorage.setItem('tenantFaviconUrl', nextTenant.tenantFaviconUrl)
         localStorage.setItem('tenantChatAvatarUrl', nextTenant.tenantChatAvatarUrl)
+        localStorage.setItem('tenantHomeLink', JSON.stringify(nextTenant.tenantHomeLink || null))
         localStorage.setItem('tenantSiteTitle', nextTenant.siteTitle)
         localStorage.setItem('tenantTitleSuffix', nextTenant.titleSuffix)
         localStorage.setItem('defaultPublicRoute', nextTenant.defaultPublicRoute)
@@ -389,7 +447,14 @@ export default function TenantContextProvider({ children }) {
 
   useEffect(() => {
     if (!auth?.isAuthenticated) {
-      clearTenant()
+      const pathname = typeof window !== 'undefined'
+        ? String(window.location?.pathname || '').trim()
+        : ''
+      const isPublicRoute = /^\/(?:t\/[^/]+)?(?:$|\/(?:journal(?:\/.*)?|page\/.*|article\/.*|category\/.*|archive\/.*|journal-category\/.*|journal-archive\/.*|journal-issue\/.*|frame\/.*|lucky-wheel\/.*|msg\/.*|join\/.*|community(?:\/.*)?|dang-ky-tuyen-sinh(?:\/.*)?|tra-cuu-tuyen-sinh\/.*|tra-cuu-diem\/.*|tra-cuu-phuc-khao\/.*|campaign\/.*|assessment-runner\/.*|login|forgot-password|reset-password|activate|set-password))$/i.test(pathname)
+
+      if (!isPublicRoute) {
+        clearTenant()
+      }
     }
   }, [auth?.isAuthenticated])
 
@@ -435,11 +500,13 @@ export default function TenantContextProvider({ children }) {
             tenantLogoUrl: resolved.tenantLogoUrl || previous.tenantLogoUrl,
             tenantFaviconUrl: resolved.tenantFaviconUrl || previous.tenantFaviconUrl || '',
             tenantChatAvatarUrl: resolved.tenantChatAvatarUrl || previous.tenantChatAvatarUrl,
+            tenantHomeLink: resolved.tenantHomeLink || previous.tenantHomeLink || null,
             siteTitle: resolved.siteTitle || previous.siteTitle || '',
             titleSuffix: resolved.titleSuffix || previous.titleSuffix || '',
             settings: {
               siteTitle: resolved.siteTitle || previous.siteTitle || '',
               titleSuffix: resolved.titleSuffix || previous.titleSuffix || '',
+              tenantHomeLink: resolved.tenantHomeLink || previous.tenantHomeLink || null,
             },
             defaultPublicRoute: resolved.defaultPublicRoute || previous.defaultPublicRoute,
             defaultProtectedRoute: resolved.defaultProtectedRoute || previous.defaultProtectedRoute,
@@ -449,6 +516,7 @@ export default function TenantContextProvider({ children }) {
           localStorage.setItem('tenantLogoUrl', nextTenant.tenantLogoUrl)
           localStorage.setItem('tenantFaviconUrl', nextTenant.tenantFaviconUrl)
           localStorage.setItem('tenantChatAvatarUrl', nextTenant.tenantChatAvatarUrl)
+          localStorage.setItem('tenantHomeLink', JSON.stringify(nextTenant.tenantHomeLink || null))
           localStorage.setItem('tenantSiteTitle', nextTenant.siteTitle)
           localStorage.setItem('tenantTitleSuffix', nextTenant.titleSuffix)
           localStorage.setItem('defaultPublicRoute', nextTenant.defaultPublicRoute)

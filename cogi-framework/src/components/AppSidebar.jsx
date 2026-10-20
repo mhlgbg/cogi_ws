@@ -1,5 +1,6 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { useTenant } from '../contexts/TenantContext'
+import { resolveTenantHomeLink } from '../utils/tenantRouting'
 
 function toInitials(input) {
   const text = String(input || '').trim()
@@ -36,19 +37,35 @@ export default function AppSidebar({
   onCloseMobile,
 }) {
   const tenant = useTenant()
+  const navigate = useNavigate()
   const groups = Array.isArray(navItems) ? navItems : []
   const tenantName = tenant?.currentTenant?.tenantShortName
     || tenant?.currentTenant?.tenantName
     || tenant?.currentTenant?.tenantCode
     || 'Tenant'
-  const tenantCode = tenant?.currentTenant?.tenantCode || ''
-  const tenantLogoUrl = tenant?.currentTenant?.tenantLogoUrl || ''
+  const tenantCode = tenant?.currentTenant?.tenantCode || tenant?.resolvedTenant?.tenantCode || ''
+  const tenantLogoUrl = tenant?.currentTenant?.tenantLogoUrl || tenant?.resolvedTenant?.tenantLogoUrl || ''
+  const tenantHomeLink = resolveTenantHomeLink(tenant?.currentTenant || tenant?.resolvedTenant || {}, {
+    tenantCode,
+    isMainDomain: Boolean(tenant?.isMainDomain),
+  })
 
   const sidebarClassName = [
     'tenant-sidebar',
     collapsed ? 'is-collapsed' : '',
     mobileOpen ? 'is-mobile-open' : '',
   ].filter(Boolean).join(' ')
+
+  const handleTenantHomeNavigation = (event) => {
+    event.preventDefault()
+    if (!tenantHomeLink?.url) return
+
+    const targetUrl = /^https?:\/\//i.test(tenantHomeLink.url)
+      ? tenantHomeLink.url
+      : `${window.location.origin}${tenantHomeLink.url.startsWith('/') ? tenantHomeLink.url : `/${tenantHomeLink.url}`}`
+
+    window.open(targetUrl, '_blank', 'noopener,noreferrer')
+  }
 
   const handleNavigate = () => {
     if (typeof onCloseMobile === 'function') {
@@ -60,12 +77,53 @@ export default function AppSidebar({
     <aside className={sidebarClassName}>
       <div className="tenant-sidebar-header">
         {tenantLogoUrl ? (
-          <img src={tenantLogoUrl} alt={tenantName} className="tenant-sidebar-logo" />
+          <img
+            src={tenantLogoUrl}
+            alt={tenantName}
+            className="tenant-sidebar-logo"
+            onClick={tenantHomeLink?.url && tenantHomeLink.logoClickable !== false ? handleTenantHomeNavigation : undefined}
+            onKeyDown={tenantHomeLink?.url && tenantHomeLink.logoClickable !== false ? (event) => {
+              if (event?.key === 'Enter' || event?.key === ' ') {
+                event.preventDefault()
+                handleTenantHomeNavigation(event)
+              }
+            } : undefined}
+            role={tenantHomeLink?.url && tenantHomeLink.logoClickable !== false ? 'link' : undefined}
+            tabIndex={tenantHomeLink?.url && tenantHomeLink.logoClickable !== false ? 0 : undefined}
+            title={tenantHomeLink?.url && tenantHomeLink.logoClickable !== false ? (tenantHomeLink.label || 'Về trang chủ') : undefined}
+            style={tenantHomeLink?.url && tenantHomeLink.logoClickable !== false ? { cursor: 'pointer' } : undefined}
+          />
         ) : (
-          <div className="tenant-sidebar-logo tenant-sidebar-logo-fallback">{toInitials(tenantName)}</div>
+          <div
+            className="tenant-sidebar-logo tenant-sidebar-logo-fallback"
+            onClick={tenantHomeLink?.url && tenantHomeLink.logoClickable !== false ? handleTenantHomeNavigation : undefined}
+            onKeyDown={tenantHomeLink?.url && tenantHomeLink.logoClickable !== false ? (event) => {
+              if (event?.key === 'Enter' || event?.key === ' ') {
+                event.preventDefault()
+                handleTenantHomeNavigation(event)
+              }
+            } : undefined}
+            role={tenantHomeLink?.url && tenantHomeLink.logoClickable !== false ? 'link' : undefined}
+            tabIndex={tenantHomeLink?.url && tenantHomeLink.logoClickable !== false ? 0 : undefined}
+            title={tenantHomeLink?.url && tenantHomeLink.logoClickable !== false ? (tenantHomeLink.label || 'Về trang chủ') : undefined}
+            style={tenantHomeLink?.url && tenantHomeLink.logoClickable !== false ? { cursor: 'pointer' } : undefined}
+          >{toInitials(tenantName)}</div>
         )}
 
-        <div className="tenant-sidebar-brand-text">
+        <div
+          className="tenant-sidebar-brand-text"
+          onClick={tenantHomeLink?.url && tenantHomeLink.logoClickable !== false ? handleTenantHomeNavigation : undefined}
+          onKeyDown={tenantHomeLink?.url && tenantHomeLink.logoClickable !== false ? (event) => {
+            if (event?.key === 'Enter' || event?.key === ' ') {
+              event.preventDefault()
+              handleTenantHomeNavigation(event)
+            }
+          } : undefined}
+          role={tenantHomeLink?.url && tenantHomeLink.logoClickable !== false ? 'link' : undefined}
+          tabIndex={tenantHomeLink?.url && tenantHomeLink.logoClickable !== false ? 0 : undefined}
+          title={tenantHomeLink?.url && tenantHomeLink.logoClickable !== false ? (tenantHomeLink.label || 'Về trang chủ') : undefined}
+          style={tenantHomeLink?.url && tenantHomeLink.logoClickable !== false ? { cursor: 'pointer' } : undefined}
+        >
           <div className="tenant-sidebar-brand-name">{tenantName}</div>
           <div className="tenant-sidebar-brand-sub">{tenantCode || 'No tenant code'}</div>
         </div>

@@ -77,7 +77,7 @@ export default function GameDetailPage() {
       setDetail(result)
       setRuleDrafts(createRuleDrafts(result?.rules || []))
     } catch (requestError) {
-      setError(getGameApiMessage(requestError, 'Khong tai duoc chi tiet game'))
+      setError(getGameApiMessage(requestError, 'Không tải được chi tiết game'))
     } finally {
       setLoading(false)
     }
@@ -117,9 +117,9 @@ export default function GameDetailPage() {
       const nextDetail = await updateGameRules(id, payload)
       setDetail(nextDetail)
       setRuleDrafts(createRuleDrafts(nextDetail?.rules || []))
-      setSuccess('Da cap nhat XP rules cho game')
+      setSuccess('Đã cập nhật luật XP cho game')
     } catch (requestError) {
-      setError(getGameApiMessage(requestError, 'Khong cap nhat duoc XP rules'))
+      setError(getGameApiMessage(requestError, 'Không cập nhật được luật XP'))
     } finally {
       setSavingRules(false)
     }
@@ -133,9 +133,9 @@ export default function GameDetailPage() {
       const nextDetail = await publishGame(id)
       setDetail(nextDetail)
       setRuleDrafts(createRuleDrafts(nextDetail?.rules || []))
-      setSuccess('Da cong bo game thanh cong')
+      setSuccess('Đã công bố game thành công')
     } catch (requestError) {
-      setError(getGameApiMessage(requestError, 'Khong cong bo duoc game'))
+      setError(getGameApiMessage(requestError, 'Không công bố được game'))
     } finally {
       setPublishing(false)
     }
@@ -146,7 +146,7 @@ export default function GameDetailPage() {
 
     const confirmed = window.confirm(
       adminActions?.unpublish?.warning
-        || 'Ban co chac chan muon rut lai cong bo game nay ve draft?'
+      || 'Bạn có chắc chắn muốn rút lại công bố game này về draft?'
     )
     if (!confirmed) return
 
@@ -157,9 +157,9 @@ export default function GameDetailPage() {
       const nextDetail = await unpublishGame(id)
       setDetail(nextDetail)
       setRuleDrafts(createRuleDrafts(nextDetail?.rules || []))
-      setSuccess(nextDetail?.message || 'Da rut lai cong bo game thanh cong')
+      setSuccess(nextDetail?.message || 'Đã rút lại công bố game thành công')
     } catch (requestError) {
-      setError(getGameApiMessage(requestError, 'Khong rut lai cong bo duoc game'))
+      setError(getGameApiMessage(requestError, 'Không rút lại công bố được game'))
     } finally {
       setUnpublishing(false)
     }
@@ -182,7 +182,7 @@ export default function GameDetailPage() {
       const result = await createResetChallenge(id)
       setResetChallenge(result?.challenge || null)
     } catch (requestError) {
-      setError(getGameApiMessage(requestError, 'Khong tao duoc challenge reset'))
+      setError(getGameApiMessage(requestError, 'Không tạo được challenge reset'))
       setResetModalVisible(false)
     } finally {
       setResetLoading(false)
@@ -215,14 +215,14 @@ export default function GameDetailPage() {
         setDetail(result.detail)
         setRuleDrafts(createRuleDrafts(result.detail?.rules || []))
       }
-      setSuccess(result?.message || 'Da reset game thanh cong')
+      setSuccess(result?.message || 'Đã reset game thành công')
       setResetModalVisible(false)
       setResetChallenge(null)
       setResetReason('')
       setResetAnswer('')
       setResetConfirmed(false)
     } catch (requestError) {
-      setError(getGameApiMessage(requestError, 'Khong reset duoc game'))
+      setError(getGameApiMessage(requestError, 'Không reset được game'))
     } finally {
       setResetSubmitting(false)
     }
@@ -233,18 +233,18 @@ export default function GameDetailPage() {
       <div className='d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4'>
         <div>
           <CButton color='secondary' variant='outline' size='sm' className='mb-3' onClick={() => navigate('/games')}>
-            Quay lai danh sach game
+            Quay lại danh sách game
           </CButton>
           <h2 className='mb-1'>{game?.name || 'Chi tiet Game'}</h2>
           <p className='text-body-secondary mb-0'>
-            Xem vòng đời game, cấu hình luật XP, danh sách đăng ký và vị trí dành cho bảng xếp hạng Phase 3.
+            Xem vòng đời game, cấu hình luật XP, danh sách đăng ký và bảng xếp hạng.
           </p>
         </div>
         <div className='d-flex flex-wrap align-items-center gap-2'>
           <CBadge color={statusBadge.color}>{phaseLabel}</CBadge>
           {game?.adminStatus === 'draft' ? (
             <CButton color='success' onClick={handlePublish} disabled={publishing}>
-              {publishing ? 'Dang cong bo...' : 'Cong bo game'}
+              {publishing ? 'Đang công bố...' : 'Công bố game'}
             </CButton>
           ) : null}
         </div>
@@ -255,9 +255,9 @@ export default function GameDetailPage() {
       {phaseNotice ? <CAlert color={game?.effectivePhase?.isTrial ? 'warning' : 'info'}>{phaseNotice}</CAlert> : null}
 
       {loading ? (
-        <div className='d-flex align-items-center gap-2'><CSpinner size='sm' /> Dang tai chi tiet game...</div>
+        <div className='d-flex align-items-center gap-2'><CSpinner size='sm' /> Đang tải chi tiết game...</div>
       ) : !game ? (
-        <CAlert color='warning'>Khong tim thay game.</CAlert>
+        <CAlert color='warning'>Không tìm thấy game.</CAlert>
       ) : (
         <>
           <CRow className='g-3 mb-4'>
@@ -270,7 +270,7 @@ export default function GameDetailPage() {
           <CRow className='g-3 mb-4'>
             <CCol xl={6}>
               <CCard className='h-100 border-0 shadow-sm'>
-                <CCardHeader><strong>Thong tin game</strong></CCardHeader>
+                <CCardHeader><strong>Thông tin game</strong></CCardHeader>
                 <CCardBody>
                   <dl className='row mb-0'>
                     <dt className='col-sm-4'>Code</dt>
@@ -319,9 +319,9 @@ export default function GameDetailPage() {
                     </div>
                   </div>
                   <div className='border rounded p-3'>
-                    <div className='fw-semibold mb-1'>Thong ke XP theo giai doan</div>
+                    <div className='fw-semibold mb-1'>Thống kê XP theo giai đoạn</div>
                     <div className='text-body-secondary small'>
-                      Vung nay duoc giu cho Trial XP va Official XP khi XP Engine duoc trien khai o Phase 3.
+                      Vùng này dành cho Trial XP và Official XP khi XP Engine đi vào hoạt động.
                     </div>
                   </div>
                 </CCardBody>
@@ -332,10 +332,10 @@ export default function GameDetailPage() {
           <CRow className='g-3 mb-4'>
             <CCol xl={6}>
               <CCard className='border-0 shadow-sm h-100'>
-                <CCardHeader><strong>Bang xep hang Official</strong></CCardHeader>
+                <CCardHeader><strong>Bảng xếp hạng Official</strong></CCardHeader>
                 <CCardBody>
                   {!leaderboards?.officialTop10?.length ? (
-                    <div className='text-body-secondary'>Chua co du lieu leaderboard official.</div>
+                    <div className='text-body-secondary'>Chưa có dữ liệu bảng xếp hạng Official.</div>
                   ) : (
                     <div className='d-grid gap-2'>
                       {leaderboards.officialTop10.map((item) => (
@@ -354,10 +354,10 @@ export default function GameDetailPage() {
             </CCol>
             <CCol xl={6}>
               <CCard className='border-0 shadow-sm h-100'>
-                <CCardHeader><strong>Bang xep hang Trial</strong></CCardHeader>
+                <CCardHeader><strong>Bảng xếp hạng Trial</strong></CCardHeader>
                 <CCardBody>
                   {!leaderboards?.trialTop10?.length ? (
-                    <div className='text-body-secondary'>Chua co du lieu leaderboard trial.</div>
+                    <div className='text-body-secondary'>Chưa có dữ liệu bảng xếp hạng Trial.</div>
                   ) : (
                     <div className='d-grid gap-2'>
                       {leaderboards.trialTop10.map((item) => (
@@ -379,18 +379,18 @@ export default function GameDetailPage() {
           <CRow className='g-3 mb-4'>
             <CCol xl={6}>
               <CCard className='border-0 shadow-sm h-100'>
-                <CCardHeader><strong>Thong ke XP theo activity</strong></CCardHeader>
+                <CCardHeader><strong>Thống kê XP theo hoạt động</strong></CCardHeader>
                 <CCardBody>
                   {!xpSummary.byActivity?.length ? (
-                    <div className='text-body-secondary'>Chua co thong ke XP.</div>
+                    <div className='text-body-secondary'>Chưa có thống kê XP.</div>
                   ) : (
                     <CTable responsive hover align='middle'>
                       <CTableHead>
                         <CTableRow>
-                          <CTableHeaderCell>Activity</CTableHeaderCell>
+                          <CTableHeaderCell>Hoạt động</CTableHeaderCell>
                           <CTableHeaderCell>Phase</CTableHeaderCell>
-                          <CTableHeaderCell>So lan</CTableHeaderCell>
-                          <CTableHeaderCell>Tong XP</CTableHeaderCell>
+                          <CTableHeaderCell>Số lần</CTableHeaderCell>
+                          <CTableHeaderCell>Tổng XP</CTableHeaderCell>
                         </CTableRow>
                       </CTableHead>
                       <CTableBody>
@@ -410,10 +410,10 @@ export default function GameDetailPage() {
             </CCol>
             <CCol xl={6}>
               <CCard className='border-0 shadow-sm h-100'>
-                <CCardHeader><strong>Trang thai xu ly event</strong></CCardHeader>
+                <CCardHeader><strong>Trạng thái xử lý event</strong></CCardHeader>
                 <CCardBody>
                   {!xpSummary.eventStatus?.length ? (
-                    <div className='text-body-secondary'>Chua co event nao.</div>
+                    <div className='text-body-secondary'>Chưa có event nào.</div>
                   ) : (
                     <div className='d-grid gap-2'>
                       {xpSummary.eventStatus.map((item) => (
@@ -430,17 +430,17 @@ export default function GameDetailPage() {
           </CRow>
 
           <CCard className='border-0 shadow-sm mb-4'>
-            <CCardHeader><strong>Thao tac quan tri</strong></CCardHeader>
+            <CCardHeader><strong>Thao tác quản trị</strong></CCardHeader>
             <CCardBody>
               <div className='small text-body-secondary mb-3'>
-                Phien hien tai: Run version {game.currentRunVersion || 1}. Reset se mo mot phien moi va giu lai lich su phien cu de audit.
+                Phiên hiện tại: Run version {game.currentRunVersion || 1}. Reset sẽ mở một phiên mới và giữ lại lịch sử phiên cũ để audit.
               </div>
               <CRow className='g-3'>
                 <CCol lg={6}>
                   <div className='border rounded p-3 h-100'>
-                    <div className='fw-semibold mb-2'>Rut lai cong bo</div>
+                    <div className='fw-semibold mb-2'>Rút lại công bố</div>
                     <div className='small text-body-secondary mb-3'>
-                      Dua game ve draft de tam ngung dang ky/ghi XP moi truoc Official. Du lieu participants, events va ledgers da co se duoc giu nguyen de audit.
+                      Đưa game về draft để tạm ngừng đăng ký/ghi XP mới trước Official. Dữ liệu participants, events và ledgers đã có sẽ được giữ nguyên để audit.
                     </div>
                     {adminActions?.unpublish?.reason ? (
                       <CAlert color='warning' className='py-2 mb-3'>{adminActions.unpublish.reason}</CAlert>
@@ -454,29 +454,29 @@ export default function GameDetailPage() {
                       disabled={!adminActions?.unpublish?.available || unpublishing}
                       onClick={handleUnpublish}
                     >
-                      {unpublishing ? 'Dang xu ly...' : 'Rut lai cong bo'}
+                      {unpublishing ? 'Đang xử lý...' : 'Rút lại công bố'}
                     </CButton>
                   </div>
                 </CCol>
 
                 <CCol lg={6}>
                   <div className='border rounded p-3 h-100'>
-                    <div className='fw-semibold mb-2 text-danger'>Reset du lieu choi</div>
+                    <div className='fw-semibold mb-2 text-danger'>Reset dữ liệu chơi</div>
                     <div className='small text-body-secondary mb-3'>
-                      Chi reset du lieu phien hien tai. Rules, Game Type va cau hinh game duoc giu nguyen, nhung nguoi choi se phai dang ky lai o phien moi.
+                      Chỉ reset dữ liệu phiên hiện tại. Rules, Game Type và cấu hình game được giữ nguyên, nhưng người chơi sẽ phải đăng ký lại ở phiên mới.
                     </div>
                     {adminActions?.reset?.reason ? (
                       <CAlert color='warning' className='py-2 mb-3'>{adminActions.reset.reason}</CAlert>
                     ) : null}
                     <CAlert color='danger' className='py-2 mb-3'>
-                      {adminActions?.reset?.warning || 'Reset chi duoc phep sau khi game da ve draft va khong duoc thao tac nham.'}
+                      {adminActions?.reset?.warning || 'Reset chỉ được phép sau khi game đã về draft và không được thao tác nhầm.'}
                     </CAlert>
                     <CButton
                       color='danger'
                       disabled={!adminActions?.reset?.available || resetLoading || resetSubmitting}
                       onClick={handleOpenResetModal}
                     >
-                      {resetLoading ? 'Dang tao challenge...' : 'Reset du lieu choi'}
+                      {resetLoading ? 'Đang tạo challenge...' : 'Reset dữ liệu chơi'}
                     </CButton>
                   </div>
                 </CCol>
@@ -588,16 +588,16 @@ export default function GameDetailPage() {
           <CRow className='g-3 mb-4'>
             <CCol xl={6}>
               <CCard className='border-0 shadow-sm h-100'>
-                <CCardHeader><strong>Lich su XP gan day</strong></CCardHeader>
+                <CCardHeader><strong>Lịch sử XP gần đây</strong></CCardHeader>
                 <CCardBody>
                   {!xpSummary.recentLedgers?.length ? (
-                    <div className='text-body-secondary'>Chua co ledger nao.</div>
+                    <div className='text-body-secondary'>Chưa có lịch sử XP.</div>
                   ) : (
                     <CTable responsive hover align='middle'>
                       <CTableHead>
                         <CTableRow>
-                          <CTableHeaderCell>Thoi diem</CTableHeaderCell>
-                          <CTableHeaderCell>Activity</CTableHeaderCell>
+                          <CTableHeaderCell>Thời điểm</CTableHeaderCell>
+                          <CTableHeaderCell>Hoạt động</CTableHeaderCell>
                           <CTableHeaderCell>Phase</CTableHeaderCell>
                           <CTableHeaderCell>XP</CTableHeaderCell>
                         </CTableRow>
@@ -619,18 +619,18 @@ export default function GameDetailPage() {
             </CCol>
             <CCol xl={6}>
               <CCard className='border-0 shadow-sm h-100'>
-                <CCardHeader><strong>Event processing status</strong></CCardHeader>
+                <CCardHeader><strong>Trạng thái xử lý event gần đây</strong></CCardHeader>
                 <CCardBody>
                   {!recentEvents.length ? (
-                    <div className='text-body-secondary'>Chua co event nao.</div>
+                    <div className='text-body-secondary'>Chưa có event nào.</div>
                   ) : (
                     <CTable responsive hover align='middle'>
                       <CTableHead>
                         <CTableRow>
-                          <CTableHeaderCell>Thoi diem</CTableHeaderCell>
-                          <CTableHeaderCell>Activity</CTableHeaderCell>
-                          <CTableHeaderCell>Status</CTableHeaderCell>
-                          <CTableHeaderCell>Loi</CTableHeaderCell>
+                          <CTableHeaderCell>Thời điểm</CTableHeaderCell>
+                          <CTableHeaderCell>Hoạt động</CTableHeaderCell>
+                          <CTableHeaderCell>Trạng thái</CTableHeaderCell>
+                          <CTableHeaderCell>Lỗi</CTableHeaderCell>
                         </CTableRow>
                       </CTableHead>
                       <CTableBody>
@@ -651,7 +651,7 @@ export default function GameDetailPage() {
           </CRow>
 
           <CCard className='border-0 shadow-sm'>
-            <CCardHeader><strong>Danh sach nguoi dang ky</strong></CCardHeader>
+            <CCardHeader><strong>Danh sách người đăng ký</strong></CCardHeader>
             <CCardBody>
               {!detail?.participants?.length ? (
                 <div className='text-body-secondary'>Chưa có người đăng ký game này.</div>
@@ -692,19 +692,19 @@ export default function GameDetailPage() {
 
       <CModal visible={resetModalVisible} onClose={handleCloseResetModal} backdrop='static'>
         <CModalHeader>
-          <CModalTitle>Reset du lieu choi</CModalTitle>
+          <CModalTitle>Reset dữ liệu chơi</CModalTitle>
         </CModalHeader>
         <CModalBody>
           {resetLoading ? (
-            <div className='d-flex align-items-center gap-2'><CSpinner size='sm' /> Dang tao challenge...</div>
+            <div className='d-flex align-items-center gap-2'><CSpinner size='sm' /> Đang tạo challenge...</div>
           ) : (
             <>
               <CAlert color='danger'>
-                Thao tac nay se mo mot run version moi. Participant, leaderboard va tong XP hien tai se tro ve trang thai rong; nguoi choi phai dang ky lai.
+                Thao tác này sẽ mở một run version mới. Participant, leaderboard và tổng XP hiện tai se tro ve trang thai rong; nguoi choi phai dang ky lai.
               </CAlert>
 
               <div className='mb-3'>
-                <CFormLabel htmlFor='reset-reason'>Ly do reset</CFormLabel>
+                <CFormLabel htmlFor='reset-reason'>Lý do reset</CFormLabel>
                 <CFormTextarea
                   id='reset-reason'
                   rows={3}
@@ -716,18 +716,18 @@ export default function GameDetailPage() {
 
               {resetChallenge ? (
                 <div className='border rounded p-3 mb-3 bg-light'>
-                  <div className='fw-semibold mb-2'>Xac nhan bang phep nhan</div>
+                  <div className='fw-semibold mb-2'>Xác nhận bằng phép nhân</div>
                   <div className='mb-2'>
-                    Nhap ket qua cua phep tinh: <strong>{resetChallenge.leftOperand} x {resetChallenge.rightOperand}</strong>
+                    Nhập kết quả của phép tính: <strong>{resetChallenge.leftOperand} x {resetChallenge.rightOperand}</strong>
                   </div>
                   <div className='small text-body-secondary'>
-                    Challenge het han luc: {formatDateTime(resetChallenge.expiresAt)}. So lan con lai: {resetChallenge.remainingAttempts}.
+                    Challenge hết hạn lúc: {formatDateTime(resetChallenge.expiresAt)}. Số lần còn lại: {resetChallenge.remainingAttempts}.
                   </div>
                 </div>
               ) : null}
 
               <div className='mb-3'>
-                <CFormLabel htmlFor='reset-answer'>Ket qua phep nhan</CFormLabel>
+                <CFormLabel htmlFor='reset-answer'>Kết quả phép nhân</CFormLabel>
                 <CFormInput
                   id='reset-answer'
                   type='number'
@@ -739,7 +739,7 @@ export default function GameDetailPage() {
 
               <CFormCheck
                 id='reset-confirmed'
-                label='Toi hieu reset se tao mot phien choi moi va nguoi choi phai dang ky lai.'
+                label='Tôi hiểu reset sẽ tạo một phiên chơi mới và người chơi phải đăng ký lại.'
                 checked={Boolean(resetConfirmed)}
                 onChange={(event) => setResetConfirmed(event.target.checked)}
                 disabled={resetSubmitting}
@@ -749,7 +749,7 @@ export default function GameDetailPage() {
         </CModalBody>
         <CModalFooter>
           <CButton color='secondary' variant='outline' onClick={handleCloseResetModal} disabled={resetLoading || resetSubmitting}>
-            Dong
+            Đóng
           </CButton>
           <CButton
             color='danger'
@@ -763,7 +763,7 @@ export default function GameDetailPage() {
             }
             onClick={handleConfirmReset}
           >
-            {resetSubmitting ? 'Dang reset...' : 'Xac nhan reset'}
+            {resetSubmitting ? 'Đang reset...' : 'Xác nhận reset'}
           </CButton>
         </CModalFooter>
       </CModal>

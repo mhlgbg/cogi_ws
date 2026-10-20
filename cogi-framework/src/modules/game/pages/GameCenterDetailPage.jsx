@@ -49,7 +49,7 @@ export default function GameCenterDetailPage() {
       const result = await getGameCenterDetail(id)
       setDetail(result)
     } catch (requestError) {
-      setError(getGameApiMessage(requestError, 'Khong tai duoc chi tiet Game Center'))
+      setError(getGameApiMessage(requestError, 'Không tải được chi tiết Game Center'))
     } finally {
       setLoading(false)
     }
@@ -88,9 +88,9 @@ export default function GameCenterDetailPage() {
     try {
       const result = await registerForGame(id)
       await loadDetail()
-      setSuccess(result?.created === false ? 'Ban da dang ky game nay truoc do.' : 'Dang ky tham gia game thanh cong.')
+      setSuccess(result?.created === false ? 'Bạn đã đăng ký game này trước đó.' : 'Đăng ký tham gia game thành công.')
     } catch (requestError) {
-      setError(getGameApiMessage(requestError, 'Khong dang ky duoc game'))
+      setError(getGameApiMessage(requestError, 'Không đăng ký được game'))
     } finally {
       setSubmitting(false)
     }
@@ -99,7 +99,7 @@ export default function GameCenterDetailPage() {
   return (
     <div className='container-fluid py-4'>
       <CButton color='secondary' variant='outline' size='sm' className='mb-3' onClick={() => navigate('/game-center')}>
-        Quay lai Game Center
+        Quay lại Game Center
       </CButton>
 
       {error ? <CAlert color='danger'>{error}</CAlert> : null}
@@ -107,9 +107,9 @@ export default function GameCenterDetailPage() {
       {phaseNotice ? <CAlert color={game?.effectivePhase?.isTrial ? 'warning' : 'info'}>{phaseNotice}</CAlert> : null}
 
       {loading ? (
-        <div className='d-flex align-items-center gap-2'><CSpinner size='sm' /> Dang tai chi tiet game...</div>
+        <div className='d-flex align-items-center gap-2'><CSpinner size='sm' /> Đang tải chi tiết game...</div>
       ) : !game ? (
-        <CAlert color='warning'>Khong tim thay game.</CAlert>
+        <CAlert color='warning'>Không tìm thấy game.</CAlert>
       ) : (
         <>
           <CCard className='border-0 shadow-sm mb-3'>
@@ -117,16 +117,16 @@ export default function GameCenterDetailPage() {
               <div>
                 <div className='small text-body-secondary mb-1'>{game.code}</div>
                 <h2 className='mb-1'>{game.name}</h2>
-                <p className='text-body-secondary mb-2'>{game.description || 'Game XP Challenge da duoc cong bo cho tenant.'}</p>
+                <p className='text-body-secondary mb-2'>{game.description || 'Game XP Challenge đã được công bố cho tenant.'}</p>
                 <div className='d-flex flex-wrap align-items-center gap-2'>
                   <CBadge color={lifecycleBadge.color}>{phaseLabel}</CBadge>
                   <CBadge color={registrationBadge.color}>{registrationBadge.label}</CBadge>
-                  {game.myParticipation?.id ? <CBadge color='success'>Da tham gia</CBadge> : <CBadge color='secondary'>Chua tham gia</CBadge>}
+                  {game.myParticipation?.id ? <CBadge color='success'>Đã tham gia</CBadge> : <CBadge color='secondary'>Chưa tham gia</CBadge>}
                 </div>
               </div>
               <div className='d-flex flex-column align-items-lg-end gap-2'>
                 <CButton color='primary' disabled={!game.registration?.canRegister || submitting} onClick={handleRegister}>
-                  {submitting ? 'Dang xu ly...' : game.myParticipation?.id ? 'Da dang ky' : 'Dang ky tham gia'}
+                  {submitting ? 'Đang xử lý...' : game.myParticipation?.id ? 'Đã đăng ký' : 'Đăng ký tham gia'}
                 </CButton>
                 <div className='small text-body-secondary text-lg-end'>Run version hiện tại: {game.currentRunVersion || 1}</div>
               </div>

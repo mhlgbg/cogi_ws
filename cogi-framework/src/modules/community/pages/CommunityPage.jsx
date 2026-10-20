@@ -5,7 +5,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { useFeature } from '../../../contexts/FeatureContext'
 import { useTenant } from '../../../contexts/TenantContext'
 import { resolveMediaUrl } from '../../../utils/mediaUrl'
-import { buildTenantUrl } from '../../../utils/tenantRouting'
+import { buildTenantUrl, resolveTenantHomeLink } from '../../../utils/tenantRouting'
 import SimpleHtmlEditor from '../../admission-management/components/SimpleHtmlEditor'
 import { sanitizeQuickMessageHtml } from '../../crm/components/quickMessageHtml'
 import { getActiveCommunityConfig, getCommunityConfigPreview } from '../services/communityConfigService'
@@ -1636,6 +1636,10 @@ export default function CommunityPage() {
   const authRequiredError = !isAuthenticated && isAuthRequiredCommunityMessage(errorMessage)
   const tenantMemberRequiredError = isAuthenticated && isTenantMemberRequiredMessage(errorMessage)
   const isTenantMember = communityActor?.tenantMember === true
+  const tenantHomeLink = resolveTenantHomeLink(tenant?.currentTenant || tenant?.resolvedTenant || {}, {
+    tenantCode,
+    isMainDomain,
+  })
   const userAvatarUrl = resolveUserAvatarUrl(auth?.user)
   const activePolicyConfig = postingContext?.policyConfig || snapshot?.config?.policyConfig || {}
   const routeGroupRequiresApproval = routeMode === 'group-feed' && routeGroupId && routeGroup
@@ -1889,6 +1893,27 @@ export default function CommunityPage() {
 
   const userName = toText(auth?.user?.fullName || auth?.user?.username || auth?.user?.email)
   const feedEmptyCopy = resolveFeedEmptyCopy(routeMode)
+
+  function handleTenantHomeNavigation(event) {
+    if (event && typeof event.preventDefault === 'function') {
+      event.preventDefault()
+    }
+
+    if (!tenantHomeLink?.url) return
+
+    const targetUrl = /^https?:\/\//i.test(tenantHomeLink.url)
+      ? tenantHomeLink.url
+      : `${window.location.origin}${tenantHomeLink.url.startsWith('/') ? tenantHomeLink.url : `/${tenantHomeLink.url}`}`
+
+    window.open(targetUrl, '_blank', 'noopener,noreferrer')
+  }
+
+  function handleBrandKeyDown(event) {
+    if (!tenantHomeLink?.url || event?.key !== 'Enter' && event?.key !== ' ') return
+
+    event.preventDefault()
+    handleTenantHomeNavigation(event)
+  }
 
   function openLoginFromCommunity() {
     navigate(loginPath)
@@ -2333,11 +2358,39 @@ export default function CommunityPage() {
         <div className='community-header-left'>
           <button type='button' className='community-hamburger' onClick={() => setMobileMenuOpen(true)}>☰</button>
           {identity.tenantLogoUrl ? (
-            <img src={identity.tenantLogoUrl} alt={identity.communityName} className='community-logo' />
+            <img
+              src={identity.tenantLogoUrl}
+              alt={identity.communityName}
+              className='community-logo'
+              onClick={tenantHomeLink?.url && tenantHomeLink.showInCommunityHeader !== false && tenantHomeLink.logoClickable !== false ? handleTenantHomeNavigation : undefined}
+              onKeyDown={tenantHomeLink?.url && tenantHomeLink.showInCommunityHeader !== false && tenantHomeLink.logoClickable !== false ? handleBrandKeyDown : undefined}
+              role={tenantHomeLink?.url && tenantHomeLink.showInCommunityHeader !== false && tenantHomeLink.logoClickable !== false ? 'link' : undefined}
+              tabIndex={tenantHomeLink?.url && tenantHomeLink.showInCommunityHeader !== false && tenantHomeLink.logoClickable !== false ? 0 : undefined}
+              title={tenantHomeLink?.url && tenantHomeLink.showInCommunityHeader !== false && tenantHomeLink.logoClickable !== false ? (tenantHomeLink.label || 'Về trang chủ') : undefined}
+              style={tenantHomeLink?.url && tenantHomeLink.showInCommunityHeader !== false && tenantHomeLink.logoClickable !== false ? { cursor: 'pointer' } : undefined}
+            />
           ) : (
-            <div className='community-logo community-logo-fallback'>{toInitials(identity.communityName)}</div>
+            <div
+              className='community-logo community-logo-fallback'
+              onClick={tenantHomeLink?.url && tenantHomeLink.showInCommunityHeader !== false && tenantHomeLink.logoClickable !== false ? handleTenantHomeNavigation : undefined}
+              onKeyDown={tenantHomeLink?.url && tenantHomeLink.showInCommunityHeader !== false && tenantHomeLink.logoClickable !== false ? handleBrandKeyDown : undefined}
+              role={tenantHomeLink?.url && tenantHomeLink.showInCommunityHeader !== false && tenantHomeLink.logoClickable !== false ? 'link' : undefined}
+              tabIndex={tenantHomeLink?.url && tenantHomeLink.showInCommunityHeader !== false && tenantHomeLink.logoClickable !== false ? 0 : undefined}
+              title={tenantHomeLink?.url && tenantHomeLink.showInCommunityHeader !== false && tenantHomeLink.logoClickable !== false ? (tenantHomeLink.label || 'Về trang chủ') : undefined}
+              style={tenantHomeLink?.url && tenantHomeLink.showInCommunityHeader !== false && tenantHomeLink.logoClickable !== false ? { cursor: 'pointer' } : undefined}
+            >
+              {toInitials(identity.communityName)}
+            </div>
           )}
-          <div className='community-header-copy'>
+          <div
+            className='community-header-copy'
+            onClick={tenantHomeLink?.url && tenantHomeLink.showInCommunityHeader !== false && tenantHomeLink.logoClickable !== false ? handleTenantHomeNavigation : undefined}
+            onKeyDown={tenantHomeLink?.url && tenantHomeLink.showInCommunityHeader !== false && tenantHomeLink.logoClickable !== false ? handleBrandKeyDown : undefined}
+            role={tenantHomeLink?.url && tenantHomeLink.showInCommunityHeader !== false && tenantHomeLink.logoClickable !== false ? 'link' : undefined}
+            tabIndex={tenantHomeLink?.url && tenantHomeLink.showInCommunityHeader !== false && tenantHomeLink.logoClickable !== false ? 0 : undefined}
+            title={tenantHomeLink?.url && tenantHomeLink.showInCommunityHeader !== false && tenantHomeLink.logoClickable !== false ? (tenantHomeLink.label || 'Về trang chủ') : undefined}
+            style={tenantHomeLink?.url && tenantHomeLink.showInCommunityHeader !== false && tenantHomeLink.logoClickable !== false ? { cursor: 'pointer' } : undefined}
+          >
             <div className='community-title'>{identity.communityName}</div>
             {identity.slogan ? <div className='community-slogan'>{identity.slogan}</div> : null}
           </div>

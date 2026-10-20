@@ -10,7 +10,9 @@ import {
   CNavItem,
 } from '@coreui/react'
 import { useEffect, useMemo, useState } from 'react'
-import { NavLink, Outlet, useLocation, useParams } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
+import { useFeature } from '../contexts/FeatureContext'
 import { useTenant } from '../contexts/TenantContext'
 import PublicChatWidget from '../components/public/PublicChatWidget.jsx'
 import { getTenantConfigByKey } from '../modules/content-management/services/tenantConfigService'
@@ -242,8 +244,11 @@ function resolvePublicPageTitle(pathname, tenantCode) {
 }
 
 export default function PublicLayout({ children }) {
+  const auth = useAuth()
+  const feature = useFeature()
   const tenant = useTenant()
   const location = useLocation()
+  const navigate = useNavigate()
   const params = useParams()
   const [journalMenuItems, setJournalMenuItems] = useState(defaultMenu)
   const [journalMenuTheme, setJournalMenuTheme] = useState(defaultTheme)
@@ -266,6 +271,74 @@ export default function PublicLayout({ children }) {
   const tenantCode = String(params?.tenantCode || tenant?.currentTenant?.tenantCode || tenant?.resolvedTenant?.tenantCode || '').trim()
   const isMainDomain = Boolean(tenant?.isMainDomain)
   const homePath = buildTenantUrl('/', { tenantCode, isMainDomain }) || '/'
+  const isAuthenticated = Boolean(auth?.isAuthenticated)
+
+  const loginPath = useMemo(() => {
+    const nextPath = buildTenantUrl('/login', { tenantCode, isMainDomain }) || '/login'
+    const redirectPath = `${location.pathname}${location.search || ''}`
+    if (!redirectPath || !redirectPath.startsWith('/')) return nextPath
+    if (redirectPath === '/login' || redirectPath === '/forgot-password' || redirectPath === '/reset-password' || redirectPath === '/activate' || redirectPath === '/set-password') {
+      return nextPath
+    }
+
+    const nextUrl = new URL(nextPath, 'http://localhost')
+    nextUrl.searchParams.set('redirect', redirectPath)
+    return `${nextUrl.pathname}${nextUrl.search}`
+  }, [location.pathname, location.search, isMainDomain, tenantCode])
+
+  const accountUserName = useMemo(() => {
+    const fullName = String(auth?.user?.fullName || '').trim()
+    const username = String(auth?.user?.username || '').trim()
+    const email = String(auth?.user?.email || '').trim()
+    return fullName || username || email || 'Người dùng'
+  }, [auth?.user?.email, auth?.user?.fullName, auth?.user?.username])
+
+  const accountAvatarText = useMemo(() => {
+    const initials = accountUserName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+      .join('')
+    return initials || 'U'
+  }, [accountUserName])
+
+  const personalPath = useMemo(() => (
+    tenant?.resolveProtectedRoutePath?.({
+      tenantCode,
+      isMainDomain,
+      forceTenantPath: true,
+    }) || buildTenantUrl('/dashboard', { tenantCode, isMainDomain: true }) || '/dashboard'
+  ), [isMainDomain, tenant, tenantCode])
+
+  const accountMenuItems = useMemo(() => {
+    const items = []
+
+    if (!isAuthenticated) return items
+
+    items.push({ label: 'Không gian của tôi', to: personalPath })
+    items.push({ label: 'Community', to: buildTenantUrl('/community', { tenantCode, isMainDomain }) || '/community' })
+
+    if (tenantCode) {
+      const sportsProfilePath = buildTenantUrl('/sports/me', { tenantCode, isMainDomain }) || '/sports/me'
+      items.push({ label: 'Hồ sơ thể thao', to: sportsProfilePath })
+    }
+
+    if (isAuthenticated && feature?.hasFeature?.('game.center.view')) {
+      const gameCenterPath = buildTenantUrl('/game-center', { tenantCode, isMainDomain }) || '/game-center'
+      items.push({ label: 'Game Center', to: gameCenterPath })
+    }
+
+    return items
+  }, [feature, isAuthenticated, isMainDomain, personalPath, tenantCode])
+
+  const handleLogout = () => {
+    auth?.logout?.()
+  }
+
+  const handleLoginNavigate = () => {
+    navigate(loginPath)
+  }
 
   const resolvedHeaderHtml = useMemo(
     () => interpolatePublicLayoutHtml(headerHtml, {
@@ -360,162 +433,203 @@ export default function PublicLayout({ children }) {
   return (
     <div className='public-layout' style={publicLayoutThemeVars}>
       <CHeader className='public-layout-header border-bottom'>
-        <CContainer className='public-layout-shell'>
-          {resolvedHeaderHtml ? (
-            <div
-              className='public-layout-header-html'
-              dangerouslySetInnerHTML={{ __html: resolvedHeaderHtml }}
-            />
-          ) : (
-            <div className='public-layout-brand'>
-              {tenantLogoUrl ? (
-                <img src={tenantLogoUrl} alt={tenantName} className='public-layout-logo' />
-              ) : (
-                <div className='public-layout-logo public-layout-logo-fallback'>
-                  {toInitials(tenantName)}
-                </div>
-              )}
+        <CContainer className='public-layout-shell public-layout-header-shell'>
+          <div className='public-layout-header-content'>
+            {resolvedHeaderHtml ? (
+              <div
+                className='public-layout-header-html'
+                dangerouslySetInnerHTML={{ __html: resolvedHeaderHtml }}
+              />
+            ) : (
+              <div className='public-layout-brand'>
+                {tenantLogoUrl ? (
+                  <img src={tenantLogoUrl} alt={tenantName} className='public-layout-logo' />
+                ) : (
+                  <div className='public-layout-logo public-layout-logo-fallback'>
+                    {toInitials(tenantName)}
+                  </div>
+                )}
 
-              <div className='public-layout-brand-copy'>
-                <div className='public-layout-brand-label'>Tenant</div>
-                <div className='public-layout-brand-name'>{tenantName}</div>
+                <div className='public-layout-brand-copy'>
+                  <div className='public-layout-brand-label'>Tenant</div>
+                  <div className='public-layout-brand-name'>{tenantName}</div>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </CContainer>
       </CHeader>
 
       <div className='public-layout-navbar-wrap border-bottom'>
-        <CContainer className='public-layout-shell'>
-          <div className='public-layout-mobile-bar'>
-            <button
-              type='button'
-              className={`public-layout-mobile-toggle${isMobileMenuOpen ? ' active' : ''}`}
-              onClick={() => setIsMobileMenuOpen((prev) => !prev)}
-              aria-label={isMobileMenuOpen ? 'Đóng menu Journal' : 'Mở menu Journal'}
-              aria-expanded={isMobileMenuOpen}
-            >
-              <span />
-              <span />
-              <span />
-            </button>
-          </div>
-
-          <CNav className={`public-layout-nav${isMobileMenuOpen ? ' public-layout-nav-open' : ''}`}>
-            <CNavItem>
-              <NavLink
-                to={homePath}
-                end
-                aria-label='Trang chủ'
-                className={({ isActive }) => `nav-link public-layout-nav-link public-layout-home-link${isActive ? ' active' : ''}`}
+        <CContainer className='public-layout-shell public-layout-navigation-shell'>
+          <div className='public-layout-navigation-group'>
+            <div className='public-layout-mobile-bar'>
+              <button
+                type='button'
+                className={`public-layout-mobile-toggle${isMobileMenuOpen ? ' active' : ''}`}
+                onClick={() => setIsMobileMenuOpen((prev) => !prev)}
+                aria-label={isMobileMenuOpen ? 'Đóng menu Journal' : 'Mở menu Journal'}
+                aria-expanded={isMobileMenuOpen}
               >
-                <svg viewBox='0 0 24 24' aria-hidden='true' className='public-layout-home-icon'>
-                  <path d='M3 10.75 12 3l9 7.75v9.75a1 1 0 0 1-1 1h-5.5v-7h-5v7H4a1 1 0 0 1-1-1z' fill='currentColor' />
-                </svg>
-              </NavLink>
-            </CNavItem>
-            {journalNavLinks.map((item) => {
-              const itemKey = `${item.label}:${item.path || 'group'}`
+                <span />
+                <span />
+                <span />
+              </button>
+            </div>
 
-              if (item.children?.length) {
-                const isActive = hasActiveDescendant(item, location.pathname)
+            <CNav className={`public-layout-nav${isMobileMenuOpen ? ' public-layout-nav-open' : ''}`}>
+              <CNavItem>
+                <NavLink
+                  to={homePath}
+                  end
+                  aria-label='Trang chủ'
+                  className={({ isActive }) => `nav-link public-layout-nav-link public-layout-home-link${isActive ? ' active' : ''}`}
+                >
+                  <svg viewBox='0 0 24 24' aria-hidden='true' className='public-layout-home-icon'>
+                    <path d='M3 10.75 12 3l9 7.75v9.75a1 1 0 0 1-1 1h-5.5v-7h-5v7H4a1 1 0 0 1-1-1z' fill='currentColor' />
+                  </svg>
+                </NavLink>
+              </CNavItem>
+              {journalNavLinks.map((item) => {
+                const itemKey = `${item.label}:${item.path || 'group'}`
 
-                return (
-                  <CDropdown key={itemKey} variant='nav-item' className='public-layout-nav-dropdown'>
-                    {item.path ? (
-                      <div className={`public-layout-nav-dropdown-trigger${isActive ? ' active' : ''}`}>
-                        {item.isExternal ? (
-                          <a href={item.to} className='nav-link public-layout-nav-link public-layout-nav-parent-link'>{item.label}</a>
-                        ) : (
-                          <NavLink
-                            to={item.to}
-                            end={item.to === homePath}
-                            className={({ isActive: isCurrent }) => `nav-link public-layout-nav-link public-layout-nav-parent-link${isCurrent || isActive ? ' active' : ''}`}
-                          >
-                            {item.label}
-                          </NavLink>
-                        )}
+                if (item.children?.length) {
+                  const isActive = hasActiveDescendant(item, location.pathname)
+
+                  return (
+                    <CDropdown key={itemKey} variant='nav-item' className='public-layout-nav-dropdown'>
+                      {item.path ? (
+                        <div className={`public-layout-nav-dropdown-trigger${isActive ? ' active' : ''}`}>
+                          {item.isExternal ? (
+                            <a href={item.to} className='nav-link public-layout-nav-link public-layout-nav-parent-link'>{item.label}</a>
+                          ) : (
+                            <NavLink
+                              to={item.to}
+                              end={item.to === homePath}
+                              className={({ isActive: isCurrent }) => `nav-link public-layout-nav-link public-layout-nav-parent-link${isCurrent || isActive ? ' active' : ''}`}
+                            >
+                              {item.label}
+                            </NavLink>
+                          )}
+                          <CDropdownToggle
+                            caret
+                            color='ghost'
+                            className={`nav-link public-layout-nav-link public-layout-nav-toggle${isActive ? ' active' : ''}`}
+                          />
+                        </div>
+                      ) : (
                         <CDropdownToggle
                           caret
                           color='ghost'
                           className={`nav-link public-layout-nav-link public-layout-nav-toggle${isActive ? ' active' : ''}`}
-                        />
-                      </div>
+                        >
+                          {item.label}
+                        </CDropdownToggle>
+                      )}
+                      <CDropdownMenu>
+                        {flattenedDropdownItemsByLabel[item.label]?.map((dropdownItem, index) => {
+                          const hasChildren = Array.isArray(dropdownItem.children) && dropdownItem.children.length > 0
+
+                          if (hasChildren && !dropdownItem.path) {
+                            return (
+                              <div
+                                key={`${dropdownItem.label}:${index}`}
+                                className='public-layout-dropdown-label'
+                                style={{ paddingLeft: `${0.75 + dropdownItem.depth * 0.85}rem` }}
+                              >
+                                {dropdownItem.label}
+                              </div>
+                            )
+                          }
+
+                          if (!dropdownItem.path) return null
+
+                          const dropdownPaddingLeft = `${0.75 + dropdownItem.depth * 0.85}rem`
+
+                          return (
+                            dropdownItem.isExternal ? (
+                              <CDropdownItem
+                                key={`${dropdownItem.label}:${dropdownItem.path}:${index}`}
+                                href={dropdownItem.to}
+                                target='_blank'
+                                rel='noreferrer'
+                                style={{ paddingLeft: dropdownPaddingLeft }}
+                              >
+                                {dropdownItem.label}
+                              </CDropdownItem>
+                            ) : (
+                              <NavLink
+                                key={`${dropdownItem.label}:${dropdownItem.path}:${index}`}
+                                to={dropdownItem.to}
+                                end={normalizePathname(dropdownItem.path) === '/'}
+                                className={({ isActive }) => `dropdown-item${isActive ? ' active' : ''}`}
+                                style={{ paddingLeft: dropdownPaddingLeft }}
+                              >
+                                {dropdownItem.label}
+                              </NavLink>
+                            )
+                          )
+                        })}
+                      </CDropdownMenu>
+                    </CDropdown>
+                  )
+                }
+
+                return (
+                  <CNavItem key={itemKey}>
+                    {item.isExternal ? (
+                      <a href={item.to} className='nav-link public-layout-nav-link'>{item.label}</a>
                     ) : (
-                      <CDropdownToggle
-                        caret
-                        color='ghost'
-                        className={`nav-link public-layout-nav-link public-layout-nav-toggle${isActive ? ' active' : ''}`}
+                      <NavLink
+                        to={item.to}
+                        end={item.to === homePath}
+                        className={({ isActive }) => `nav-link public-layout-nav-link${isActive ? ' active' : ''}`}
                       >
                         {item.label}
-                      </CDropdownToggle>
+                      </NavLink>
                     )}
-                    <CDropdownMenu>
-                      {flattenedDropdownItemsByLabel[item.label]?.map((dropdownItem, index) => {
-                        const hasChildren = Array.isArray(dropdownItem.children) && dropdownItem.children.length > 0
-
-                        if (hasChildren && !dropdownItem.path) {
-                          return (
-                            <div
-                              key={`${dropdownItem.label}:${index}`}
-                              className='public-layout-dropdown-label'
-                              style={{ paddingLeft: `${0.75 + dropdownItem.depth * 0.85}rem` }}
-                            >
-                              {dropdownItem.label}
-                            </div>
-                          )
-                        }
-
-                        if (!dropdownItem.path) return null
-
-                        const dropdownPaddingLeft = `${0.75 + dropdownItem.depth * 0.85}rem`
-
-                        return (
-                          dropdownItem.isExternal ? (
-                            <CDropdownItem
-                              key={`${dropdownItem.label}:${dropdownItem.path}:${index}`}
-                              href={dropdownItem.to}
-                              target='_blank'
-                              rel='noreferrer'
-                              style={{ paddingLeft: dropdownPaddingLeft }}
-                            >
-                              {dropdownItem.label}
-                            </CDropdownItem>
-                          ) : (
-                            <NavLink
-                              key={`${dropdownItem.label}:${dropdownItem.path}:${index}`}
-                              to={dropdownItem.to}
-                              end={normalizePathname(dropdownItem.path) === '/'}
-                              className={({ isActive }) => `dropdown-item${isActive ? ' active' : ''}`}
-                              style={{ paddingLeft: dropdownPaddingLeft }}
-                            >
-                              {dropdownItem.label}
-                            </NavLink>
-                          )
-                        )
-                      })}
-                    </CDropdownMenu>
-                  </CDropdown>
+                  </CNavItem>
                 )
-              }
+              })}
+            </CNav>
+          </div>
 
-              return (
-                <CNavItem key={itemKey}>
-                  {item.isExternal ? (
-                    <a href={item.to} className='nav-link public-layout-nav-link'>{item.label}</a>
-                  ) : (
+          <div className='public-layout-navigation-actions'>
+            {!isAuthenticated ? (
+              <button
+                type='button'
+                className='public-layout-account-button'
+                onClick={handleLoginNavigate}
+              >
+                Đăng nhập
+              </button>
+            ) : (
+              <CDropdown alignment='end' variant='nav-item' className='public-layout-account-dropdown'>
+                <CDropdownToggle className='public-layout-account-toggle' color='light'>
+                  <span className='public-layout-account-avatar'>{accountAvatarText}</span>
+                  <span className='public-layout-account-name'>{accountUserName}</span>
+                </CDropdownToggle>
+                <CDropdownMenu className='public-layout-account-menu'>
+                  {accountMenuItems.map((item) => (
                     <NavLink
+                      key={item.label}
                       to={item.to}
-                      end={item.to === homePath}
-                      className={({ isActive }) => `nav-link public-layout-nav-link${isActive ? ' active' : ''}`}
+                      className={({ isActive }) => `public-layout-account-item${isActive ? ' active' : ''}`}
                     >
                       {item.label}
                     </NavLink>
-                  )}
-                </CNavItem>
-              )
-            })}
-          </CNav>
+                  ))}
+                  <button
+                    type='button'
+                    className='public-layout-account-item public-layout-account-logout'
+                    onClick={handleLogout}
+                  >
+                    Đăng xuất
+                  </button>
+                </CDropdownMenu>
+              </CDropdown>
+            )}
+          </div>
         </CContainer>
       </div>
 

@@ -5,7 +5,7 @@ function unwrapData(response, fallback) {
   return fallback
 }
 
-export function getGameApiMessage(error, fallback = 'Yeu cau khong thanh cong.') {
+export function getGameApiMessage(error, fallback = 'Yêu cầu không thành công.') {
   const data = error?.response?.data
   const message = data?.error?.message || data?.message || error?.message
   return String(message || fallback).trim() || fallback

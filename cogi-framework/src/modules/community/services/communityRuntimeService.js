@@ -33,9 +33,11 @@ function normalizeMedia(value) {
   const rawUrl = String(value.url || value.attributes?.url || value.path || '').trim()
   const fileAssetId = Number(
     value.fileAssetId
+    || value.id
     || value.provider_metadata?.bridgedFromFileAssetId
     || value.providerMetadata?.bridgedFromFileAssetId
     || value.attributes?.fileAssetId
+    || value.attributes?.id
     || value.attributes?.provider_metadata?.bridgedFromFileAssetId
     || value.attributes?.providerMetadata?.bridgedFromFileAssetId
     || 0

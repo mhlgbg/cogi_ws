@@ -36,11 +36,32 @@ function normalizeStorageConfig(value) {
   }
 }
 
+function normalizeTenantHomeLink(value) {
+  const rawConfig = value && typeof value === 'object' ? value : (typeof value === 'string' ? { url: value } : null)
+  if (!rawConfig) return null
+
+  const url = String(rawConfig.url || rawConfig.homeUrl || '').trim()
+  if (!url) return null
+
+  return {
+    enabled: rawConfig.enabled !== false,
+    url,
+    label: String(rawConfig.label || 'Về trang chủ').trim() || 'Về trang chủ',
+    logoClickable: rawConfig.logoClickable !== false,
+    showInSidebar: rawConfig.showInSidebar !== false,
+    showInCommunityHeader: rawConfig.showInCommunityHeader !== false,
+  }
+}
+
 function normalizeWebsiteSettingsPayload(payload) {
   const data = payload?.data && typeof payload.data === 'object' ? payload.data : payload
   const storageConfigs = Array.isArray(data?.storageConfigs)
     ? data.storageConfigs.map(normalizeStorageConfig).filter(Boolean)
     : []
+
+  const settings = data?.settings && typeof data.settings === 'object' ? data.settings : {}
+  const tenantHomeLinkValue = data?.tenantHomeLink ?? settings.tenantHomeLink ?? settings.tenantHomeLinkConfig ?? settings.homeLink
+  const tenantHomeLink = normalizeTenantHomeLink(tenantHomeLinkValue)
 
   return {
     siteTitle: String(data?.siteTitle || '').trim(),
@@ -53,6 +74,8 @@ function normalizeWebsiteSettingsPayload(payload) {
     defaultMetaImage: normalizeMedia(data?.defaultMetaImage),
     favicon: normalizeMedia(data?.favicon),
     chatAvatar: normalizeMedia(data?.chatAvatar),
+    tenantHomeLink,
+    settings: data?.settings && typeof data.settings === 'object' ? { ...data.settings, tenantHomeLink } : { tenantHomeLink },
     storageDefaultConfigId: normalizePositiveId(data?.storageDefaultConfigId),
     storageConfigs,
   }

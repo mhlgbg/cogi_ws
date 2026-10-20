@@ -74,7 +74,7 @@ export default function GameDashboardPage() {
       const nextDashboard = await getGameManagementDashboard()
       setDashboard(nextDashboard)
     } catch (requestError) {
-      setError(getGameApiMessage(requestError, 'Khong tai duoc game dashboard'))
+      setError(getGameApiMessage(requestError, 'Không tải được game dashboard'))
     } finally {
       setLoading(false)
     }
@@ -97,7 +97,7 @@ export default function GameDashboardPage() {
 
   function openEditModal(game) {
     if (game?.editability?.canEdit === false) {
-      setError(game?.editability?.reason || 'Game nay khong con cho phep chinh sua.')
+      setError(      game?.editability?.reason || 'Game này không còn cho phép chỉnh sửa.')
       setSuccess('')
       return
     }
@@ -122,9 +122,9 @@ export default function GameDashboardPage() {
     try {
       await updateTenantGameTypeEnablement(xpChallengeType.id, nextEnabled)
       await loadDashboard()
-      setSuccess(nextEnabled ? 'Da bat XP Challenge cho tenant' : 'Da tat XP Challenge cho tenant')
+      setSuccess(nextEnabled ? 'Đã bật XP Challenge cho tenant' : 'Đã tắt XP Challenge cho tenant')
     } catch (requestError) {
-      setError(getGameApiMessage(requestError, 'Khong cap nhat duoc game type'))
+      setError(getGameApiMessage(requestError, 'Không cập nhật được game type'))
     } finally {
       setActionKey('')
     }
@@ -155,7 +155,7 @@ export default function GameDashboardPage() {
       const result = editingGame?.id
         ? await updateGame(editingGame.id, payload)
         : await createGame(payload)
-      setSuccess(isEditing ? 'Cap nhat game thanh cong' : 'Tao game thanh cong')
+      setSuccess(isEditing ? 'Cập nhật game thành công' : 'Tạo game thành công')
       setModalVisible(false)
       setEditingGame(null)
       setFormState(createEmptyGameFormState())
@@ -168,7 +168,7 @@ export default function GameDashboardPage() {
 
       await loadDashboard()
     } catch (requestError) {
-      setError(getGameApiMessage(requestError, 'Khong luu duoc game'))
+      setError(getGameApiMessage(requestError, 'Không lưu được game'))
     } finally {
       setActionKey('')
     }
@@ -176,7 +176,7 @@ export default function GameDashboardPage() {
 
   async function handlePublish(game) {
     if (game?.editability?.canPublish === false) {
-      setError(game?.editability?.publishReason || 'Game nay khong con cho phep cong bo.')
+      setError(      game?.editability?.publishReason || 'Game này không còn cho phép công bố.')
       setSuccess('')
       return
     }
@@ -186,9 +186,9 @@ export default function GameDashboardPage() {
     try {
       await publishGame(game.id)
       await loadDashboard()
-      setSuccess(`Da cong bo game ${game.name || game.code}`)
+      setSuccess(`Đã công bố game ${game.name || game.code}`)
     } catch (requestError) {
-      setError(getGameApiMessage(requestError, 'Khong cong bo duoc game'))
+      setError(getGameApiMessage(requestError, 'Không công bố được game'))
     } finally {
       setActionKey('')
     }
@@ -210,11 +210,11 @@ export default function GameDashboardPage() {
         <div>
           <h2 className='mb-1'>Game Platform</h2>
           <p className='text-body-secondary mb-0'>
-            Quan tri game XP Challenge, tenant enablement, lifecycle, rule configuration va danh sach nguoi dang ky.
+            Quản trị game XP Challenge, bật tắt game type, vòng đời game, cấu hình luật và danh sách đăng ký.
           </p>
         </div>
         <CButton color='primary' onClick={openCreateModal} disabled={!xpChallengeType?.isEnabled || Boolean(actionKey)}>
-          Tao XP Challenge
+          Tạo XP Challenge
         </CButton>
       </div>
 
@@ -222,10 +222,10 @@ export default function GameDashboardPage() {
       {success ? <CAlert color='success'>{success}</CAlert> : null}
 
       <CRow className='g-3 mb-4'>
-        <SummaryCard label='Tong so game' value={summary.totalGames} />
-        <SummaryCard label='Sap dien ra / cho chay' value={summary.upcomingGames} color='info' />
-        <SummaryCard label='Dang trial / official' value={summary.runningGames} color='success' />
-        <SummaryCard label='Da ket thuc' value={summary.endedGames} color='dark' />
+        <SummaryCard label='Tổng số game' value={summary.totalGames} />
+        <SummaryCard label='Sắp diễn ra / chờ chạy' value={summary.upcomingGames} color='info' />
+        <SummaryCard label='Đang trial / official' value={summary.runningGames} color='success' />
+        <SummaryCard label='Đã kết thúc' value={summary.endedGames} color='dark' />
       </CRow>
 
       <CRow className='g-3 mb-4'>
@@ -237,13 +237,13 @@ export default function GameDashboardPage() {
             </CCardHeader>
             <CCardBody>
               {loading ? (
-                <div className='d-flex align-items-center gap-2'><CSpinner size='sm' /> Dang tai...</div>
+                <div className='d-flex align-items-center gap-2'><CSpinner size='sm' /> Đang tải...</div>
               ) : xpChallengeType ? (
                 <>
                   <div className='d-flex justify-content-between align-items-start gap-3 mb-3'>
                     <div>
                       <div className='fw-semibold'>{xpChallengeType.name || 'XP Challenge'}</div>
-                      <div className='small text-body-secondary'>{xpChallengeType.description || 'Game type built-in cho Phase 2.'}</div>
+                      <div className='small text-body-secondary'>{xpChallengeType.description || 'Game type tích hợp sẵn cho XP Challenge.'}</div>
                     </div>
                     <CBadge color={xpChallengeType.isLicensed ? 'success' : 'secondary'}>
                       {xpChallengeType.isLicensed ? 'Licensed' : 'Not licensed'}
@@ -251,25 +251,25 @@ export default function GameDashboardPage() {
                   </div>
                   <CFormSwitch
                     id='tenant-game-type-enable'
-                    label='Tenant bat su dung XP Challenge'
+                    label='Cho phép tenant sử dụng XP Challenge'
                     checked={Boolean(xpChallengeType.isEnabled)}
                     disabled={!xpChallengeType.isLicensed || Boolean(actionKey)}
                     onChange={handleToggleGameType}
                   />
                   {!xpChallengeType.isLicensed ? (
                     <div className='small text-danger mt-3'>
-                      Platform chua cap phep XP Challenge cho tenant nay.
+                      Platform chưa cấp phép XP Challenge cho tenant này.
                     </div>
                   ) : (
                     <div className='small text-body-secondary mt-3'>
                       {xpChallengeType.isEnabled
-                        ? 'Tenant Admin co the tao va cong bo game XP Challenge.'
-                        : 'Can bat game type truoc khi tao game moi.'}
+                        ? 'Tenant Admin có thể tạo và công bố game XP Challenge.'
+                        : 'Cần bật game type trước khi tạo game mới.'}
                     </div>
                   )}
                 </>
               ) : (
-                <div className='text-body-secondary'>Khong tim thay game type xp_challenge.</div>
+                <div className='text-body-secondary'>Không tìm thấy game type xp_challenge.</div>
               )}
             </CCardBody>
           </CCard>
@@ -277,27 +277,27 @@ export default function GameDashboardPage() {
 
         <CCol xl={8}>
           <CCard className='h-100 border-0 shadow-sm'>
-            <CCardHeader><strong>Trang thai he thong</strong></CCardHeader>
+            <CCardHeader><strong>Trạng thái hệ thống</strong></CCardHeader>
             <CCardBody>
               <div className='row g-3'>
                 <div className='col-md-4'>
                   <div className='border rounded p-3 h-100'>
-                    <div className='small text-body-secondary'>Nguoi dang ky</div>
+                    <div className='small text-body-secondary'>Người đăng ký</div>
                     <div className='h3 mb-0 mt-2'>{summary.totalParticipants}</div>
                   </div>
                 </div>
                 <div className='col-md-4'>
                   <div className='border rounded p-3 h-100'>
-                    <div className='small text-body-secondary'>Leaderboard</div>
+                    <div className='small text-body-secondary'>Bảng xếp hạng</div>
                     <div className='fw-semibold mt-2'>Phase 3</div>
-                    <div className='small text-body-secondary'>Vi tri san cho bang xep hang XP.</div>
+                    <div className='small text-body-secondary'>Vị trí sẽ có khi XP Engine hoạt động.</div>
                   </div>
                 </div>
                 <div className='col-md-4'>
                   <div className='border rounded p-3 h-100'>
-                    <div className='small text-body-secondary'>Thong ke XP</div>
+                    <div className='small text-body-secondary'>Thống kê XP</div>
                     <div className='fw-semibold mt-2'>Phase 3</div>
-                    <div className='small text-body-secondary'>Chua phat sinh du lieu diem o Phase 2.</div>
+                    <div className='small text-body-secondary'>Chưa phát sinh dữ liệu điểm.</div>
                   </div>
                 </div>
               </div>
@@ -308,26 +308,26 @@ export default function GameDashboardPage() {
 
       <CCard className='border-0 shadow-sm'>
         <CCardHeader className='d-flex justify-content-between align-items-center gap-2'>
-          <strong>Danh sach game</strong>
+          <strong>Danh sách game</strong>
           {loading ? <CSpinner size='sm' /> : null}
         </CCardHeader>
         <CCardBody>
           {loading ? (
-            <div className='d-flex align-items-center gap-2'><CSpinner size='sm' /> Dang tai game...</div>
+            <div className='d-flex align-items-center gap-2'><CSpinner size='sm' /> Đang tải game...</div>
           ) : games.length === 0 ? (
-            <div className='text-body-secondary'>Chua co game nao trong tenant.</div>
+            <div className='text-body-secondary'>Chưa có game nào trong tenant.</div>
           ) : (
             <CTable responsive hover align='middle'>
               <CTableHead>
                 <CTableRow>
                   <CTableHeaderCell>Code</CTableHeaderCell>
-                  <CTableHeaderCell>Ten game</CTableHeaderCell>
+                  <CTableHeaderCell>Tên game</CTableHeaderCell>
                   <CTableHeaderCell>Game Type</CTableHeaderCell>
                   <CTableHeaderCell>Giai đoạn hiệu lực</CTableHeaderCell>
-                  <CTableHeaderCell>Dang ky</CTableHeaderCell>
-                  <CTableHeaderCell>Cac moc thoi gian</CTableHeaderCell>
-                  <CTableHeaderCell>Nguoi tham gia</CTableHeaderCell>
-                  <CTableHeaderCell className='text-end'>Tac vu</CTableHeaderCell>
+                  <CTableHeaderCell>Đăng ký</CTableHeaderCell>
+                  <CTableHeaderCell>Các mốc thời gian</CTableHeaderCell>
+                  <CTableHeaderCell>Người tham gia</CTableHeaderCell>
+                  <CTableHeaderCell className='text-end'>Tác vụ</CTableHeaderCell>
                 </CTableRow>
               </CTableHead>
               <CTableBody>
@@ -340,7 +340,7 @@ export default function GameDashboardPage() {
                       <CTableDataCell className='fw-semibold'>{game.code}</CTableDataCell>
                       <CTableDataCell>
                         <div className='fw-semibold'>{game.name}</div>
-                        <div className='small text-body-secondary'>{game.description || 'Khong co mo ta'}</div>
+                        <div className='small text-body-secondary'>{game.description || 'Không có mô tả'}</div>
                       </CTableDataCell>
                       <CTableDataCell>{game.gameType?.name || game.gameType?.code || '-'}</CTableDataCell>
                       <CTableDataCell>
@@ -351,26 +351,26 @@ export default function GameDashboardPage() {
                       </CTableDataCell>
                       <CTableDataCell>
                         <div>{formatDateTime(game.registrationOpenAt)}</div>
-                        <div className='small text-body-secondary'>den {formatDateTime(game.registrationCloseAt)}</div>
+                        <div className='small text-body-secondary'>đến {formatDateTime(game.registrationCloseAt)}</div>
                       </CTableDataCell>
                       <CTableDataCell>
                         <div>{formatDateTime(game.startsAt)}</div>
                         <div className='small text-body-secondary'>den {formatDateTime(game.endsAt)}</div>
                         {game.hasTrial ? (
-                          <div className='small text-body-secondary'>Trial: {formatDateTime(game.trialStartAt)} den {formatDateTime(game.trialEndAt)}</div>
+                          <div className='small text-body-secondary'>Trial: {formatDateTime(game.trialStartAt)} đến {formatDateTime(game.trialEndAt)}</div>
                         ) : null}
                       </CTableDataCell>
                       <CTableDataCell>
                         <div className='fw-semibold'>{game.participantCount}</div>
-                        <div className='small text-body-secondary'>{game.activeParticipantCount} active</div>
+                        <div className='small text-body-secondary'>{game.activeParticipantCount} đang hoạt động</div>
                       </CTableDataCell>
                       <CTableDataCell className='text-end'>
                         <div className='d-inline-flex flex-wrap justify-content-end gap-2'>
                           <CButton color='info' variant='outline' size='sm' onClick={() => navigate(`/games/${game.id}`)}>
-                            Chi tiet
+                            Chi tiết
                           </CButton>
                           <CButton color='secondary' variant='outline' size='sm' onClick={() => openEditModal(game)} disabled={!isEditable || Boolean(actionKey)}>
-                            Sua
+                            Sửa
                           </CButton>
                           <CButton
                             color='success'
@@ -379,7 +379,7 @@ export default function GameDashboardPage() {
                             disabled={!canPublish || Boolean(actionKey)}
                             onClick={() => handlePublish(game)}
                           >
-                            {actionKey === `publish:${game.id}` ? 'Dang cong bo...' : 'Cong bo'}
+                            {actionKey === `publish:${game.id}` ? 'Đang công bố...' : 'Công bố'}
                           </CButton>
                         </div>
                       </CTableDataCell>
@@ -394,7 +394,7 @@ export default function GameDashboardPage() {
 
       <CModal visible={modalVisible} onClose={closeModal} size='lg' backdrop='static'>
         <CModalHeader>
-          <CModalTitle>{editingGame?.id ? 'Cap nhat game XP Challenge' : 'Tao game XP Challenge'}</CModalTitle>
+          <CModalTitle>{editingGame?.id ? 'Cập nhật game XP Challenge' : 'Tạo game XP Challenge'}</CModalTitle>
         </CModalHeader>
         <CModalBody>
           <CRow className='g-3'>
@@ -408,7 +408,7 @@ export default function GameDashboardPage() {
               />
             </CCol>
             <CCol md={6}>
-              <CFormLabel htmlFor='game-name'>Ten game</CFormLabel>
+              <CFormLabel htmlFor='game-name'>Tên game</CFormLabel>
               <CFormInput
                 id='game-name'
                 value={formState.name}
@@ -417,7 +417,7 @@ export default function GameDashboardPage() {
               />
             </CCol>
             <CCol md={12}>
-              <CFormLabel htmlFor='game-description'>Mo ta</CFormLabel>
+              <CFormLabel htmlFor='game-description'>Mô tả</CFormLabel>
               <CFormTextarea
                 id='game-description'
                 rows={4}
@@ -440,7 +440,7 @@ export default function GameDashboardPage() {
               />
             </CCol>
             <CCol md={6}>
-              <CFormLabel htmlFor='registration-open-at'>Mo dang ky</CFormLabel>
+              <CFormLabel htmlFor='registration-open-at'>Mở đăng ký</CFormLabel>
               <CFormInput
                 id='registration-open-at'
                 type='datetime-local'
@@ -450,7 +450,7 @@ export default function GameDashboardPage() {
               />
             </CCol>
             <CCol md={6}>
-              <CFormLabel htmlFor='registration-close-at'>Dong dang ky</CFormLabel>
+              <CFormLabel htmlFor='registration-close-at'>Đóng đăng ký</CFormLabel>
               <CFormInput
                 id='registration-close-at'
                 type='datetime-local'
@@ -462,7 +462,7 @@ export default function GameDashboardPage() {
             <CCol xs={12}>
               <CFormCheck
                 id='has-trial-enabled'
-                label='Co giai doan choi thu'
+                label='Có giai đoạn chơi thử'
                 checked={Boolean(formState.hasTrial)}
                 onChange={(event) => setFormState((prev) => ({
                   ...prev,
@@ -476,7 +476,7 @@ export default function GameDashboardPage() {
             {formState.hasTrial ? (
               <>
                 <CCol md={6}>
-                  <CFormLabel htmlFor='trial-start-at'>Bat dau choi thu</CFormLabel>
+                  <CFormLabel htmlFor='trial-start-at'>Bắt đầu chơi thử</CFormLabel>
                   <CFormInput
                     id='trial-start-at'
                     type='datetime-local'
@@ -486,7 +486,7 @@ export default function GameDashboardPage() {
                   />
                 </CCol>
                 <CCol md={6}>
-                  <CFormLabel htmlFor='trial-end-at'>Ket thuc choi thu</CFormLabel>
+                  <CFormLabel htmlFor='trial-end-at'>Kết thúc chơi thử</CFormLabel>
                   <CFormInput
                     id='trial-end-at'
                     type='datetime-local'
@@ -498,7 +498,7 @@ export default function GameDashboardPage() {
               </>
             ) : null}
             <CCol md={6}>
-              <CFormLabel htmlFor='starts-at'>Bat dau game</CFormLabel>
+              <CFormLabel htmlFor='starts-at'>Bắt đầu chính thức</CFormLabel>
               <CFormInput
                 id='starts-at'
                 type='datetime-local'
@@ -508,7 +508,7 @@ export default function GameDashboardPage() {
               />
             </CCol>
             <CCol md={6}>
-              <CFormLabel htmlFor='ends-at'>Ket thuc game</CFormLabel>
+              <CFormLabel htmlFor='ends-at'>Kết thúc game</CFormLabel>
               <CFormInput
                 id='ends-at'
                 type='datetime-local'
@@ -520,7 +520,7 @@ export default function GameDashboardPage() {
             <CCol xs={12}>
               <CFormCheck
                 id='late-registration-enabled'
-                label='Cho phep dang ky muon khi game da bat dau'
+                label='Cho phép đăng ký muộn khi game đã bắt đầu'
                 checked={Boolean(formState.lateRegistrationEnabled)}
                 onChange={(event) => setFormState((prev) => ({ ...prev, lateRegistrationEnabled: event.target.checked }))}
                 disabled={Boolean(actionKey)}
@@ -530,10 +530,10 @@ export default function GameDashboardPage() {
         </CModalBody>
         <CModalFooter>
           <CButton color='secondary' variant='outline' onClick={closeModal} disabled={Boolean(actionKey)}>
-            Huy
+            Huỷ
           </CButton>
           <CButton color='primary' onClick={handleSubmitForm} disabled={Boolean(actionKey)}>
-            {actionKey === 'create' || actionKey.startsWith('update:') ? 'Dang luu...' : 'Luu game'}
+            {actionKey === 'create' || actionKey.startsWith('update:') ? 'Đang lưu...' : 'Lưu game'}
           </CButton>
         </CModalFooter>
       </CModal>
