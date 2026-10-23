@@ -50,6 +50,12 @@ const registrationCampaignRoutes = [
     featureKey: 'registration-campaign.manage',
     component: RegistrationCampaignDetailPage,
   },
+  {
+    path: '/registration-campaigns/:id/post-registration',
+    title: 'Chi tiết chiến dịch đăng ký - Xử lý sau đăng ký',
+    featureKey: 'registration-campaign.manage',
+    component: RegistrationCampaignDetailPage,
+  },
 ]
 
 export default registrationCampaignRoutes

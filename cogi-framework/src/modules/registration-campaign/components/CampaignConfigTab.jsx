@@ -5,7 +5,6 @@ import {
   CCardBody,
   CCardHeader,
   CCol,
-  CFormCheck,
   CFormInput,
   CFormLabel,
   CFormSelect,
@@ -13,7 +12,7 @@ import {
   CFormTextarea,
   CRow,
 } from '@coreui/react'
-import { getApiMessage, getRegistrationModeLabel, normalizeStatus, toText } from '../utils/registrationCampaignUi'
+import { getRegistrationModeLabel, normalizeStatus, toText } from '../utils/registrationCampaignUi'
 
 function buildInitialState(campaign) {
   return {
@@ -26,6 +25,8 @@ function buildInitialState(campaign) {
     termsContent: campaign?.termsContent || '',
     successMessage: campaign?.successMessage || '',
     redirectPath: campaign?.redirectPath || '',
+    sportsProfileLinkEnabled: campaign?.postRegistrationConfig?.sportsProfileLink?.enabled === true,
+    sportsProfileLinkFormFieldKey: campaign?.postRegistrationConfig?.sportsProfileLink?.formFieldKey || '',
   }
 }
 
@@ -70,6 +71,11 @@ export default function CampaignConfigTab({ campaign, formOptions, saving = fals
       return
     }
 
+    if (form.sportsProfileLinkEnabled && !toText(form.sportsProfileLinkFormFieldKey)) {
+      setError('Vui lòng nhập key trường trong formData để đối chiếu Sports Profile.')
+      return
+    }
+
     onSave?.({
       registrationMode: form.registrationMode,
       verificationRequired: form.verificationRequired === true,
@@ -80,6 +86,12 @@ export default function CampaignConfigTab({ campaign, formOptions, saving = fals
       termsContent: toText(form.termsContent) || null,
       successMessage: toText(form.successMessage) || null,
       redirectPath: toText(form.redirectPath) || null,
+      postRegistrationConfig: {
+        sportsProfileLink: {
+          enabled: form.sportsProfileLinkEnabled === true,
+          formFieldKey: toText(form.sportsProfileLinkFormFieldKey) || null,
+        },
+      },
     })
   }
 
@@ -149,6 +161,29 @@ export default function CampaignConfigTab({ campaign, formOptions, saving = fals
               <CFormLabel>Redirect path</CFormLabel>
               <CFormInput value={form.redirectPath} onChange={(event) => updateField('redirectPath', event.target.value)} disabled={saving} placeholder='/fitness/connect' />
               <div className='small text-body-secondary mt-1'>Chỉ chấp nhận đường dẫn nội bộ bắt đầu bằng /</div>
+            </CCol>
+            <CCol xs={12}><hr className='my-1' /></CCol>
+            <CCol xs={12}>
+              <div className='fw-semibold'>Xử lý sau đăng ký</div>
+              <div className='small text-body-secondary'>Giai đoạn hiện tại hỗ trợ liên kết Sports Profile với User dựa trên mã trong formData.</div>
+            </CCol>
+            <CCol md={6}>
+              <CFormSwitch
+                label='Bật tác vụ liên kết hồ sơ thể thao'
+                checked={form.sportsProfileLinkEnabled === true}
+                onChange={(event) => updateField('sportsProfileLinkEnabled', event.target.checked)}
+                disabled={saving}
+              />
+            </CCol>
+            <CCol md={6}>
+              <CFormLabel>Key trường mã thành viên</CFormLabel>
+              <CFormInput
+                value={form.sportsProfileLinkFormFieldKey}
+                onChange={(event) => updateField('sportsProfileLinkFormFieldKey', event.target.value)}
+                disabled={saving || form.sportsProfileLinkEnabled !== true}
+                placeholder='Ví dụ: MaThanhVienVKL'
+              />
+              <div className='small text-body-secondary mt-1'>Đây là key trong formData dùng để đối soát với Sports Profile.code.</div>
             </CCol>
             <CCol xs={12} className='d-flex justify-content-end'>
               <CButton type='submit' color='primary' disabled={saving}>{saving ? 'Đang lưu...' : 'Lưu cấu hình'}</CButton>

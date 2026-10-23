@@ -1,6 +1,8 @@
 import { CCol, CFormInput, CFormLabel, CFormSelect, CRow } from '@coreui/react'
 import {
+  RACE_TYPE_OPTIONS,
   RUNNING_DISTANCE_OPTIONS,
+  buildRaceResultTitleSuggestion,
   formatDistanceKm,
   formatDurationSeconds,
 } from '../utils/sportsAchievementUi'
@@ -16,7 +18,8 @@ function normalizeDistanceValue(value) {
   return Number(parsed.toFixed(3))
 }
 
-function getDistancePreset(distanceKm) {
+function getDistancePreset(distanceKm, distancePending = false) {
+  if (distancePending) return 'unknown'
   const normalized = normalizeDistanceValue(distanceKm)
   if (normalized === null) return ''
   if (Math.abs(normalized - 42.195) < 0.0001) return '42.195'
@@ -30,8 +33,12 @@ export function buildRunningAchievementState(initialValues = null) {
   const totalSeconds = Number(initialValues?.durationSeconds || 0)
   const safeTotalSeconds = Number.isInteger(totalSeconds) && totalSeconds > 0 ? totalSeconds : 0
   return {
-    distancePreset: getDistancePreset(initialValues?.distanceKm),
-    customDistanceKm: getDistancePreset(initialValues?.distanceKm) === 'other'
+    eventCode: toText(initialValues?.eventCode),
+    bib: toText(initialValues?.bib),
+    raceType: toText(initialValues?.raceType),
+    distancePending: Boolean(initialValues?.distancePending),
+    distancePreset: getDistancePreset(initialValues?.distanceKm, Boolean(initialValues?.distancePending)),
+    customDistanceKm: getDistancePreset(initialValues?.distanceKm, Boolean(initialValues?.distancePending)) === 'other'
       ? toText(initialValues?.distanceKm)
       : '',
     durationHours: safeTotalSeconds > 0 ? String(Math.floor(safeTotalSeconds / 3600)) : '',
@@ -46,9 +53,12 @@ export function isRunningDistanceOther(distancePreset) {
 
 export function buildRunningAchievementPayload(form) {
   const distancePreset = toText(form.distancePreset)
-  const distanceKm = distancePreset && distancePreset !== 'other'
-    ? normalizeDistanceValue(distancePreset)
-    : normalizeDistanceValue(form.customDistanceKm)
+  const distancePending = Boolean(form.distancePending) || distancePreset === 'unknown'
+  const distanceKm = distancePending
+    ? null
+    : (distancePreset && distancePreset !== 'other'
+      ? normalizeDistanceValue(distancePreset)
+      : normalizeDistanceValue(form.customDistanceKm))
 
   const hours = Number(toText(form.durationHours) || 0)
   const minutes = Number(toText(form.durationMinutes) || 0)
@@ -57,6 +67,10 @@ export function buildRunningAchievementPayload(form) {
   const durationSeconds = hasDuration ? (hours * 3600) + (minutes * 60) + seconds : null
 
   return {
+    eventCode: toText(form.eventCode || ''),
+    bib: toText(form.bib || ''),
+    raceType: toText(form.raceType || ''),
+    distancePending,
     distanceKm,
     durationSeconds: durationSeconds && durationSeconds > 0 ? durationSeconds : null,
     resultValue: durationSeconds && durationSeconds > 0 ? durationSeconds : null,
@@ -71,7 +85,9 @@ export function validateRunningAchievementForm(form) {
   if (!toText(form.achievedAt)) errors.achievedAt = 'Ngày đạt thành tích là bắt buộc'
 
   const distancePreset = toText(form.distancePreset)
-  if (!distancePreset) {
+  if (distancePreset === 'unknown') {
+    // Backend accepts field as distancePending when the distance is not available yet.
+  } else if (!distancePreset) {
     errors.distanceKm = 'Cự ly là bắt buộc'
   } else if (distancePreset === 'other') {
     const customDistance = Number(form.customDistanceKm)
@@ -102,15 +118,43 @@ export function validateRunningAchievementForm(form) {
 export default function RunningAchievementFields({ form, errors = {}, disabled = false, onChange }) {
   const distancePreview = (() => {
     const payload = buildRunningAchievementPayload(form)
-    return payload.distanceKm ? formatDistanceKm(payload.distanceKm) : '-'
+    return payload.distanceKm ? formatDistanceKm(payload.distanceKm) : (payload.distancePending ? 'Chưa xác định' : '-')
   })()
   const durationPreview = (() => {
     const payload = buildRunningAchievementPayload(form)
     return payload.durationSeconds ? formatDurationSeconds(payload.durationSeconds) : '--:--:--'
   })()
 
+  function handleRaceMetaChange(key, value) {
+    const nextValue = value
+    if ((key === 'eventCode' || key === 'bib') && !toText(form.title).trim()) {
+      const suggestion = buildRaceResultTitleSuggestion({
+        title: form.title,
+        eventCode: key === 'eventCode' ? nextValue : form.eventCode,
+        bib: key === 'bib' ? nextValue : form.bib,
+      })
+      if (suggestion) onChange('title', suggestion)
+    }
+    onChange(key, nextValue)
+  }
+
   return (
     <CRow className='g-3'>
+      <CCol md={4}>
+        <CFormLabel>Mã giải (eventCode)</CFormLabel>
+        <CFormInput value={form.eventCode || ''} onChange={(event) => handleRaceMetaChange('eventCode', event.target.value)} disabled={disabled} />
+      </CCol>
+      <CCol md={4}>
+        <CFormLabel>BIB</CFormLabel>
+        <CFormInput value={form.bib || ''} onChange={(event) => handleRaceMetaChange('bib', event.target.value)} disabled={disabled} />
+      </CCol>
+      <CCol md={4}>
+        <CFormLabel>Loại đường chạy</CFormLabel>
+        <CFormSelect value={form.raceType || ''} onChange={(event) => onChange('raceType', event.target.value)} disabled={disabled}>
+          <option value=''>Chưa xác định</option>
+          {RACE_TYPE_OPTIONS.filter((option) => option.value).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </CFormSelect>
+      </CCol>
       <CCol md={8}>
         <CFormLabel>Tên giải chạy *</CFormLabel>
         <CFormInput value={form.title} onChange={(event) => onChange('title', event.target.value)} disabled={disabled} invalid={Boolean(errors.title)} />
@@ -123,7 +167,7 @@ export default function RunningAchievementFields({ form, errors = {}, disabled =
       </CCol>
       <CCol md={4}>
         <CFormLabel>Cự ly *</CFormLabel>
-        <CFormSelect value={form.distancePreset} onChange={(event) => onChange('distancePreset', event.target.value)} disabled={disabled} invalid={Boolean(errors.distanceKm)}>
+        <CFormSelect value={form.distancePreset || ''} onChange={(event) => onChange('distancePreset', event.target.value)} disabled={disabled} invalid={Boolean(errors.distanceKm)}>
           <option value=''>Chọn cự ly</option>
           {RUNNING_DISTANCE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </CFormSelect>

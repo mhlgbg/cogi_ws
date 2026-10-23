@@ -118,3 +118,32 @@ export async function signalDailyActive(signalSource = 'app') {
   })
   return unwrapData(response, [])
 }
+
+export async function getGhostRaceSession(gameId) {
+  const response = await api.get(`/game-center/games/${gameId}/ghost-race/session`)
+  return unwrapData(response, null)
+}
+
+export async function startGhostRaceAttempt(gameId, payload = {}) {
+  const response = await api.post(`/game-center/games/${gameId}/ghost-race/attempts/start`, {
+    data: payload,
+  })
+  return unwrapData(response, null)
+}
+
+export async function submitGhostRaceAttempt(gameId, payload = {}) {
+  const response = await api.post(`/game-center/games/${gameId}/ghost-race/attempts/submit`, {
+    data: payload,
+  })
+  return unwrapData(response, null)
+}
+
+export async function getMyGhostRaceAttempts(gameId) {
+  const response = await api.get(`/game-center/games/${gameId}/ghost-race/attempts`)
+  return Array.isArray(response?.data?.data) ? response.data.data : []
+}
+
+export async function getMyGhostRacePersonalBest(gameId) {
+  const response = await api.get(`/game-center/games/${gameId}/ghost-race/personal-best`)
+  return unwrapData(response, { personalBest: null, runVersion: 1, gameId })
+}

@@ -2,6 +2,7 @@ import GameDashboardPage from '../pages/GameDashboardPage'
 import GameCenterPage from '../pages/GameCenterPage'
 import GameDetailPage from '../pages/GameDetailPage'
 import GameCenterDetailPage from '../pages/GameCenterDetailPage'
+import GhostRacePage from '../pages/GhostRacePage'
 
 const gameRoutes = [
   {
@@ -21,6 +22,12 @@ const gameRoutes = [
     title: 'Game Center',
     featureKey: 'game.center.view',
     component: GameCenterPage,
+  },
+  {
+    path: '/game-center/ghost-race',
+    title: 'Đua bất đồng bộ',
+    featureKey: 'game.center.view',
+    component: GhostRacePage,
   },
   {
     path: '/game-center/:id',

@@ -154,3 +154,23 @@ export async function getCampaignEmailDetail(campaignId, mailLogId) {
   const response = await api.get(`/registration-campaigns/${campaignId}/emails/${mailLogId}`)
   return unwrapSuccess(response.data)
 }
+
+export async function getCampaignPostRegistrationSportsProfiles(campaignId, params = {}) {
+  const response = await api.get(`/registration-campaigns/${campaignId}/post-registration/sports-profiles`, { params })
+  return unwrapSuccess(response.data) || {
+    task: null,
+    stats: null,
+    data: [],
+    pagination: { page: 1, pageSize: 20, total: 0, pageCount: 1 },
+  }
+}
+
+export async function linkCampaignPostRegistrationSportsProfiles(campaignId, payload = {}) {
+  const response = await api.post(`/registration-campaigns/${campaignId}/post-registration/sports-profiles/link`, payload)
+  return unwrapSuccess(response.data)
+}
+
+export async function manualLinkCampaignPostRegistrationSportsProfile(campaignId, payload = {}) {
+  const response = await api.post(`/registration-campaigns/${campaignId}/post-registration/sports-profiles/manual-link`, payload)
+  return unwrapSuccess(response.data)
+}

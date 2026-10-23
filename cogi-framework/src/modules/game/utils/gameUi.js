@@ -51,7 +51,10 @@ export function getStatusBadgeConfig(status) {
 }
 
 export function buildGameFormState(game) {
+  const gameTypeCode = String(game?.gameType?.code || game?.gameTypeCode || 'xp_challenge').toLowerCase()
+  const settings = game?.settings && typeof game.settings === 'object' ? game.settings : {}
   return {
+    gameTypeCode,
     code: String(game?.code || ''),
     name: String(game?.name || ''),
     description: String(game?.description || ''),
@@ -64,6 +67,15 @@ export function buildGameFormState(game) {
     endsAt: toInputDateTime(game?.endsAt),
     timezone: String(game?.timezone || 'Asia/Ho_Chi_Minh'),
     lateRegistrationEnabled: Boolean(game?.lateRegistrationEnabled),
+    ghostRacePlatform: String(settings?.playPlatform || 'web'),
+    ghostRaceDistanceMeters: String(settings?.distanceMeters ?? 200),
+    ghostRaceCutoffSeconds: String(settings?.cutoffSeconds ?? 40),
+    ghostRacePhysicsVersion: String(settings?.physicsVersion || 'v1'),
+    ghostRaceTrackVersion: String(settings?.trackVersion || 'v1'),
+    ghostRaceRulesVersion: String(settings?.rulesVersion || 'v1'),
+    ghostRaceCountdownOnYourMarksMs: String(settings?.countdown?.onYourMarksMs ?? 900),
+    ghostRaceCountdownSetMs: String(settings?.countdown?.setMs ?? 900),
+    ghostRaceCountdownGoHoldMs: String(settings?.countdown?.goHoldMs ?? 500),
   }
 }
 

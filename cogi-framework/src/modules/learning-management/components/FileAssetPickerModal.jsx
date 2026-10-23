@@ -111,6 +111,7 @@ export default function FileAssetPickerModal({
       const uploaded = await uploadTenantStorageFile({
         file: fileInput,
         moduleKey,
+        featureKey: 'learning.question.manage',
         isPublic: true,
       })
       setSelectedId(String(uploaded?.id || uploaded?.documentId || ''))

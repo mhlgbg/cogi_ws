@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CAlert, CBadge, CButton, CCard, CCardBody, CCardHeader, CCol, CFormInput, CFormLabel, CFormSelect, CModal, CModalBody, CModalFooter, CModalHeader, CModalTitle, CRow, CSpinner, CTable, CTableBody, CTableDataCell, CTableHead, CTableHeaderCell, CTableRow } from '@coreui/react'
-import { getTeacherAssignmentDetail, getTeacherAssignmentLearnerTaskDetail, publishTeacherAssignment, closeTeacherAssignment, cancelTeacherAssignment, reviewTeacherAssignmentLearnerTask, startTeacherAssignmentAssessmentPreview, updateTeacherAssignment } from '../services/classService'
+import { getTeacherAssignmentDetail, getTeacherAssignmentLearnerTaskDetail, publishTeacherAssignment, closeTeacherAssignment, cancelTeacherAssignment, reopenTeacherAssignment, reviewTeacherAssignmentLearnerTask, startTeacherAssignmentAssessmentPreview, updateTeacherAssignment } from '../services/classService'
 import { sanitizeClassSessionContentHtml } from '../utils/classSessionContentHtml'
 import { formatSessionDateTime } from '../utils/classSessionUi'
 import SubmissionViewer from './SubmissionViewer'
@@ -51,7 +51,7 @@ function getDefaultReviewForm(payload = null) {
   }
 }
 
-export function TeacherAssignmentDetailModal({ visible = false, assignmentId = null, onClose, onChanged }) {
+export function TeacherAssignmentDetailModal({ visible = false, assignmentId = null, canManage = false, onClose, onChanged }) {
   const [loading, setLoading] = useState(false)
   const [detail, setDetail] = useState(null)
   const [error, setError] = useState('')
@@ -84,6 +84,14 @@ export function TeacherAssignmentDetailModal({ visible = false, assignmentId = n
 
   async function handleAction(action) {
     if (!assignmentId) return
+    if (action === 'reopen') {
+      const dueAtMs = detail?.dueAt ? new Date(detail.dueAt).getTime() : null
+      const isOverdue = dueAtMs !== null && Number.isFinite(dueAtMs) && dueAtMs < Date.now()
+      const confirmMessage = isOverdue
+        ? 'Bài tập đã quá hạn nộp. Bạn vẫn muốn mở lại bài tập này không?\n\nLưu ý: Nếu muốn học viên tiếp tục nộp bài, bạn cần gia hạn deadline.'
+        : 'Bạn có chắc chắn muốn mở lại bài tập này không?'
+      if (!window.confirm(confirmMessage)) return
+    }
     setActionLoading(action)
     setError('')
     try {
@@ -91,7 +99,9 @@ export function TeacherAssignmentDetailModal({ visible = false, assignmentId = n
         ? await publishTeacherAssignment(assignmentId)
         : action === 'close'
           ? await closeTeacherAssignment(assignmentId)
-          : await cancelTeacherAssignment(assignmentId)
+          : action === 'cancel'
+            ? await cancelTeacherAssignment(assignmentId)
+            : await reopenTeacherAssignment(assignmentId)
       setDetail(nextDetail)
       onChanged?.()
     } catch (requestError) {
@@ -136,6 +146,7 @@ export function TeacherAssignmentDetailModal({ visible = false, assignmentId = n
                     {detail.status === 'draft' ? <CButton size='sm' color='primary' onClick={() => handleAction('publish')} disabled={actionLoading === 'publish'}>{actionLoading === 'publish' ? 'Đang giao...' : 'Giao bài'}</CButton> : null}
                     {detail.status === 'published' ? <CButton size='sm' color='dark' variant='outline' onClick={() => handleAction('close')} disabled={actionLoading === 'close'}>{actionLoading === 'close' ? 'Đang đóng...' : 'Đóng bài tập'}</CButton> : null}
                     {detail.status !== 'cancelled' ? <CButton size='sm' color='danger' variant='outline' onClick={() => handleAction('cancel')} disabled={actionLoading === 'cancel'}>{actionLoading === 'cancel' ? 'Đang hủy...' : 'Hủy'}</CButton> : null}
+                    {canManage && detail.status === 'cancelled' ? <CButton size='sm' color='success' onClick={() => handleAction('reopen')} disabled={actionLoading === 'reopen'}>{actionLoading === 'reopen' ? 'Đang mở lại...' : 'Mở lại bài tập'}</CButton> : null}
                   </div>
                 </CCardHeader>
                 <CCardBody>

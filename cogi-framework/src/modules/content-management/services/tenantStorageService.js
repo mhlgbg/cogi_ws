@@ -91,6 +91,13 @@ export async function uploadTenantStorageFile(payload) {
   const formData = new FormData()
   formData.append('file', payload.file)
   formData.append('moduleKey', String(payload.moduleKey || '').trim())
+  if (payload.featureKey) formData.append('featureKey', String(payload.featureKey).trim())
+  if (Array.isArray(payload.featureKeys)) {
+    payload.featureKeys
+      .map((item) => String(item || '').trim())
+      .filter(Boolean)
+      .forEach((item) => formData.append('featureKeys[]', item))
+  }
   if (payload.entityType) formData.append('entityType', String(payload.entityType).trim())
   if (payload.entityId) formData.append('entityId', String(payload.entityId).trim())
   if (payload.isPublic !== undefined) formData.append('isPublic', payload.isPublic ? 'true' : 'false')

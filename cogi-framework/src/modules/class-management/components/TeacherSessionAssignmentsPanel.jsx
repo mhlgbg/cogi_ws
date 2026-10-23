@@ -118,7 +118,7 @@ export default function TeacherSessionAssignmentsPanel({ sessionId, canManage = 
         }}
       />
 
-      <TeacherAssignmentDetailModal visible={Boolean(detailId)} assignmentId={detailId} onClose={() => setDetailId(null)} onChanged={load} />
+      <TeacherAssignmentDetailModal visible={Boolean(detailId)} assignmentId={detailId} canManage={canManage} onClose={() => setDetailId(null)} onChanged={load} />
       <TeacherAssignmentProgressModal visible={Boolean(progressId)} assignmentId={progressId} onClose={() => setProgressId(null)} onChanged={load} />
     </>
   )

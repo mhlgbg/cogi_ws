@@ -255,6 +255,7 @@ export default function RegistrationCampaignsPage() {
                       <CTableHeaderCell>Thời gian bắt đầu</CTableHeaderCell>
                       <CTableHeaderCell>Thời gian kết thúc</CTableHeaderCell>
                       <CTableHeaderCell>Số người đăng ký</CTableHeaderCell>
+                      <CTableHeaderCell>Chờ liên kết hồ sơ thể thao</CTableHeaderCell>
                       <CTableHeaderCell>Ngày tạo</CTableHeaderCell>
                       <CTableHeaderCell>Thao tác</CTableHeaderCell>
                     </CTableRow>
@@ -277,13 +278,18 @@ export default function RegistrationCampaignsPage() {
                           <CTableDataCell>{formatDateTime(row.startAt)}</CTableDataCell>
                           <CTableDataCell>{formatDateTime(row.endAt)}</CTableDataCell>
                           <CTableDataCell>{row.registrationCount || 0}</CTableDataCell>
+                          <CTableDataCell>
+                            {Number(row?.postRegistration?.sportsProfileLink?.stats?.waitingToLink || 0) > 0
+                              ? <CBadge color='warning'>{row.postRegistration.sportsProfileLink.stats.waitingToLink}</CBadge>
+                              : <CBadge color='secondary'>0</CBadge>}
+                          </CTableDataCell>
                           <CTableDataCell>{formatDateTime(row.createdAt)}</CTableDataCell>
                           <CTableDataCell>{renderActions(row)}</CTableDataCell>
                         </CTableRow>
                       )
                     }) : (
                       <CTableRow>
-                        <CTableDataCell colSpan={9} className='text-center text-body-secondary'>Chưa có chiến dịch đăng ký nào. Hãy tạo chiến dịch đầu tiên để bắt đầu tiếp nhận người dùng.</CTableDataCell>
+                        <CTableDataCell colSpan={10} className='text-center text-body-secondary'>Chưa có chiến dịch đăng ký nào. Hãy tạo chiến dịch đầu tiên để bắt đầu tiếp nhận người dùng.</CTableDataCell>
                       </CTableRow>
                     )}
                   </CTableBody>

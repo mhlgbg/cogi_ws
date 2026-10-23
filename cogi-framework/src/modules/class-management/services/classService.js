@@ -942,6 +942,11 @@ export async function cancelTeacherAssignment(assignmentId) {
   return normalizeAssignmentSummary(response?.data?.data || null)
 }
 
+export async function reopenTeacherAssignment(assignmentId) {
+  const response = await api.post(`/teacher/assignments/${assignmentId}/reopen`)
+  return normalizeAssignmentSummary(response?.data?.data || null)
+}
+
 export async function getTeacherAssignmentLearnerTaskDetail(assignmentId, taskId, learnerId) {
   const response = await api.get(`/teacher/assignments/${assignmentId}/tasks/${taskId}/learners/${learnerId}`)
   return normalizeAssignmentSummary(response?.data?.data || null)

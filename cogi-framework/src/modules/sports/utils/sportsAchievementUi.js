@@ -37,6 +37,16 @@ export const RUNNING_DISTANCE_OPTIONS = [
   { value: '10', label: '10KM' },
   { value: '5', label: '5KM' },
   { value: 'other', label: 'Khác' },
+  { value: 'unknown', label: 'Chưa xác định cự ly' },
+]
+
+export const RACE_TYPE_OPTIONS = [
+  { value: '', label: 'Chưa xác định' },
+  { value: 'road', label: 'Road' },
+  { value: 'trail', label: 'Trail' },
+  { value: 'track', label: 'Track' },
+  { value: 'virtual', label: 'Virtual' },
+  { value: 'other', label: 'Unknown' },
 ]
 
 export const ACHIEVEMENT_STATUS_OPTIONS = [
@@ -81,6 +91,10 @@ export const SUBMISSION_STATUS_OPTIONS = [
 
 export function getSportTypeLabel(value) {
   return SPORT_TYPE_OPTIONS.find((item) => item.value === toText(value).toLowerCase())?.label || '-'
+}
+
+export function getRaceTypeLabel(value) {
+  return RACE_TYPE_OPTIONS.find((item) => item.value === toText(value).toLowerCase())?.label || 'Unknown'
 }
 
 export function getAchievementTypeLabel(value) {
@@ -177,6 +191,18 @@ export function getUserLabel(user) {
 
 export function isRunningV1AchievementType(value) {
   return RUNNING_V1_ACHIEVEMENT_TYPES.includes(toText(value).toLowerCase())
+}
+
+export function buildRaceResultTitleSuggestion({ title = '', eventCode = '', bib = '' }) {
+  const safeTitle = toText(title).trim()
+  if (safeTitle) return safeTitle
+
+  const safeEventCode = toText(eventCode).trim()
+  const safeBib = toText(bib).trim()
+  if (safeEventCode && safeBib) return `${safeEventCode}-${safeBib}`
+  if (safeEventCode) return safeEventCode
+  if (safeBib) return safeBib
+  return ''
 }
 
 export function formatDurationSeconds(value) {

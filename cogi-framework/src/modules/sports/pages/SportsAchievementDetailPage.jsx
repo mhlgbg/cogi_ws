@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { CAlert, CBadge, CButton, CCard, CCardBody, CCol, CRow, CSpinner } from '@coreui/react'
 import SportsAchievementForm from '../components/SportsAchievementForm'
 import { getSportsAchievement, getSportsAchievementApiMessage, updateSportsAchievement } from '../services/sportsAchievementService'
-import { formatDistanceKm, formatDurationSeconds, formatSportsDateTime, getAchievementSourceLabel, getAchievementStatusMeta, getAchievementTypeLabel, getSportTypeLabel, getUserLabel } from '../utils/sportsAchievementUi'
+import { formatDistanceKm, formatDurationSeconds, formatSportsDateTime, getAchievementSourceLabel, getAchievementStatusMeta, getAchievementTypeLabel, getRaceTypeLabel, getSportTypeLabel, getUserLabel } from '../utils/sportsAchievementUi'
 
 function InfoCard({ label, value }) {
   return (
@@ -118,7 +118,10 @@ export default function SportsAchievementDetailPage() {
             <CCol md={4}><InfoCard label='Nguồn' value={getAchievementSourceLabel(achievement.source)} /></CCol>
             <CCol md={4}><InfoCard label='Achieved At' value={formatSportsDateTime(achievement.achievedAt)} /></CCol>
             <CCol md={4}><InfoCard label='Verified At' value={formatSportsDateTime(achievement.verifiedAt)} /></CCol>
-            <CCol md={4}><InfoCard label='Cự ly' value={achievement.distanceKm ? formatDistanceKm(achievement.distanceKm) : '-'} /></CCol>
+            <CCol md={4}><InfoCard label='Mã giải' value={achievement.eventCode || '-'} /></CCol>
+            <CCol md={4}><InfoCard label='BIB' value={achievement.bib || '-'} /></CCol>
+            <CCol md={4}><InfoCard label='Loại đường chạy' value={achievement.raceType ? getRaceTypeLabel(achievement.raceType) : '-'} /></CCol>
+            <CCol md={4}><InfoCard label='Cự ly' value={achievement.distanceKm ? formatDistanceKm(achievement.distanceKm) : (achievement.distancePending ? 'Chưa xác định cự ly' : '-')} /></CCol>
             <CCol md={4}><InfoCard label='Thời gian hoàn thành' value={achievement.durationSeconds ? formatDurationSeconds(achievement.durationSeconds) : (achievement.resultText || '-')} /></CCol>
             <CCol md={4}><InfoCard label='Kết quả thô' value={achievement.resultValue === null ? '-' : `${achievement.resultValue} ${achievement.resultUnit || ''}`.trim()} /></CCol>
             <CCol md={6}><InfoCard label='Source Reference' value={achievement.sourceReference || '-'} /></CCol>

@@ -1,6 +1,6 @@
 import api from '../../../api/axios'
-import { uploadTenantWebsiteMedia } from '../../content-management/services/tenantWebsiteSettingsService'
-import { resolveMediaUrl } from '../../../utils/mediaUrl'
+import { uploadTenantStorageFile } from '../../content-management/services/tenantStorageService'
+import { buildProtectedFileUrl, resolveMediaUrl } from '../../../utils/mediaUrl'
 
 function toText(value) {
   if (value === null || value === undefined) return ''
@@ -19,11 +19,29 @@ function unwrapSuccess(payload) {
 
 function normalizeMedia(value) {
   if (!value || typeof value !== 'object') return null
+
+  const rawUrl = toText(value.url || value.attributes?.url || value.resolvedUrl || value.relativePath)
+  const fileAssetId = normalizePositiveId(
+    value.fileAssetId
+    || value.provider_metadata?.bridgedFromFileAssetId
+    || value.providerMetadata?.bridgedFromFileAssetId
+    || value.attributes?.fileAssetId
+    || value.attributes?.provider_metadata?.bridgedFromFileAssetId
+    || value.attributes?.providerMetadata?.bridgedFromFileAssetId
+  )
+  const provider = toText(value.provider || value.attributes?.provider).toLowerCase()
+
   return {
     id: normalizePositiveId(value.id),
-    name: toText(value.name),
-    url: resolveMediaUrl(toText(value.url || value.attributes?.url)) || '',
-    mime: toText(value.mime),
+    fileAssetId,
+    name: toText(value.name || value.originalName || value.fileName),
+    provider,
+    url: buildProtectedFileUrl({
+      fileAssetId,
+      storageProvider: provider,
+      url: rawUrl,
+    }) || resolveMediaUrl(rawUrl) || '',
+    mime: toText(value.mime || value.mimeType),
   }
 }
 
@@ -181,6 +199,17 @@ export async function cancelSportsAchievementSubmission(id) {
   return normalizeSubmission(unwrapSuccess(response.data))
 }
 
-export async function uploadSportsAchievementSubmissionEvidence(file) {
-  return uploadTenantWebsiteMedia(file)
+export async function uploadSportsAchievementSubmissionEvidence(file, options = {}) {
+  if (!file) return null
+
+  const uploaded = await uploadTenantStorageFile({
+    file,
+    moduleKey: options.moduleKey || 'sports-achievement-submission',
+    featureKey: options.featureKey || 'sports-achievement-submission.manage',
+    entityType: options.entityType || 'sports-achievement-submission',
+    entityId: options.entityId ? String(options.entityId).trim() : undefined,
+    isPublic: true,
+  })
+
+  return normalizeMedia(uploaded)
 }

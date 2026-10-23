@@ -346,7 +346,14 @@ function PrizeList({ wheelId }) {
     if (!file) return null
     setUploading(true)
     try {
-      const uploaded = await uploadTenantStorageFile({ file, moduleKey: 'lucky-wheel', entityType: 'prize', entityId: String(wheelId), isPublic: true })
+      const uploaded = await uploadTenantStorageFile({
+        file,
+        moduleKey: 'lucky-wheel',
+        featureKey: 'lucky-wheel.manage',
+        entityType: 'prize',
+        entityId: String(wheelId),
+        isPublic: true,
+      })
       return uploaded
     } catch (e) {
       window.alert(storageApiMessage(e, 'Không thể upload ảnh'))

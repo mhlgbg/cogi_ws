@@ -151,6 +151,32 @@ function normalizeMembership(value) {
   }
 }
 
+function normalizeReactionUser(value) {
+  if (!value || typeof value !== 'object') return null
+  const id = Number(value.id || 0) || null
+  if (!id) return null
+  const displayName = String(value.displayName || value.fullName || value.username || `User #${id}`).trim()
+  return {
+    id,
+    displayName: displayName || `User #${id}`,
+    username: value.username ? String(value.username).trim() : null,
+  }
+}
+
+function normalizeReaction(value) {
+  if (!value || typeof value !== 'object') return null
+  const id = Number(value.id || 0) || null
+  if (!id) return null
+  const type = String(value.type || 'like').trim().toLowerCase()
+  if (!['like', 'love', 'support'].includes(type)) return null
+  return {
+    id,
+    type,
+    createdAt: value.createdAt || null,
+    user: normalizeReactionUser(value.user),
+  }
+}
+
 function normalizeActor(value, fallbackAuthenticated = false) {
   if (!value || typeof value !== 'object') {
     return {
@@ -263,9 +289,11 @@ export async function uploadCommunityPostImages(files, options = {}) {
   if (rows.length === 0) return []
 
   const moduleKey = String(options.moduleKey || options.category || 'community').trim() || 'community'
+  const featureKey = String(options.featureKey || 'community-post.manage').trim() || 'community-post.manage'
   const formData = new FormData()
   rows.forEach((file) => formData.append('file', file))
   formData.append('moduleKey', moduleKey)
+  formData.append('featureKey', featureKey)
   formData.append('entityType', String(options.entityType || 'community-post').trim() || 'community-post')
   formData.append('isPublic', String(options.isPublic !== undefined ? options.isPublic : true))
   if (options.entityId) formData.append('entityId', String(options.entityId))
@@ -355,6 +383,24 @@ export async function getCommunityPostComments(postId, params = {}) {
   return {
     rows: Array.isArray(response?.data?.data) ? response.data.data.map(normalizeComment).filter(Boolean) : [],
     pagination: unwrapPagination(response.data),
+  }
+}
+
+export async function getCommunityPostReactions(postId, params = {}) {
+  const response = await api.get(`/community/posts/${postId}/reactions`, { params })
+  const meta = response?.data?.meta || {}
+  return {
+    rows: Array.isArray(response?.data?.data) ? response.data.data.map(normalizeReaction).filter((item) => item && item.user) : [],
+    pagination: unwrapPagination(response.data),
+    summary: meta?.summary && typeof meta.summary === 'object'
+      ? {
+          like: Number(meta.summary.like || 0) || 0,
+          love: Number(meta.summary.love || 0) || 0,
+          support: Number(meta.summary.support || 0) || 0,
+        }
+      : { like: 0, love: 0, support: 0 },
+    reactionCount: Number(meta?.reactionCount || 0) || 0,
+    myReaction: meta?.myReaction ? String(meta.myReaction).trim().toLowerCase() : null,
   }
 }
 

@@ -10,7 +10,7 @@ const storageFeatures = {
       name: 'Quan ly luu tru',
       key: 'storage.manage',
       order: 1,
-      description: 'Tenant quan ly dung luong storage va FileAsset cua minh',
+      description: 'Quyền quản trị Storage Manager: xem thống kê, duyệt FileAsset, xóa/khôi phục file ở tenant',
       path: '/tenant/storage',
       showInMenu: true,
     },

@@ -80,6 +80,9 @@ export default function GameCenterDetailPage() {
     return Number(myRank || 0) > 0 && Number(item?.rank || 0) === Number(myRank || 0)
   })
   const progressByCode = new Map(progress.map((item) => [String(item?.activityCode || ''), item]))
+  const isGhostRaceGame = String(game?.gameType?.code || '').toLowerCase() === 'ghost_race'
+  const canPlayTrial = isGhostRaceGame && Boolean(game?.myParticipation?.id) && game?.effectivePhase?.isTrial
+  const canPlayOfficial = isGhostRaceGame && Boolean(game?.myParticipation?.id) && game?.effectivePhase?.isOfficial
 
   async function handleRegister() {
     setSubmitting(true)
@@ -117,7 +120,7 @@ export default function GameCenterDetailPage() {
               <div>
                 <div className='small text-body-secondary mb-1'>{game.code}</div>
                 <h2 className='mb-1'>{game.name}</h2>
-                <p className='text-body-secondary mb-2'>{game.description || 'Game XP Challenge đã được công bố cho tenant.'}</p>
+                <p className='text-body-secondary mb-2'>{game.description || 'Game đã được công bố cho tenant.'}</p>
                 <div className='d-flex flex-wrap align-items-center gap-2'>
                   <CBadge color={lifecycleBadge.color}>{phaseLabel}</CBadge>
                   <CBadge color={registrationBadge.color}>{registrationBadge.label}</CBadge>
@@ -128,16 +131,45 @@ export default function GameCenterDetailPage() {
                 <CButton color='primary' disabled={!game.registration?.canRegister || submitting} onClick={handleRegister}>
                   {submitting ? 'Đang xử lý...' : game.myParticipation?.id ? 'Đã đăng ký' : 'Đăng ký tham gia'}
                 </CButton>
+                {isGhostRaceGame ? (
+                  <>
+                    <CButton
+                      color='warning'
+                      variant='outline'
+                      disabled={!canPlayTrial}
+                      onClick={() => navigate(`/game-center/ghost-race?gameId=${game.id}`)}
+                    >
+                      Vào đường đua Trial
+                    </CButton>
+                    <CButton
+                      color='warning'
+                      disabled={!canPlayOfficial}
+                      onClick={() => navigate(`/game-center/ghost-race?gameId=${game.id}`)}
+                    >
+                      Vào đường đua Official
+                    </CButton>
+                  </>
+                ) : null}
                 <div className='small text-body-secondary text-lg-end'>Run version hiện tại: {game.currentRunVersion || 1}</div>
               </div>
             </CCardBody>
           </CCard>
 
+          {isGhostRaceGame ? (
+            <CAlert color='info'>
+              {game.myParticipation?.id
+                ? `Lane của bạn: ${game.myParticipation?.laneNumber || '-'} • Phase hiện tại: ${phaseLabel}.`
+                : 'Đăng ký để nhận lane và mở lượt đua theo phase hiện tại.'}
+            </CAlert>
+          ) : null}
+
           {game.registration?.reason ? (
             <CAlert color={game.registration?.canRegister ? 'info' : 'warning'}>{game.registration.reason}</CAlert>
           ) : null}
 
-          <CRow className='g-3 mb-3'>
+          {!isGhostRaceGame ? (
+            <>
+              <CRow className='g-3 mb-3'>
             <CCol lg={4}>
               <CCard className='border-0 shadow-sm h-100'>
                 <CCardHeader><strong>Thành tích cá nhân</strong></CCardHeader>
@@ -286,7 +318,82 @@ export default function GameCenterDetailPage() {
                 </CCardBody>
               </CCard>
             </CCol>
-          </CRow>
+              </CRow>
+
+              <CRow className='g-3 mb-3'>
+            <CCol lg={6}>
+              <CCard className='border-0 shadow-sm h-100'>
+                <CCardHeader><strong>Tiến độ hoạt động</strong></CCardHeader>
+                <CCardBody>
+                  {!rules.length ? (
+                    <div className='text-body-secondary'>Chưa có cấu hình hoạt động.</div>
+                  ) : (
+                    <CRow className='g-3'>
+                      {rules.map((rule) => {
+                        const currentProgress = progressByCode.get(String(rule.activityCode)) || null
+                        return (
+                          <CCol md={6} key={rule.activityCode}>
+                            <div className='border rounded p-3 h-100'>
+                              <div className='d-flex justify-content-between align-items-start gap-2 mb-2'>
+                                <div className='fw-semibold'>{rule.activityName || getActivityLabel(rule.activityCode)}</div>
+                                <CBadge color={rule.isEnabled ? 'success' : 'secondary'}>
+                                  {rule.isEnabled ? 'Đang bật' : 'Đang tắt'}
+                                </CBadge>
+                              </div>
+                              <div className='small text-body-secondary mb-2'>{rule.description || 'Không có mô tả'}</div>
+                              <div className='small'>
+                                <div><strong>XP có thể nhận:</strong> {rule.xpAmount}</div>
+                                <div><strong>Đã dùng:</strong> {currentProgress?.earnedCount ?? 0}</div>
+                                <div><strong>Giới hạn:</strong> {rule.maxCount || 'Không giới hạn'}</div>
+                                <div><strong>Còn lại:</strong> {currentProgress?.remainingCount ?? (rule.maxCount || '-')}</div>
+                              </div>
+                            </div>
+                          </CCol>
+                        )
+                      })}
+                    </CRow>
+                  )}
+                </CCardBody>
+              </CCard>
+            </CCol>
+            <CCol lg={6}>
+              <CCard className='border-0 shadow-sm h-100'>
+                <CCardHeader><strong>Lịch sử nhận XP</strong></CCardHeader>
+                <CCardBody>
+                  {!history.length ? (
+                    <div className='text-body-secondary'>Bạn chưa có lịch sử nhận XP.</div>
+                  ) : (
+                    <div className='d-grid gap-3'>
+                      {history.map((item) => (
+                        <div key={item.id} className='border-start border-4 border-primary ps-3 py-2'>
+                          <div className='d-flex justify-content-between flex-wrap gap-2'>
+                            <div>
+                              <div className='fw-semibold'>{getActivityLabel(item.activityCode)}</div>
+                              <div className='small text-body-secondary'>{formatDateTime(item.recordedAt)}</div>
+                            </div>
+                            <div className='text-end'>
+                              <CBadge color={item.phase === 'official' ? 'success' : 'warning'} className='mb-1'>
+                                {String(item.phase || '').toUpperCase() || '-'}
+                              </CBadge>
+                              <div className='fw-semibold'>+{item.xpAmount} XP</div>
+                            </div>
+                          </div>
+                          <details className='mt-2'>
+                            <summary className='small text-body-secondary' style={{ cursor: 'pointer' }}>Chi tiết kỹ thuật</summary>
+                            <div className='small text-body-secondary mt-1'>
+                              Event #{item.id} • Source: {item.sourceType}:{item.sourceId}
+                            </div>
+                          </details>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CCardBody>
+              </CCard>
+            </CCol>
+              </CRow>
+            </>
+          ) : null}
 
           <CCard className='border-0 shadow-sm'>
             <CCardHeader><strong>Thông tin mở rộng</strong></CCardHeader>
@@ -318,7 +425,8 @@ export default function GameCenterDetailPage() {
                     </div>
                   </CAccordionBody>
                 </CAccordionItem>
-                <CAccordionItem itemKey={3}>
+                {!isGhostRaceGame ? (
+                  <CAccordionItem itemKey={3}>
                   <CAccordionHeader>XP Rules chi tiết</CAccordionHeader>
                   <CAccordionBody>
                     {!rules.length ? (
@@ -336,8 +444,10 @@ export default function GameCenterDetailPage() {
                       </div>
                     )}
                   </CAccordionBody>
-                </CAccordionItem>
-                <CAccordionItem itemKey={4}>
+                  </CAccordionItem>
+                ) : null}
+                {!isGhostRaceGame ? (
+                  <CAccordionItem itemKey={4}>
                   <CAccordionHeader>Giải thích Trial XP và Official XP</CAccordionHeader>
                   <CAccordionBody>
                     <div className='small text-body-secondary'>
@@ -345,7 +455,8 @@ export default function GameCenterDetailPage() {
                       Khi game ở trial, trang ưu tiên Trial XP; khi game vào official, trang ưu tiên Official XP.
                     </div>
                   </CAccordionBody>
-                </CAccordionItem>
+                  </CAccordionItem>
+                ) : null}
               </CAccordion>
             </CCardBody>
           </CCard>

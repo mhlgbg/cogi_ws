@@ -18,8 +18,11 @@ function ensureDataLayer() {
 
 function ensureGtag() {
   if (typeof window.gtag !== 'function') {
+    const dataLayer = ensureDataLayer()
     window.gtag = function gtag() {
-      window.dataLayer.push(arguments)
+      if (Array.isArray(dataLayer)) {
+        dataLayer.push(Array.from(arguments))
+      }
     }
   }
 

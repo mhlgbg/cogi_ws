@@ -107,6 +107,9 @@ export default function GameCenterPage() {
             Không gian game của {brandName}, nơi thành viên có thể xem lịch game, luật chơi và đăng ký tham gia XP Challenge.
           </p>
         </div>
+        <CButton color='primary' onClick={() => navigate('/game-center/ghost-race')}>
+          Chạy thử Ghost Race
+        </CButton>
       </div>
 
       {error ? <CAlert color='danger'>{error}</CAlert> : null}

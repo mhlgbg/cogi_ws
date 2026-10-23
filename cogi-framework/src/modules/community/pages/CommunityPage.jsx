@@ -20,6 +20,7 @@ import {
   getCommunityGroups,
   getCommunityMyPosts,
   getCommunityPostComments,
+  getCommunityPostReactions,
   getCommunityPostingContext,
   hideCommunityComment,
   getMyCommunityGroups,
@@ -184,6 +185,13 @@ function resolveReactionMeta(type) {
   if (type === 'love') return { icon: '❤️', label: 'Yêu thích' }
   if (type === 'support') return { icon: '🤝', label: 'Ủng hộ' }
   return { icon: '👍', label: 'Thích' }
+}
+
+function resolveReactionTabLabel(type) {
+  if (type === 'like') return '👍 Thích'
+  if (type === 'love') return '❤️ Yêu thích'
+  if (type === 'support') return '🤝 Ủng hộ'
+  return 'Tất cả'
 }
 
 function parseYouTubeVideoId(value) {
@@ -1006,6 +1014,7 @@ function CommunityPostCard({
   onHideComment,
   onUploadCommentImages,
   isAdmin,
+  onOpenReactionList,
 }) {
   const [expanded, setExpanded] = useState(false)
   const [canExpand, setCanExpand] = useState(false)
@@ -1157,7 +1166,12 @@ function CommunityPostCard({
       {canShowInteraction ? (
         <>
           <div className='community-interaction-summary'>
-            <div className='community-reaction-summary'>
+            <button
+              type='button'
+              className='community-reaction-summary community-reaction-summary-btn'
+              onClick={() => onOpenReactionList?.(post)}
+              title='Xem danh sách người đã reaction'
+            >
               {(reactionSummary.like > 0 || reactionSummary.love > 0 || reactionSummary.support > 0) ? (
                 <>
                   {reactionSummary.like > 0 ? <span>👍</span> : null}
@@ -1166,7 +1180,7 @@ function CommunityPostCard({
                 </>
               ) : <span>🙂</span>}
               <span>{post.reactionCount || 0}</span>
-            </div>
+            </button>
             <button type='button' className='community-comment-count-btn' onClick={onToggleComments}>{post.commentCount || 0} bình luận</button>
           </div>
 
@@ -1578,6 +1592,97 @@ function CommunityComposerModal({
   )
 }
 
+function CommunityReactionListModal({
+  visible,
+  post,
+  selectedType,
+  onSelectType,
+  rows,
+  loading,
+  loadingMore,
+  error,
+  summary,
+  pagination,
+  onLoadMore,
+  onClose,
+}) {
+  const types = ['all', 'like', 'love', 'support']
+  const effectiveSummary = summary || { like: 0, love: 0, support: 0 }
+  const totalCount = Number(
+    post?.reactionCount
+    || (effectiveSummary.like || 0) + (effectiveSummary.love || 0) + (effectiveSummary.support || 0)
+    || 0,
+  )
+  const canLoadMore = Number(pagination?.page || 1) < Number(pagination?.pageCount || 1)
+
+  return (
+    <CModal visible={visible} onClose={onClose} alignment='center' size='lg'>
+      <CModalHeader closeButton>
+        <CModalTitle>Reactions · {totalCount}</CModalTitle>
+      </CModalHeader>
+      <CModalBody className='community-reaction-modal-body'>
+        <div className='community-reaction-tabs'>
+          {types.map((type) => {
+            const isActive = selectedType === type
+            const count = type === 'all'
+              ? totalCount
+              : Number(effectiveSummary[type] || 0)
+            return (
+              <button
+                key={`reaction-tab:${type}`}
+                type='button'
+                className={['community-reaction-tab-btn', isActive ? 'is-active' : ''].join(' ')}
+                onClick={() => onSelectType?.(type)}
+              >
+                <span>{resolveReactionTabLabel(type)}</span>
+                <span className='community-reaction-tab-count'>{count}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        {error ? <CAlert color='danger' className='mb-3'>{error}</CAlert> : null}
+        {loading ? (
+          <div className='community-reaction-modal-loading'>
+            <CSpinner size='sm' /> Đang tải danh sách reaction...
+          </div>
+        ) : null}
+
+        {!loading ? (
+          <div className='community-reaction-list'>
+            {rows.length === 0 ? (
+              <div className='community-empty-state'>
+                <h3>Chưa có reaction phù hợp.</h3>
+                <p>Hãy thử chọn tab khác hoặc quay lại sau.</p>
+              </div>
+            ) : rows.map((row) => {
+              const meta = resolveReactionMeta(row.type)
+              const displayName = toText(row?.user?.displayName || row?.user?.username || `User #${row?.user?.id || '?'}`)
+              return (
+                <div key={`reaction-row:${row.id}`} className='community-reaction-item'>
+                  <div className='community-user-avatar community-reaction-item-avatar'>{toInitials(displayName)}</div>
+                  <div className='community-reaction-item-main'>
+                    <div className='community-reaction-item-name'>{displayName}</div>
+                    <div className='community-reaction-item-meta'>{meta.icon} {meta.label}</div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : null}
+
+        {!loading && canLoadMore ? (
+          <div className='community-reaction-load-more'>
+            <button type='button' className='community-comment-count-btn' onClick={onLoadMore} disabled={loadingMore}>
+              {loadingMore ? 'Đang tải...' : 'Tải thêm'}
+            </button>
+          </div>
+        ) : null}
+      </CModalBody>
+    </CModal>
+  )
+}
+
 export default function CommunityPage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -1614,6 +1719,17 @@ export default function CommunityPage() {
   const [commentStates, setCommentStates] = useState({})
   const [commentBusyPosts, setCommentBusyPosts] = useState({})
   const [reactionBusyPosts, setReactionBusyPosts] = useState({})
+  const [reactionViewer, setReactionViewer] = useState({
+    open: false,
+    post: null,
+    type: 'all',
+    rows: [],
+    pagination: null,
+    loading: false,
+    loadingMore: false,
+    error: '',
+    summary: { like: 0, love: 0, support: 0 },
+  })
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef(null)
 
@@ -1781,6 +1897,21 @@ export default function CommunityPage() {
   useEffect(() => {
     loadRuntime()
   }, [loadRuntime])
+
+  useEffect(() => {
+    if (!reactionViewer.open || !reactionViewer.post?.id) return
+    const matched = feedRows.find((item) => Number(item.id) === Number(reactionViewer.post.id))
+    if (!matched) return
+    setReactionViewer((previous) => ({
+      ...previous,
+      post: {
+        ...previous.post,
+        reactionCount: Number(matched.reactionCount || 0),
+        reactionSummary: matched.reactionSummary || previous.post?.reactionSummary || { like: 0, love: 0, support: 0 },
+      },
+      summary: matched.reactionSummary || previous.summary,
+    }))
+  }, [feedRows, reactionViewer.open, reactionViewer.post?.id])
 
   useEffect(() => {
     function handlePointerDown(event) {
@@ -2225,6 +2356,70 @@ export default function CommunityPage() {
     }))
   }
 
+  async function loadPostReactions(post, options = {}) {
+    if (!post?.id) return
+    const type = options.type || 'all'
+    const append = options.append === true
+    const page = append
+      ? Math.max(1, Number((reactionViewer.pagination?.page || 1) + 1))
+      : 1
+
+    setReactionViewer((previous) => ({
+      ...previous,
+      open: true,
+      post: post || previous.post,
+      type,
+      error: '',
+      loading: append ? previous.loading : true,
+      loadingMore: append,
+      rows: append ? previous.rows : [],
+      pagination: append ? previous.pagination : null,
+      summary: append ? previous.summary : (post?.reactionSummary || previous.summary),
+    }))
+
+    try {
+      const result = await getCommunityPostReactions(post.id, {
+        type,
+        page,
+        pageSize: 20,
+      })
+      setReactionViewer((previous) => ({
+        ...previous,
+        open: true,
+        post: post || previous.post,
+        type,
+        loading: false,
+        loadingMore: false,
+        rows: append ? [...previous.rows, ...(result.rows || [])] : (result.rows || []),
+        pagination: result.pagination || null,
+        summary: result.summary || previous.summary,
+        error: '',
+      }))
+    } catch (requestError) {
+      setReactionViewer((previous) => ({
+        ...previous,
+        loading: false,
+        loadingMore: false,
+        error: getCommunityApiMessage(requestError, 'Không thể tải danh sách reaction.'),
+      }))
+    }
+  }
+
+  function openReactionList(post) {
+    if (!post?.id) return
+    void loadPostReactions(post, { type: 'all', append: false })
+  }
+
+  function closeReactionList() {
+    setReactionViewer((previous) => ({
+      ...previous,
+      open: false,
+      loading: false,
+      loadingMore: false,
+      error: '',
+    }))
+  }
+
   async function loadComments(postId) {
     setCommentStates((previous) => ({
       ...previous,
@@ -2344,6 +2539,14 @@ export default function CommunityPage() {
           reactionCount: Number(result?.reactionCount || 0),
           myReaction: result?.myReaction || type,
         })
+      }
+
+      if (reactionViewer.open && Number(reactionViewer?.post?.id) === Number(post.id)) {
+        const refreshedPost = {
+          ...post,
+          ...(feedRows.find((row) => Number(row.id) === Number(post.id)) || {}),
+        }
+        void loadPostReactions(refreshedPost, { type: reactionViewer.type || 'all', append: false })
       }
     } catch (requestError) {
       setComposerMessage(getCommunityApiMessage(requestError, 'Không thể cập nhật cảm xúc.'))
@@ -2560,6 +2763,7 @@ export default function CommunityPage() {
                           mediaUploading={mediaUploading}
                           reactionBusy={reactionBusyPosts[post.id] === true}
                           onReact={(type) => reactPost(post, type)}
+                          onOpenReactionList={(selectedPost) => openReactionList(selectedPost)}
                           commentsState={commentsState}
                           commentsBusy={commentBusyPosts[post.id] === true}
                           onToggleComments={() => toggleComments(post.id)}
@@ -2580,6 +2784,27 @@ export default function CommunityPage() {
           ) : null}
         </main>
       </div>
+
+      <CommunityReactionListModal
+        visible={reactionViewer.open}
+        post={reactionViewer.post}
+        selectedType={reactionViewer.type}
+        rows={Array.isArray(reactionViewer.rows) ? reactionViewer.rows : []}
+        loading={reactionViewer.loading === true}
+        loadingMore={reactionViewer.loadingMore === true}
+        error={reactionViewer.error}
+        summary={reactionViewer.summary}
+        pagination={reactionViewer.pagination}
+        onSelectType={(type) => {
+          if (type === reactionViewer.type || !reactionViewer.post?.id) return
+          void loadPostReactions(reactionViewer.post, { type, append: false })
+        }}
+        onLoadMore={() => {
+          if (!reactionViewer.post?.id || reactionViewer.loadingMore || reactionViewer.loading) return
+          void loadPostReactions(reactionViewer.post, { type: reactionViewer.type, append: true })
+        }}
+        onClose={closeReactionList}
+      />
 
       <CommunityComposerModal
         visible={composerModalOpen}

@@ -22,6 +22,7 @@ import CampaignFormTab from '../components/CampaignFormTab'
 import CampaignRegistrationsTab from '../components/CampaignRegistrationsTab'
 import CampaignEmailsTab from '../components/CampaignEmailsTab'
 import CampaignPublicPageTab from '../components/CampaignPublicPageTab'
+import CampaignPostRegistrationTab from '../components/CampaignPostRegistrationTab'
 import {
   closeRegistrationCampaign,
   getRegistrationCampaign,
@@ -209,6 +210,7 @@ export default function RegistrationCampaignDetailPage() {
   }
 
   const statusMeta = getCampaignStatusMeta(campaign.status)
+  const pendingPostRegistration = Number(campaign?.postRegistration?.sportsProfileLink?.stats?.waitingToLink || 0)
 
   return (
     <CContainer fluid className='py-4'>
@@ -239,6 +241,12 @@ export default function RegistrationCampaignDetailPage() {
         <CNavItem><CNavLink href='#' active={activeTab === 'form'} onClick={(event) => { event.preventDefault(); goTab('form') }}>Biểu mẫu</CNavLink></CNavItem>
         <CNavItem><CNavLink href='#' active={activeTab === 'registrations'} onClick={(event) => { event.preventDefault(); goTab('registrations') }}>Người đăng ký</CNavLink></CNavItem>
         <CNavItem><CNavLink href='#' active={activeTab === 'emails'} onClick={(event) => { event.preventDefault(); goTab('emails') }}>Email</CNavLink></CNavItem>
+        <CNavItem>
+          <CNavLink href='#' active={activeTab === 'post-registration'} onClick={(event) => { event.preventDefault(); goTab('post-registration') }}>
+            Xử lý sau đăng ký
+            {pendingPostRegistration > 0 ? <CBadge color='warning' className='ms-2'>{pendingPostRegistration}</CBadge> : null}
+          </CNavLink>
+        </CNavItem>
         <CNavItem><CNavLink href='#' active={activeTab === 'public-page'} onClick={(event) => { event.preventDefault(); goTab('public-page') }}>Trang đăng ký</CNavLink></CNavItem>
       </CNav>
 
@@ -247,6 +255,7 @@ export default function RegistrationCampaignDetailPage() {
       {activeTab === 'form' ? <CampaignFormTab campaign={campaign} saving={saving} onSave={handleSaveForm} /> : null}
       {activeTab === 'registrations' ? <CampaignRegistrationsTab campaign={campaign} onChanged={reloadKeepTab} /> : null}
       {activeTab === 'emails' ? <CampaignEmailsTab campaign={campaign} onChanged={reloadKeepTab} onOpenRegistration={() => goTab('registrations')} /> : null}
+      {activeTab === 'post-registration' ? <CampaignPostRegistrationTab campaign={campaign} onChanged={reloadKeepTab} /> : null}
       {activeTab === 'public-page' ? <CampaignPublicPageTab campaign={campaign} onOpenPublic={handleOpenPublic} onOpenAction={() => handleStatusAction('open')} /> : null}
 
       <RegistrationCampaignBasicInfoModal

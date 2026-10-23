@@ -85,6 +85,7 @@ export function getRegistrationModeLabel(mode) {
 }
 
 export function resolveRegistrationCampaignTab(pathname = '') {
+  if (/\/post-registration(?:\/)?$/i.test(pathname)) return 'post-registration'
   if (/\/public-page(?:\/)?$/i.test(pathname)) return 'public-page'
   if (/\/emails(?:\/)?$/i.test(pathname)) return 'emails'
   if (/\/registrations(?:\/)?$/i.test(pathname)) return 'registrations'
@@ -96,6 +97,7 @@ export function resolveRegistrationCampaignTab(pathname = '') {
 
 export function buildRegistrationCampaignTabPath(id, tab, tenantCode = '') {
   const prefix = tenantCode ? `/t/${encodeURIComponent(tenantCode)}` : ''
+  if (tab === 'post-registration') return `${prefix}/registration-campaigns/${id}/post-registration`
   if (tab === 'config') return `${prefix}/registration-campaigns/${id}/config`
   if (tab === 'form') return `${prefix}/registration-campaigns/${id}/form`
   if (tab === 'registrations') return `${prefix}/registration-campaigns/${id}/registrations`

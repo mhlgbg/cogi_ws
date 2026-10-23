@@ -154,6 +154,7 @@ export async function uploadSportsClubMedia(file, options = {}) {
   const uploaded = await uploadTenantStorageFile({
     file,
     moduleKey: 'sports-club',
+    featureKey: 'sports-club.manage',
     entityType: 'sports-club',
     entityId: options.entityId ? String(options.entityId).trim() : undefined,
     isPublic: true,

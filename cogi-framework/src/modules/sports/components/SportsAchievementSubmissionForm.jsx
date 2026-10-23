@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { CAlert, CButton, CCol, CForm, CFormInput, CFormLabel, CFormSelect, CFormTextarea, CRow, CSpinner } from '@coreui/react'
 import RunningAchievementFields, { buildRunningAchievementPayload, buildRunningAchievementState, validateRunningAchievementForm } from './RunningAchievementFields'
-import { listSportsClubs } from '../services/sportsClubService'
-import { listSportsProfiles } from '../services/sportsProfileService'
+import { getMySportsProfile, listMySportsClubs } from '../services/sportsMeService'
 import { getSportsAchievementSubmissionApiMessage, uploadSportsAchievementSubmissionEvidence } from '../services/sportsAchievementSubmissionService'
+import FileAssetPreview from '../../../components/FileAssetPreview'
 import {
   ACHIEVEMENT_TYPE_OPTIONS,
+  RACE_TYPE_OPTIONS,
   RUNNING_ACHIEVEMENT_TYPE_OPTIONS,
+  buildRaceResultTitleSuggestion,
   fromDateTimeInputValue,
   getSportsClubOptionLabel,
   getSportsProfileOptionLabel,
@@ -24,6 +26,9 @@ function buildInitialForm(initialValues = null) {
     achievementType: String(initialValues?.achievementType || 'other').trim() || 'other',
     sportType: String(initialValues?.sportType || '').trim(),
     title: String(initialValues?.title || '').trim(),
+    eventCode: String(initialValues?.eventCode || '').trim(),
+    bib: String(initialValues?.bib || '').trim(),
+    raceType: String(initialValues?.raceType || '').trim(),
     description: String(initialValues?.description || '').trim(),
     achievedAt: toDateTimeInputValue(initialValues?.achievedAt),
     resultValue: initialValues?.resultValue ?? '',
@@ -36,6 +41,7 @@ function buildInitialForm(initialValues = null) {
     evidence: Array.isArray(initialValues?.evidence) ? initialValues.evidence : [],
     distanceKm: initialValues?.distanceKm ?? null,
     durationSeconds: initialValues?.durationSeconds ?? null,
+    distancePending: Boolean(initialValues?.distancePending),
     ...buildRunningAchievementState(initialValues),
   }
 }
@@ -50,6 +56,10 @@ function buildPayload(form) {
     achievementType: form.achievementType || 'other',
     sportType: form.sportType || null,
     title: form.title || null,
+    eventCode: form.eventCode || null,
+    bib: form.bib || null,
+    raceType: form.raceType || null,
+    distancePending: runningPayload.distancePending ?? Boolean(form.distancePending),
     description: form.description || null,
     achievedAt: fromDateTimeInputValue(form.achievedAt),
     resultValue: runningPayload.resultValue ?? (form.resultValue === '' ? null : Number(form.resultValue)),
@@ -110,6 +120,7 @@ export default function SportsAchievementSubmissionForm({
     : ACHIEVEMENT_TYPE_OPTIONS
   const effectiveSportType = lockedSportType || form.sportType || ''
   const isRunningMode = effectiveSportType === 'running' && isRunningV1AchievementType(form.achievementType)
+  const showRaceResultFields = form.achievementType === 'race_result' || isRunningMode
 
   useEffect(() => {
     setForm(buildInitialForm(initialValues))
@@ -139,12 +150,28 @@ export default function SportsAchievementSubmissionForm({
     async function loadOptions() {
       try {
         const [profileResult, clubResult] = await Promise.all([
-          listSportsProfiles({ page: 1, pageSize: 500, sort: 'fullName:asc' }),
-          listSportsClubs({ page: 1, pageSize: 500, sort: 'name:asc' }),
+          getMySportsProfile(),
+          listMySportsClubs({ page: 1, pageSize: 500 }),
         ])
         if (!mounted) return
-        setProfiles(Array.isArray(profileResult?.rows) ? profileResult.rows : [])
-        setClubs(Array.isArray(clubResult?.rows) ? clubResult.rows : [])
+
+        const myProfile = profileResult?.profile || null
+        const nextProfiles = myProfile ? [myProfile] : []
+        const nextClubs = Array.isArray(clubResult)
+          ? clubResult
+            .map((membership) => membership?.club)
+            .filter(Boolean)
+          : []
+
+        setProfiles(nextProfiles)
+        setClubs(nextClubs)
+
+        if (myProfile) {
+          setForm((current) => ({
+            ...current,
+            sportsProfile: current.sportsProfile?.id ? current.sportsProfile : myProfile,
+          }))
+        }
       } catch {
         if (!mounted) return
         setProfiles([])
@@ -156,7 +183,14 @@ export default function SportsAchievementSubmissionForm({
   }, [])
 
   function updateField(key, value) {
-    setForm((current) => ({ ...current, [key]: value }))
+    setForm((current) => {
+      const next = { ...current, [key]: value }
+      if ((key === 'eventCode' || key === 'bib') && !String(current.title || '').trim()) {
+        const suggestion = buildRaceResultTitleSuggestion({ title: current.title, eventCode: key === 'eventCode' ? value : current.eventCode, bib: key === 'bib' ? value : current.bib })
+        if (suggestion) next.title = suggestion
+      }
+      return next
+    })
     setFieldErrors((current) => {
       if (!current[key]) return current
       const next = { ...current }
@@ -241,6 +275,13 @@ export default function SportsAchievementSubmissionForm({
           <RunningAchievementFields form={form} errors={fieldErrors} disabled={submitting || uploading} onChange={updateField} />
         ) : (
           <>
+            {showRaceResultFields ? (
+              <>
+                <CCol md={4}><CFormLabel>Mã giải (eventCode)</CFormLabel><CFormInput value={form.eventCode} onChange={(event) => updateField('eventCode', event.target.value)} disabled={submitting || uploading} /></CCol>
+                <CCol md={4}><CFormLabel>BIB</CFormLabel><CFormInput value={form.bib} onChange={(event) => updateField('bib', event.target.value)} disabled={submitting || uploading} /></CCol>
+                <CCol md={4}><CFormLabel>Loại đường chạy</CFormLabel><CFormSelect value={form.raceType} onChange={(event) => updateField('raceType', event.target.value)} disabled={submitting || uploading}><option value=''>Chưa xác định</option>{RACE_TYPE_OPTIONS.filter((option) => option.value).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</CFormSelect></CCol>
+              </>
+            ) : null}
             <CCol md={8}><CFormLabel>Tiêu đề *</CFormLabel><CFormInput value={form.title} onChange={(event) => updateField('title', event.target.value)} disabled={submitting || uploading} invalid={Boolean(fieldErrors.title)} />{fieldErrors.title ? <div className='text-danger small mt-1'>{fieldErrors.title}</div> : null}</CCol>
             <CCol md={4}><CFormLabel>Achieved At</CFormLabel><CFormInput type='datetime-local' value={form.achievedAt} onChange={(event) => updateField('achievedAt', event.target.value)} disabled={submitting || uploading} /></CCol>
             <CCol md={4}><CFormLabel>Result Value</CFormLabel><CFormInput type='number' step='any' value={form.resultValue} onChange={(event) => updateField('resultValue', event.target.value)} disabled={submitting || uploading} /></CCol>
@@ -267,19 +308,13 @@ export default function SportsAchievementSubmissionForm({
         <CCol lg={7}>
           <div className='border rounded p-3 h-100'>
             <div className='small text-body-secondary mb-2'>Danh sách file</div>
-            {form.evidence.length === 0 ? <div className='text-body-secondary'>Chưa có evidence.</div> : (
-              <div className='d-flex flex-column gap-2'>
-                {form.evidence.map((item) => (
-                  <div key={item.id} className='d-flex justify-content-between align-items-center gap-3 flex-wrap'>
-                    <div>
-                      <div className='fw-semibold'>{item.name || `Media #${item.id}`}</div>
-                      <div className='small text-body-secondary'>{item.url || item.mime || '-'}</div>
-                    </div>
-                    <CButton type='button' size='sm' color='secondary' variant='outline' onClick={() => removeEvidence(item.id)} disabled={submitting || uploading}>Gỡ</CButton>
-                  </div>
-                ))}
-              </div>
-            )}
+            <FileAssetPreview
+              files={form.evidence}
+              mode='editable'
+              onRemove={(fileId) => removeEvidence(fileId)}
+              emptyText='Chưa có evidence.'
+              compact={false}
+            />
           </div>
         </CCol>
       </CRow>

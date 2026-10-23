@@ -88,6 +88,9 @@ export default function GameDetailPage() {
   }, [id])
 
   const game = detail?.game || null
+  const gameTypeCode = String(game?.gameType?.code || '').toLowerCase()
+  const isGhostRaceGame = gameTypeCode === 'ghost_race'
+  const isXpChallengeGame = gameTypeCode === 'xp_challenge'
   const adminActions = detail?.adminActions || null
   const legacyEditable = ['draft', 'registration', 'trial_upcoming'].includes(String(game?.effectiveStatus || '').toLowerCase())
   const canEditRules = adminActions?.rules?.available === undefined
@@ -99,6 +102,7 @@ export default function GameDetailPage() {
   const xpSummary = detail?.xpSummary || { byActivity: [], byPhase: [], eventStatus: [], recentLedgers: [] }
   const leaderboards = detail?.leaderboards || { officialTop10: [], trialTop10: [] }
   const recentEvents = Array.isArray(detail?.recentEvents) ? detail.recentEvents : []
+  const ghostRace = detail?.ghostRace || { config: null, attempts: [], personalBest: { trial: [], official: [] } }
 
   async function handleSaveRules() {
     setSavingRules(true)
@@ -237,7 +241,9 @@ export default function GameDetailPage() {
           </CButton>
           <h2 className='mb-1'>{game?.name || 'Chi tiet Game'}</h2>
           <p className='text-body-secondary mb-0'>
-            Xem vòng đời game, cấu hình luật XP, danh sách đăng ký và bảng xếp hạng.
+            {isGhostRaceGame
+              ? 'Xem vòng đời Ghost Race, cấu hình race, đăng ký lane, attempts và personal best.'
+              : 'Xem vòng đời game, cấu hình luật XP, danh sách đăng ký và bảng xếp hạng.'}
           </p>
         </div>
         <div className='d-flex flex-wrap align-items-center gap-2'>
@@ -263,8 +269,21 @@ export default function GameDetailPage() {
           <CRow className='g-3 mb-4'>
             <StatTile label='Người đăng ký' value={detail?.stats?.totalParticipants || 0} helper='Tổng số participant' />
             <StatTile label='Đang hoạt động' value={detail?.stats?.activeParticipants || 0} helper='Người tham gia active' />
-            <StatTile label='Luật đã cấu hình' value={detail?.stats?.configuredRules || 0} helper='3 luật mục tiêu' />
-            <StatTile label='Luật đang bật' value={detail?.stats?.enabledRules || 0} helper='Hoạt động được tính điểm' />
+            {isGhostRaceGame ? (
+              <>
+                <StatTile label='Attempts (run hiện tại)' value={ghostRace?.attempts?.length || 0} helper='Bao gồm trial/official' />
+                <StatTile
+                  label='PB Official tốt nhất'
+                  value={ghostRace?.personalBest?.official?.[0]?.finishTimeSeconds ? `${Number(ghostRace.personalBest.official[0].finishTimeSeconds).toFixed(2)}s` : '-'}
+                  helper='Chỉ tính attempts verified'
+                />
+              </>
+            ) : (
+              <>
+                <StatTile label='Luật đã cấu hình' value={detail?.stats?.configuredRules || 0} helper='3 luật mục tiêu' />
+                <StatTile label='Luật đang bật' value={detail?.stats?.enabledRules || 0} helper='Hoạt động được tính điểm' />
+              </>
+            )}
           </CRow>
 
           <CRow className='g-3 mb-4'>
@@ -310,26 +329,131 @@ export default function GameDetailPage() {
 
             <CCol xl={6}>
               <CCard className='h-100 border-0 shadow-sm'>
-                <CCardHeader><strong>Dành cho Phase 3</strong></CCardHeader>
+                <CCardHeader><strong>{isGhostRaceGame ? 'Cấu hình Ghost Race' : 'Dành cho Phase 3'}</strong></CCardHeader>
                 <CCardBody>
-                  <div className='border rounded p-3 mb-3'>
-                    <div className='fw-semibold mb-1'>Bảng xếp hạng</div>
-                    <div className='text-body-secondary small'>
-                      Chưa hiển thị bảng xếp hạng vì XP Engine và cơ chế cộng điểm thực tế sẽ được triển khai ở Phase 3.
-                    </div>
-                  </div>
-                  <div className='border rounded p-3'>
-                    <div className='fw-semibold mb-1'>Thống kê XP theo giai đoạn</div>
-                    <div className='text-body-secondary small'>
-                      Vùng này dành cho Trial XP và Official XP khi XP Engine đi vào hoạt động.
-                    </div>
-                  </div>
+                  {isGhostRaceGame ? (
+                    <dl className='row mb-0'>
+                      <dt className='col-sm-5'>Platform</dt>
+                      <dd className='col-sm-7'>{ghostRace?.config?.playPlatform || '-'}</dd>
+                      <dt className='col-sm-5'>Distance</dt>
+                      <dd className='col-sm-7'>{ghostRace?.config?.distanceMeters || '-'}m</dd>
+                      <dt className='col-sm-5'>Cut-off</dt>
+                      <dd className='col-sm-7'>{ghostRace?.config?.cutoffSeconds || '-'}s</dd>
+                      <dt className='col-sm-5'>Countdown</dt>
+                      <dd className='col-sm-7'>
+                        {(ghostRace?.config?.countdown?.onYourMarksMs ?? '-')}/
+                        {(ghostRace?.config?.countdown?.setMs ?? '-')}/
+                        {(ghostRace?.config?.countdown?.goHoldMs ?? '-')} ms
+                      </dd>
+                      <dt className='col-sm-5'>Physics</dt>
+                      <dd className='col-sm-7'>{ghostRace?.config?.physicsVersion || '-'}</dd>
+                      <dt className='col-sm-5'>Rules</dt>
+                      <dd className='col-sm-7'>{ghostRace?.config?.rulesVersion || '-'}</dd>
+                      <dt className='col-sm-5'>Track</dt>
+                      <dd className='col-sm-7'>{ghostRace?.config?.trackVersion || '-'}</dd>
+                      <dt className='col-sm-5'>PB policy</dt>
+                      <dd className='col-sm-7'>Fastest verified attempt per phase</dd>
+                    </dl>
+                  ) : (
+                    <>
+                      <div className='border rounded p-3 mb-3'>
+                        <div className='fw-semibold mb-1'>Bảng xếp hạng</div>
+                        <div className='text-body-secondary small'>
+                          Chưa hiển thị bảng xếp hạng vì XP Engine và cơ chế cộng điểm thực tế sẽ được triển khai ở Phase 3.
+                        </div>
+                      </div>
+                      <div className='border rounded p-3'>
+                        <div className='fw-semibold mb-1'>Thống kê XP theo giai đoạn</div>
+                        <div className='text-body-secondary small'>
+                          Vùng này dành cho Trial XP và Official XP khi XP Engine đi vào hoạt động.
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </CCardBody>
               </CCard>
             </CCol>
           </CRow>
 
-          <CRow className='g-3 mb-4'>
+          {isGhostRaceGame ? (
+            <CRow className='g-3 mb-4'>
+              <CCol xl={7}>
+                <CCard className='border-0 shadow-sm h-100'>
+                  <CCardHeader><strong>Race Attempts (run hiện tại)</strong></CCardHeader>
+                  <CCardBody>
+                    {!ghostRace?.attempts?.length ? (
+                      <div className='text-body-secondary'>Chưa có attempt nào trong run version hiện tại.</div>
+                    ) : (
+                      <CTable responsive hover align='middle'>
+                        <CTableHead>
+                          <CTableRow>
+                            <CTableHeaderCell>Người chơi</CTableHeaderCell>
+                            <CTableHeaderCell>Lane</CTableHeaderCell>
+                            <CTableHeaderCell>Phase</CTableHeaderCell>
+                            <CTableHeaderCell>Time</CTableHeaderCell>
+                            <CTableHeaderCell>Status</CTableHeaderCell>
+                            <CTableHeaderCell>Verify</CTableHeaderCell>
+                          </CTableRow>
+                        </CTableHead>
+                        <CTableBody>
+                          {ghostRace.attempts.map((attempt) => (
+                            <CTableRow key={`attempt:${attempt.id}`}>
+                              <CTableDataCell>{attempt.user?.fullName || attempt.user?.username || `User ${attempt.user?.id || '-'}`}</CTableDataCell>
+                              <CTableDataCell>{attempt.laneNumber || '-'}</CTableDataCell>
+                              <CTableDataCell>{String(attempt.phase || '-').toUpperCase()}</CTableDataCell>
+                              <CTableDataCell>{attempt.finishTimeSeconds ? `${Number(attempt.finishTimeSeconds).toFixed(2)}s` : '-'}</CTableDataCell>
+                              <CTableDataCell>{attempt.status || '-'}</CTableDataCell>
+                              <CTableDataCell>{attempt.verificationStatus || '-'}</CTableDataCell>
+                            </CTableRow>
+                          ))}
+                        </CTableBody>
+                      </CTable>
+                    )}
+                  </CCardBody>
+                </CCard>
+              </CCol>
+              <CCol xl={5}>
+                <CCard className='border-0 shadow-sm h-100'>
+                  <CCardHeader><strong>Personal Best (verified)</strong></CCardHeader>
+                  <CCardBody>
+                    <div className='mb-3'>
+                      <div className='fw-semibold mb-2'>Trial PB</div>
+                      {!ghostRace?.personalBest?.trial?.length ? (
+                        <div className='text-body-secondary small'>Chưa có PB Trial hợp lệ.</div>
+                      ) : (
+                        <div className='d-grid gap-2'>
+                          {ghostRace.personalBest.trial.slice(0, 5).map((item) => (
+                            <div className='border rounded px-3 py-2 d-flex justify-content-between' key={`pb-trial:${item.attemptId}`}>
+                              <span>{item.user?.fullName || item.user?.username || `User ${item.user?.id}`}</span>
+                              <strong>{Number(item.finishTimeSeconds).toFixed(2)}s</strong>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <div className='fw-semibold mb-2'>Official PB</div>
+                      {!ghostRace?.personalBest?.official?.length ? (
+                        <div className='text-body-secondary small'>Chưa có PB Official hợp lệ.</div>
+                      ) : (
+                        <div className='d-grid gap-2'>
+                          {ghostRace.personalBest.official.slice(0, 5).map((item) => (
+                            <div className='border rounded px-3 py-2 d-flex justify-content-between' key={`pb-official:${item.attemptId}`}>
+                              <span>{item.user?.fullName || item.user?.username || `User ${item.user?.id}`}</span>
+                              <strong>{Number(item.finishTimeSeconds).toFixed(2)}s</strong>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </CCardBody>
+                </CCard>
+              </CCol>
+            </CRow>
+          ) : null}
+
+          {!isGhostRaceGame ? (
+            <CRow className='g-3 mb-4'>
             <CCol xl={6}>
               <CCard className='border-0 shadow-sm h-100'>
                 <CCardHeader><strong>Bảng xếp hạng Official</strong></CCardHeader>
@@ -374,9 +498,11 @@ export default function GameDetailPage() {
                 </CCardBody>
               </CCard>
             </CCol>
-          </CRow>
+            </CRow>
+          ) : null}
 
-          <CRow className='g-3 mb-4'>
+          {!isGhostRaceGame ? (
+            <CRow className='g-3 mb-4'>
             <CCol xl={6}>
               <CCard className='border-0 shadow-sm h-100'>
                 <CCardHeader><strong>Thống kê XP theo hoạt động</strong></CCardHeader>
@@ -427,7 +553,8 @@ export default function GameDetailPage() {
                 </CCardBody>
               </CCard>
             </CCol>
-          </CRow>
+            </CRow>
+          ) : null}
 
           <CCard className='border-0 shadow-sm mb-4'>
             <CCardHeader><strong>Thao tác quản trị</strong></CCardHeader>
@@ -484,7 +611,8 @@ export default function GameDetailPage() {
             </CCardBody>
           </CCard>
 
-          <CCard className='border-0 shadow-sm mb-4'>
+          {!isGhostRaceGame ? (
+            <CCard className='border-0 shadow-sm mb-4'>
             <CCardHeader className='d-flex justify-content-between align-items-center gap-2'>
               <strong>Cấu hình luật XP</strong>
               {savingRules ? <CSpinner size='sm' /> : null}
@@ -583,9 +711,11 @@ export default function GameDetailPage() {
                 </CButton>
               </div>
             </CCardBody>
-          </CCard>
+            </CCard>
+          ) : null}
 
-          <CRow className='g-3 mb-4'>
+          {!isGhostRaceGame ? (
+            <CRow className='g-3 mb-4'>
             <CCol xl={6}>
               <CCard className='border-0 shadow-sm h-100'>
                 <CCardHeader><strong>Lịch sử XP gần đây</strong></CCardHeader>
@@ -648,7 +778,8 @@ export default function GameDetailPage() {
                 </CCardBody>
               </CCard>
             </CCol>
-          </CRow>
+            </CRow>
+          ) : null}
 
           <CCard className='border-0 shadow-sm'>
             <CCardHeader><strong>Danh sách người đăng ký</strong></CCardHeader>
@@ -662,9 +793,10 @@ export default function GameDetailPage() {
                       <CTableHeaderCell>Username</CTableHeaderCell>
                       <CTableHeaderCell>Họ tên</CTableHeaderCell>
                       <CTableHeaderCell>Email</CTableHeaderCell>
+                      {isGhostRaceGame ? <CTableHeaderCell>Làn</CTableHeaderCell> : null}
                       <CTableHeaderCell>Trạng thái</CTableHeaderCell>
                       <CTableHeaderCell>Thời điểm đăng ký</CTableHeaderCell>
-                      <CTableHeaderCell>Tổng XP</CTableHeaderCell>
+                      <CTableHeaderCell>{isGhostRaceGame ? 'Run Version' : 'Tổng XP'}</CTableHeaderCell>
                     </CTableRow>
                   </CTableHead>
                   <CTableBody>
@@ -673,13 +805,14 @@ export default function GameDetailPage() {
                         <CTableDataCell>{participant.user?.username || '-'}</CTableDataCell>
                         <CTableDataCell>{participant.user?.fullName || '-'}</CTableDataCell>
                         <CTableDataCell>{participant.user?.email || '-'}</CTableDataCell>
+                        {isGhostRaceGame ? <CTableDataCell>{participant.laneNumber || '-'}</CTableDataCell> : null}
                         <CTableDataCell>
                           <CBadge color={participant.status === 'active' ? 'success' : 'secondary'}>
                             {participant.status || '-'}
                           </CBadge>
                         </CTableDataCell>
                         <CTableDataCell>{formatDateTime(participant.registeredAt)}</CTableDataCell>
-                        <CTableDataCell>{participant.totalXp}</CTableDataCell>
+                        <CTableDataCell>{isGhostRaceGame ? (participant.runVersion || 1) : participant.totalXp}</CTableDataCell>
                       </CTableRow>
                     ))}
                   </CTableBody>
