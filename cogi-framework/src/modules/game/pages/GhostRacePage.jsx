@@ -12,6 +12,7 @@ import {
   CSpinner,
 } from '@coreui/react'
 import { GhostRaceEngine } from '../utils/ghostRaceEngine'
+import { TouchInputAdapter } from '../utils/touchInputAdapter'
 import {
   getGameApiMessage,
   getGhostRaceSession,
@@ -81,8 +82,42 @@ const styles = {
 const REPLAY_STORAGE_KEY = 'vkl-ghost-race-replays-v1'
 const MAX_REPLAY_HISTORY = 20
 const MAX_OPPONENTS = 5
+const MAX_MOBILE_RACERS = 5
+const MAX_MOBILE_GHOSTS = 4
 const OPPONENT_COLORS = ['#FFFFFF', '#F7F7F2', '#D4AF37', '#E5E7EB', '#C7CAD1']
 const TICK_SECONDS = 1 / 60
+
+function detectClientDeviceProfile() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return {
+      platform: 'desktop',
+      userAgent: '',
+      maxTouchPoints: 0,
+      coarsePointer: false,
+      userAgentDataMobile: null,
+    }
+  }
+
+  const userAgent = String(navigator.userAgent || '')
+  const loweredUa = userAgent.toLowerCase()
+  const maxTouchPoints = Number(navigator.maxTouchPoints || 0)
+  const coarsePointer = Boolean(window.matchMedia?.('(pointer: coarse)')?.matches)
+  const userAgentDataMobile = typeof navigator.userAgentData?.mobile === 'boolean'
+    ? navigator.userAgentData.mobile
+    : null
+
+  const mobileByUa = /android|iphone|ipad|ipod|mobile|phone|tablet/i.test(loweredUa)
+  const mobileByHints = userAgentDataMobile === true || maxTouchPoints >= 2 || coarsePointer
+  const platform = (mobileByUa || mobileByHints) ? 'mobile' : 'desktop'
+
+  return {
+    platform,
+    userAgent,
+    maxTouchPoints,
+    coarsePointer,
+    userAgentDataMobile,
+  }
+}
 
 function normalizeReplayEntry(item, index) {
   const finish = Number(item?.result?.finishTimeSeconds)
@@ -203,8 +238,19 @@ export default function GhostRacePage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const officialGameId = Number(searchParams.get('gameId') || 0) || null
+  const isMobilePrototype = searchParams.get('prototype') === 'mobile'
+  const hasPrototypeAndGameId = isMobilePrototype && Boolean(officialGameId)
+  const effectiveOfficialGameId = isMobilePrototype ? null : officialGameId
   const technicalMode = searchParams.get('debug') === '1' || searchParams.get('tech') === '1'
   const canvasRef = useRef(null)
+  const leftTouchButtonRef = useRef(null)
+  const rightTouchButtonRef = useRef(null)
+  const touchAdapterRef = useRef(null)
+  const [isMobileViewport, setIsMobileViewport] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.innerWidth <= 767
+  })
+  const [clientDevice, setClientDevice] = useState(() => detectClientDeviceProfile())
   const engineRef = useRef(null)
   const [hud, setHud] = useState(initialHud)
   const [mode, setMode] = useState('race')
@@ -241,10 +287,54 @@ export default function GhostRacePage() {
   const [clockNow, setClockNow] = useState(() => Date.now())
 
   useEffect(() => {
-    if (!officialGameId) return undefined
+    if (!effectiveOfficialGameId) return undefined
     const timer = window.setInterval(() => setClockNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
-  }, [officialGameId])
+  }, [effectiveOfficialGameId])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+    const updateViewport = () => setIsMobileViewport(window.innerWidth <= 767)
+    updateViewport()
+    window.addEventListener('resize', updateViewport)
+    return () => window.removeEventListener('resize', updateViewport)
+  }, [])
+
+  useEffect(() => {
+    setClientDevice(detectClientDeviceProfile())
+  }, [])
+
+  const instancePlayPlatform = String(sessionInfo?.raceConfig?.playPlatform || 'web').toLowerCase()
+  const expectsMobileDevice = Boolean(effectiveOfficialGameId) && instancePlayPlatform === 'mobile'
+  const expectsDesktopDevice = Boolean(effectiveOfficialGameId) && instancePlayPlatform === 'desktop'
+  const isMobileClientDevice = clientDevice.platform === 'mobile'
+  const isOfficialPlatformMismatch = expectsMobileDevice
+    ? !isMobileClientDevice
+    : expectsDesktopDevice
+      ? isMobileClientDevice
+      : false
+  const platformMismatchMessage = expectsDesktopDevice
+    ? 'Cuộc thi này dành cho máy tính. Vui lòng sử dụng máy tính để tham gia.'
+    : 'Cuộc thi này dành cho điện thoại. Vui lòng mở trên điện thoại để tham gia.'
+  const shouldBlockOfficialStart = Boolean(effectiveOfficialGameId) && isOfficialPlatformMismatch
+  const isMobileLayout = isMobilePrototype || expectsMobileDevice || (!effectiveOfficialGameId && isMobileViewport)
+
+  useEffect(() => {
+    if (!engineRef.current) return undefined
+    if (!isMobileLayout) {
+      touchAdapterRef.current?.destroy()
+      touchAdapterRef.current = null
+      return undefined
+    }
+    const adapter = new TouchInputAdapter({ engine: engineRef.current })
+    if (leftTouchButtonRef.current) adapter.bindButton(leftTouchButtonRef.current, 'left')
+    if (rightTouchButtonRef.current) adapter.bindButton(rightTouchButtonRef.current, 'right')
+    touchAdapterRef.current = adapter
+    return () => {
+      adapter.destroy()
+      touchAdapterRef.current = null
+    }
+  }, [isMobileLayout, mode, uiStage])
 
   const phaseRemainingText = useMemo(() => {
     if (!sessionInfo?.phaseCode) return '-'
@@ -330,7 +420,7 @@ export default function GhostRacePage() {
   useEffect(() => {
     let mounted = true
     async function loadOfficialSession() {
-      if (!officialGameId) {
+      if (!effectiveOfficialGameId) {
         setSessionInfo(null)
         setAttempts([])
         setPersonalBest(null)
@@ -344,9 +434,9 @@ export default function GhostRacePage() {
       setSessionError('')
       try {
         const [session, attemptsResult, pbResult] = await Promise.all([
-          getGhostRaceSession(officialGameId),
-          getMyGhostRaceAttempts(officialGameId),
-          getMyGhostRacePersonalBest(officialGameId),
+          getGhostRaceSession(effectiveOfficialGameId),
+          getMyGhostRaceAttempts(effectiveOfficialGameId),
+          getMyGhostRacePersonalBest(effectiveOfficialGameId),
         ])
         if (!mounted) return
         setSessionInfo(session)
@@ -367,7 +457,7 @@ export default function GhostRacePage() {
     return () => {
       mounted = false
     }
-  }, [officialGameId])
+  }, [effectiveOfficialGameId])
 
   useEffect(() => {
     if (hud.status === 'finished' && hud.mode === 'race' && hud.runMode === 'player') {
@@ -400,7 +490,7 @@ export default function GhostRacePage() {
   }, [hud.status, hud.mode, hud.runMode, hud.elapsedSeconds])
 
   const refreshOfficialData = async () => {
-    if (!officialGameId) return
+    if (!effectiveOfficialGameId) return
     const withTimeout = (promise, timeoutMs, timeoutMessage) => new Promise((resolve, reject) => {
       const timer = window.setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs)
       promise
@@ -415,9 +505,9 @@ export default function GhostRacePage() {
     })
     const [sessionResult, attemptRows, pbResult] = await withTimeout(
       Promise.all([
-        getGhostRaceSession(officialGameId),
-        getMyGhostRaceAttempts(officialGameId),
-        getMyGhostRacePersonalBest(officialGameId),
+        getGhostRaceSession(effectiveOfficialGameId),
+        getMyGhostRaceAttempts(effectiveOfficialGameId),
+        getMyGhostRacePersonalBest(effectiveOfficialGameId),
       ]),
       12000,
       'Timeout while refreshing official race data',
@@ -429,16 +519,28 @@ export default function GhostRacePage() {
   }
 
   const handleStart = async () => {
-    const shouldCreateAttempt = officialGameId
+    if (shouldBlockOfficialStart) {
+      setSessionError(platformMismatchMessage)
+      return
+    }
+    const shouldCreateAttempt = effectiveOfficialGameId
+      && !isMobilePrototype
       && mode === 'race'
       && hud.runMode !== 'replay'
 
     if (shouldCreateAttempt) {
       setSessionError('')
       try {
-        const startedAttempt = await startGhostRaceAttempt(officialGameId, {
+        const startedAttempt = await startGhostRaceAttempt(effectiveOfficialGameId, {
           engineVersion: 'ghost-race-engine-v1',
           countdown: sessionInfo?.raceConfig?.countdown || undefined,
+          clientPlatform: clientDevice.platform,
+          userAgent: clientDevice.userAgent,
+          deviceSignals: {
+            maxTouchPoints: clientDevice.maxTouchPoints,
+            coarsePointer: clientDevice.coarsePointer,
+            userAgentDataMobile: clientDevice.userAgentDataMobile,
+          },
         })
         const attemptId = Number(startedAttempt?.attemptId || 0)
         const attemptToken = String(startedAttempt?.attemptToken || '').trim()
@@ -489,6 +591,10 @@ export default function GhostRacePage() {
   }
 
   const handleGoToLineup = async () => {
+    if (shouldBlockOfficialStart) {
+      setSessionError(platformMismatchMessage)
+      return
+    }
     submitRequestSeqRef.current += 1
     setSessionError('')
     engineRef.current?.reset()
@@ -503,7 +609,7 @@ export default function GhostRacePage() {
     }
     setUiStage(STAGES.LINEUP)
     try {
-      if (officialGameId) {
+      if (effectiveOfficialGameId) {
         await refreshOfficialData()
       }
     } catch (error) {
@@ -756,11 +862,47 @@ export default function GhostRacePage() {
   }, [liveParticipant, debugManualOpponents])
   const displayRows = useMemo(
     () => {
-      if (!officialGameId) return fallbackDisplayRows
-      if (automaticDisplayRows.length > 0) return automaticDisplayRows
-      return [{ ...liveParticipant, displayOrder: 1 }]
+      let baseRows = []
+      if (!effectiveOfficialGameId) {
+        baseRows = fallbackDisplayRows
+      } else if (automaticDisplayRows.length > 0) {
+        baseRows = automaticDisplayRows
+      } else {
+        baseRows = [{ ...liveParticipant, displayOrder: 1 }]
+      }
+
+      if (!isMobileLayout) return baseRows
+
+      const selfRow = baseRows.find((entry) => entry.isSelf) || null
+      const opponents = baseRows
+        .filter((entry) => !entry.isSelf)
+        .sort((a, b) => {
+          const pbA = Number.isFinite(a.pbSeconds) ? Number(a.pbSeconds) : Number.POSITIVE_INFINITY
+          const pbB = Number.isFinite(b.pbSeconds) ? Number(b.pbSeconds) : Number.POSITIVE_INFINITY
+          if (Math.abs(pbA - pbB) > 0.0001) return pbA - pbB
+          return Number(a.displayOrder || 999) - Number(b.displayOrder || 999)
+        })
+        .slice(0, MAX_MOBILE_GHOSTS)
+
+      const limited = selfRow ? [selfRow, ...opponents] : baseRows.slice(0, MAX_MOBILE_RACERS)
+      let ghostIndex = 0
+      return limited.map((entry, index) => {
+        if (entry.isSelf) {
+          return {
+            ...entry,
+            displayOrder: index + 1,
+            mobileLabel: 'Bạn',
+          }
+        }
+        ghostIndex += 1
+        return {
+          ...entry,
+          displayOrder: index + 1,
+          mobileLabel: `Ghost ${ghostIndex}`,
+        }
+      })
     },
-    [officialGameId, automaticDisplayRows, fallbackDisplayRows, liveParticipant],
+    [effectiveOfficialGameId, automaticDisplayRows, fallbackDisplayRows, liveParticipant, isMobileLayout],
   )
   const raceParticipants = useMemo(() => {
     const list = [...displayRows]
@@ -818,13 +960,19 @@ export default function GhostRacePage() {
   const latestAttemptStatus = String(latestAttempt?.status || '').toLowerCase()
   const latestAttemptReason = latestAttempt?.verificationReason || ''
   const latestAttemptFailed = Boolean(latestAttempt) && latestAttemptStatus !== 'verified'
+  const mobileHeaderStatus = isMobilePrototype ? 'Prototype' : (sessionInfo?.phaseCode || 'Trial')
+  const mobileTimeValue = (hud.finishTimeSeconds ?? (hud.mode === 'practice' ? hud.practiceRemainingSeconds : hud.elapsedSeconds)).toFixed(2)
+  const mobileRankOrLane = `#${liveRanking?.liveRank || '-'} / ${Math.max(1, raceParticipants.length)}`
+  const mobileGapLabel = aheadOfLive
+    ? `Kém ${aheadOfLive.displayName} ${gapAhead?.toFixed(2)}m`
+    : (behindLive ? `Hơn ${behindLive.displayName} ${gapBehind?.toFixed(2)}m` : 'Đang dẫn đầu')
 
   const submitOfficialAttempt = async (payload) => {
     const requestSeq = ++submitRequestSeqRef.current
     setPendingSubmitPayload(payload || null)
     setLastSubmitStatus(null)
     setUiStage(STAGES.SUBMITTING)
-    if (!officialGameId) {
+    if (!effectiveOfficialGameId) {
       setLastSubmitStatus({
         ok: true,
         submitResult: { status: payload?.falseStart ? 'false_start' : 'verified', verificationStatus: payload?.falseStart ? 'rejected' : 'verified' },
@@ -855,7 +1003,7 @@ export default function GhostRacePage() {
           })
       })
       const submitResult = await withTimeout(
-        submitGhostRaceAttempt(officialGameId, {
+        submitGhostRaceAttempt(effectiveOfficialGameId, {
           attemptId: activeAttempt.attemptId,
           attemptToken: activeAttempt.attemptToken,
           ...payload,
@@ -956,16 +1104,31 @@ export default function GhostRacePage() {
 
   if (uiStage === STAGES.OVERVIEW) {
     return (
-      <div className='container-fluid py-4 vkl-ghost-race-theme' style={styles.page}>
+      <div
+        className='container-fluid py-4 vkl-ghost-race-theme'
+        style={{
+          ...styles.page,
+          paddingBottom: isMobileLayout ? 'calc(170px + env(safe-area-inset-bottom))' : undefined,
+        }}
+      >
         <div className='d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3'>
           <div>
-            <div className='small' style={{ color: 'rgba(247,247,242,0.72)' }}>
-              Game Center / {officialGameId ? `Official Session #${officialGameId}` : 'Prototype'}
-            </div>
-            <h2 className='mb-0'>{sessionInfo?.game?.name || 'Asynchronous Sprint'}</h2>
+            {isMobileLayout ? (
+              <>
+                <div className='small' style={{ color: 'rgba(247,247,242,0.72)' }}>{mobileHeaderStatus}</div>
+                <h2 className='mb-0'>VKL Sprint 200m</h2>
+              </>
+            ) : (
+              <>
+                <div className='small' style={{ color: 'rgba(247,247,242,0.72)' }}>
+                  Game Center / {effectiveOfficialGameId ? `Official Session #${effectiveOfficialGameId}` : 'Prototype'}
+                </div>
+                <h2 className='mb-0'>{sessionInfo?.game?.name || 'Asynchronous Sprint'}</h2>
+              </>
+            )}
           </div>
-          <CButton style={styles.toggleButton} onClick={() => navigate('/game-center')}>
-            Quay lại Game Center
+          <CButton style={styles.toggleButton} size={isMobileLayout ? 'sm' : undefined} onClick={() => navigate('/game-center')}>
+            {isMobileLayout ? 'Quay lại' : 'Quay lại Game Center'}
           </CButton>
         </div>
         {sessionError ? <CAlert className='mb-3' color='danger'>{sessionError}</CAlert> : null}
@@ -991,8 +1154,8 @@ export default function GhostRacePage() {
                 <div><strong>Thứ hạng:</strong> {playerRank ? `${playerRank}/${Math.max(1, totalRankedParticipants)}` : '-'}</div>
                 <div><strong>Số người có thành tích:</strong> {totalRankedParticipants}</div>
                 <div className='d-flex gap-2 mt-2'>
-                  <CButton style={styles.primaryButton} onClick={handleGoToLineup}>Đua ngay</CButton>
-                  {technicalMode ? <CButton style={styles.toggleButton} onClick={() => setUiStage(STAGES.RACING)}>Vào kỹ thuật</CButton> : null}
+                  <CButton style={styles.primaryButton} onClick={handleGoToLineup} disabled={shouldBlockOfficialStart}>Đua ngay</CButton>
+                  {technicalMode ? <CButton style={styles.toggleButton} onClick={() => setUiStage(STAGES.RACING)} disabled={shouldBlockOfficialStart}>Vào kỹ thuật</CButton> : null}
                 </div>
               </CCardBody>
             </CCard>
@@ -1061,7 +1224,7 @@ export default function GhostRacePage() {
         </CCard>
         <div className='d-flex gap-2'>
           <CButton style={styles.secondaryButton} onClick={handleGoToOverview}>Quay lại</CButton>
-          <CButton style={styles.primaryButton} onClick={handleStart}>Sẵn sàng</CButton>
+          <CButton style={styles.primaryButton} onClick={handleStart} disabled={shouldBlockOfficialStart}>Sẵn sàng</CButton>
         </div>
       </div>
     )
@@ -1114,7 +1277,7 @@ export default function GhostRacePage() {
       <div className='d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3'>
         <div>
           <div className='small' style={{ color: 'rgba(247,247,242,0.72)' }}>
-            Game Center / {officialGameId ? `Official Session #${officialGameId}` : 'Prototype'}
+            Game Center / {effectiveOfficialGameId ? `Official Session #${effectiveOfficialGameId}` : 'Prototype'}
           </div>
           <h2 className='mb-0'>{sessionInfo?.game?.name || 'Asynchronous Sprint'}</h2>
         </div>
@@ -1127,14 +1290,28 @@ export default function GhostRacePage() {
         <CAlert className='mb-3' color='danger'>{sessionError}</CAlert>
       ) : null}
 
-      {officialGameId ? (
+      {isMobilePrototype ? (
+        <CAlert className='mb-3' style={{ background: 'rgba(244,196,0,0.14)', borderColor: VKL_THEME.mutedGold, color: VKL_THEME.warmWhite }}>
+          Mobile Prototype – Thành tích thử nghiệm, chưa ghi nhận chính thức.
+        </CAlert>
+      ) : null}
+
+      {hasPrototypeAndGameId ? (
+        <CAlert className='mb-3' color='info'>Prototype mode đang bật cùng gameId. Phiên này chạy local-only và không ghi Attempt backend.</CAlert>
+      ) : null}
+
+      {shouldBlockOfficialStart ? (
+        <CAlert className='mb-3' color='warning'>{platformMismatchMessage}</CAlert>
+      ) : null}
+
+      {effectiveOfficialGameId && !isMobileLayout ? (
         <CCard className='border-0 shadow-sm mb-3' style={styles.card}>
           <CCardBody>
             {sessionLoading ? (
               <div className='small' style={styles.statLabel}>Đang tải phiên đua chính thức...</div>
             ) : (
               <div className='d-flex flex-wrap gap-3 align-items-center small'>
-                <div><strong>Game:</strong> {sessionInfo?.game?.name || `#${officialGameId}`}</div>
+                <div><strong>Game:</strong> {sessionInfo?.game?.name || `#${effectiveOfficialGameId}`}</div>
                 <div><strong>Lane:</strong> {sessionInfo?.participant?.laneNumber || '-'}</div>
                 <div><strong>Phase:</strong> {sessionInfo?.phaseCode || '-'}</div>
                 <div><strong>Còn lại:</strong> {phaseRemainingText}</div>
@@ -1150,14 +1327,22 @@ export default function GhostRacePage() {
       ) : null}
 
       <CAlert className='mb-4' style={{ background: 'rgba(244,196,0,0.14)', borderColor: VKL_THEME.mutedGold, color: VKL_THEME.warmWhite }}>
-        Rhythm-only mode: không obstacle, không nhảy/cúi/chuyển làn. Điều khiển chính thức bằng ← / → và chỉ tính bước sau tín hiệu GO.
+        {isMobileLayout
+          ? 'Rhythm-only mode: chỉ tính bước hợp lệ sau GO.'
+          : 'Rhythm-only mode: không obstacle, không nhảy/cúi/chuyển làn. Điều khiển chính thức bằng ← / → và chỉ tính bước sau tín hiệu GO.'}
       </CAlert>
 
       <div className='d-flex gap-3 mb-4 flex-wrap align-items-center'>
         <CBadge color='warning'>{uiStage === STAGES.COUNTDOWN ? 'Countdown' : 'Racing'}</CBadge>
-        <span className='small' style={styles.statLabel}>Điều khiển: ArrowLeft / ArrowRight</span>
+        {!isMobileLayout ? <span className='small' style={styles.statLabel}>Điều khiển: ArrowLeft / ArrowRight</span> : null}
         <CButton style={styles.secondaryButton} onClick={handleGoToOverview}>Hủy lượt</CButton>
-        {technicalMode ? (
+        {isMobileLayout ? (
+          <>
+            <CButton style={styles.secondaryButton} onClick={handlePause}>Pause</CButton>
+            <CButton style={styles.secondaryButton} onClick={handleReset}>Reset</CButton>
+          </>
+        ) : null}
+        {!isMobileLayout && technicalMode ? (
           <>
             <CButton style={styles.secondaryButton} onClick={handlePause}>Pause</CButton>
             <CButton style={styles.secondaryButton} onClick={handleReset}>Reset</CButton>
@@ -1193,52 +1378,77 @@ export default function GhostRacePage() {
         </CCard>
       ) : null}
 
-      <CCard className='border-0 shadow-sm mb-4' style={styles.card}>
-        <CCardBody>
-          <div className='d-flex gap-3 flex-wrap align-items-center justify-content-between'>
-            <div>
-              <div className='small' style={styles.statLabel}>Replay mode</div>
-              <div><strong>{isReplayMode ? 'Đang phát lại' : 'Đang chạy trực tiếp'}</strong></div>
+      {isMobileLayout ? (
+        <CCard className='border-0 shadow-sm mb-3' style={styles.card}>
+          <CCardBody>
+            <div className='row g-2 text-center'>
+              <div className='col-6'>
+                <div className='small' style={styles.statLabel}>Time</div>
+                <div className='fw-bold fs-4' style={{ color: VKL_THEME.yellow }}>{mobileTimeValue}s</div>
+              </div>
+              <div className='col-6'>
+                <div className='small' style={styles.statLabel}>Distance</div>
+                <div className='fw-bold fs-5'>{hud.distance.toFixed(0)}m / 200m</div>
+              </div>
+              <div className='col-6'>
+                <div className='small' style={styles.statLabel}>Speed</div>
+                <div className='fw-bold fs-5'>{hud.speed.toFixed(2)} m/s</div>
+              </div>
+              <div className='col-6'>
+                <div className='small' style={styles.statLabel}>Rank</div>
+                <div className='fw-bold fs-5'>{mobileRankOrLane}</div>
+              </div>
             </div>
-            <div>
-              <div className='small' style={styles.statLabel}>Personal Best</div>
-              <div><strong>{personalBest?.finishTimeSeconds ? `${Number(personalBest.finishTimeSeconds).toFixed(2)}s` : '-'}</strong></div>
-            </div>
-            <div>
-              <div className='small' style={styles.statLabel}>Thứ hạng realtime</div>
-              <div><strong>{liveRanking ? `${liveRanking.liveRank}/${raceParticipants.length}` : '-'}</strong></div>
-            </div>
-            <div>
-              <div className='small' style={styles.statLabel}>Người dẫn đầu</div>
-              <div><strong>{leaderLabel}</strong></div>
-            </div>
-            <div>
-              <div className='small' style={styles.statLabel}>Khoảng cách</div>
+          </CCardBody>
+        </CCard>
+      ) : (
+        <CCard className='border-0 shadow-sm mb-4' style={styles.card}>
+          <CCardBody>
+            <div className='d-flex gap-3 flex-wrap align-items-center justify-content-between'>
               <div>
-                <strong>
-                  {aheadOfLive ? `Kém ${aheadOfLive.displayName} ${gapAhead?.toFixed(2)}m` : 'Đang dẫn đầu'}
-                  {behindLive ? ` • Hơn ${behindLive.displayName} ${gapBehind?.toFixed(2)}m` : ''}
-                </strong>
+                <div className='small' style={styles.statLabel}>Replay mode</div>
+                <div><strong>{isReplayMode ? 'Đang phát lại' : 'Đang chạy trực tiếp'}</strong></div>
               </div>
+              <div>
+                <div className='small' style={styles.statLabel}>Personal Best</div>
+                <div><strong>{personalBest?.finishTimeSeconds ? `${Number(personalBest.finishTimeSeconds).toFixed(2)}s` : '-'}</strong></div>
+              </div>
+              <div>
+                <div className='small' style={styles.statLabel}>Thứ hạng realtime</div>
+                <div><strong>{liveRanking ? `${liveRanking.liveRank}/${raceParticipants.length}` : '-'}</strong></div>
+              </div>
+              <div>
+                <div className='small' style={styles.statLabel}>Người dẫn đầu</div>
+                <div><strong>{leaderLabel}</strong></div>
+              </div>
+              <div>
+                <div className='small' style={styles.statLabel}>Khoảng cách</div>
+                <div>
+                  <strong>
+                    {aheadOfLive ? `Kém ${aheadOfLive.displayName} ${gapAhead?.toFixed(2)}m` : 'Đang dẫn đầu'}
+                    {behindLive ? ` • Hơn ${behindLive.displayName} ${gapBehind?.toFixed(2)}m` : ''}
+                  </strong>
+                </div>
+              </div>
+              {isReplayMode ? (
+                <div className='d-flex gap-2'>
+                  <CButton style={styles.secondaryButton} onClick={handlePauseReplay}>Pause Replay</CButton>
+                  <CButton style={styles.secondaryButton} onClick={handleResumeReplay}>Resume Replay</CButton>
+                  <CButton style={styles.toggleButton} onClick={handleRestartReplay}>Restart Replay</CButton>
+                </div>
+              ) : null}
             </div>
-            {isReplayMode ? (
-              <div className='d-flex gap-2'>
-                <CButton style={styles.secondaryButton} onClick={handlePauseReplay}>Pause Replay</CButton>
-                <CButton style={styles.secondaryButton} onClick={handleResumeReplay}>Resume Replay</CButton>
-                <CButton style={styles.toggleButton} onClick={handleRestartReplay}>Restart Replay</CButton>
-              </div>
-            ) : null}
-          </div>
-        </CCardBody>
-      </CCard>
+          </CCardBody>
+        </CCard>
+      )}
 
       <CRow className='g-3 mb-4'>
-        <CCol lg={7}>
+        <CCol lg={isMobileLayout ? 12 : 7}>
           <CCard className='border-0 shadow-sm h-100' style={styles.card}>
             <CCardBody>
               <div className='d-flex justify-content-between align-items-center mb-2'>
-                <div className='fw-semibold'>LIVE PLAYER</div>
-                <div className='small' style={styles.statLabel}>ArrowLeft / ArrowRight</div>
+                <div className='fw-semibold'>{isMobileLayout ? 'Đường chạy' : 'LIVE PLAYER'}</div>
+                {!isMobileLayout ? <div className='small' style={styles.statLabel}>ArrowLeft / ArrowRight</div> : null}
               </div>
               <canvas
                 ref={canvasRef}
@@ -1249,44 +1459,83 @@ export default function GhostRacePage() {
             </CCardBody>
           </CCard>
         </CCol>
-        <CCol lg={5}>
+        <CCol lg={isMobileLayout ? 12 : 5}>
           <CCard className='border-0 shadow-sm h-100' style={styles.card}>
             <CCardBody>
-              <div className='d-flex justify-content-between align-items-center mb-2'>
-                <div className='fw-semibold'>BẢNG ĐUA BẤT ĐỒNG BỘ</div>
-                <div className='small' style={styles.statLabel}>Từ GO: {raceElapsedForOpponents.toFixed(2)}s</div>
-              </div>
-              <svg width='100%' height='300' viewBox='0 0 520 300' style={{ background: VKL_THEME.deepBlack, borderRadius: '10px', border: `1px solid ${VKL_THEME.charcoal}` }}>
-                <rect x='20' y='24' width='480' height='240' fill={VKL_THEME.softBlack} stroke={VKL_THEME.charcoal} />
-                {[0, 1, 2, 3, 4, 5].map((index) => (
-                  <line key={`meter-${index}`} x1={20 + (index * 96)} y1='24' x2={20 + (index * 96)} y2='264' stroke='rgba(244,196,0,0.26)' strokeDasharray='4 6' />
-                ))}
-                {[...displayRowsWithLiveRank].map((runner, index) => {
-                  const laneY = 46 + (index * 34)
-                  const x = 28 + ((Math.max(0, Math.min(200, runner.distance)) / 200) * 460)
-                  const statusText = runner.finished ? `FINISHED ${Number.isFinite(runner.finishTimeSeconds) ? `(${runner.finishTimeSeconds.toFixed(2)}s)` : ''}` : 'RUNNING'
-                  return (
-                    <g key={runner.id}>
-                      <line x1='24' y1={laneY} x2='496' y2={laneY} stroke='rgba(255,255,255,0.08)' />
-                      <circle cx={x} cy={laneY} r='8' fill={runner.type === 'live' ? VKL_THEME.yellow : runner.color} />
-                      <text x='30' y={laneY - 11} fill={VKL_THEME.warmWhite} fontSize='11'>
-                        Dòng {runner.displayOrder} • Lane {runner.lane || '-'} • {runner.isSelf ? 'Bạn' : runner.displayName}
-                      </text>
-                      <text x='350' y={laneY - 11} fill={VKL_THEME.mutedGold} fontSize='10'>
-                        {runner.distance.toFixed(1)}m · PB {Number.isFinite(runner.pbSeconds) ? `${Number(runner.pbSeconds).toFixed(2)}s` : '-'} · Rank realtime #{runner.liveRank || '-'} · {statusText}
-                      </text>
-                    </g>
-                  )
-                })}
-                <text x='24' y='286' fill={VKL_THEME.warmWhite} fontSize='10'>0m</text>
-                <text x='468' y='286' fill={VKL_THEME.warmWhite} fontSize='10'>200m</text>
-              </svg>
+              {isMobileLayout ? (
+                <>
+                  <div className='d-flex flex-column gap-1 mb-2'>
+                    <div className='fw-semibold'>Ghost race mini • Từ GO: {raceElapsedForOpponents.toFixed(2)}s</div>
+                    <div className='small' style={styles.statLabel}>Hạng {mobileRankOrLane}</div>
+                    <div className='small' style={styles.statLabel}>Người dẫn đầu: {leaderLabel}</div>
+                    <div className='small' style={styles.statLabel}>{mobileGapLabel}</div>
+                  </div>
+                  <svg
+                    width='100%'
+                    height={Math.max(120, (displayRowsWithLiveRank.length * 30) + 24)}
+                    viewBox={`0 0 520 ${Math.max(120, (displayRowsWithLiveRank.length * 30) + 24)}`}
+                    style={{ background: VKL_THEME.deepBlack, borderRadius: '10px', border: `1px solid ${VKL_THEME.charcoal}` }}
+                  >
+                    <rect x='8' y='8' width='504' height={Math.max(102, displayRowsWithLiveRank.length * 30)} fill={VKL_THEME.softBlack} stroke={VKL_THEME.charcoal} />
+                    {displayRowsWithLiveRank.map((runner, index) => {
+                      const laneY = 24 + (index * 30)
+                      const xStart = 110
+                      const xEnd = 496
+                      const x = xStart + ((Math.max(0, Math.min(200, runner.distance)) / 200) * (xEnd - xStart))
+                      const laneLabel = runner.mobileLabel || (runner.isSelf ? 'Bạn' : `Ghost ${index}`)
+                      return (
+                        <g key={runner.id}>
+                          <text x='16' y={laneY + 4} fill={runner.isSelf ? VKL_THEME.yellow : VKL_THEME.warmWhite} fontSize='11' fontWeight={runner.isSelf ? 700 : 500}>
+                            {laneLabel}
+                          </text>
+                          <line x1={xStart} y1={laneY} x2={xEnd} y2={laneY} stroke={runner.isSelf ? 'rgba(244,196,0,0.6)' : 'rgba(255,255,255,0.18)'} strokeWidth={runner.isSelf ? 2 : 1.2} />
+                          <circle cx={x} cy={laneY} r={runner.isSelf ? 6 : 5} fill={runner.isSelf ? VKL_THEME.yellow : runner.color} />
+                        </g>
+                      )
+                    })}
+                    <text x='110' y={Math.max(116, (displayRowsWithLiveRank.length * 30) + 16)} fill={VKL_THEME.warmWhite} fontSize='10'>0m</text>
+                    <text x='470' y={Math.max(116, (displayRowsWithLiveRank.length * 30) + 16)} fill={VKL_THEME.warmWhite} fontSize='10'>200m</text>
+                  </svg>
+                </>
+              ) : (
+                <>
+                  <div className='d-flex justify-content-between align-items-center mb-2'>
+                    <div className='fw-semibold'>BẢNG ĐUA BẤT ĐỒNG BỘ</div>
+                    <div className='small' style={styles.statLabel}>Từ GO: {raceElapsedForOpponents.toFixed(2)}s</div>
+                  </div>
+                  <svg width='100%' height='300' viewBox='0 0 520 300' style={{ background: VKL_THEME.deepBlack, borderRadius: '10px', border: `1px solid ${VKL_THEME.charcoal}` }}>
+                    <rect x='20' y='24' width='480' height='240' fill={VKL_THEME.softBlack} stroke={VKL_THEME.charcoal} />
+                    {[0, 1, 2, 3, 4, 5].map((index) => (
+                      <line key={`meter-${index}`} x1={20 + (index * 96)} y1='24' x2={20 + (index * 96)} y2='264' stroke='rgba(244,196,0,0.26)' strokeDasharray='4 6' />
+                    ))}
+                    {[...displayRowsWithLiveRank].map((runner, index) => {
+                      const laneY = 46 + (index * 34)
+                      const x = 28 + ((Math.max(0, Math.min(200, runner.distance)) / 200) * 460)
+                      const statusText = runner.finished ? `FINISHED ${Number.isFinite(runner.finishTimeSeconds) ? `(${runner.finishTimeSeconds.toFixed(2)}s)` : ''}` : 'RUNNING'
+                      return (
+                        <g key={runner.id}>
+                          <line x1='24' y1={laneY} x2='496' y2={laneY} stroke='rgba(255,255,255,0.08)' />
+                          <circle cx={x} cy={laneY} r='8' fill={runner.type === 'live' ? VKL_THEME.yellow : runner.color} />
+                          <text x='30' y={laneY - 11} fill={VKL_THEME.warmWhite} fontSize='11'>
+                            Dòng {runner.displayOrder} • Lane {runner.lane || '-'} • {runner.isSelf ? 'Bạn' : runner.displayName}
+                          </text>
+                          <text x='350' y={laneY - 11} fill={VKL_THEME.mutedGold} fontSize='10'>
+                            {runner.distance.toFixed(1)}m · PB {Number.isFinite(runner.pbSeconds) ? `${Number(runner.pbSeconds).toFixed(2)}s` : '-'} · Rank realtime #{runner.liveRank || '-'} · {statusText}
+                          </text>
+                        </g>
+                      )
+                    })}
+                    <text x='24' y='286' fill={VKL_THEME.warmWhite} fontSize='10'>0m</text>
+                    <text x='468' y='286' fill={VKL_THEME.warmWhite} fontSize='10'>200m</text>
+                  </svg>
+                </>
+              )}
             </CCardBody>
           </CCard>
         </CCol>
       </CRow>
 
-      {officialGameId ? (
+      {effectiveOfficialGameId && !isMobileLayout ? (
         <CRow className='g-3 mb-4'>
           <CCol lg={7}>
             <CCard className='border-0 shadow-sm h-100' style={styles.card}>
@@ -1362,7 +1611,8 @@ export default function GhostRacePage() {
         </CRow>
       ) : null}
 
-      <CRow className='g-3 mb-4'>
+      {!isMobileLayout ? (
+        <CRow className='g-3 mb-4'>
         <CCol xs={6} md={3}>
           <CCard className='h-100 border-0 shadow-sm' style={styles.card}>
             <CCardBody>
@@ -1411,9 +1661,11 @@ export default function GhostRacePage() {
             </CCardBody>
           </CCard>
         </CCol>
-      </CRow>
+        </CRow>
+      ) : null}
 
-      <CCard className='border-0 shadow-sm mb-4' style={styles.card}>
+      {!isMobileLayout ? (
+        <CCard className='border-0 shadow-sm mb-4' style={styles.card}>
         <CCardBody>
           <div className='fw-semibold mb-2'>Hiệu quả nhịp chân</div>
           <div className='position-relative rounded' style={{ height: '18px', background: `linear-gradient(90deg, ${VKL_THEME.charcoal} 0 24%, ${VKL_THEME.mutedGold} 24% 52%, ${VKL_THEME.yellow} 52% 74%, ${VKL_THEME.warmWhite} 74% 100%)` }}>
@@ -1483,9 +1735,10 @@ export default function GhostRacePage() {
             </div>
           ) : null}
         </CCardBody>
-      </CCard>
+        </CCard>
+      ) : null}
 
-      {debugEnabled ? (
+      {!isMobileLayout && debugEnabled ? (
         <CCard className='border-0 shadow-sm mb-4' style={styles.card}>
           <CCardBody>
             <div className='fw-semibold mb-2'>Game Feel Debug</div>
@@ -1517,7 +1770,7 @@ export default function GhostRacePage() {
         </CCard>
       ) : null}
 
-      {!officialGameId || debugEnabled ? (
+      {!isMobileLayout && (!effectiveOfficialGameId || debugEnabled) ? (
         <CCard className='border-0 shadow-sm mb-4' style={styles.card}>
           <CCardBody>
             <div className='d-flex justify-content-between align-items-center mb-2'>
@@ -1584,12 +1837,66 @@ export default function GhostRacePage() {
             <li><strong>Race 200m</strong>: chạy về đích 200m.</li>
             <li>Đối thủ được chọn tự động từ thành tích tốt nhất hợp lệ của phase hiện tại.</li>
             <li>Mỗi lượt đua khóa danh sách đối thủ tại thời điểm Start.</li>
-            <li>Mobile: hiện chưa hỗ trợ cảm ứng, vui lòng dùng bàn phím ngoài.</li>
+            {isMobileLayout ? <li>Mobile: dùng hai nút CHÂN TRÁI/CHÂN PHẢI ở đáy màn hình để chạy.</li> : <li>Desktop: dùng bàn phím ← / → để chạy.</li>}
             {technicalMode ? <li>Chế độ kỹ thuật đang bật qua query param <code>?debug=1</code> hoặc <code>?tech=1</code>.</li> : null}
           </ul>
           <div className='mt-3' style={styles.statLabel}>Trạng thái: <strong style={{ color: VKL_THEME.white }}>{hud.status}</strong> — {hud.message}</div>
         </CCardBody>
       </CCard>
+      {isMobileLayout ? (
+        <div
+          style={{
+            position: 'fixed',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 1040,
+            padding: '8px 10px calc(8px + env(safe-area-inset-bottom))',
+            background: 'linear-gradient(180deg, rgba(15,15,16,0) 0%, rgba(15,15,16,0.95) 26%, rgba(15,15,16,0.98) 100%)',
+            touchAction: 'none',
+          }}
+        >
+          <div className='d-flex gap-2'>
+            <button
+              ref={leftTouchButtonRef}
+              type='button'
+              style={{
+                ...styles.primaryButton,
+                flex: 1,
+                minHeight: '104px',
+                borderRadius: '12px',
+                fontSize: '1.05rem',
+                letterSpacing: '0.08em',
+                touchAction: 'none',
+                userSelect: 'none',
+              }}
+              onContextMenu={(event) => event.preventDefault()}
+            >
+              CHÂN TRÁI
+            </button>
+            <button
+              ref={rightTouchButtonRef}
+              type='button'
+              style={{
+                ...styles.primaryButton,
+                flex: 1,
+                minHeight: '104px',
+                borderRadius: '12px',
+                fontSize: '1.05rem',
+                letterSpacing: '0.08em',
+                background: VKL_THEME.softBlack,
+                borderColor: VKL_THEME.yellow,
+                color: VKL_THEME.warmWhite,
+                touchAction: 'none',
+                userSelect: 'none',
+              }}
+              onContextMenu={(event) => event.preventDefault()}
+            >
+              CHÂN PHẢI
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

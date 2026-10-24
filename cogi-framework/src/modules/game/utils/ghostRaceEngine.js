@@ -222,6 +222,10 @@ export class GhostRaceEngine {
       averageCadenceAccumulator: 0,
       averageCadenceSamples: 0,
     }
+    this.touchPointerIds = {
+      left: new Set(),
+      right: new Set(),
+    }
 
     this.motion = {
       targetSpeed: 0,
@@ -451,6 +455,8 @@ export class GhostRaceEngine {
     this.lastPrePauseStatus = null
     this.pressedKeys.left = false
     this.pressedKeys.right = false
+    this.touchPointerIds.left.clear()
+    this.touchPointerIds.right.clear()
     this.startSequence = {
       stage: 'idle',
       stageElapsed: 0,
@@ -615,6 +621,60 @@ export class GhostRaceEngine {
     if (key === 'arrowleft') return 'left'
     if (key === 'arrowright') return 'right'
     return null
+  }
+
+  handleTouchPress(foot, event = null) {
+    const normalizedFoot = String(foot || '').toLowerCase()
+    if (!['left', 'right'].includes(normalizedFoot)) return false
+    if (this.runMode === 'replay') return false
+    if (this.pressedKeys[normalizedFoot]) return false
+    if (event && typeof event.pointerId === 'number') {
+      this.touchPointerIds[normalizedFoot].add(event.pointerId)
+    }
+    this.pressedKeys[normalizedFoot] = true
+
+    const inputTimestampMs = Number(event?.timeStamp)
+    if (Number.isFinite(inputTimestampMs) && typeof performance !== 'undefined' && Number.isFinite(performance.now())) {
+      this.debugStats.lastKeydownTimestampMs = inputTimestampMs
+      this.debugStats.lastInputLatencyMs = Math.max(0, performance.now() - inputTimestampMs)
+    }
+
+    if (this.mode === 'race' && (this.status === 'on_your_marks' || this.status === 'set')) {
+      this.status = 'false_start'
+      this.startSequence.stage = 'false_start'
+      this.startSequence.falseStartTick = this.tickCount
+      this.startSequence.falseStartAtSimSeconds = this.simulationSeconds
+      this.startSequence.falseStartKey = normalizedFoot
+      this.message = 'XUẤT PHÁT PHẠM QUY'
+      this.sessionTrace.falseStart = {
+        tick: this.tickCount,
+        simSeconds: Number(this.simulationSeconds.toFixed(6)),
+        foot: normalizedFoot,
+      }
+      if (this.recording.replay) {
+        this.recording.replay.falseStart = { ...this.sessionTrace.falseStart }
+      }
+      this.recording.active = false
+      this.publishHud(true)
+      return false
+    }
+
+    this.handleStride(normalizedFoot, { source: 'touch' })
+    return true
+  }
+
+  handleTouchRelease(foot, pointerId = null, event = null) {
+    const normalizedFoot = String(foot || '').toLowerCase()
+    if (!['left', 'right'].includes(normalizedFoot)) return
+    if (typeof pointerId === 'number') {
+      this.touchPointerIds[normalizedFoot].delete(pointerId)
+    }
+    this.pressedKeys[normalizedFoot] = false
+    if (event && typeof event.preventDefault === 'function') event.preventDefault()
+  }
+
+  handleTouchCancel(foot, pointerId = null, event = null) {
+    this.handleTouchRelease(foot, pointerId, event)
   }
 
   handleKeyDown(event) {

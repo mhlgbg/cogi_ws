@@ -173,7 +173,7 @@ export default function GameDashboardPage() {
       lateRegistrationEnabled: formState.lateRegistrationEnabled,
       settings: selectedGameTypeCode === 'ghost_race'
         ? {
-          playPlatform: String(formState.ghostRacePlatform || 'web'),
+          playPlatform: String(formState.ghostRacePlatform || 'desktop'),
           distanceMeters: Number(formState.ghostRaceDistanceMeters || 200),
           cutoffSeconds: Number(formState.ghostRaceCutoffSeconds || 40),
           physicsVersion: String(formState.ghostRacePhysicsVersion || 'v1'),
@@ -613,7 +613,7 @@ export default function GameDashboardPage() {
                   >
                     <option value='desktop'>Desktop</option>
                     <option value='mobile'>Mobile</option>
-                    <option value='web'>Web</option>
+                    <option value='web'>Web (Legacy)</option>
                   </CFormSelect>
                 </CCol>
                 <CCol md={6}>

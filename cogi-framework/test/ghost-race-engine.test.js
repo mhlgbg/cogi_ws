@@ -181,6 +181,45 @@ test('pressing arrow before GO triggers false start', () => {
   assert.equal(engine.distance, beforeDistance)
 })
 
+test('touch pointerdown maps to the same stride inputs as keyboard controls', () => {
+  const engine = new GhostRaceEngine({ canvas: createMockCanvas(), onHud: () => {}, initialMode: 'race' })
+  engine.start()
+  const dt = 1 / 60
+  for (let i = 0; i < 132; i += 1) engine.update(dt)
+  assert.equal(engine.status, 'running')
+
+  engine.handleTouchPress('left', { pointerId: 1, timeStamp: 200, preventDefault: () => {} })
+  engine.handleTouchRelease('left', 1, { preventDefault: () => {} })
+  engine.update(0.2)
+  engine.handleTouchPress('right', { pointerId: 2, timeStamp: 250, preventDefault: () => {} })
+  engine.handleTouchRelease('right', 2, { preventDefault: () => {} })
+
+  assert.equal(engine.stepStats.validStepCount, 2)
+  assert.equal(engine.sessionTrace.validInputs[0].foot, 'left')
+  assert.equal(engine.sessionTrace.validInputs[1].foot, 'right')
+})
+
+test('touch before GO triggers false start and hold does not count as post-GO step', () => {
+  const engine = new GhostRaceEngine({ canvas: createMockCanvas(), onHud: () => {}, initialMode: 'race' })
+  engine.start()
+  engine.handleTouchPress('left', { pointerId: 11, timeStamp: 50, preventDefault: () => {} })
+  assert.equal(engine.status, 'false_start')
+  engine.handleTouchRelease('left', 11, { preventDefault: () => {} })
+
+  engine.reset()
+  engine.start()
+  engine.pressedKeys.left = true
+  const dt = 1 / 60
+  for (let i = 0; i < 132; i += 1) engine.update(dt)
+  assert.equal(engine.status, 'running')
+  assert.equal(engine.stepStats.validStepCount, 0)
+
+  engine.handleTouchRelease('left', 11, { preventDefault: () => {} })
+  engine.handleTouchPress('left', { pointerId: 12, timeStamp: 600, preventDefault: () => {} })
+  engine.handleTouchRelease('left', 12, { preventDefault: () => {} })
+  assert.equal(engine.stepStats.validStepCount, 1)
+})
+
 test('holding key before GO does not create step after GO without new keydown', () => {
   const engine = new GhostRaceEngine({ canvas: createMockCanvas(), onHud: () => {}, initialMode: 'race' })
   engine.start()

@@ -67,7 +67,7 @@ export function buildGameFormState(game) {
     endsAt: toInputDateTime(game?.endsAt),
     timezone: String(game?.timezone || 'Asia/Ho_Chi_Minh'),
     lateRegistrationEnabled: Boolean(game?.lateRegistrationEnabled),
-    ghostRacePlatform: String(settings?.playPlatform || 'web'),
+    ghostRacePlatform: String(settings?.playPlatform || 'desktop'),
     ghostRaceDistanceMeters: String(settings?.distanceMeters ?? 200),
     ghostRaceCutoffSeconds: String(settings?.cutoffSeconds ?? 40),
     ghostRacePhysicsVersion: String(settings?.physicsVersion || 'v1'),
