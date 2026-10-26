@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CAlert, CBadge, CButton, CCard, CCardBody, CCardHeader, CCol, CFormInput, CFormLabel, CFormSelect, CModal, CModalBody, CModalFooter, CModalHeader, CModalTitle, CRow, CSpinner, CTable, CTableBody, CTableDataCell, CTableHead, CTableHeaderCell, CTableRow } from '@coreui/react'
-import { getTeacherAssignmentDetail, getTeacherAssignmentLearnerTaskDetail, publishTeacherAssignment, closeTeacherAssignment, cancelTeacherAssignment, reopenTeacherAssignment, reviewTeacherAssignmentLearnerTask, startTeacherAssignmentAssessmentPreview, updateTeacherAssignment } from '../services/classService'
-import { sanitizeClassSessionContentHtml } from '../utils/classSessionContentHtml'
+import { getTeacherAssignmentDetail, getTeacherAssignmentLearnerTaskDetail, publishTeacherAssignment, closeTeacherAssignment, cancelTeacherAssignment, reopenTeacherAssignment, reviewTeacherAssignmentLearnerTask, startTeacherAssignmentAssessmentPreview, updateTeacherAssignment, autoGradeTeacherAssignmentLearnerTask, updateTeacherAssignmentTaskGradingDefinition, batchRegradeStaleUnreviewedTeacherAssignmentTask } from '../services/classService'
+import SimpleHtmlEditor from '../../admission-management/components/SimpleHtmlEditor'
+import { hasClassSessionContent, normalizeClassSessionContentForEditor, sanitizeClassSessionContentHtml } from '../utils/classSessionContentHtml'
 import { formatSessionDateTime } from '../utils/classSessionUi'
 import SubmissionViewer from './SubmissionViewer'
 import TeacherAssignmentEditorModal from './TeacherAssignmentEditorModal'
-import { getSubmissionStatusMeta, getSubmissionVersionLabel } from './submissionViewerMeta'
+import { getSubmissionVersionLabel } from './submissionViewerMeta'
 
 const STATUS_META = {
   draft: { label: 'Draft', color: 'secondary' },
@@ -19,6 +20,14 @@ const STATUS_META = {
   returned: { label: 'Làm lại', color: 'danger' },
   missing: { label: 'Thiếu', color: 'secondary' },
 }
+
+const REVIEW_FEEDBACK_TOOLBAR = [
+  { label: 'P', command: 'formatBlock', value: 'p' },
+  { label: 'B', command: 'bold' },
+  { label: 'I', command: 'italic' },
+  { label: 'UL', command: 'insertUnorderedList' },
+  { label: 'OL', command: 'insertOrderedList' },
+]
 
 function getApiMessage(error, fallback) {
   return error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || fallback
@@ -42,13 +51,85 @@ function isTaskDetailClickable(status) {
   return ['in_progress', 'submitted', 'completed', 'returned'].includes(normalized)
 }
 
+function normalizeTeacherFeedbackValue(value) {
+  const normalized = normalizeClassSessionContentForEditor(value)
+  const sanitized = sanitizeClassSessionContentHtml(normalized)
+  return sanitized || '<p></p>'
+}
+
 function getDefaultReviewForm(payload = null) {
   return {
     status: payload?.progress?.status === 'returned' ? 'returned' : 'completed',
-    teacherFeedback: payload?.progress?.teacherFeedback || '<p></p>',
+    teacherFeedback: normalizeTeacherFeedbackValue(payload?.progress?.teacherFeedback),
     score: payload?.progress?.score ?? '',
     maxScore: payload?.progress?.maxScore ?? '',
   }
+}
+
+function normalizeGradingDefinitionHtml(value) {
+  const normalized = normalizeClassSessionContentForEditor(value)
+  const sanitized = sanitizeClassSessionContentHtml(normalized)
+  if (!hasClassSessionContent(sanitized)) return ''
+  return sanitized
+}
+
+function TaskGradingDefinitionModal({ visible = false, task = null, saving = false, submitError = '', onClose, onSave }) {
+  const [expectedOutcome, setExpectedOutcome] = useState(() => task?.expectedOutcome || '<p></p>')
+  const [gradingRubric, setGradingRubric] = useState(() => task?.gradingRubric || '<p></p>')
+
+  return (
+    <CModal visible={visible} onClose={() => !saving && onClose?.()} size='xl'>
+      <CModalHeader>
+        <CModalTitle>Sửa tiêu chí chấm</CModalTitle>
+      </CModalHeader>
+      <CModalBody className='d-flex flex-column gap-3'>
+        {submitError ? <CAlert color='danger'>{submitError}</CAlert> : null}
+        <div className='small text-body-secondary'>
+          Task: <strong>{task?.title || '-'}</strong> · Phiên bản tiêu chí hiện tại: <strong>v{Number(task?.gradingVersion || 0) || 1}</strong>
+        </div>
+        {Number(task?.stats?.staleAiCount || 0) > 0 ? (
+          <CAlert color='warning' className='mb-0'>
+            Có {task?.stats?.staleAiCount || 0} bài đã AI chấm theo phiên bản cũ ({task?.stats?.staleUnreviewedCount || 0} chưa duyệt, {task?.stats?.staleReviewedCount || 0} đã duyệt).
+          </CAlert>
+        ) : null}
+        <SimpleHtmlEditor
+          label='Kỳ vọng đầu ra'
+          value={expectedOutcome}
+          onChange={setExpectedOutcome}
+          disabled={saving}
+          rows={6}
+          showImageControls={false}
+          showColorControls={false}
+          allowHtmlMode
+          helperText='Mô tả giáo viên mong muốn học sinh đạt được gì. Nội dung này dùng để hỗ trợ chấm bài và có thể không hiển thị cho học sinh.'
+        />
+        <SimpleHtmlEditor
+          label='Tiêu chí chấm'
+          value={gradingRubric}
+          onChange={setGradingRubric}
+          disabled={saving}
+          rows={6}
+          showImageControls={false}
+          showColorControls={false}
+          allowHtmlMode
+          helperText='Mô tả cách đánh giá hoặc phân bổ điểm. Có thể để trống nếu không cần.'
+        />
+      </CModalBody>
+      <CModalFooter>
+        <CButton color='secondary' variant='outline' onClick={() => onClose?.()} disabled={saving}>Đóng</CButton>
+        <CButton
+          color='primary'
+          onClick={() => onSave?.({
+            expectedOutcome: normalizeGradingDefinitionHtml(expectedOutcome),
+            gradingRubric: normalizeGradingDefinitionHtml(gradingRubric),
+          })}
+          disabled={saving}
+        >
+          {saving ? 'Đang lưu...' : 'Lưu tiêu chí chấm'}
+        </CButton>
+      </CModalFooter>
+    </CModal>
+  )
 }
 
 export function TeacherAssignmentDetailModal({ visible = false, assignmentId = null, canManage = false, onClose, onChanged }) {
@@ -59,6 +140,8 @@ export function TeacherAssignmentDetailModal({ visible = false, assignmentId = n
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorError, setEditorError] = useState('')
   const [previewLoadingTaskId, setPreviewLoadingTaskId] = useState(null)
+  const [gradingEditorTask, setGradingEditorTask] = useState(null)
+  const [gradingEditorError, setGradingEditorError] = useState('')
 
   const load = useCallback(async () => {
     if (!assignmentId) {
@@ -128,6 +211,27 @@ export function TeacherAssignmentDetailModal({ visible = false, assignmentId = n
     }
   }
 
+  async function handleBatchRegradeTask(task) {
+    const taskId = Number(task?.id || 0) || 0
+    if (!assignmentId || !taskId) return
+    const staleCount = Number(task?.stats?.staleUnreviewedCount || 0) || 0
+    if (staleCount <= 0) return
+    const confirmed = window.confirm(`Bạn muốn chấm lại ${staleCount} bài chưa duyệt theo tiêu chí mới cho task "${task?.title || 'Task'}"?`)
+    if (!confirmed) return
+    setActionLoading(`regrade-${taskId}`)
+    setError('')
+    try {
+      const result = await batchRegradeStaleUnreviewedTeacherAssignmentTask(assignmentId, taskId)
+      await load()
+      onChanged?.()
+      window.alert(`Đã chấm lại ${result?.regradedCount || 0}/${result?.totalCandidates || staleCount} bài. Còn ${result?.staleUnreviewedCount || 0} bài AI theo tiêu chí cũ chưa duyệt.`)
+    } catch (requestError) {
+      setError(getApiMessage(requestError, 'Không thể chấm lại theo tiêu chí mới.'))
+    } finally {
+      setActionLoading('')
+    }
+  }
+
   return (
     <>
       <CModal visible={visible} onClose={() => !actionLoading && onClose?.()} size='xl'>
@@ -166,7 +270,23 @@ export function TeacherAssignmentDetailModal({ visible = false, assignmentId = n
                       <div className='d-flex justify-content-between align-items-center gap-2 flex-wrap'>
                         <div className='fw-semibold'>{task.title}</div>
                         <div className='d-flex align-items-center gap-2 flex-wrap'>
-                          <div className='small text-body-secondary'>{task.taskType} · {task.required ? 'Bắt buộc' : 'Tùy chọn'}</div>
+                          <div className='small text-body-secondary'>{task.taskType} · {task.required ? 'Bắt buộc' : 'Tùy chọn'} · Grading v{Number(task?.gradingVersion || 0) || 1}</div>
+                          {detail.status === 'published' ? (
+                            <CButton size='sm' color='secondary' variant='outline' onClick={() => { setGradingEditorTask(task); setGradingEditorError('') }}>
+                              Sửa tiêu chí chấm
+                            </CButton>
+                          ) : null}
+                          {task.taskType === 'submission' && Number(task?.stats?.staleUnreviewedCount || 0) > 0 ? (
+                            <CButton
+                              size='sm'
+                              color='warning'
+                              variant='outline'
+                              onClick={() => handleBatchRegradeTask(task)}
+                              disabled={actionLoading === `regrade-${task.id}`}
+                            >
+                              {actionLoading === `regrade-${task.id}` ? 'Đang chấm lại...' : `Chấm lại ${task.stats.staleUnreviewedCount} bài chưa duyệt`}
+                            </CButton>
+                          ) : null}
                           {task.taskType === 'assessment' && task.assessmentVersion?.id ? (
                             <CButton size='sm' color='info' variant='outline' onClick={() => openAssessmentPreview(task)} disabled={previewLoadingTaskId === task.id}>
                               {previewLoadingTaskId === task.id ? 'Đang mở...' : 'Xem lại bài kiểm tra'}
@@ -175,6 +295,23 @@ export function TeacherAssignmentDetailModal({ visible = false, assignmentId = n
                         </div>
                       </div>
                       <HtmlView value={task.description} />
+                      {hasClassSessionContent(task.expectedOutcome) ? (
+                        <div className='mt-2'>
+                          <div className='small fw-semibold text-body-secondary'>Kỳ vọng đầu ra</div>
+                          <HtmlView value={task.expectedOutcome} />
+                        </div>
+                      ) : null}
+                      {hasClassSessionContent(task.gradingRubric) ? (
+                        <div className='mt-2'>
+                          <div className='small fw-semibold text-body-secondary'>Tiêu chí chấm</div>
+                          <HtmlView value={task.gradingRubric} />
+                        </div>
+                      ) : null}
+                      {Number(task?.stats?.staleAiCount || 0) > 0 ? (
+                        <div className='small text-warning mt-2'>
+                          Có {task.stats.staleAiCount} bài AI chấm theo tiêu chí cũ ({task.stats.staleUnreviewedCount} chưa duyệt, {task.stats.staleReviewedCount} đã duyệt).
+                        </div>
+                      ) : null}
                       {task.taskType === 'assessment' && task.assessment ? (
                         <div className='small text-body-secondary mt-2 d-grid gap-1'>
                           <div>{`${task.assessment.code || '-'} · ${task.assessment.title || '-'} · ${task.assessmentVersion?.code || '-'} · ${task.assessmentVersion?.durationMinutes || 0} phút · ${task.assessmentVersion?.questionCount || 0} câu`}</div>
@@ -215,6 +352,38 @@ export function TeacherAssignmentDetailModal({ visible = false, assignmentId = n
           }
         }}
       />
+
+      <TaskGradingDefinitionModal
+        key={gradingEditorTask?.id || 'grading-definition-empty'}
+        visible={Boolean(gradingEditorTask)}
+        task={gradingEditorTask}
+        saving={actionLoading === 'save-grading-definition'}
+        submitError={gradingEditorError}
+        onClose={() => {
+          if (!actionLoading) setGradingEditorTask(null)
+        }}
+        onSave={async (payload) => {
+          const taskId = Number(gradingEditorTask?.id || 0) || 0
+          if (!detail?.id || !taskId) return
+          setActionLoading('save-grading-definition')
+          setGradingEditorError('')
+          setError('')
+          try {
+            const result = await updateTeacherAssignmentTaskGradingDefinition(detail.id, taskId, payload)
+            const refreshed = await getTeacherAssignmentDetail(detail.id)
+            setDetail(refreshed)
+            setGradingEditorTask(null)
+            onChanged?.()
+            if (result?.gradingChanged) {
+              window.alert(`Tiêu chí chấm đã được cập nhật lên phiên bản ${result?.gradingVersion || 1}. Có ${result?.staleAiCount || 0} bài đã được AI chấm theo tiêu chí cũ.`)
+            }
+          } catch (requestError) {
+            setGradingEditorError(getApiMessage(requestError, 'Không thể lưu tiêu chí chấm.'))
+          } finally {
+            setActionLoading('')
+          }
+        }}
+      />
     </>
   )
 }
@@ -223,6 +392,7 @@ export function TeacherAssignmentProgressModal({ visible = false, assignmentId =
   const [loading, setLoading] = useState(false)
   const [detail, setDetail] = useState(null)
   const [error, setError] = useState('')
+  const [actionLoading, setActionLoading] = useState('')
   const [selectedTask, setSelectedTask] = useState({ taskId: null, learnerId: null })
   const [taskDetailOpen, setTaskDetailOpen] = useState(false)
 
@@ -247,6 +417,27 @@ export function TeacherAssignmentProgressModal({ visible = false, assignmentId =
     if (!visible) return
     load()
   }, [load, visible])
+
+  async function handleBatchRegrade(task) {
+    const taskId = Number(task?.id || 0) || 0
+    if (!assignmentId || !taskId) return
+    const staleCount = Number(task?.stats?.staleUnreviewedCount || 0) || 0
+    if (staleCount <= 0) return
+    const confirmed = window.confirm(`Chấm lại ${staleCount} bài chưa duyệt của task "${task?.title || 'Task'}" theo tiêu chí mới?`)
+    if (!confirmed) return
+    setActionLoading(`regrade-${taskId}`)
+    setError('')
+    try {
+      const result = await batchRegradeStaleUnreviewedTeacherAssignmentTask(assignmentId, taskId)
+      await load()
+      onChanged?.()
+      window.alert(`Đã chấm lại ${result?.regradedCount || 0}/${result?.totalCandidates || staleCount} bài. Còn ${result?.staleUnreviewedCount || 0} bài stale.`)
+    } catch (requestError) {
+      setError(getApiMessage(requestError, 'Không thể batch regrade theo tiêu chí mới.'))
+    } finally {
+      setActionLoading('')
+    }
+  }
 
   const summary = useMemo(() => {
     const learners = Array.isArray(detail?.learners) ? detail.learners : []
@@ -287,7 +478,22 @@ export function TeacherAssignmentProgressModal({ visible = false, assignmentId =
                       <CTableHeaderCell style={{ minWidth: 180, position: 'sticky', left: 0, background: '#fff', zIndex: 1 }}>Học viên</CTableHeaderCell>
                       {(detail.tasks || []).map((task) => (
                         <CTableHeaderCell key={`progress-head-${task.id}`} title={task.title} style={{ minWidth: 130 }}>
-                          {task.title || `Task ${task.order || ''}`}
+                          <div className='fw-semibold'>{task.title || `Task ${task.order || ''}`}</div>
+                          <div className='small text-body-secondary'>v{Number(task?.gradingVersion || 0) || 1}</div>
+                          {Number(task?.stats?.staleUnreviewedCount || 0) > 0 ? (
+                            <div className='d-flex flex-column gap-1 mt-1'>
+                              <div className='small text-warning'>{task.stats.staleUnreviewedCount} stale chưa duyệt</div>
+                              <CButton
+                                size='sm'
+                                color='warning'
+                                variant='outline'
+                                onClick={() => handleBatchRegrade(task)}
+                                disabled={actionLoading === `regrade-${task.id}`}
+                              >
+                                {actionLoading === `regrade-${task.id}` ? 'Đang chấm lại...' : 'Chấm lại'}
+                              </CButton>
+                            </div>
+                          ) : null}
                         </CTableHeaderCell>
                       ))}
                       <CTableHeaderCell style={{ minWidth: 100 }}>Tổng</CTableHeaderCell>
@@ -304,13 +510,17 @@ export function TeacherAssignmentProgressModal({ visible = false, assignmentId =
                           const clickable = isTaskDetailClickable(taskCell.status) && Boolean(taskCell.taskId) && Boolean(row?.learner?.id)
                           return (
                             <CTableDataCell key={`progress-cell-${row?.learner?.id}-${taskCell.taskId}`}>
-                              {clickable ? (
-                                <CButton size='sm' color={meta.color} variant='outline' onClick={() => { setSelectedTask({ taskId: taskCell.taskId, learnerId: row.learner.id }); setTaskDetailOpen(true) }}>
-                                  {meta.label}
-                                </CButton>
-                              ) : (
-                                <span className='text-body-secondary'>{meta.label}</span>
-                              )}
+                              <div className='d-flex flex-column gap-1'>
+                                {clickable ? (
+                                  <CButton size='sm' color={meta.color} variant='outline' onClick={() => { setSelectedTask({ taskId: taskCell.taskId, learnerId: row.learner.id }); setTaskDetailOpen(true) }}>
+                                    {meta.label}
+                                  </CButton>
+                                ) : (
+                                  <span className='text-body-secondary'>{meta.label}</span>
+                                )}
+                                {taskCell?.aiStale ? <span className='small text-warning'>AI stale {taskCell?.aiGradingVersion ? `(v${taskCell.aiGradingVersion})` : '(unknown)'}</span> : null}
+                                {taskCell?.teacherReviewGradingVersion ? <span className='small text-body-secondary'>Review v{taskCell.teacherReviewGradingVersion}</span> : null}
+                              </div>
                             </CTableDataCell>
                           )
                         })}
@@ -347,8 +557,9 @@ export function TeacherAssignmentLearnerTaskDetailModal({ visible = false, assig
   const [loading, setLoading] = useState(false)
   const [detail, setDetail] = useState(null)
   const [error, setError] = useState('')
-  const [reviewForm, setReviewForm] = useState({ status: 'completed', teacherFeedback: '<p></p>', score: '', maxScore: '' })
+  const [reviewForm, setReviewForm] = useState({ status: 'completed', teacherFeedback: normalizeTeacherFeedbackValue(''), score: '', maxScore: '' })
   const [savingReview, setSavingReview] = useState(false)
+  const [autoGrading, setAutoGrading] = useState(false)
   const [selectedVersion, setSelectedVersion] = useState(null)
 
   const load = useCallback(async () => {
@@ -387,24 +598,80 @@ export function TeacherAssignmentLearnerTaskDetailModal({ visible = false, assig
     return detail.submissions.find((submission) => String(submission.id) === String(selectedVersion)) || detail.submissions[0]
   }, [detail, selectedVersion])
 
-  async function handleSaveReview() {
+  const currentTaskGradingVersion = Number(detail?.task?.gradingVersion || 0) || 1
+  const currentAiGradingVersion = Number(detail?.progress?.aiGradingVersion || 0) || null
+  const aiStale = detail?.progress?.aiStale === true || (currentAiGradingVersion !== null && currentAiGradingVersion < currentTaskGradingVersion)
+
+  async function handleSaveReview(confirmStaleAiReview = false) {
     if (!assignmentId || !taskId || !learnerId || !detail) return
     setSavingReview(true)
     setError('')
     try {
       await reviewTeacherAssignmentLearnerTask(assignmentId, taskId, learnerId, {
         status: reviewForm.status,
-        teacherFeedback: reviewForm.teacherFeedback,
+        teacherFeedback: normalizeTeacherFeedbackValue(reviewForm.teacherFeedback),
         score: reviewForm.score,
         maxScore: reviewForm.maxScore,
         submissionId: currentSubmission?.id,
+        confirmStaleAiReview: confirmStaleAiReview === true,
       })
       await load()
       onChanged?.()
     } catch (requestError) {
-      setError(getApiMessage(requestError, 'Không thể lưu review cho learner.'))
+      const message = getApiMessage(requestError, 'Không thể lưu review cho learner.')
+      const shouldConfirmStale = requestError?.response?.status === 409 && /tiêu chí cũ|grading|version/i.test(message)
+      if (shouldConfirmStale) {
+        const confirmed = window.confirm(`${message}\n\nBạn có muốn vẫn lưu review theo phiên bản tiêu chí hiện tại không?`)
+        if (confirmed) {
+          await handleSaveReview(true)
+          return
+        }
+      }
+      setError(message)
     } finally {
       setSavingReview(false)
+    }
+  }
+
+  async function handleAutoGrade() {
+    if (!assignmentId || !taskId || !learnerId || !detail) return
+    const confirmMessage = aiStale
+      ? `AI hiện đang ở phiên bản tiêu chí cũ (${currentAiGradingVersion ? `v${currentAiGradingVersion}` : 'unknown'}), task hiện tại v${currentTaskGradingVersion}.\n\nBạn muốn chấm lại theo tiêu chí mới?`
+      : 'Bạn muốn chấm tự động bài nộp này bằng AI? Kết quả sẽ là đề xuất chấm, cần giáo viên xác nhận trước khi lưu.'
+    const confirmed = window.confirm(confirmMessage)
+    if (!confirmed) return
+    setAutoGrading(true)
+    setError('')
+    try {
+      const proposal = await autoGradeTeacherAssignmentLearnerTask(assignmentId, taskId, learnerId)
+      const proposalScore = proposal?.proposal?.score ?? proposal?.score ?? ''
+      const proposalMaxScore = proposal?.proposal?.maxScore ?? proposal?.maxScore ?? (reviewForm.maxScore || '')
+      const proposalFeedback = proposal?.proposal?.teacherFeedback ?? proposal?.teacherFeedback ?? (reviewForm.teacherFeedback || '<p></p>')
+      setReviewForm((prev) => ({
+        ...prev,
+        score: proposalScore,
+        maxScore: proposalMaxScore,
+        teacherFeedback: normalizeTeacherFeedbackValue(proposalFeedback),
+      }))
+      setDetail((prev) => prev ? {
+        ...prev,
+        progress: {
+          ...(prev.progress || {}),
+          aiGradingVersion: Number(proposal?.proposal?.gradingVersion || prev?.task?.gradingVersion || currentTaskGradingVersion),
+          aiGradedAt: proposal?.proposal?.generatedAt || new Date().toISOString(),
+          aiSuggestedScore: proposalScore === '' ? null : Number(proposalScore),
+          aiSuggestedMaxScore: proposalMaxScore === '' ? null : Number(proposalMaxScore),
+          aiSuggestedFeedback: normalizeTeacherFeedbackValue(proposalFeedback),
+          aiStale: false,
+        },
+      } : prev)
+      if (proposal?.proposal?.teacherFeedback || proposal?.teacherFeedback) {
+        setError('')
+      }
+    } catch (requestError) {
+      setError(getApiMessage(requestError, 'Không thể chấm tự động bài nộp.'))
+    } finally {
+      setAutoGrading(false)
     }
   }
 
@@ -433,10 +700,33 @@ export function TeacherAssignmentLearnerTaskDetailModal({ visible = false, assig
               </CCardBody>
             </CCard>
 
+            {aiStale ? (
+              <CAlert color='warning' className='mb-0'>
+                AI đã chấm theo tiêu chí cũ ({currentAiGradingVersion ? `v${currentAiGradingVersion}` : 'unknown'}), hiện tại task đang ở v{currentTaskGradingVersion}. Vui lòng bấm <strong>Chấm lại theo tiêu chí mới</strong> trước khi duyệt nếu cần.
+              </CAlert>
+            ) : null}
+            {detail?.progress?.teacherReviewGradingVersion ? (
+              <div className='small text-body-secondary'>
+                Bản review gần nhất được lưu theo grading version v{detail.progress.teacherReviewGradingVersion}.
+              </div>
+            ) : null}
+
             {detail?.task?.description ? (
               <div className='border rounded-3 p-3 bg-body-tertiary'>
                 <div className='fw-semibold mb-2'>Hướng dẫn task</div>
                 <HtmlView value={detail.task.description} />
+              </div>
+            ) : null}
+            {hasClassSessionContent(detail?.task?.expectedOutcome) ? (
+              <div className='border rounded-3 p-3 bg-body-tertiary'>
+                <div className='fw-semibold mb-2'>Kỳ vọng đầu ra</div>
+                <HtmlView value={detail.task.expectedOutcome} />
+              </div>
+            ) : null}
+            {hasClassSessionContent(detail?.task?.gradingRubric) ? (
+              <div className='border rounded-3 p-3 bg-body-tertiary'>
+                <div className='fw-semibold mb-2'>Tiêu chí chấm</div>
+                <HtmlView value={detail.task.gradingRubric} />
               </div>
             ) : null}
 
@@ -479,6 +769,12 @@ export function TeacherAssignmentLearnerTaskDetailModal({ visible = false, assig
             )}
 
             <div className='border rounded-3 p-3 bg-body-tertiary'>
+              <div className='d-flex justify-content-between align-items-center gap-2 flex-wrap mb-3'>
+                <div className='fw-semibold'>Kết quả review</div>
+                <CButton size='sm' color='primary' variant='outline' onClick={handleAutoGrade} disabled={autoGrading || !detail || !currentSubmission}>
+                  {autoGrading ? 'Đang chấm...' : aiStale ? 'Chấm lại theo tiêu chí mới' : 'Chấm tự động'}
+                </CButton>
+              </div>
               <CRow className='g-3'>
                 <CCol md={4}>
                   <CFormLabel>Kết quả review</CFormLabel>
@@ -497,8 +793,19 @@ export function TeacherAssignmentLearnerTaskDetailModal({ visible = false, assig
                 </CCol>
               </CRow>
               <div className='mt-3'>
-                <CFormLabel>TeacherFeedback</CFormLabel>
-                <CFormInput value={reviewForm.teacherFeedback} onChange={(event) => setReviewForm((prev) => ({ ...prev, teacherFeedback: event.target.value }))} />
+                <SimpleHtmlEditor
+                  label='Nhận xét của giáo viên'
+                  value={reviewForm.teacherFeedback}
+                  onChange={(value) => setReviewForm((prev) => ({ ...prev, teacherFeedback: value }))}
+                  disabled={savingReview}
+                  rows={8}
+                  toolbarActions={REVIEW_FEEDBACK_TOOLBAR}
+                  showLinkControls
+                  showImageControls={false}
+                  showColorControls={false}
+                  allowHtmlMode
+                  helperText='Hỗ trợ đoạn văn, in đậm, in nghiêng, danh sách, liên kết và chỉnh HTML cơ bản. Nội dung sẽ được sanitize an toàn.'
+                />
               </div>
             </div>
           </div>

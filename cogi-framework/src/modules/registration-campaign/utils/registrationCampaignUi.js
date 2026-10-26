@@ -1,7 +1,14 @@
 import { resolveMediaUrl } from '../../../utils/mediaUrl'
 
 export function getApiMessage(error, fallback) {
-  return error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || fallback
+  const responseData = error?.response?.data
+  const nestedError = responseData?.error
+
+  if (typeof nestedError === 'string' && nestedError.trim()) return nestedError.trim()
+  if (typeof nestedError?.message === 'string' && nestedError.message.trim()) return nestedError.message.trim()
+  if (typeof responseData?.message === 'string' && responseData.message.trim()) return responseData.message.trim()
+  if (typeof error?.message === 'string' && error.message.trim()) return error.message.trim()
+  return fallback
 }
 
 export function toText(value) {

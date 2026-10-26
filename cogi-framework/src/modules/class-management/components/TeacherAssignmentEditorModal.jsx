@@ -47,6 +47,9 @@ function buildTask(task = null, order = 1) {
   return {
     title: String(task?.title || '').trim(),
     description: String(task?.description || '').trim() || '<p></p>',
+    expectedOutcome: String(task?.expectedOutcome || '').trim() || '<p></p>',
+    gradingRubric: String(task?.gradingRubric || '').trim() || '<p></p>',
+    gradingVersion: Number(task?.gradingVersion || 0) || 1,
     order: Number(task?.order || order) || order,
     required: task?.required !== false,
     taskType: String(task?.taskType || 'todo').trim() || 'todo',
@@ -293,6 +296,32 @@ export default function TeacherAssignmentEditorModal({ visible = false, saving =
                 <CFormLabel>Mô tả task</CFormLabel>
                 <SimpleHtmlEditor value={task.description} onChange={(value) => updateTask(index, { description: value })} disabled={saving} rows={5} showImageControls={false} showColorControls={false} allowHtmlMode helperText='Có thể nhập hướng dẫn, checklist, liên kết.' />
               </div>
+              <div>
+                <CFormLabel>Kỳ vọng đầu ra</CFormLabel>
+                <SimpleHtmlEditor
+                  value={task.expectedOutcome}
+                  onChange={(value) => updateTask(index, { expectedOutcome: value })}
+                  disabled={saving}
+                  rows={4}
+                  showImageControls={false}
+                  showColorControls={false}
+                  allowHtmlMode
+                  helperText='Mô tả giáo viên mong muốn học sinh đạt được gì. Nội dung này dùng để hỗ trợ chấm bài và có thể không hiển thị cho học sinh.'
+                />
+              </div>
+              <div>
+                <CFormLabel>Tiêu chí chấm</CFormLabel>
+                <SimpleHtmlEditor
+                  value={task.gradingRubric}
+                  onChange={(value) => updateTask(index, { gradingRubric: value })}
+                  disabled={saving}
+                  rows={4}
+                  showImageControls={false}
+                  showColorControls={false}
+                  allowHtmlMode
+                  helperText='Mô tả cách đánh giá hoặc phân bổ điểm. Có thể để trống nếu không cần.'
+                />
+              </div>
               <div className='d-grid' style={{ gridTemplateColumns: 'minmax(180px, 1fr) minmax(140px, 160px) minmax(140px, 160px)', gap: 16 }}>
                 <div>
                   <CFormLabel>Loại task</CFormLabel>
@@ -400,6 +429,9 @@ export default function TeacherAssignmentEditorModal({ visible = false, saving =
           tasks: form.tasks.map((task, index) => ({
             title: task.title,
             description: task.description,
+            expectedOutcome: task.expectedOutcome,
+            gradingRubric: task.gradingRubric,
+            gradingVersion: Number(task.gradingVersion || 0) || 1,
             taskType: task.taskType,
             order: Number(task.order || index + 1) || index + 1,
             required: task.required !== false,

@@ -182,6 +182,8 @@ function normalizeAssignmentSubmission(raw) {
 
 function normalizeAssignmentProgress(raw) {
   if (!raw || typeof raw !== 'object') return null
+  const aiGradingVersion = Number(raw.aiGradingVersion || 0) || null
+  const teacherReviewGradingVersion = Number(raw.teacherReviewGradingVersion || 0) || null
   return {
     id: Number(raw.id || 0) || 0,
     status: toText(raw.status) || 'assigned',
@@ -191,6 +193,15 @@ function normalizeAssignmentProgress(raw) {
     score: raw.score === null || raw.score === undefined || raw.score === '' ? null : Number(raw.score),
     maxScore: raw.maxScore === null || raw.maxScore === undefined || raw.maxScore === '' ? null : Number(raw.maxScore),
     teacherFeedback: toText(raw.teacherFeedback),
+    aiSuggestedScore: raw.aiSuggestedScore === null || raw.aiSuggestedScore === undefined || raw.aiSuggestedScore === '' ? null : Number(raw.aiSuggestedScore),
+    aiSuggestedMaxScore: raw.aiSuggestedMaxScore === null || raw.aiSuggestedMaxScore === undefined || raw.aiSuggestedMaxScore === '' ? null : Number(raw.aiSuggestedMaxScore),
+    aiSuggestedFeedback: toText(raw.aiSuggestedFeedback),
+    aiGradingVersion,
+    aiGradedAt: raw.aiGradedAt || null,
+    aiModel: toText(raw.aiModel),
+    aiStale: raw.aiStale === true || (aiGradingVersion !== null && Number(raw?.task?.gradingVersion || 0) > aiGradingVersion),
+    staleReason: toText(raw.staleReason),
+    teacherReviewGradingVersion,
     reviewedBy: normalizeUserLite(raw.reviewedBy),
     reviewedAt: raw.reviewedAt || null,
     learner: normalizeLearnerLite(raw.learner),
@@ -246,6 +257,9 @@ function normalizeAssignmentTask(raw) {
     id: Number(raw.id || 0) || 0,
     title: toText(raw.title),
     description: toText(raw.description),
+    expectedOutcome: toText(raw.expectedOutcome),
+    gradingRubric: toText(raw.gradingRubric),
+    gradingVersion: Number(raw.gradingVersion || 0) || 1,
     order: Number(raw.order || 0) || 0,
     required: raw.required !== false,
     taskType: toText(raw.taskType) || 'todo',
@@ -258,7 +272,7 @@ function normalizeAssignmentTask(raw) {
     } : null,
     assessmentVersion: normalizeAssignmentAssessmentVersion(raw.assessmentVersion),
     assessmentSettings: normalizeAssignmentAssessmentSettings(raw.assessmentSettings),
-    stats: raw.stats || { learnerCount: 0, submittedCount: 0, completedCount: 0, returnedCount: 0, missingCount: 0, submissionVersionCount: 0 },
+    stats: raw.stats || { learnerCount: 0, submittedCount: 0, completedCount: 0, returnedCount: 0, missingCount: 0, submissionVersionCount: 0, aiGradedCount: 0, staleAiCount: 0, staleUnreviewedCount: 0, staleReviewedCount: 0 },
     myProgress: normalizeAssignmentProgress(raw.myProgress),
     submissions: Array.isArray(raw.submissions) ? raw.submissions.map(normalizeAssignmentSubmission).filter(Boolean) : [],
   }
@@ -909,6 +923,11 @@ export async function updateTeacherAssignment(assignmentId, payload) {
   return normalizeAssignmentSummary(response?.data?.data || null)
 }
 
+export async function updateTeacherAssignmentTaskGradingDefinition(assignmentId, taskId, payload) {
+  const response = await api.put(`/teacher/assignments/${assignmentId}/tasks/${taskId}/grading-definition`, { data: payload || {} })
+  return response?.data?.data || null
+}
+
 export async function getTeacherAssignmentAssessmentOptions(assignmentId, params = {}) {
   const response = await api.get(`/teacher/assignments/${assignmentId}/assessment-options`, { params })
   const payload = response?.data?.data || {}
@@ -950,6 +969,16 @@ export async function reopenTeacherAssignment(assignmentId) {
 export async function getTeacherAssignmentLearnerTaskDetail(assignmentId, taskId, learnerId) {
   const response = await api.get(`/teacher/assignments/${assignmentId}/tasks/${taskId}/learners/${learnerId}`)
   return normalizeAssignmentSummary(response?.data?.data || null)
+}
+
+export async function autoGradeTeacherAssignmentLearnerTask(assignmentId, taskId, learnerId) {
+  const response = await api.post(`/teacher/assignments/${assignmentId}/tasks/${taskId}/learners/${learnerId}/auto-grade`)
+  return response?.data?.data || null
+}
+
+export async function batchRegradeStaleUnreviewedTeacherAssignmentTask(assignmentId, taskId) {
+  const response = await api.post(`/teacher/assignments/${assignmentId}/tasks/${taskId}/regrade-stale-unreviewed`)
+  return response?.data?.data || null
 }
 
 export async function reviewTeacherAssignmentLearnerTask(assignmentId, taskId, learnerId, payload) {
