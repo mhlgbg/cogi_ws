@@ -69,10 +69,14 @@ async function findRecordByTargetDocumentId(uid: string, targetDocumentId: strin
   const normalizedId = parsePositiveInt(targetDocumentId)
   if (!normalizedId) return null
 
-  return strapi.db.query(uid).findOne({
-    where: { id: normalizedId },
-    select: ['id'],
-  })
+  try {
+    const record = await (strapi.entityService as any).findOne(uid, normalizedId, {
+      fields: ['id'],
+    })
+    return record
+  } catch (error) {
+    return null
+  }
 }
 
 async function listMappingsForSource(sourceDocumentId: number) {
@@ -153,20 +157,36 @@ async function loadSectionById(id: number | string) {
   const normalizedId = parsePositiveInt(id)
   if (!normalizedId) return null
 
-  return strapi.db.query(SECTION_UID).findOne({
-    where: { id: normalizedId },
-    select: ['id', 'sourceDocument', 'parent', 'sectionType', 'title', 'body', 'sortOrder'],
-  })
+  try {
+    const section = await (strapi.entityService as any).findOne(SECTION_UID, normalizedId, {
+      fields: ['id', 'sourceDocument', 'parent', 'sectionType', 'title', 'body', 'sortOrder'],
+      populate: {
+        sourceDocument: { fields: ['id'] },
+        parent: { fields: ['id'] },
+      },
+    })
+    return section
+  } catch (error) {
+    return null
+  }
 }
 
 async function loadLocationById(id: number | string) {
   const normalizedId = parsePositiveInt(id)
   if (!normalizedId) return null
 
-  return strapi.db.query(LOCATION_UID).findOne({
-    where: { id: normalizedId },
-    select: ['id', 'sourceDocument', 'section', 'startPage', 'endPage', 'locator', 'excerpt'],
-  })
+  try {
+    const location = await (strapi.entityService as any).findOne(LOCATION_UID, normalizedId, {
+      fields: ['id', 'sourceDocument', 'section', 'startPage', 'endPage', 'locator', 'excerpt'],
+      populate: {
+        sourceDocument: { fields: ['id'] },
+        section: { fields: ['id'] },
+      },
+    })
+    return location
+  } catch (error) {
+    return null
+  }
 }
 
 function createSectionRecordSnapshot(record: Record<string, any>) {
@@ -531,13 +551,15 @@ async function previewPackage(input: Record<string, any>, sourceDocumentId: numb
       // Fallback: Search for existing section by sourceDocument + title (when mapping is missing)
       let fallbackRecord: any = null
       try {
-        fallbackRecord = await strapi.db.query(SECTION_UID).findOne({
-          where: {
+        const sections = await (strapi.entityService as any).findMany(SECTION_UID, {
+          filters: {
             sourceDocument: sourceDocumentId,
             title: normalizedSection.title,
           },
-          select: ['id'],
+          fields: ['id'],
+          limit: 1,
         })
+        fallbackRecord = sections?.[0] || null
       } catch {
         // If query fails, treat as not found
       }
@@ -643,15 +665,17 @@ async function previewPackage(input: Record<string, any>, sourceDocumentId: numb
       // Fallback: Search for existing location by sourceDocument + startPage + endPage + locator
       let fallbackRecord: any = null
       try {
-        fallbackRecord = await strapi.db.query(LOCATION_UID).findOne({
-          where: {
+        const locations = await (strapi.entityService as any).findMany(LOCATION_UID, {
+          filters: {
             sourceDocument: sourceDocumentId,
             startPage: startPage || null,
             endPage: endPage || null,
             locator: textValue(row.locator),
           },
-          select: ['id'],
+          fields: ['id'],
+          limit: 1,
         })
+        fallbackRecord = locations?.[0] || null
       } catch {
         // If query fails, treat as not found
       }
