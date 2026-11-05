@@ -960,8 +960,15 @@ export default {
           if (action === 'create') {
             const created = await strapi.db.query(SECTION_UID).create({
               data: basePayload,
+              select: ['id', 'documentId'],
               ...(trx ? { transacting: trx } : {}),
             } as any)
+            
+            const targetDocId = created?.documentId
+            if (!targetDocId) {
+              throw new Error(`Section created but documentId is missing for importKey '${item.importKey}'`)
+            }
+            
             resolvedSectionIds.set(normalizeKey(item.importKey), Number(created.id))
             sectionLookup.set(normalizeKey(item.importKey), { ...item, targetRecord: { id: created.id } })
             stats.created += 1
@@ -969,7 +976,7 @@ export default {
               sourceDocumentId: sourceDocument.id,
               entityType: 'section',
               importKey: item.importKey,
-              targetDocumentId: created.id,
+              targetDocumentId: targetDocId,
               lastImportBatch: batchRecord.id,
               sourceHash: computeHash({ ...basePayload, importKey: item.importKey, rowNumber: item.rowNumber }),
               trx,
@@ -978,8 +985,17 @@ export default {
           }
 
           if (action === 'update' && existingTargetId) {
-            const targetSection = await strapi.db.query(SECTION_UID).findOne({ where: { id: existingTargetId }, select: ['id'] })
+            const targetSection = await strapi.db.query(SECTION_UID).findOne({ 
+              where: { id: existingTargetId }, 
+              select: ['id', 'documentId'] 
+            })
             if (!targetSection) throw new Error(`Target section for importKey '${item.importKey}' no longer exists.`)
+            
+            const targetDocId = targetSection?.documentId
+            if (!targetDocId) {
+              throw new Error(`Target section found but documentId is missing for importKey '${item.importKey}'`)
+            }
+            
             const updated = await strapi.db.query(SECTION_UID).update({
               where: { id: existingTargetId },
               data: basePayload,
@@ -992,7 +1008,7 @@ export default {
               sourceDocumentId: sourceDocument.id,
               entityType: 'section',
               importKey: item.importKey,
-              targetDocumentId: Number(updated.id || existingTargetId),
+              targetDocumentId: targetDocId,
               lastImportBatch: batchRecord.id,
               sourceHash: computeHash({ ...basePayload, importKey: item.importKey, rowNumber: item.rowNumber }),
               trx,
@@ -1046,14 +1062,21 @@ export default {
           if (action === 'create') {
             const created = await strapi.db.query(LOCATION_UID).create({
               data: payload,
+              select: ['id', 'documentId'],
               ...(trx ? { transacting: trx } : {}),
             } as any)
+            
+            const targetDocId = created?.documentId
+            if (!targetDocId) {
+              throw new Error(`SourceLocation created but documentId is missing for importKey '${item.importKey}'`)
+            }
+            
             stats.created += 1
             await upsertImportMappingRecord({
               sourceDocumentId: sourceDocument.id,
               entityType: 'source-location',
               importKey: item.importKey,
-              targetDocumentId: created.id,
+              targetDocumentId: targetDocId,
               lastImportBatch: batchRecord.id,
               sourceHash: computeHash({ ...payload, importKey: item.importKey, rowNumber: item.rowNumber }),
               trx,
@@ -1062,8 +1085,17 @@ export default {
           }
 
           if (action === 'update' && item.targetRecord?.id) {
-            const targetLocation = await strapi.db.query(LOCATION_UID).findOne({ where: { id: item.targetRecord.id }, select: ['id'] })
+            const targetLocation = await strapi.db.query(LOCATION_UID).findOne({ 
+              where: { id: item.targetRecord.id }, 
+              select: ['id', 'documentId'] 
+            })
             if (!targetLocation) throw new Error(`Target source location for importKey '${item.importKey}' no longer exists.`)
+            
+            const targetDocId = targetLocation?.documentId
+            if (!targetDocId) {
+              throw new Error(`Target SourceLocation found but documentId is missing for importKey '${item.importKey}'`)
+            }
+            
             await strapi.db.query(LOCATION_UID).update({
               where: { id: item.targetRecord.id },
               data: payload,
@@ -1074,7 +1106,7 @@ export default {
               sourceDocumentId: sourceDocument.id,
               entityType: 'source-location',
               importKey: item.importKey,
-              targetDocumentId: item.targetRecord.id,
+              targetDocumentId: targetDocId,
               lastImportBatch: batchRecord.id,
               sourceHash: computeHash({ ...payload, importKey: item.importKey, rowNumber: item.rowNumber }),
               trx,
