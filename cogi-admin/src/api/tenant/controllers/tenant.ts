@@ -70,6 +70,61 @@ function toBoolean(value: unknown): boolean | null {
   return null;
 }
 
+function readJsonSettings(value: unknown): Record<string, any> {
+  if (!value) return {};
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return {};
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+      return parsed as Record<string, any>;
+    } catch {
+      return {};
+    }
+  }
+
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, any>;
+  }
+
+  return {};
+}
+
+function normalizeTenantHomeLinkConfig(value: unknown): Record<string, any> | null {
+  const rawConfig = value && typeof value === 'object' ? value as Record<string, any> : (typeof value === 'string' ? { url: value } : null);
+  if (!rawConfig) return null;
+
+  const enabled = rawConfig.enabled !== false;
+  const rawUrl = toText(rawConfig.url ?? rawConfig.homeUrl ?? '').trim();
+  if (!enabled || !rawUrl) return null;
+
+  const lowerUrl = rawUrl.toLowerCase();
+  if (rawUrl.startsWith('//') || /^(javascript:|data:|vbscript:)/i.test(lowerUrl)) {
+    throw new Error('tenantHomeLink.url must be a valid http(s) or internal relative path');
+  }
+
+  const schemeMatch = lowerUrl.match(/^([a-z][a-z0-9+.-]*):/);
+  if (schemeMatch && !/^https?:$/.test(schemeMatch[1])) {
+    throw new Error('tenantHomeLink.url must be a valid http(s) or internal relative path');
+  }
+
+  if (!/^https?:\/\//i.test(rawUrl) && !rawUrl.startsWith('/') && !rawUrl.startsWith('./') && !rawUrl.startsWith('../')) {
+    throw new Error('tenantHomeLink.url must be a valid http(s) or internal relative path');
+  }
+
+  return {
+    enabled: true,
+    url: rawUrl,
+    label: toText(rawConfig.label || 'Về trang chủ') || 'Về trang chủ',
+    logoClickable: rawConfig.logoClickable !== false,
+    showInSidebar: rawConfig.showInSidebar !== false,
+    showInCommunityHeader: rawConfig.showInCommunityHeader !== false,
+  };
+}
+
 function resolveRequestData(ctx: any): Record<string, unknown> {
   const body = (ctx.request.body ??= {});
   if (body.data && typeof body.data === 'object' && !Array.isArray(body.data)) {
@@ -207,6 +262,11 @@ function parseStorageSettingsValue(value: unknown) {
 }
 
 function buildWebsiteSettingsResponse(tenant: any, storageConfigs: any[] = []) {
+  const settings = readJsonSettings(tenant?.settings);
+  const tenantHomeLink = normalizeTenantHomeLinkConfig(
+    settings?.tenantHomeLink ?? settings?.tenantHomeLinkConfig ?? settings?.homeLink,
+  );
+
   return {
     siteTitle: toText(tenant?.siteTitle) || null,
     defaultPageTitle: toText(tenant?.defaultPageTitle) || null,
@@ -222,6 +282,8 @@ function buildWebsiteSettingsResponse(tenant: any, storageConfigs: any[] = []) {
     defaultMetaImage: normalizeWebsiteMedia(tenant?.defaultMetaImage),
     favicon: normalizeWebsiteMedia(tenant?.favicon),
     chatAvatar: normalizeWebsiteMedia(tenant?.chatAvatar),
+    tenantHomeLink,
+    settings,
     storageDefaultConfigId: toPositiveInt(tenant?.storageDefaultConfigId),
     storageConfigs,
   };
@@ -575,7 +637,24 @@ export default {
   async updateWebsiteSettings(ctx: any) {
     try {
       const tenant = await findCurrentTenantOrThrow(ctx);
+      const requestData = resolveRequestData(ctx);
       const { payload, storageDefaultConfigId } = readWebsiteSettingsPayload(ctx);
+
+      if (Object.prototype.hasOwnProperty.call(requestData, 'tenantHomeLink')) {
+        const currentSettings = readJsonSettings(tenant.settings);
+        const tenantHomeLinkValue = requestData.tenantHomeLink;
+        if (tenantHomeLinkValue === null || tenantHomeLinkValue === undefined || tenantHomeLinkValue === '') {
+          delete currentSettings.tenantHomeLink;
+          payload.settings = currentSettings;
+        } else {
+          const normalizedTenantHomeLink = normalizeTenantHomeLinkConfig(tenantHomeLinkValue);
+          if (!normalizedTenantHomeLink) {
+            throw new Error('tenantHomeLink.url must be a valid http(s) or internal relative path');
+          }
+          currentSettings.tenantHomeLink = normalizedTenantHomeLink;
+          payload.settings = currentSettings;
+        }
+      }
 
       if (storageDefaultConfigId !== undefined) {
         const validatedStorageDefaultConfigId = await validateDefaultStorageConfigId(tenant.id, storageDefaultConfigId);

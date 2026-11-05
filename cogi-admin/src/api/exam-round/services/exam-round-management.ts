@@ -1,6 +1,8 @@
 import { randomBytes } from 'node:crypto';
+import fs from 'node:fs/promises';
 
 import { errors } from '@strapi/utils';
+import XLSX from 'xlsx';
 import { enqueueMail } from '../../../services/mail-queue';
 import storageService from '../../../services/storage-service';
 import { getBaseUrl } from '../../../utils/tenant-base-url';
@@ -31,6 +33,15 @@ const ENROLLMENT_UID = 'api::enrollment.enrollment';
 const TENANT_UID = 'api::tenant.tenant';
 const REGISTRATION_CONCURRENCY_GUARD_WINDOW_MS = 500;
 const ELIGIBILITY_BULK_LIMIT = 500;
+const ELIGIBILITY_IMPORT_MAX_ROWS = 5000;
+const EXAM_ELIGIBILITY_IMPORT_TEMPLATE_FILE_NAME = 'exam-eligibility-import-template.xlsx';
+const EXAM_ELIGIBILITY_IMPORT_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const EXAM_ELIGIBILITY_IMPORT_ALLOWED_MIME_TYPES = new Set([
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+  'application/octet-stream',
+]);
+const EXAM_ELIGIBILITY_IMPORT_MAX_FILE_SIZE = 10 * 1024 * 1024;
 const REGISTRATION_CODE_PREFIX = 'EXR';
 const REGISTRATION_CODE_MAX_ATTEMPTS = 10;
 const PAYMENT_TRANSFER_CONTENT_MAX_LENGTH = 255;
@@ -50,6 +61,18 @@ type AuthUser = {
   username?: string | null;
   fullName?: string | null;
   email?: string | null;
+};
+
+type UploadedFileLike = {
+  name?: string;
+  originalFilename?: string;
+  type?: string;
+  mimetype?: string;
+  size?: number;
+  filepath?: string;
+  path?: string;
+  tempFilePath?: string;
+  buffer?: Buffer;
 };
 
 type HttpErrorDetails = Record<string, unknown> | Array<Record<string, unknown>> | null;
@@ -110,10 +133,27 @@ type ComponentSnapshotDraft = {
 };
 
 type UpdateStructureInput = {
+  code?: string;
+  name?: string;
+  academicYear?: string | null;
+  semester?: string | null;
+  registrationMode?: 'open' | 'restricted';
+  registrationStartAt?: string | null;
+  registrationEndAt?: string | null;
+  paymentStartAt?: string | null;
+  paymentEndAt?: string | null;
+  candidateListClosingAt?: string | null;
+  examStartAt?: string | null;
+  examEndAt?: string | null;
   paymentCalculationMethod?: 'fixed' | 'program_fee' | 'subject_fee' | 'component_fee';
   fixedFee?: string | null;
   allowSubjectSelection?: boolean;
   allowComponentSelection?: boolean;
+  requireConfirmedPayment?: boolean;
+  allowCancellation?: boolean;
+  cancellationDeadline?: string | null;
+  instructions?: string | null;
+  paymentInstructions?: string | null;
   subjects: Array<{
     examRoundSubjectId: number;
     status?: 'active' | 'inactive';
@@ -198,11 +238,27 @@ type MutableExamRoundStructure = {
     id: number;
     documentId: string | null;
     code: string;
+    name: string;
+    academicYear: string | null;
+    semester: string | null;
     status: string;
+    registrationMode: 'open' | 'restricted';
+    registrationStartAt: string | null;
+    registrationEndAt: string | null;
+    paymentStartAt: string | null;
+    paymentEndAt: string | null;
+    candidateListClosingAt: string | null;
+    examStartAt: string | null;
+    examEndAt: string | null;
     paymentCalculationMethod: 'fixed' | 'program_fee' | 'subject_fee' | 'component_fee';
     fixedFee: string | null;
     allowSubjectSelection: boolean;
     allowComponentSelection: boolean;
+    requireConfirmedPayment: boolean;
+    allowCancellation: boolean;
+    cancellationDeadline: string | null;
+    instructions: string | null;
+    paymentInstructions: string | null;
   };
   subjects: MutableRoundSubject[];
   orphanComponentIds: number[];
@@ -227,6 +283,55 @@ type WorkflowReturnInput = {
 type VenueRoomConfigurationInput = {
   venueIds: number[];
   roomIds: number[];
+};
+
+type VenueRoomCopySourceListQuery = {
+  page: number;
+  pageSize: number;
+  search: string;
+};
+
+type VenueRoomCopyInput = {
+  sourceRoundId: number;
+};
+
+type VenueRoomCopyAction = 'ADD' | 'SKIP' | 'WARNING';
+
+type VenueRoomCopyPreviewVenueRow = ReturnType<typeof mapExamVenueConfigurationItem> & {
+  action: VenueRoomCopyAction;
+  resultMessage: string | null;
+};
+
+type VenueRoomCopyPreviewRoomRow = ReturnType<typeof mapExamRoomConfigurationItem> & {
+  action: VenueRoomCopyAction;
+  resultMessage: string | null;
+};
+
+type VenueRoomCopyPlan = {
+  sourceRound: {
+    id: number;
+    documentId: string | null;
+    code: string;
+    name: string;
+    examStartAt: string | null;
+    examEndAt: string | null;
+  };
+  summary: {
+    sourceVenueCount: number;
+    sourceRoomCount: number;
+    sourceTotalCapacity: number;
+    addedVenues: number;
+    addedRooms: number;
+    skippedVenues: number;
+    skippedRooms: number;
+  };
+  warnings: Array<{ code: string; message: string }>;
+  venues: VenueRoomCopyPreviewVenueRow[];
+  rooms: VenueRoomCopyPreviewRoomRow[];
+  nextVenueIds: number[];
+  nextRoomIds: number[];
+  addedVenueIds: number[];
+  addedRoomIds: number[];
 };
 
 type OptionalReasonInput = {
@@ -423,6 +528,63 @@ type BulkCreateEligibilitiesInput = {
   duplicateHandling: DuplicateHandling;
 };
 
+type ExamEligibilityImportStatus = EligibilityStatus;
+
+type ExamEligibilityImportAction = 'CREATE' | 'UPDATE' | 'SKIP' | 'ERROR';
+
+type ExamEligibilityImportHeaderKey = 'learnerCode' | 'status' | 'reason' | 'note' | 'fullName' | 'dateOfBirth';
+
+type ExamEligibilityImportNormalizedRow = {
+  learnerCode: string;
+  eligibilityStatus: ExamEligibilityImportStatus;
+  reason: string | null;
+  note: string | null;
+  fullName: string | null;
+  dateOfBirth: string | null;
+};
+
+type ExamEligibilityImportPreviewRow = {
+  rowNumber: number;
+  learnerCode: string;
+  learnerName: string | null;
+  dateOfBirth: string | null;
+  currentStatus: EligibilityStatus | null;
+  newStatus: EligibilityStatus | null;
+  action: ExamEligibilityImportAction;
+  warnings: string[];
+  errors: string[];
+  reason: string | null;
+  note: string | null;
+  internalNormalizedRow: ExamEligibilityImportNormalizedRow | null;
+  internalLearner: any | null;
+  internalExistingEligibility: any | null;
+  internalRegistrationSummary: any | null;
+};
+
+type ExamEligibilityImportPreviewResult = {
+  fileName: string | null;
+  totalRows: number;
+  validRows: number;
+  createCount: number;
+  updateCount: number;
+  skipCount: number;
+  errorCount: number;
+  rows: Array<{
+    rowNumber: number;
+    learnerCode: string;
+    learnerName: string | null;
+    dateOfBirth: string | null;
+    currentStatus: EligibilityStatus | null;
+    newStatus: EligibilityStatus | null;
+    action: ExamEligibilityImportAction;
+    warnings: string[];
+    errors: string[];
+    reason: string | null;
+    note: string | null;
+  }>;
+  internalRows: ExamEligibilityImportPreviewRow[];
+};
+
 type LearnerEligibilityLookupQuery = {
   page: number;
   pageSize: number;
@@ -519,7 +681,7 @@ export async function getExamRoundManagementDetail(roundId: unknown, tenantId: n
   const where = whereByParam(roundId);
   if (!where) return null;
 
-  return strapi.db.query(EXAM_ROUND_UID).findOne({
+  const entity = await strapi.db.query(EXAM_ROUND_UID).findOne({
     where: mergeTenantWhere(where, tenantId),
     populate: {
       examProgram: {
@@ -554,7 +716,30 @@ export async function getExamRoundManagementDetail(roundId: unknown, tenantId: n
       },
     },
     ...(transacting ? { transacting } : {}),
-  });
+  }) as any;
+
+  if (!entity?.id) return entity;
+
+  const [configurationAccess, registrationCount, eligibilityCount] = await Promise.all([
+    getExamRoundBaseConfigurationEditState(tenantId, entity, transacting),
+    countExistingRegistrationsForRound(tenantId, Number(entity.id), transacting),
+    countExamEligibilitiesForRound(tenantId, Number(entity.id), transacting),
+  ]);
+
+  return {
+    ...entity,
+    registrationCount,
+    eligibilityCount,
+    configurationAccess: {
+      canEditBaseConfiguration: configurationAccess.canEdit === true,
+      canEditPaymentSettings: configurationAccess.canEdit === true,
+      reasonCode: configurationAccess.reasonCode || null,
+      message: configurationAccess.message || '',
+      warningMessage: configurationAccess.warningMessage || null,
+      registrationOperationalState: configurationAccess.registrationOperationalState,
+      registrationCount: configurationAccess.registrationCount,
+    },
+  };
 }
 
 function buildExamConfigurationProgramWhere(query: Record<string, unknown>) {
@@ -1465,6 +1650,59 @@ function normalizeOptionalText(value: unknown, maxLength?: number): string | nul
     httpError(400, `Text exceeds max length ${maxLength}`, 'INVALID_TEXT_LENGTH');
   }
   return text;
+}
+
+function getUploadedFilePath(file: UploadedFileLike) {
+  return file.filepath || file.path || file.tempFilePath || '';
+}
+
+function getUploadedFileName(file: UploadedFileLike) {
+  return normalizeOptionalText(file.name || file.originalFilename) || null;
+}
+
+function normalizeUploadedFileMimeType(file: UploadedFileLike) {
+  return normalizeText(file.mimetype || file.type).toLowerCase();
+}
+
+function normalizeUploadedFileSize(file: UploadedFileLike) {
+  const size = Number(file?.size || 0);
+  return Number.isFinite(size) && size >= 0 ? Math.floor(size) : 0;
+}
+
+function assertEligibilityImportFileValid(file: UploadedFileLike) {
+  const fileName = getUploadedFileName(file);
+  if (!fileName) {
+    httpError(400, 'File Excel is required', 'EXAM_ELIGIBILITY_IMPORT_FILE_REQUIRED');
+  }
+
+  const normalizedFileName = String(fileName).toLowerCase();
+  if (!normalizedFileName.endsWith('.xlsx') && !normalizedFileName.endsWith('.xls')) {
+    httpError(400, 'Chỉ hỗ trợ file Excel .xlsx hoặc .xls', 'EXAM_ELIGIBILITY_IMPORT_INVALID_FILE_TYPE');
+  }
+
+  const mimeType = normalizeUploadedFileMimeType(file);
+  if (mimeType && !EXAM_ELIGIBILITY_IMPORT_ALLOWED_MIME_TYPES.has(mimeType)) {
+    httpError(400, 'Chỉ hỗ trợ file Excel .xlsx hoặc .xls', 'EXAM_ELIGIBILITY_IMPORT_INVALID_FILE_TYPE');
+  }
+
+  const size = normalizeUploadedFileSize(file);
+  if (size <= 0 || size > EXAM_ELIGIBILITY_IMPORT_MAX_FILE_SIZE) {
+    httpError(400, 'File Excel vượt quá giới hạn 10MB', 'EXAM_ELIGIBILITY_IMPORT_FILE_TOO_LARGE');
+  }
+}
+
+async function readWorkbookBuffer(file: UploadedFileLike): Promise<Buffer> {
+  assertEligibilityImportFileValid(file);
+  if (file.buffer && Buffer.isBuffer(file.buffer)) {
+    return file.buffer;
+  }
+
+  const filePath = getUploadedFilePath(file);
+  if (!filePath) {
+    httpError(400, 'Uploaded file path was not found', 'EXAM_ELIGIBILITY_IMPORT_FILE_REQUIRED');
+  }
+
+  return fs.readFile(filePath);
 }
 
 function normalizeRequiredText(value: unknown, fieldName: string, maxLength?: number): string {
@@ -2520,6 +2758,19 @@ function normalizeVenueRoomConfigurationInput(payload: Record<string, unknown>):
   return { venueIds, roomIds };
 }
 
+function normalizeVenueRoomCopySourceListQuery(query: Record<string, unknown>): VenueRoomCopySourceListQuery {
+  const page = toPositiveInt(query?.page, 1);
+  const pageSize = Math.min(20, toPositiveInt(query?.pageSize, 10));
+  const search = normalizeText(query?.search);
+  return { page, pageSize, search };
+}
+
+function normalizeVenueRoomCopyInput(payload: Record<string, unknown>): VenueRoomCopyInput {
+  ensureNoUnknownFields(payload, ['sourceRoundId'], 'payload');
+  const sourceRoundId = normalizePositiveInteger(payload.sourceRoundId, 'sourceRoundId');
+  return { sourceRoundId };
+}
+
 async function loadExamVenueInTenant(tenantId: number, venueRef: unknown, transacting?: any) {
   const where = whereByParam(venueRef);
   if (!where) {
@@ -2606,6 +2857,211 @@ function mapExamRoomConfigurationItem(room: any, options: { selected?: boolean; 
       sortOrder: Number(room.examVenue.sortOrder || 0) || 0,
     } : null,
   };
+}
+
+function buildVenueRoomSelectionSummary(venues: any[], rooms: any[]) {
+  return {
+    venueCount: venues.length,
+    roomCount: rooms.length,
+    totalCapacity: rooms.reduce((total, item) => total + Math.max(0, Number(item?.capacity || 0)), 0),
+  };
+}
+
+function mapVenueRoomCopySourceRound(row: any) {
+  const summary = buildVenueRoomSelectionSummary(row?.examVenues || [], row?.examRooms || []);
+  return {
+    id: Number(row?.id || 0),
+    documentId: row?.documentId || null,
+    code: normalizeText(row?.code),
+    name: normalizeText(row?.name),
+    examProgram: row?.examProgram ? {
+      id: Number(row?.examProgram?.id || 0) || null,
+      code: normalizeText(row?.examProgram?.code) || null,
+      name: normalizeText(row?.examProgram?.name) || null,
+    } : null,
+    examStartAt: normalizeStoredDateTime(row?.examStartAt),
+    examEndAt: normalizeStoredDateTime(row?.examEndAt),
+    createdAt: normalizeStoredDateTime(row?.createdAt),
+    venueCount: summary.venueCount,
+    roomCount: summary.roomCount,
+    totalCapacity: summary.totalCapacity,
+  };
+}
+
+function mapVenueRoomCopyPreviewRound(round: any) {
+  return {
+    id: Number(round?.id || 0),
+    documentId: round?.documentId || null,
+    code: normalizeText(round?.code),
+    name: normalizeText(round?.name),
+    examStartAt: normalizeStoredDateTime(round?.examStartAt),
+    examEndAt: normalizeStoredDateTime(round?.examEndAt),
+  };
+}
+
+function buildVenueRoomCopyWarning(code: string, message: string) {
+  return { code, message };
+}
+
+function buildVenueRoomCopyPlan(sourceRound: any, targetRound: any): VenueRoomCopyPlan {
+  const targetVenueIds = new Set((targetRound?.examVenues || []).map((item: any) => Number(item?.id || 0)).filter((item: number) => item > 0));
+  const targetRoomIds = new Set((targetRound?.examRooms || []).map((item: any) => Number(item?.id || 0)).filter((item: number) => item > 0));
+  const sourceSelectedVenueIds = new Set((sourceRound?.examVenues || []).map((item: any) => Number(item?.id || 0)).filter((item: number) => item > 0));
+  const sourceSelectedRooms = Array.isArray(sourceRound?.examRooms) ? sourceRound.examRooms : [];
+  const warnings: Array<{ code: string; message: string }> = [];
+  const venues: VenueRoomCopyPreviewVenueRow[] = [];
+  const rooms: VenueRoomCopyPreviewRoomRow[] = [];
+  const allowedVenueIds = new Set<number>();
+  const allowedRoomIds = new Set<number>();
+  let skippedInactiveVenueCount = 0;
+  let skippedInactiveRoomCount = 0;
+  let skippedInvalidRelationRoomCount = 0;
+
+  for (const venue of sourceRound?.examVenues || []) {
+    const venueId = Number(venue?.id || 0);
+    const mappedVenue = mapExamVenueConfigurationItem(venue, { selected: true });
+    if (!venueId) {
+      venues.push({ ...mappedVenue, action: 'WARNING', resultMessage: 'Địa điểm nguồn không còn hợp lệ.' });
+      continue;
+    }
+
+    if (venue?.isActive !== true) {
+      skippedInactiveVenueCount += 1;
+      venues.push({ ...mappedVenue, action: 'WARNING', resultMessage: 'Địa điểm inactive không được sao chép.' });
+      continue;
+    }
+
+    allowedVenueIds.add(venueId);
+    if (targetVenueIds.has(venueId)) {
+      venues.push({ ...mappedVenue, action: 'SKIP', resultMessage: 'Địa điểm đã có trong round hiện tại.' });
+    } else {
+      venues.push({ ...mappedVenue, action: 'ADD', resultMessage: 'Địa điểm sẽ được bổ sung.' });
+    }
+  }
+
+  for (const room of sourceSelectedRooms) {
+    const roomId = Number(room?.id || 0);
+    const mappedRoom = mapExamRoomConfigurationItem(room, { selected: true, scheduleCount: 0 });
+    const venueId = Number(extractRelationRef(room?.examVenue) || room?.examVenue?.id || 0);
+    if (!roomId) {
+      rooms.push({ ...mappedRoom, action: 'WARNING', resultMessage: 'Phòng nguồn không còn hợp lệ.' });
+      continue;
+    }
+
+    if (!venueId || !sourceSelectedVenueIds.has(venueId)) {
+      skippedInvalidRelationRoomCount += 1;
+      rooms.push({ ...mappedRoom, action: 'WARNING', resultMessage: 'Phòng nguồn không thuộc địa điểm đã chọn ở round nguồn.' });
+      continue;
+    }
+
+    if (room?.examVenue?.isActive !== true) {
+      skippedInactiveRoomCount += 1;
+      rooms.push({ ...mappedRoom, action: 'WARNING', resultMessage: 'Địa điểm của phòng đang inactive nên phòng không được sao chép.' });
+      continue;
+    }
+
+    if (room?.isActive !== true) {
+      skippedInactiveRoomCount += 1;
+      rooms.push({ ...mappedRoom, action: 'WARNING', resultMessage: 'Phòng inactive không được sao chép.' });
+      continue;
+    }
+
+    if (!allowedVenueIds.has(venueId)) {
+      skippedInvalidRelationRoomCount += 1;
+      rooms.push({ ...mappedRoom, action: 'WARNING', resultMessage: 'Địa điểm của phòng không hợp lệ để sao chép.' });
+      continue;
+    }
+
+    if (Number(room?.capacity || 0) === 0) {
+      warnings.push(buildVenueRoomCopyWarning('ZERO_CAPACITY_ROOM_IN_SOURCE', 'Có phòng nguồn có sức chứa bằng 0. Phòng vẫn có thể được bổ sung nhưng cần kiểm tra trước khi tạo lịch.'));
+    }
+
+    allowedRoomIds.add(roomId);
+    if (targetRoomIds.has(roomId)) {
+      rooms.push({ ...mappedRoom, action: 'SKIP', resultMessage: 'Phòng đã có trong round hiện tại.' });
+    } else {
+      rooms.push({ ...mappedRoom, action: 'ADD', resultMessage: 'Phòng sẽ được bổ sung.' });
+    }
+  }
+
+  if (allowedVenueIds.size === 0 && allowedRoomIds.size === 0) {
+    httpError(409, 'Đợt nguồn không có venue/room active hợp lệ để sao chép.', 'EXAM_ROUND_COPY_SOURCE_NO_VALID_VENUE_ROOM');
+  }
+
+  if (skippedInactiveVenueCount > 0) {
+    warnings.push(buildVenueRoomCopyWarning('INACTIVE_VENUE_SKIPPED', `Đợt nguồn có ${skippedInactiveVenueCount} địa điểm inactive, các địa điểm này không được sao chép.`));
+  }
+  if (skippedInactiveRoomCount > 0) {
+    warnings.push(buildVenueRoomCopyWarning('INACTIVE_ROOM_SKIPPED', `Đợt nguồn có ${skippedInactiveRoomCount} phòng inactive, các phòng này không được sao chép.`));
+  }
+  if (skippedInvalidRelationRoomCount > 0) {
+    warnings.push(buildVenueRoomCopyWarning('INVALID_SOURCE_RELATION_SKIPPED', `Đợt nguồn có ${skippedInvalidRelationRoomCount} phòng với quan hệ venue/room không hợp lệ, các phòng này bị bỏ qua.`));
+  }
+
+  const mergedVenueIds = [...Array.from(targetVenueIds) as number[], ...Array.from(allowedVenueIds) as number[]];
+  const mergedRoomIds = [...Array.from(targetRoomIds) as number[], ...Array.from(allowedRoomIds) as number[]];
+  const nextVenueIds = Array.from<number>(new Set<number>(mergedVenueIds)).sort((left, right) => left - right);
+  const nextRoomIds = Array.from<number>(new Set<number>(mergedRoomIds)).sort((left, right) => left - right);
+  const addedVenueIds = Array.from(allowedVenueIds).filter((item) => !targetVenueIds.has(item));
+  const addedRoomIds = Array.from(allowedRoomIds).filter((item) => !targetRoomIds.has(item));
+  const sourceSummary = buildVenueRoomSelectionSummary(sourceRound?.examVenues || [], sourceSelectedRooms);
+
+  return {
+    sourceRound: mapVenueRoomCopyPreviewRound(sourceRound),
+    summary: {
+      sourceVenueCount: sourceSummary.venueCount,
+      sourceRoomCount: sourceSummary.roomCount,
+      sourceTotalCapacity: sourceSummary.totalCapacity,
+      addedVenues: addedVenueIds.length,
+      addedRooms: addedRoomIds.length,
+      skippedVenues: venues.filter((item) => item.action !== 'ADD').length,
+      skippedRooms: rooms.filter((item) => item.action !== 'ADD').length,
+    },
+    warnings,
+    venues,
+    rooms,
+    nextVenueIds,
+    nextRoomIds,
+    addedVenueIds,
+    addedRoomIds,
+  };
+}
+
+async function loadExamRoundVenueRoomCopySource(tenantId: number, roundRef: unknown, targetRoundId: number, transacting?: any) {
+  if (Number(roundRef || 0) > 0 && Number(roundRef) === Number(targetRoundId)) {
+    httpError(409, 'Đợt nguồn phải khác đợt hiện tại.', 'EXAM_ROUND_COPY_SOURCE_SAME_AS_TARGET');
+  }
+
+  const sourceRound = await strapi.db.query(EXAM_ROUND_UID).findOne({
+    where: mergeTenantWhere({
+      $and: [
+        whereByParam(roundRef) || { id: { $eq: -1 } },
+        { id: { $ne: targetRoundId } },
+      ],
+    }, tenantId),
+    select: ['id', 'documentId', 'code', 'name', 'status', 'examStartAt', 'examEndAt', 'createdAt'],
+    populate: {
+      examProgram: { select: ['id', 'documentId', 'code', 'name'] },
+      examVenues: { select: ['id', 'documentId', 'code', 'name', 'shortName', 'address', 'description', 'contactName', 'contactPhone', 'isActive', 'sortOrder'] },
+      examRooms: {
+        select: ['id', 'documentId', 'code', 'name', 'floor', 'capacity', 'roomType', 'isActive', 'description', 'sortOrder'],
+        populate: {
+          examVenue: { select: ['id', 'documentId', 'code', 'name', 'shortName', 'address', 'description', 'contactName', 'contactPhone', 'isActive', 'sortOrder'] },
+        },
+      },
+    },
+    ...(transacting ? { transacting } : {}),
+  } as any) as any;
+
+  if (!sourceRound?.id) {
+    httpError(404, 'Không tìm thấy đợt nguồn trong tenant hiện tại.', 'EXAM_ROUND_COPY_SOURCE_NOT_FOUND');
+  }
+
+  if ((sourceRound?.examVenues || []).length === 0 && (sourceRound?.examRooms || []).length === 0) {
+    httpError(409, 'Đợt nguồn chưa có cấu hình địa điểm/phòng để sao chép.', 'EXAM_ROUND_COPY_SOURCE_EMPTY_CONFIGURATION');
+  }
+
+  return sourceRound;
 }
 
 async function loadExamRoundVenueRoomContext(tenantId: number, roundRef: unknown, transacting?: any) {
@@ -2843,14 +3299,193 @@ function normalizeMarkIneligibleInput(payload: Record<string, unknown>): { reaso
   return { reason, note };
 }
 
+function normalizeExamEligibilityImportStatus(value: unknown): ExamEligibilityImportStatus {
+  const text = normalizeText(value).toLowerCase();
+  if (!text) return 'eligible';
+
+  const mapped = {
+    pending: 'pending',
+    eligible: 'eligible',
+    ineligible: 'ineligible',
+    temporarily_ineligible: 'temporarily_ineligible',
+    'cho xac dinh': 'pending',
+    'chờ xác định': 'pending',
+    'du dieu kien': 'eligible',
+    'đủ điều kiện': 'eligible',
+    'khong du dieu kien': 'ineligible',
+    'không đủ điều kiện': 'ineligible',
+    'tam thoi chua du dieu kien': 'temporarily_ineligible',
+    'tạm thời chưa đủ điều kiện': 'temporarily_ineligible',
+  } as Record<string, ExamEligibilityImportStatus>;
+
+  const normalized = mapped[text];
+  if (!normalized) {
+    httpError(400, 'status is invalid', 'INVALID_ELIGIBILITY_STATUS');
+  }
+
+  return normalized;
+}
+
+function getExamEligibilityImportColumnAliases(): Record<ExamEligibilityImportHeaderKey, string[]> {
+  return {
+    learnerCode: ['learnercode', 'learner code', 'mã learner', 'ma learner', 'mã học viên', 'ma hoc vien', 'ma hoc sinh', 'mã học sinh', 'studentcode', 'student code'],
+    status: ['status', 'trạng thái', 'trang thai', 'eligibilitystatus', 'eligibility status'],
+    reason: ['reason', 'lý do', 'ly do'],
+    note: ['note', 'ghi chú', 'ghi chu'],
+    fullName: ['fullname', 'full name', 'họ tên', 'ho ten'],
+    dateOfBirth: ['dateofbirth', 'date of birth', 'ngày sinh', 'ngay sinh', 'dob'],
+  };
+}
+
+function normalizeImportHeaderKey(value: unknown) {
+  return normalizeText(value).toLowerCase();
+}
+
+function buildExamEligibilityImportHeaderMap(headers: unknown[]) {
+  const aliases = getExamEligibilityImportColumnAliases();
+  const headerMap = new Map<ExamEligibilityImportHeaderKey, number>();
+
+  headers.forEach((header, index) => {
+    const normalized = normalizeImportHeaderKey(header);
+    if (!normalized) return;
+    (Object.keys(aliases) as ExamEligibilityImportHeaderKey[]).forEach((key) => {
+      if (!headerMap.has(key) && aliases[key].includes(normalized)) {
+        headerMap.set(key, index);
+      }
+    });
+  });
+
+  return headerMap;
+}
+
+function getWorksheetCellText(worksheet: XLSX.WorkSheet, rowNumber: number, columnIndex: number) {
+  const ref = XLSX.utils.encode_cell({ r: rowNumber - 1, c: columnIndex });
+  const cell = worksheet[ref] as XLSX.CellObject | undefined;
+  if (!cell) return '';
+  if (typeof cell.w === 'string') return normalizeText(cell.w);
+  if (typeof cell.v === 'string') return normalizeText(cell.v);
+  if (typeof cell.v === 'number' || typeof cell.v === 'boolean') return String(cell.v).trim();
+  return normalizeText(cell.v);
+}
+
+function isExamEligibilityImportRowEmpty(row: ExamEligibilityImportNormalizedRow) {
+  return !row.learnerCode && !row.reason && !row.note && !row.fullName && !row.dateOfBirth;
+}
+
+function isSameEligibilityData(existing: any, normalizedRow: ExamEligibilityImportNormalizedRow) {
+  if (!existing?.id) return false;
+  return normalizeEligibilityStatus(existing?.eligibilityStatus, 'eligibilityStatus', 'pending') === normalizedRow.eligibilityStatus
+    && normalizeOptionalText(existing?.reason, 2000) === normalizedRow.reason
+    && normalizeOptionalText(existing?.note, 2000) === normalizedRow.note;
+}
+
+function shouldBlockEligibilityImportForRegistration(existing: any, normalizedRow: ExamEligibilityImportNormalizedRow, registrationSummary: any) {
+  if (!registrationSummary?.id) return false;
+  if (normalizedRow.eligibilityStatus === 'eligible') return false;
+  const currentStatus = existing?.id
+    ? normalizeEligibilityStatus(existing?.eligibilityStatus, 'eligibilityStatus', 'pending')
+    : null;
+  return currentStatus !== normalizedRow.eligibilityStatus;
+}
+
+function toPublicEligibilityImportRow(row: ExamEligibilityImportPreviewRow) {
+  return {
+    rowNumber: row.rowNumber,
+    learnerCode: row.learnerCode,
+    learnerName: row.learnerName,
+    dateOfBirth: row.dateOfBirth,
+    currentStatus: row.currentStatus,
+    newStatus: row.newStatus,
+    action: row.action,
+    warnings: row.warnings,
+    errors: row.errors,
+    reason: row.reason,
+    note: row.note,
+  };
+}
+
+function buildEligibilityImportSummary(rows: ExamEligibilityImportPreviewRow[]) {
+  return rows.reduce((summary, row) => {
+    summary.totalRows += 1;
+    if (row.action === 'CREATE') summary.createCount += 1;
+    else if (row.action === 'UPDATE') summary.updateCount += 1;
+    else if (row.action === 'SKIP') summary.skipCount += 1;
+    else if (row.action === 'ERROR') summary.errorCount += 1;
+    if (row.action !== 'ERROR') summary.validRows += 1;
+    return summary;
+  }, {
+    totalRows: 0,
+    validRows: 0,
+    createCount: 0,
+    updateCount: 0,
+    skipCount: 0,
+    errorCount: 0,
+  });
+}
+
 function isExamEligibilityEditableStatus(status: unknown): boolean {
   const normalized = normalizeText(status).toLowerCase();
-  return normalized === 'approved' || normalized === 'registration_open' || normalized === 'registration_paused';
+  return normalized === 'draft'
+    || normalized === 'approved'
+    || normalized === 'registration_open'
+    || normalized === 'registration_paused';
+}
+
+function getExamEligibilityManagementState(round: any) {
+  const status = normalizeText(round?.status).toLowerCase();
+  const registrationMode = normalizeText(round?.registrationMode).toLowerCase();
+
+  if (registrationMode !== 'restricted') {
+    return {
+      allowed: false,
+      code: 'EXAM_ELIGIBILITY_RESTRICTED_MODE_REQUIRED',
+      message: 'Đợt thi không sử dụng chế độ đăng ký có điều kiện.',
+    };
+  }
+
+  if (status === 'pending_approval') {
+    return {
+      allowed: false,
+      code: 'EXAM_ELIGIBILITY_PENDING_APPROVAL_LOCKED',
+      message: 'Đợt thi đang chờ phê duyệt.',
+    };
+  }
+
+  if (isExamEligibilityEditableStatus(status)) {
+    return {
+      allowed: true,
+      code: null,
+      message: null,
+    };
+  }
+
+  if (status === 'registration_closed') {
+    return {
+      allowed: false,
+      code: 'EXAM_ELIGIBILITY_REGISTRATION_CLOSED',
+      message: 'Đợt thi đã đóng đăng ký.',
+    };
+  }
+
+  if (['preparing_exam', 'exam_in_progress', 'scoring', 'completed', 'cancelled'].includes(status)) {
+    return {
+      allowed: false,
+      code: 'EXAM_ELIGIBILITY_WORKFLOW_LOCKED',
+      message: 'Đợt thi đã qua giai đoạn cho phép thay đổi đối tượng đăng ký.',
+    };
+  }
+
+  return {
+    allowed: false,
+    code: 'EXAM_ELIGIBILITY_NOT_EDITABLE',
+    message: 'Đợt thi hiện không cho phép thay đổi eligibility.',
+  };
 }
 
 function assertExamEligibilityEditableRound(round: any) {
-  if (!isExamEligibilityEditableStatus(round?.status)) {
-    httpError(409, 'Exam eligibility cannot be edited for the current exam round status.', 'EXAM_ELIGIBILITY_NOT_EDITABLE');
+  const state = getExamEligibilityManagementState(round);
+  if (!state.allowed) {
+    httpError(409, state.message, state.code || 'EXAM_ELIGIBILITY_NOT_EDITABLE');
   }
 }
 
@@ -2913,7 +3548,23 @@ function buildRegistrationAvailabilityResult(round: any, structure: MutableExamR
   const roundStatus = normalizeText(round?.status).toLowerCase();
 
   if (roundStatus !== 'registration_open') {
-    if (roundStatus === 'approved' || roundStatus === 'registration_paused' || roundStatus === 'registration_closed') {
+    if (roundStatus === 'registration_paused') {
+      return {
+        canRegister: false,
+        reasonCode: 'EXAM_ROUND_REGISTRATION_PAUSED',
+        registrationWindowStatus,
+      };
+    }
+
+    if (roundStatus === 'registration_closed') {
+      return {
+        canRegister: false,
+        reasonCode: 'EXAM_ROUND_REGISTRATION_CLOSED',
+        registrationWindowStatus,
+      };
+    }
+
+    if (roundStatus === 'approved') {
       return {
         canRegister: false,
         reasonCode: 'EXAM_REGISTRATION_NOT_OPEN',
@@ -3212,11 +3863,26 @@ async function resolveCurrentLearnerForPortal(ctx: any, tenantId: number, option
 function normalizeLearnerFacingRoundReasonCode(roundStatus: string, registrationWindowStatus: RegistrationWindowStatus): string | null {
   if (roundStatus === 'registration_paused') return 'EXAM_ROUND_REGISTRATION_PAUSED';
   if (roundStatus === 'registration_closed') return 'EXAM_ROUND_REGISTRATION_CLOSED';
-  if (roundStatus === 'approved' && registrationWindowStatus === 'before') return 'REGISTRATION_WINDOW_NOT_STARTED';
-  if (registrationWindowStatus === 'after') return 'REGISTRATION_WINDOW_ENDED';
   if (roundStatus === 'approved') return 'EXAM_ROUND_REGISTRATION_NOT_OPEN';
+  if (registrationWindowStatus === 'after') return 'REGISTRATION_WINDOW_ENDED';
   if (roundStatus === 'registration_open' && registrationWindowStatus === 'before') return 'REGISTRATION_WINDOW_NOT_STARTED';
   return 'EXAM_ROUND_NOT_AVAILABLE';
+}
+
+function mapLearnerFacingAvailabilityState(reasonCode: string | null, canRegister: boolean, existingRegistration: any): string {
+  if (existingRegistration?.id) return 'registered';
+  if (canRegister) return 'open';
+
+  const normalized = normalizeText(reasonCode).toLowerCase();
+  if (normalized === 'exam_round_registration_paused') return 'registration_paused';
+  if (normalized === 'exam_round_registration_closed' || normalized === 'exam_registration_window_expired' || normalized === 'registration_window_ended') return 'registration_ended';
+  if (normalized === 'exam_registration_not_started' || normalized === 'registration_window_not_started') return 'registration_not_started';
+  if (normalized === 'exam_registration_not_open' || normalized === 'exam_round_registration_not_open') return 'registration_not_open';
+  if (normalized === 'exam_registration_already_exists') return 'registered';
+  if (normalized === 'exam_eligibility_pending') return 'eligibility_pending';
+  if (normalized === 'exam_learner_temporarily_ineligible') return 'temporarily_ineligible';
+  if (normalized === 'exam_learner_not_eligible' || normalized === 'learner_not_eligible' || normalized === 'learner_required_for_restricted_round') return 'not_eligible';
+  return 'not_available';
 }
 
 function summarizeRichText(value: unknown, maxLength = 240): string | null {
@@ -3389,8 +4055,12 @@ function buildLearnerFacingRoundAvailability(round: any, learner: CurrentLearner
   const availability = structure
     ? buildRegistrationAvailabilityResult(round, structure)
     : {
-        canRegister: false,
-        reasonCode: normalizeLearnerFacingRoundReasonCode(roundStatus, registrationWindowStatus),
+        canRegister: roundStatus === 'registration_open' && registrationWindowStatus === 'within',
+        reasonCode: existingRegistration?.id
+          ? 'EXAM_REGISTRATION_ALREADY_EXISTS'
+          : roundStatus === 'registration_open' && registrationWindowStatus === 'within'
+            ? null
+            : normalizeLearnerFacingRoundReasonCode(roundStatus, registrationWindowStatus),
         registrationWindowStatus,
       };
 
@@ -3464,6 +4134,7 @@ function mapLearnerFacingRoundListItem(round: any, options: {
   registrationWindowStatus: RegistrationWindowStatus;
   canRegister: boolean;
   reasonCode: string | null;
+  availabilityState: string;
   learnerState: 'linked' | 'missing';
   requiresLearnerCreation: boolean;
 }) {
@@ -3489,6 +4160,7 @@ function mapLearnerFacingRoundListItem(round: any, options: {
     canRegister: options.canRegister,
     canView: true,
     reasonCode: options.reasonCode,
+    availabilityState: options.availabilityState,
     eligibility: mapLearnerFacingEligibilityState(round, options.eligibilityDecision),
     existingRegistration: mapExistingRegistrationSummary(options.existingRegistration),
   };
@@ -3588,6 +4260,7 @@ async function buildLearnerFacingRoundAccessRecords(tenantId: number, learner: C
         registrationWindowStatus: availabilityDecision.registrationWindowStatus,
         canRegister: availabilityDecision.canRegister,
         reasonCode: availabilityDecision.reasonCode,
+        availabilityState: mapLearnerFacingAvailabilityState(availabilityDecision.reasonCode, availabilityDecision.canRegister, existingRegistration),
         learnerState: availabilityDecision.learnerState,
         requiresLearnerCreation: availabilityDecision.requiresLearnerCreation,
       });
@@ -4417,17 +5090,6 @@ async function findPaymentProfileInTenant(tenantId: number, paymentProfileRef: u
   return profile;
 }
 
-function isExamRoundPaymentSettingsEditableStatus(status: unknown): boolean {
-  const normalized = normalizeText(status).toLowerCase();
-  return ['draft', 'approved', 'registration_open', 'registration_paused', 'registration_closed'].includes(normalized);
-}
-
-function assertExamRoundPaymentSettingsEditableRound(round: any) {
-  if (!isExamRoundPaymentSettingsEditableStatus(round?.status)) {
-    httpError(409, 'Exam round payment settings cannot be edited for the current status.', 'EXAM_ROUND_PAYMENT_SETTINGS_NOT_EDITABLE');
-  }
-}
-
 async function countExistingRegistrationsForRound(tenantId: number, roundId: number, transacting?: any) {
   return await strapi.db.query(EXAM_REGISTRATION_UID).count({
     where: mergeTenantWhere({
@@ -4438,6 +5100,92 @@ async function countExistingRegistrationsForRound(tenantId: number, roundId: num
     }, tenantId),
     ...(transacting ? { transacting } : {}),
   } as any);
+}
+
+async function countExamEligibilitiesForRound(tenantId: number, roundId: number, transacting?: any) {
+  return await strapi.db.query(EXAM_ELIGIBILITY_UID).count({
+    where: mergeTenantWhere({
+      examRound: { id: { $eq: roundId } },
+    }, tenantId),
+    ...(transacting ? { transacting } : {}),
+  } as any);
+}
+
+function getExamRoundRegistrationOperationalState(status: unknown): 'not_open' | 'open' | 'paused' | 'closed' | 'unavailable' {
+  const normalized = normalizeText(status).toLowerCase();
+  if (normalized === 'approved') return 'not_open';
+  if (normalized === 'registration_open') return 'open';
+  if (normalized === 'registration_paused') return 'paused';
+  if (normalized === 'registration_closed') return 'closed';
+  return 'unavailable';
+}
+
+function getExamRoundBaseConfigurationLockDetails(round: any, registrationOperationalState: string, registrationCount: number) {
+  const status = normalizeText(round?.status).toLowerCase();
+
+  if (status === 'pending_approval') {
+    return {
+      canEdit: false,
+      reasonCode: 'EXAM_ROUND_BASE_CONFIGURATION_PENDING_APPROVAL',
+      message: 'Đợt thi đang chờ phê duyệt. Hãy thu hồi hoặc trả lại bản nháp theo workflow hiện có trước khi chỉnh sửa cấu hình.',
+      warningMessage: null,
+    };
+  }
+
+  if (status === 'approved' && registrationOperationalState === 'not_open' && registrationCount === 0) {
+    return {
+      canEdit: true,
+      reasonCode: null,
+      message: 'Đợt thi đã được phê duyệt nhưng chưa mở đăng ký và chưa có hồ sơ đăng ký. Bạn vẫn có thể điều chỉnh cấu hình trước khi đưa đợt vào vận hành.',
+      warningMessage: 'Sau khi mở đăng ký, các cấu hình nền sẽ bị hạn chế chỉnh sửa.',
+    };
+  }
+
+  if (registrationCount > 0) {
+    return {
+      canEdit: false,
+      reasonCode: 'EXAM_ROUND_BASE_CONFIGURATION_HAS_REGISTRATIONS',
+      message: 'Đợt thi đã có hồ sơ đăng ký nên một số cấu hình không thể thay đổi.',
+      warningMessage: null,
+    };
+  }
+
+  return {
+    canEdit: false,
+    reasonCode: 'EXAM_ROUND_BASE_CONFIGURATION_LOCKED',
+    message: 'Đợt thi đã được phê duyệt hoặc đang vận hành nên các thông tin cấu hình nền không thể chỉnh sửa.',
+    warningMessage: null,
+  };
+}
+
+async function getExamRoundBaseConfigurationEditState(tenantId: number, round: any, transacting?: any) {
+  const roundId = Number(round?.id || 0);
+  const status = normalizeText(round?.status).toLowerCase();
+  const registrationOperationalState = getExamRoundRegistrationOperationalState(status);
+
+  if (status === 'draft') {
+    return {
+      canEdit: true,
+      reasonCode: null,
+      message: '',
+      warningMessage: null,
+      registrationOperationalState,
+      registrationCount: 0,
+    };
+  }
+
+  const registrationCount = roundId > 0
+    ? await countExistingRegistrationsForRound(tenantId, roundId, transacting)
+    : 0;
+  const lock = getExamRoundBaseConfigurationLockDetails(round, registrationOperationalState, registrationCount);
+  return {
+    canEdit: lock.canEdit === true,
+    reasonCode: lock.reasonCode || null,
+    message: lock.message || '',
+    warningMessage: lock.warningMessage || null,
+    registrationOperationalState,
+    registrationCount,
+  };
 }
 
 function buildExamRoundPaymentSettingsResponse(round: any) {
@@ -4594,6 +5342,7 @@ function buildLearnerRegistrationOptionsResponse(options: {
     learner: mapLearnerSummary(options.learner),
     canRegister: reasonCode === null,
     reasonCode,
+    availabilityState: mapLearnerFacingAvailabilityState(reasonCode, reasonCode === null, options.existingRegistration),
     registrationWindowState: options.availability.registrationWindowStatus,
     existingRegistration: mapExistingRegistrationSummary(options.existingRegistration),
     allowSubjectSelection: options.workflowRound.allowSubjectSelection === true,
@@ -5086,9 +5835,9 @@ async function loadProgramGraph(tenantId: number, examProgramId: number) {
 
   const subjectIds = programSubjects
     .map((item) => Number(extractRelationRef(item?.examSubject) || item?.examSubject?.id || 0))
-    .filter((value) => Number.isInteger(value) && value > 0);
+    .filter((item) => item > 0);
 
-  const subjectComponents = subjectIds.length > 0
+  const subjectComponents = subjectIds.length
     ? await strapi.db.query(EXAM_SUBJECT_COMPONENT_UID).findMany({
         where: mergeTenantWhere({
           examSubject: {
@@ -5118,6 +5867,13 @@ async function loadProgramGraph(tenantId: number, examProgramId: number) {
     programSubjects,
     subjectComponents,
   };
+}
+
+async function assertExamRoundPaymentSettingsEditableRound(tenantId: number, round: any, transacting?: any) {
+  const state = await getExamRoundBaseConfigurationEditState(tenantId, round, transacting);
+  if (!state.canEdit) {
+    httpError(409, state.message || getExamRoundBaseConfigurationLockedMessage(normalizeText(round?.status).toLowerCase()), 'EXAM_ROUND_PAYMENT_SETTINGS_NOT_EDITABLE');
+  }
 }
 
 function validateProgramGraph(tenantId: number, programGraph: Awaited<ReturnType<typeof loadProgramGraph>>, input: CreateExamRoundInput) {
@@ -5360,6 +6116,8 @@ async function loadExamRoundWorkflowContext(tenantId: number, roundRef: unknown,
       'documentId',
       'code',
       'name',
+      'academicYear',
+      'semester',
       'status',
       'registrationMode',
       'registrationStartAt',
@@ -5389,6 +6147,8 @@ async function loadExamRoundWorkflowContext(tenantId: number, roundRef: unknown,
       'requireConfirmedPayment',
       'allowCancellation',
       'cancellationDeadline',
+      'instructions',
+      'paymentInstructions',
       'submittedAt',
       'approvedAt',
       'returnedAt',
@@ -5438,6 +6198,15 @@ async function findLearnerInTenant(tenantId: number, learnerRef: unknown, transa
   }
 
   return learner;
+}
+
+async function findLearnersInTenantByCodes(tenantId: number, learnerCodes: string[], transacting?: any) {
+  if (learnerCodes.length === 0) return [];
+  return await strapi.db.query(LEARNER_UID).findMany({
+    where: mergeTenantWhere({ code: { $in: learnerCodes } }, tenantId),
+    select: ['id', 'code', 'fullName', 'dateOfBirth', 'parentPhone', 'learnerStatus'],
+    ...(transacting ? { transacting } : {}),
+  } as any) as any[];
 }
 
 async function findExamEligibilityInRound(tenantId: number, roundId: number, eligibilityRef: unknown, transacting?: any) {
@@ -5572,6 +6341,196 @@ async function countRegisteredLearnersForRound(tenantId: number, roundId: number
   return learnerIds.length;
 }
 
+async function buildExamEligibilityImportPreview(tenantId: number, roundRef: unknown, file: UploadedFileLike, authUser: AuthUser, options: { transacting?: any } = {}): Promise<ExamEligibilityImportPreviewResult> {
+  const round = await findExamRoundByRef(tenantId, roundRef, options.transacting);
+  const workflowRound = await loadExamRoundWorkflowContext(tenantId, Number(round.id), options.transacting);
+  assertExamEligibilityEditableRound(workflowRound);
+
+  const buffer = await readWorkbookBuffer(file);
+  const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: false, raw: false });
+  const sheetName = (workbook.SheetNames || []).find((name) => normalizeText(name).toLowerCase() === 'eligibility');
+  if (!sheetName) {
+    httpError(400, 'Workbook thiếu sheet Eligibility', 'EXAM_ELIGIBILITY_IMPORT_INVALID_SHEET');
+  }
+
+  const worksheet = workbook.Sheets[sheetName];
+  const matrix = XLSX.utils.sheet_to_json<(string | number | boolean | null)[]>(worksheet, { header: 1, raw: false, defval: '' });
+  if (!Array.isArray(matrix) || matrix.length === 0) {
+    httpError(400, 'Workbook không có dữ liệu', 'EXAM_ELIGIBILITY_IMPORT_EMPTY_FILE');
+  }
+
+  const headers = Array.isArray(matrix[0]) ? matrix[0] : [];
+  const headerMap = buildExamEligibilityImportHeaderMap(headers);
+  if (!headerMap.has('learnerCode')) {
+    httpError(400, 'Thiếu cột learnerCode', 'EXAM_ELIGIBILITY_IMPORT_INVALID_HEADER');
+  }
+
+  const parsedRows: ExamEligibilityImportPreviewRow[] = [];
+  for (let index = 1; index < matrix.length; index += 1) {
+    const rowNumber = index + 1;
+    const learnerCode = getWorksheetCellText(worksheet, rowNumber, Number(headerMap.get('learnerCode'))).trim();
+    const statusText = headerMap.has('status') ? getWorksheetCellText(worksheet, rowNumber, Number(headerMap.get('status'))) : '';
+    const reason = headerMap.has('reason') ? normalizeOptionalText(getWorksheetCellText(worksheet, rowNumber, Number(headerMap.get('reason'))), 2000) : null;
+    const note = headerMap.has('note') ? normalizeOptionalText(getWorksheetCellText(worksheet, rowNumber, Number(headerMap.get('note'))), 2000) : null;
+    const fullName = headerMap.has('fullName') ? normalizeOptionalText(getWorksheetCellText(worksheet, rowNumber, Number(headerMap.get('fullName'))), 255) : null;
+    const dateOfBirth = headerMap.has('dateOfBirth') ? normalizeOptionalText(getWorksheetCellText(worksheet, rowNumber, Number(headerMap.get('dateOfBirth'))), 50) : null;
+
+    let normalizedRow: ExamEligibilityImportNormalizedRow | null = null;
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    try {
+      normalizedRow = {
+        learnerCode,
+        eligibilityStatus: normalizeExamEligibilityImportStatus(statusText),
+        reason,
+        note,
+        fullName,
+        dateOfBirth,
+      };
+      if (isExamEligibilityImportRowEmpty(normalizedRow)) {
+        continue;
+      }
+      if (!normalizedRow.learnerCode) {
+        errors.push('LEARNER_CODE_REQUIRED: learnerCode là bắt buộc.');
+      }
+      assertEligibilityReasonRequired(normalizedRow.eligibilityStatus, normalizedRow.reason);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Dữ liệu không hợp lệ';
+      errors.push(message === 'reason is required'
+        ? 'ELIGIBILITY_REASON_REQUIRED: Cần nhập lý do cho trạng thái này.'
+        : message === 'status is invalid'
+          ? 'INVALID_STATUS: Trạng thái import không hợp lệ.'
+          : message);
+    }
+
+    parsedRows.push({
+      rowNumber,
+      learnerCode,
+      learnerName: null,
+      dateOfBirth,
+      currentStatus: null,
+      newStatus: normalizedRow?.eligibilityStatus || null,
+      action: errors.length > 0 ? 'ERROR' : 'SKIP',
+      warnings,
+      errors,
+      reason,
+      note,
+      internalNormalizedRow: normalizedRow,
+      internalLearner: null,
+      internalExistingEligibility: null,
+      internalRegistrationSummary: null,
+    });
+  }
+
+  if (parsedRows.length === 0) {
+    httpError(400, 'Workbook không có dòng dữ liệu hợp lệ', 'EXAM_ELIGIBILITY_IMPORT_EMPTY_FILE');
+  }
+
+  if (parsedRows.length > ELIGIBILITY_IMPORT_MAX_ROWS) {
+    httpError(400, `Số dòng vượt quá giới hạn ${ELIGIBILITY_IMPORT_MAX_ROWS}`, 'EXAM_ELIGIBILITY_IMPORT_ROW_LIMIT_EXCEEDED');
+  }
+
+  const duplicateCounter = new Map<string, number>();
+  for (const row of parsedRows) {
+    if (!row.learnerCode) continue;
+    duplicateCounter.set(row.learnerCode, Number(duplicateCounter.get(row.learnerCode) || 0) + 1);
+  }
+
+  const learnerCodes = Array.from(new Set(parsedRows.map((row) => row.learnerCode).filter(Boolean)));
+  const learnerRows = await findLearnersInTenantByCodes(tenantId, learnerCodes, options.transacting);
+  const learnersByCode = new Map<string, any[]>();
+  for (const learner of learnerRows) {
+    const code = normalizeText(learner?.code);
+    const rows = learnersByCode.get(code) || [];
+    rows.push(learner);
+    learnersByCode.set(code, rows);
+  }
+
+  const uniqueLearnerRows = learnerRows.filter((learner) => {
+    const code = normalizeText(learner?.code);
+    return code && (learnersByCode.get(code) || []).length === 1;
+  });
+  const learnerIds = uniqueLearnerRows.map((learner) => Number(learner.id || 0)).filter((value) => value > 0);
+  const [existingEligibilities, registrationByLearnerId] = await Promise.all([
+    findExistingEligibilitiesByLearnerIds(tenantId, Number(round.id), learnerIds, options.transacting),
+    findEffectiveRegistrationsByLearnerIds(tenantId, Number(round.id), learnerIds, options.transacting),
+  ]);
+
+  const eligibilityByLearnerId = new Map<number, any[]>();
+  for (const row of existingEligibilities || []) {
+    const learnerId = Number(extractRelationRef(row?.learner) || row?.learner?.id || 0);
+    if (!learnerId) continue;
+    const rows = eligibilityByLearnerId.get(learnerId) || [];
+    rows.push(row);
+    eligibilityByLearnerId.set(learnerId, rows);
+  }
+
+  for (const row of parsedRows) {
+    const normalizedRow = row.internalNormalizedRow;
+    if (!normalizedRow) {
+      row.action = 'ERROR';
+      continue;
+    }
+
+    if (row.learnerCode && Number(duplicateCounter.get(row.learnerCode) || 0) > 1) {
+      row.errors.push('DUPLICATE_LEARNER_CODE_IN_FILE: learnerCode bị trùng trong file import.');
+    }
+
+    const matchedLearners = learnersByCode.get(row.learnerCode) || [];
+    if (matchedLearners.length === 0) {
+      row.errors.push('LEARNER_NOT_FOUND: Không tìm thấy learner trong tenant hiện tại.');
+    } else if (matchedLearners.length > 1) {
+      row.errors.push('LEARNER_CODE_NOT_UNIQUE: learnerCode đang trùng nhiều learner trong tenant.');
+    } else {
+      const learner = matchedLearners[0];
+      row.internalLearner = learner;
+      row.learnerName = normalizeOptionalText(learner?.fullName) || null;
+      row.dateOfBirth = normalizeOptionalText(learner?.dateOfBirth) || row.dateOfBirth;
+      const learnerId = Number(learner.id || 0);
+      const existingRows = learnerId > 0 ? (eligibilityByLearnerId.get(learnerId) || []) : [];
+      if (existingRows.length > 1) {
+        row.errors.push('EXAM_ELIGIBILITY_DUPLICATE_FOUND: learner đang có nhiều eligibility trong cùng đợt thi.');
+      } else {
+        const existing = existingRows[0] || null;
+        row.internalExistingEligibility = existing;
+        row.currentStatus = existing?.id
+          ? normalizeEligibilityStatus(existing?.eligibilityStatus, 'eligibilityStatus', 'pending')
+          : null;
+        row.internalRegistrationSummary = registrationByLearnerId.get(learnerId) || null;
+
+        if (shouldBlockEligibilityImportForRegistration(existing, normalizedRow, row.internalRegistrationSummary)) {
+          row.errors.push('EXAM_ELIGIBILITY_IMPORT_REGISTRATION_CONFLICT: Learner đã có hồ sơ đăng ký. Không thể chuyển sang trạng thái không đủ điều kiện bằng import.');
+        }
+
+        if (row.errors.length === 0) {
+          if (!existing?.id) {
+            row.action = 'CREATE';
+          } else if (isSameEligibilityData(existing, normalizedRow)) {
+            row.action = 'SKIP';
+          } else {
+            row.action = 'UPDATE';
+          }
+        }
+      }
+    }
+
+    if (row.errors.length > 0) {
+      row.action = 'ERROR';
+    }
+  }
+
+  const summary = buildEligibilityImportSummary(parsedRows);
+  strapi.log.info(`[exam-eligibility] exam_eligibility.import_preview ${JSON.stringify({ tenantId, examRoundId: Number(round.id), actorUserId: authUser.id, fileName: getUploadedFileName(file), totalRows: summary.totalRows, createCount: summary.createCount, updateCount: summary.updateCount, skipCount: summary.skipCount, errorCount: summary.errorCount, timestamp: new Date().toISOString() })}`);
+
+  return {
+    fileName: getUploadedFileName(file),
+    ...summary,
+    rows: parsedRows.map(toPublicEligibilityImportRow),
+    internalRows: parsedRows,
+  };
+}
+
 function normalizeEligibilityListQuery(query: Record<string, unknown>) {
   const page = toPositiveInt(query.page, 1);
   const pageSize = Math.min(100, toPositiveInt(query.pageSize, 20));
@@ -5682,11 +6641,55 @@ function resolveEligibilityOrderBy(sort: Array<Record<string, 'asc' | 'desc'>>) 
 }
 
 function normalizeStructureUpdateInput(payload: Record<string, unknown>): UpdateStructureInput {
-  ensureNoUnknownFields(payload, ['paymentCalculationMethod', 'fixedFee', 'allowSubjectSelection', 'allowComponentSelection', 'subjects'], 'payload');
+  ensureNoUnknownFields(payload, [
+    'code',
+    'name',
+    'academicYear',
+    'semester',
+    'registrationMode',
+    'registrationStartAt',
+    'registrationEndAt',
+    'paymentStartAt',
+    'paymentEndAt',
+    'candidateListClosingAt',
+    'examStartAt',
+    'examEndAt',
+    'paymentCalculationMethod',
+    'fixedFee',
+    'allowSubjectSelection',
+    'allowComponentSelection',
+    'requireConfirmedPayment',
+    'allowCancellation',
+    'cancellationDeadline',
+    'instructions',
+    'paymentInstructions',
+    'subjects',
+  ], 'payload');
   const rawSubjects = payload.subjects;
   if (!Array.isArray(rawSubjects)) {
     httpError(400, 'subjects must be an array', 'INVALID_REQUEST_BODY');
   }
+
+  const registrationStartAt = hasOwn(payload, 'registrationStartAt') ? parseDateTime(payload.registrationStartAt, 'registrationStartAt') : undefined;
+  const registrationEndAt = hasOwn(payload, 'registrationEndAt') ? parseDateTime(payload.registrationEndAt, 'registrationEndAt') : undefined;
+  const paymentStartAt = hasOwn(payload, 'paymentStartAt') ? parseDateTime(payload.paymentStartAt, 'paymentStartAt') : undefined;
+  const paymentEndAt = hasOwn(payload, 'paymentEndAt') ? parseDateTime(payload.paymentEndAt, 'paymentEndAt') : undefined;
+  const candidateListClosingAt = hasOwn(payload, 'candidateListClosingAt') ? parseDateTime(payload.candidateListClosingAt, 'candidateListClosingAt') : undefined;
+  const examStartAt = hasOwn(payload, 'examStartAt') ? parseDateTime(payload.examStartAt, 'examStartAt') : undefined;
+  const examEndAt = hasOwn(payload, 'examEndAt') ? parseDateTime(payload.examEndAt, 'examEndAt') : undefined;
+  const cancellationDeadline = hasOwn(payload, 'cancellationDeadline') ? parseDateTime(payload.cancellationDeadline, 'cancellationDeadline') : undefined;
+
+  if ((typeof paymentStartAt !== 'undefined' || typeof paymentEndAt !== 'undefined')
+    && ((paymentStartAt && !paymentEndAt) || (!paymentStartAt && paymentEndAt))) {
+    httpError(400, 'paymentStartAt and paymentEndAt must be provided together', 'INVALID_DATE_RANGE');
+  }
+
+  assertChronologicalOrder(registrationStartAt || null, registrationEndAt || null, 'registrationStartAt must be before registrationEndAt');
+  assertChronologicalOrder(examStartAt || null, examEndAt || null, 'examStartAt must be before examEndAt');
+  assertLessOrEqual(paymentStartAt || null, paymentEndAt || null, 'paymentStartAt must be before paymentEndAt');
+  assertLessOrEqual(registrationEndAt || null, candidateListClosingAt || null, 'candidateListClosingAt cannot be before registrationEndAt');
+  assertLessOrEqual(candidateListClosingAt || null, examStartAt || null, 'examStartAt cannot be before candidateListClosingAt');
+  assertLessOrEqual(cancellationDeadline || null, registrationEndAt || null, 'cancellationDeadline cannot be after registrationEndAt');
 
   const seenSubjectIds = new Set<number>();
   const seenComponentIds = new Set<number>();
@@ -5787,12 +6790,29 @@ function normalizeStructureUpdateInput(payload: Record<string, unknown>): Update
   });
 
   return {
+    ...(typeof payload.code !== 'undefined' ? { code: normalizeRequiredText(payload.code, 'code', 100) } : {}),
+    ...(typeof payload.name !== 'undefined' ? { name: normalizeRequiredText(payload.name, 'name', 200) } : {}),
+    ...(typeof payload.academicYear !== 'undefined' ? { academicYear: normalizeOptionalText(payload.academicYear, 50) } : {}),
+    ...(typeof payload.semester !== 'undefined' ? { semester: normalizeOptionalText(payload.semester, 50) } : {}),
+    ...(typeof payload.registrationMode !== 'undefined' ? { registrationMode: normalizeEnum(payload.registrationMode, ['open', 'restricted'], 'restricted', 'registrationMode') } : {}),
+    ...(typeof payload.registrationStartAt !== 'undefined' ? { registrationStartAt } : {}),
+    ...(typeof payload.registrationEndAt !== 'undefined' ? { registrationEndAt } : {}),
+    ...(typeof payload.paymentStartAt !== 'undefined' ? { paymentStartAt } : {}),
+    ...(typeof payload.paymentEndAt !== 'undefined' ? { paymentEndAt } : {}),
+    ...(typeof payload.candidateListClosingAt !== 'undefined' ? { candidateListClosingAt } : {}),
+    ...(typeof payload.examStartAt !== 'undefined' ? { examStartAt } : {}),
+    ...(typeof payload.examEndAt !== 'undefined' ? { examEndAt } : {}),
     ...(typeof payload.paymentCalculationMethod !== 'undefined'
       ? { paymentCalculationMethod: normalizeEnum(payload.paymentCalculationMethod, ['fixed', 'program_fee', 'subject_fee', 'component_fee'], 'fixed', 'paymentCalculationMethod') }
       : {}),
     ...(typeof payload.fixedFee !== 'undefined' ? { fixedFee: parseDecimalInput(payload.fixedFee, 'fixedFee', { min: 0 }) } : {}),
     ...(typeof payload.allowSubjectSelection !== 'undefined' ? { allowSubjectSelection: parseStrictOptionalBoolean(payload.allowSubjectSelection, 'allowSubjectSelection') } : {}),
     ...(typeof payload.allowComponentSelection !== 'undefined' ? { allowComponentSelection: parseStrictOptionalBoolean(payload.allowComponentSelection, 'allowComponentSelection') } : {}),
+    ...(typeof payload.requireConfirmedPayment !== 'undefined' ? { requireConfirmedPayment: parseStrictOptionalBoolean(payload.requireConfirmedPayment, 'requireConfirmedPayment') } : {}),
+    ...(typeof payload.allowCancellation !== 'undefined' ? { allowCancellation: parseStrictOptionalBoolean(payload.allowCancellation, 'allowCancellation') } : {}),
+    ...(typeof payload.cancellationDeadline !== 'undefined' ? { cancellationDeadline } : {}),
+    ...(typeof payload.instructions !== 'undefined' ? { instructions: normalizeOptionalText(payload.instructions) } : {}),
+    ...(typeof payload.paymentInstructions !== 'undefined' ? { paymentInstructions: normalizeOptionalText(payload.paymentInstructions) } : {}),
     subjects,
   };
 }
@@ -5802,6 +6822,8 @@ async function loadExamRoundStructure(tenantId: number, roundId: number, transac
   if (options.requireDraft !== false && normalizeText(round.status).toLowerCase() !== 'draft') {
     httpError(409, 'Chỉ có thể sửa cấu trúc khi đợt thi còn ở trạng thái draft.', 'EXAM_ROUND_NOT_EDITABLE');
   }
+
+  const workflowRound = await loadExamRoundWorkflowContext(tenantId, roundId, transacting);
 
   const subjects = await strapi.db.query(EXAM_ROUND_SUBJECT_UID).findMany({
     where: mergeTenantWhere({ examRound: { id: { $eq: round.id } } }, tenantId),
@@ -5874,12 +6896,28 @@ async function loadExamRoundStructure(tenantId: number, roundId: number, transac
     round: {
       id: Number(round.id),
       documentId: round.documentId || null,
-      code: round.code,
-      status: round.status,
+      code: normalizeRequiredText(workflowRound?.code, 'code', 100),
+      name: normalizeRequiredText(workflowRound?.name, 'name', 200),
+      academicYear: normalizeOptionalText((workflowRound as any)?.academicYear, 50),
+      semester: normalizeOptionalText((workflowRound as any)?.semester, 50),
+      status: normalizeText(round.status).toLowerCase(),
+      registrationMode: normalizeEnum(workflowRound?.registrationMode, ['open', 'restricted'], 'restricted', 'registrationMode'),
+      registrationStartAt: normalizeStoredDateTime(workflowRound?.registrationStartAt),
+      registrationEndAt: normalizeStoredDateTime(workflowRound?.registrationEndAt),
+      paymentStartAt: normalizeStoredDateTime(workflowRound?.paymentStartAt),
+      paymentEndAt: normalizeStoredDateTime(workflowRound?.paymentEndAt),
+      candidateListClosingAt: normalizeStoredDateTime(workflowRound?.candidateListClosingAt),
+      examStartAt: normalizeStoredDateTime(workflowRound?.examStartAt),
+      examEndAt: normalizeStoredDateTime(workflowRound?.examEndAt),
       paymentCalculationMethod: normalizeEnum(round.paymentCalculationMethod, ['fixed', 'program_fee', 'subject_fee', 'component_fee'], 'fixed', 'paymentCalculationMethod'),
       fixedFee: decimalToString(round.fixedFee),
       allowSubjectSelection: round.allowSubjectSelection === true,
       allowComponentSelection: round.allowComponentSelection === true,
+      requireConfirmedPayment: workflowRound?.requireConfirmedPayment === true,
+      allowCancellation: workflowRound?.allowCancellation === true,
+      cancellationDeadline: normalizeStoredDateTime(workflowRound?.cancellationDeadline),
+      instructions: normalizeOptionalText((workflowRound as any)?.instructions),
+      paymentInstructions: normalizeOptionalText((workflowRound as any)?.paymentInstructions),
     },
     subjects: subjectGraph,
     orphanComponentIds,
@@ -5889,10 +6927,27 @@ async function loadExamRoundStructure(tenantId: number, roundId: number, transac
 function mergeStructureUpdate(current: MutableExamRoundStructure, input: UpdateStructureInput) {
   const subjectMap = new Map<number, MutableRoundSubject>();
   const componentMap = new Map<number, MutableRoundComponent>();
+  if (typeof input.code !== 'undefined') current.round.code = input.code;
+  if (typeof input.name !== 'undefined') current.round.name = input.name;
+  if (typeof input.academicYear !== 'undefined') current.round.academicYear = input.academicYear;
+  if (typeof input.semester !== 'undefined') current.round.semester = input.semester;
+  if (typeof input.registrationMode !== 'undefined') current.round.registrationMode = input.registrationMode;
+  if (typeof input.registrationStartAt !== 'undefined') current.round.registrationStartAt = input.registrationStartAt;
+  if (typeof input.registrationEndAt !== 'undefined') current.round.registrationEndAt = input.registrationEndAt;
+  if (typeof input.paymentStartAt !== 'undefined') current.round.paymentStartAt = input.paymentStartAt;
+  if (typeof input.paymentEndAt !== 'undefined') current.round.paymentEndAt = input.paymentEndAt;
+  if (typeof input.candidateListClosingAt !== 'undefined') current.round.candidateListClosingAt = input.candidateListClosingAt;
+  if (typeof input.examStartAt !== 'undefined') current.round.examStartAt = input.examStartAt;
+  if (typeof input.examEndAt !== 'undefined') current.round.examEndAt = input.examEndAt;
   if (typeof input.paymentCalculationMethod !== 'undefined') current.round.paymentCalculationMethod = input.paymentCalculationMethod;
   if (typeof input.fixedFee !== 'undefined') current.round.fixedFee = input.fixedFee;
   if (typeof input.allowSubjectSelection !== 'undefined') current.round.allowSubjectSelection = input.allowSubjectSelection;
   if (typeof input.allowComponentSelection !== 'undefined') current.round.allowComponentSelection = input.allowComponentSelection;
+  if (typeof input.requireConfirmedPayment !== 'undefined') current.round.requireConfirmedPayment = input.requireConfirmedPayment;
+  if (typeof input.allowCancellation !== 'undefined') current.round.allowCancellation = input.allowCancellation;
+  if (typeof input.cancellationDeadline !== 'undefined') current.round.cancellationDeadline = input.cancellationDeadline;
+  if (typeof input.instructions !== 'undefined') current.round.instructions = input.instructions;
+  if (typeof input.paymentInstructions !== 'undefined') current.round.paymentInstructions = input.paymentInstructions;
 
   for (const subject of current.subjects) {
     subjectMap.set(subject.id, subject);
@@ -5951,6 +7006,42 @@ function mergeStructureUpdate(current: MutableExamRoundStructure, input: UpdateS
 function collectStructureValidationErrors(structure: MutableExamRoundStructure): WorkflowValidationError[] {
   const errors: WorkflowValidationError[] = [];
   const { round, subjects } = structure;
+  if (!round.code) {
+    pushWorkflowValidationError(errors, 400, 'round.code', 'INVALID_REQUEST_BODY', 'code is required.');
+  }
+  if (!round.name) {
+    pushWorkflowValidationError(errors, 400, 'round.name', 'INVALID_REQUEST_BODY', 'name is required.');
+  }
+  if (!['open', 'restricted'].includes(round.registrationMode)) {
+    pushWorkflowValidationError(errors, 400, 'round.registrationMode', 'INVALID_REQUEST_BODY', 'registrationMode is invalid.');
+  }
+  if (!round.registrationStartAt) {
+    pushWorkflowValidationError(errors, 400, 'round.registrationStartAt', 'INVALID_DATE_RANGE', 'registrationStartAt is required.');
+  }
+  if (!round.registrationEndAt) {
+    pushWorkflowValidationError(errors, 400, 'round.registrationEndAt', 'INVALID_DATE_RANGE', 'registrationEndAt is required.');
+  }
+  if (round.registrationStartAt && round.registrationEndAt && Date.parse(round.registrationStartAt) >= Date.parse(round.registrationEndAt)) {
+    pushWorkflowValidationError(errors, 400, 'round.registrationEndAt', 'INVALID_DATE_RANGE', 'registrationStartAt must be before registrationEndAt.');
+  }
+  if ((round.paymentStartAt && !round.paymentEndAt) || (!round.paymentStartAt && round.paymentEndAt)) {
+    pushWorkflowValidationError(errors, 400, 'round.paymentStartAt', 'INVALID_DATE_RANGE', 'paymentStartAt and paymentEndAt must be provided together.');
+  }
+  if (round.paymentStartAt && round.paymentEndAt && Date.parse(round.paymentStartAt) >= Date.parse(round.paymentEndAt)) {
+    pushWorkflowValidationError(errors, 400, 'round.paymentEndAt', 'INVALID_DATE_RANGE', 'paymentStartAt must be before paymentEndAt.');
+  }
+  if (round.registrationEndAt && round.candidateListClosingAt && Date.parse(round.registrationEndAt) > Date.parse(round.candidateListClosingAt)) {
+    pushWorkflowValidationError(errors, 400, 'round.candidateListClosingAt', 'INVALID_DATE_RANGE', 'candidateListClosingAt cannot be before registrationEndAt.');
+  }
+  if (round.candidateListClosingAt && round.examStartAt && Date.parse(round.candidateListClosingAt) > Date.parse(round.examStartAt)) {
+    pushWorkflowValidationError(errors, 400, 'round.examStartAt', 'INVALID_DATE_RANGE', 'examStartAt cannot be before candidateListClosingAt.');
+  }
+  if (round.examStartAt && round.examEndAt && Date.parse(round.examStartAt) >= Date.parse(round.examEndAt)) {
+    pushWorkflowValidationError(errors, 400, 'round.examEndAt', 'INVALID_DATE_RANGE', 'examStartAt must be before examEndAt.');
+  }
+  if (round.cancellationDeadline && round.registrationEndAt && Date.parse(round.cancellationDeadline) > Date.parse(round.registrationEndAt)) {
+    pushWorkflowValidationError(errors, 400, 'round.cancellationDeadline', 'INVALID_DATE_RANGE', 'cancellationDeadline cannot be after registrationEndAt.');
+  }
   const activeSubjects = subjects.filter((item) => item.status === 'active');
   if (activeSubjects.length === 0) {
     pushWorkflowValidationError(errors, 409, 'subjects', 'EXAM_ROUND_HAS_NO_ACTIVE_SUBJECT', 'Đợt thi phải còn ít nhất một môn active.');
@@ -6180,13 +7271,45 @@ async function updateExamRoundInTransaction(round: MutableExamRoundStructure['ro
   return strapi.db.query(EXAM_ROUND_UID).update({
     where: { id: round.id },
     data: {
+      code: round.code,
+      name: round.name,
+      academicYear: round.academicYear,
+      semester: round.semester,
+      registrationMode: round.registrationMode,
+      registrationStartAt: round.registrationStartAt,
+      registrationEndAt: round.registrationEndAt,
+      paymentStartAt: round.paymentStartAt,
+      paymentEndAt: round.paymentEndAt,
+      candidateListClosingAt: round.candidateListClosingAt,
+      examStartAt: round.examStartAt,
+      examEndAt: round.examEndAt,
       paymentCalculationMethod: round.paymentCalculationMethod,
       fixedFee: round.fixedFee,
       allowSubjectSelection: round.allowSubjectSelection,
       allowComponentSelection: round.allowComponentSelection,
+      requireConfirmedPayment: round.requireConfirmedPayment,
+      allowCancellation: round.allowCancellation,
+      cancellationDeadline: round.cancellationDeadline,
+      instructions: round.instructions,
+      paymentInstructions: round.paymentInstructions,
     },
     transacting: trx,
   } as any);
+}
+
+function getExamRoundBaseConfigurationLockedMessage(status: string) {
+  if (status === 'pending_approval') {
+    return 'Đợt thi đang chờ phê duyệt. Hãy thu hồi hoặc trả lại bản nháp theo workflow hiện có trước khi chỉnh sửa cấu hình.';
+  }
+
+  return 'Đợt thi đã được phê duyệt hoặc đang vận hành nên các thông tin cấu hình nền không thể chỉnh sửa.';
+}
+
+async function assertExamRoundBaseConfigurationEditable(tenantId: number, round: any, transacting?: any) {
+  const state = await getExamRoundBaseConfigurationEditState(tenantId, round, transacting);
+  if (state.canEdit) return;
+  const status = normalizeText(round?.status).toLowerCase();
+  httpError(409, state.message || getExamRoundBaseConfigurationLockedMessage(status), 'EXAM_ROUND_BASE_CONFIGURATION_LOCKED');
 }
 
 async function updateRoundComponentInTransaction(component: MutableRoundComponent, trx: any) {
@@ -6692,6 +7815,126 @@ export async function createExamRoundEligibility(tenantId: number, roundRef: unk
   });
 }
 
+export async function downloadExamEligibilityImportTemplate() {
+  const workbook = XLSX.utils.book_new();
+  const eligibilitySheet = XLSX.utils.aoa_to_sheet([
+    ['learnerCode', 'status', 'reason', 'note', 'fullName', 'dateOfBirth'],
+    ['001234', 'Đủ điều kiện', '', '', 'Nguyễn Văn A', '2010-09-01'],
+    ['001235', 'Không đủ điều kiện', 'Thiếu hồ sơ', 'Kiểm tra lại với phòng đào tạo', 'Trần Thị B', '2010-05-12'],
+  ]);
+  const guideSheet = XLSX.utils.aoa_to_sheet([
+    ['Hướng dẫn'],
+    ['Chỉ learnerCode được dùng để xác định learner. Họ tên/ngày sinh chỉ phục vụ đối chiếu.'],
+    ['learnerCode là bắt buộc và được xử lý dưới dạng chuỗi. Không đổi định dạng mã sang số.'],
+    ['status để trống sẽ mặc định là Đủ điều kiện.'],
+    ['Giá trị status hợp lệ: Chờ xác định, Đủ điều kiện, Tạm thời chưa đủ điều kiện, Không đủ điều kiện.'],
+    ['reason và note là tùy chọn.'],
+    ['Không đổi tên cột trong sheet Eligibility.'],
+    ['Learner phải tồn tại trước trong tenant hiện tại. File này không tạo learner mới.'],
+  ]);
+
+  XLSX.utils.book_append_sheet(workbook, eligibilitySheet, 'Eligibility');
+  XLSX.utils.book_append_sheet(workbook, guideSheet, 'Hướng dẫn');
+
+  return {
+    fileName: EXAM_ELIGIBILITY_IMPORT_TEMPLATE_FILE_NAME,
+    contentType: EXAM_ELIGIBILITY_IMPORT_CONTENT_TYPE,
+    buffer: XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }) as Buffer,
+  };
+}
+
+export async function previewExamEligibilityImport(tenantId: number, roundRef: unknown, file: UploadedFileLike, authUser: AuthUser) {
+  return buildExamEligibilityImportPreview(tenantId, roundRef, file, authUser);
+}
+
+export async function commitExamEligibilityImport(tenantId: number, roundRef: unknown, file: UploadedFileLike, authUser: AuthUser) {
+  return strapi.db.connection.transaction(async (trx: any) => {
+    const round = await findExamRoundByRef(tenantId, roundRef, trx);
+    await acquireExamRoundStructureLock(trx, tenantId, Number(round.id));
+    const workflowRound = await loadExamRoundWorkflowContext(tenantId, Number(round.id), trx);
+    assertExamEligibilityEditableRound(workflowRound);
+
+    const preview = await buildExamEligibilityImportPreview(tenantId, Number(round.id), file, authUser, { transacting: trx });
+    if (preview.errorCount > 0) {
+      httpError(409, 'File import còn lỗi. Vui lòng sửa file và xem trước lại trước khi xác nhận import.', 'EXAM_ELIGIBILITY_IMPORT_HAS_ERRORS', {
+        errorCount: preview.errorCount,
+      });
+    }
+
+    const now = new Date();
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+
+    for (const row of preview.internalRows) {
+      if (row.action === 'SKIP') {
+        skipped += 1;
+        continue;
+      }
+
+      if (row.action !== 'CREATE' && row.action !== 'UPDATE') {
+        httpError(409, 'File import còn lỗi. Vui lòng sửa file và xem trước lại trước khi xác nhận import.', 'EXAM_ELIGIBILITY_IMPORT_HAS_ERRORS');
+      }
+
+      const normalizedRow = row.internalNormalizedRow;
+      const learner = row.internalLearner;
+      if (!normalizedRow || !learner?.id) {
+        httpError(409, 'Dữ liệu import không còn hợp lệ.', 'EXAM_ELIGIBILITY_IMPORT_INVALID_STATE');
+      }
+
+      if (row.action === 'CREATE') {
+        const createdRow = await strapi.db.query(EXAM_ELIGIBILITY_UID).create({
+          data: {
+            examRound: Number(round.id),
+            learner: Number(learner.id),
+            tenant: tenantId,
+            source: 'imported',
+            eligibilityStatus: normalizedRow.eligibilityStatus,
+            reason: normalizedRow.reason,
+            note: normalizedRow.note,
+            ...resolveEligibilityReviewFields(normalizedRow.eligibilityStatus, authUser, now),
+          },
+          transacting: trx,
+        } as any) as any;
+        if (!createdRow?.id) {
+          httpError(409, 'Failed to create exam eligibility.', 'EXAM_ELIGIBILITY_BULK_FAILED');
+        }
+        created += 1;
+        continue;
+      }
+
+      const existing = row.internalExistingEligibility;
+      if (!existing?.id) {
+        httpError(409, 'Eligibility hiện có không còn hợp lệ.', 'EXAM_ELIGIBILITY_IMPORT_INVALID_STATE');
+      }
+
+      await strapi.db.query(EXAM_ELIGIBILITY_UID).update({
+        where: { id: existing.id },
+        data: {
+          eligibilityStatus: normalizedRow.eligibilityStatus,
+          source: 'imported',
+          reason: normalizedRow.reason,
+          note: normalizedRow.note,
+          ...resolveEligibilityReviewFields(normalizedRow.eligibilityStatus, authUser, now),
+        },
+        transacting: trx,
+      } as any);
+      updated += 1;
+    }
+
+    strapi.log.info(`[exam-eligibility] exam_eligibility.import_commit ${JSON.stringify({ tenantId, examRoundId: Number(round.id), actorUserId: authUser.id, fileName: preview.fileName, totalRows: preview.totalRows, created, updated, skipped, timestamp: now.toISOString() })}`);
+
+    return {
+      fileName: preview.fileName,
+      totalRows: preview.totalRows,
+      created,
+      updated,
+      skipped,
+      imported: created + updated + skipped,
+    };
+  });
+}
+
 export async function bulkCreateExamRoundEligibilities(tenantId: number, roundRef: unknown, payload: Record<string, unknown>, authUser: AuthUser) {
   const input = normalizeBulkCreateEligibilitiesInput(payload || {});
 
@@ -6797,6 +8040,8 @@ export async function bulkCreateExamRoundEligibilities(tenantId: number, roundRe
 
 export async function listExamRoundEligibilities(tenantId: number, roundRef: unknown, rawQuery: Record<string, unknown>, _authUser: AuthUser) {
   const round = await findExamRoundByRef(tenantId, roundRef);
+  const workflowRound = await loadExamRoundWorkflowContext(tenantId, Number(round.id));
+  const management = getExamEligibilityManagementState(workflowRound);
   const query = normalizeEligibilityListQuery(rawQuery || {});
   const orderBy = resolveEligibilityOrderBy(query.sort);
   const start = (query.page - 1) * query.pageSize;
@@ -6857,6 +8102,11 @@ export async function listExamRoundEligibilities(tenantId: number, roundRef: unk
         registered,
         notRegistered: Math.max(0, total - registered),
       },
+      management: {
+        canManage: management.allowed === true,
+        reasonCode: management.code || null,
+        message: management.message || null,
+      },
     },
   };
 }
@@ -6871,6 +8121,8 @@ export async function getExamRoundEligibility(tenantId: number, roundRef: unknow
 
 export async function listLearnersForExamRoundEligibility(tenantId: number, roundRef: unknown, rawQuery: Record<string, unknown>, _authUser: AuthUser) {
   const round = await findExamRoundByRef(tenantId, roundRef);
+  const workflowRound = await loadExamRoundWorkflowContext(tenantId, Number(round.id));
+  assertExamEligibilityEditableRound(workflowRound);
   const query = normalizeLearnerEligibilityLookupQuery(rawQuery || {});
   const clauses: any[] = [];
 
@@ -6933,6 +8185,11 @@ export async function listLearnersForExamRoundEligibility(tenantId: number, roun
         pageCount: Math.max(1, Math.ceil(total / query.pageSize)),
         total,
       },
+      management: {
+        canManage: true,
+        reasonCode: null,
+        message: null,
+      },
     },
   };
 }
@@ -6962,6 +8219,39 @@ export async function updateExamRoundEligibility(tenantId: number, roundRef: unk
     const fresh = await findExamEligibilityInRound(tenantId, Number(round.id), entity.id, trx);
     strapi.log.info(`[exam-eligibility] exam_eligibility.updated ${JSON.stringify({ tenantId, examRoundId: Number(round.id), eligibilityId: Number(entity.id), learnerId: Number(extractRelationRef(entity?.learner) || entity?.learner?.id || 0), actorUserId: authUser.id, beforeStatus: normalizeEligibilityStatus(entity?.eligibilityStatus, 'eligibilityStatus', 'pending'), afterStatus: input.eligibilityStatus, source: normalizeEligibilitySource(entity?.source, 'source', 'manual'), timestamp: now.toISOString() })}`);
     return mapEligibilityRow(fresh, { includeReviewedBy: true, includeTimestamps: true });
+  });
+}
+
+export async function deleteExamRoundEligibility(tenantId: number, roundRef: unknown, eligibilityRef: unknown, authUser: AuthUser) {
+  return strapi.db.connection.transaction(async (trx: any) => {
+    const round = await findExamRoundByRef(tenantId, roundRef, trx);
+    await acquireExamRoundStructureLock(trx, tenantId, Number(round.id));
+    const workflowRound = await loadExamRoundWorkflowContext(tenantId, Number(round.id), trx);
+    assertExamEligibilityEditableRound(workflowRound);
+
+    const entity = await findExamEligibilityInRound(tenantId, Number(round.id), eligibilityRef, trx);
+    const learnerId = Number(extractRelationRef(entity?.learner) || entity?.learner?.id || 0);
+    const activeRegistrations = learnerId > 0
+      ? await countActiveRegistrationsForEligibility(tenantId, Number(round.id), learnerId, trx)
+      : 0;
+
+    if (activeRegistrations > 0) {
+      httpError(409, 'Learner đã có đăng ký dự thi đang hiệu lực. Không thể xóa khỏi danh sách đối tượng đăng ký.', 'EXAM_ELIGIBILITY_HAS_ACTIVE_REGISTRATION');
+    }
+
+    await strapi.db.query(EXAM_ELIGIBILITY_UID).delete({
+      where: { id: entity.id },
+      transacting: trx,
+    } as any);
+
+    strapi.log.info(`[exam-eligibility] exam_eligibility.deleted ${JSON.stringify({ tenantId, examRoundId: Number(round.id), eligibilityId: Number(entity.id), learnerId, actorUserId: authUser.id, status: normalizeEligibilityStatus(entity?.eligibilityStatus, 'eligibilityStatus', 'pending'), timestamp: new Date().toISOString() })}`);
+
+    return {
+      id: Number(entity.id),
+      examRoundId: Number(round.id),
+      learnerId: learnerId || null,
+      deleted: true,
+    };
   });
 }
 
@@ -7138,7 +8428,10 @@ export async function updateExamRoundStructure(tenantId: number, roundRef: unkno
       const round = await findExamRoundByRef(tenantId, roundRef, trx);
       await acquireExamRoundStructureLock(trx, tenantId, Number(round.id));
 
-      const structure = await loadExamRoundStructure(tenantId, Number(round.id), trx);
+      const workflowRound = await loadExamRoundWorkflowContext(tenantId, Number(round.id), trx);
+      await assertExamRoundBaseConfigurationEditable(tenantId, workflowRound, trx);
+
+      const structure = await loadExamRoundStructure(tenantId, Number(round.id), trx, { requireDraft: false });
       const merged = mergeStructureUpdate(structure, input);
       validateStructureGraph(merged);
 
@@ -7155,11 +8448,27 @@ export async function updateExamRoundStructure(tenantId: number, roundRef: unkno
           id: merged.round.id,
           documentId: merged.round.documentId,
           code: merged.round.code,
+          name: merged.round.name,
+          academicYear: merged.round.academicYear,
+          semester: merged.round.semester,
           status: merged.round.status,
+          registrationMode: merged.round.registrationMode,
+          registrationStartAt: merged.round.registrationStartAt,
+          registrationEndAt: merged.round.registrationEndAt,
+          paymentStartAt: merged.round.paymentStartAt,
+          paymentEndAt: merged.round.paymentEndAt,
+          candidateListClosingAt: merged.round.candidateListClosingAt,
+          examStartAt: merged.round.examStartAt,
+          examEndAt: merged.round.examEndAt,
           paymentCalculationMethod: merged.round.paymentCalculationMethod,
           fixedFee: merged.round.fixedFee,
           allowSubjectSelection: merged.round.allowSubjectSelection,
           allowComponentSelection: merged.round.allowComponentSelection,
+          requireConfirmedPayment: merged.round.requireConfirmedPayment,
+          allowCancellation: merged.round.allowCancellation,
+          cancellationDeadline: merged.round.cancellationDeadline,
+          instructions: merged.round.instructions,
+          paymentInstructions: merged.round.paymentInstructions,
         },
         summary: summarizeStructure(merged.subjects),
         subjects: merged.subjects
@@ -7340,6 +8649,7 @@ export async function getLearnerExamRoundDetail(ctx: any, tenantId: number, roun
       canRegister: availabilityDecision.canRegister === true,
       requiresLearnerCreation: availabilityDecision.requiresLearnerCreation === true,
       reasonCode: availabilityDecision.reasonCode || null,
+      availabilityState: mapLearnerFacingAvailabilityState(availabilityDecision.reasonCode, availabilityDecision.canRegister, existingRegistration),
     },
     eligibility: mapLearnerFacingEligibilityState(workflowRound, availabilityDecision.eligibilityDecision),
     existingRegistration: mapExistingRegistrationSummary(existingRegistration),
@@ -7416,7 +8726,7 @@ export async function applyPaymentProfileToExamRound(tenantId: number, roundRef:
     const round = await findExamRoundByRef(tenantId, roundRef, trx);
     await acquireExamRoundStructureLock(trx, tenantId, Number(round.id));
     const workflowRound = await loadExamRoundWorkflowContext(tenantId, Number(round.id), trx);
-    assertExamRoundPaymentSettingsEditableRound(workflowRound);
+    await assertExamRoundPaymentSettingsEditableRound(tenantId, workflowRound, trx);
 
     const paymentProfile = await findPaymentProfileInTenant(tenantId, paymentProfileRef, trx);
     if (paymentProfile.isActive === false) {
@@ -7462,7 +8772,7 @@ export async function updateExamRoundPaymentSettings(tenantId: number, roundRef:
     const round = await findExamRoundByRef(tenantId, roundRef, trx);
     await acquireExamRoundStructureLock(trx, tenantId, Number(round.id));
     const workflowRound = await loadExamRoundWorkflowContext(tenantId, Number(round.id), trx);
-    assertExamRoundPaymentSettingsEditableRound(workflowRound);
+    await assertExamRoundPaymentSettingsEditableRound(tenantId, workflowRound, trx);
 
     const current = await getExamRoundManagementDetail(round.id, tenantId);
     const nextSnapshot = {
@@ -7601,6 +8911,69 @@ export async function getExamRoundVenueRoomConfiguration(tenantId: number, round
   };
 }
 
+export async function listExamRoundVenueRoomCopySources(tenantId: number, roundRef: unknown, rawQuery: Record<string, unknown>) {
+  const targetRound = await findExamRoundByRef(tenantId, roundRef);
+  const query = normalizeVenueRoomCopySourceListQuery(rawQuery || {});
+  const multiplier = 5;
+  const fetchLimit = Math.min(100, query.pageSize * multiplier);
+  const offset = (query.page - 1) * query.pageSize;
+  const clauses: any[] = [
+    { id: { $ne: Number(targetRound.id) } },
+  ];
+
+  if (query.search) {
+    clauses.push({
+      $or: [
+        { code: { $containsi: query.search } },
+        { name: { $containsi: query.search } },
+      ],
+    });
+  }
+
+  const rows = await strapi.db.query(EXAM_ROUND_UID).findMany({
+    where: mergeTenantWhere(clauses.length > 1 ? { $and: clauses } : clauses[0], tenantId),
+    select: ['id', 'documentId', 'code', 'name', 'examStartAt', 'examEndAt', 'createdAt'],
+    populate: {
+      examProgram: { select: ['id', 'documentId', 'code', 'name'] },
+      examVenues: { select: ['id'] },
+      examRooms: { select: ['id', 'capacity'] },
+    },
+    orderBy: [{ examStartAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+    offset: Math.max(0, offset),
+    limit: fetchLimit,
+  } as any) as any[];
+
+  const filtered = (rows || []).filter((item) => (item?.examVenues || []).length > 0 || (item?.examRooms || []).length > 0);
+  const paged = filtered.slice(0, query.pageSize);
+
+  return {
+    data: paged.map(mapVenueRoomCopySourceRound),
+    meta: {
+      pagination: {
+        page: query.page,
+        pageSize: query.pageSize,
+        pageCount: filtered.length > 0 && filtered.length >= query.pageSize ? query.page + 1 : query.page,
+        total: offset + filtered.length,
+      },
+    },
+  };
+}
+
+export async function previewExamRoundVenueRoomCopy(tenantId: number, roundRef: unknown, sourceRoundRef: unknown) {
+  const targetRound = await loadExamRoundVenueRoomContext(tenantId, roundRef);
+  const sourceRound = await loadExamRoundVenueRoomCopySource(tenantId, sourceRoundRef, Number(targetRound.id));
+  const plan = buildVenueRoomCopyPlan(sourceRound, targetRound);
+
+  return {
+    targetRound: mapVenueRoomCopyPreviewRound(targetRound),
+    sourceRound: plan.sourceRound,
+    summary: plan.summary,
+    warnings: plan.warnings,
+    venues: plan.venues,
+    rooms: plan.rooms,
+  };
+}
+
 export async function updateExamRoundVenuesRooms(tenantId: number, roundRef: unknown, payload: Record<string, unknown>, authUser: AuthUser) {
   const input = normalizeVenueRoomConfigurationInput(payload || {});
 
@@ -7670,6 +9043,42 @@ export async function updateExamRoundVenuesRooms(tenantId: number, roundRef: unk
     strapi.log.info(`[exam-round-management] exam_round.venues_rooms_updated ${JSON.stringify({ tenantId, examRoundId: Number(round.id), actorUserId: Number(authUser.id || 0), venueIds: input.venueIds, roomIds: input.roomIds, timestamp: new Date().toISOString() })}`);
 
     return await getExamRoundVenueRoomConfiguration(tenantId, Number(round.id));
+  });
+}
+
+export async function copyExamRoundVenueRoomConfiguration(tenantId: number, roundRef: unknown, payload: Record<string, unknown>, authUser: AuthUser) {
+  const input = normalizeVenueRoomCopyInput(payload || {});
+
+  return await strapi.db.connection.transaction(async (trx: any) => {
+    const initialRound = await findExamRoundByRef(tenantId, roundRef, trx);
+    await acquireExamRoundStructureLock(trx, tenantId, Number(initialRound.id));
+    const targetRound = await loadExamRoundVenueRoomContext(tenantId, Number(initialRound.id), trx);
+    const sourceRound = await loadExamRoundVenueRoomCopySource(tenantId, input.sourceRoundId, Number(targetRound.id), trx);
+    const plan = buildVenueRoomCopyPlan(sourceRound, targetRound);
+
+    await strapi.db.query(EXAM_ROUND_UID).update({
+      where: { id: Number(targetRound.id) },
+      data: {
+        examVenues: plan.nextVenueIds,
+        examRooms: plan.nextRoomIds,
+      },
+      transacting: trx,
+    } as any);
+
+    const configuration = await getExamRoundVenueRoomConfiguration(tenantId, Number(targetRound.id));
+    strapi.log.info(`[exam-round-management] exam_round.venue_room_configuration_copied ${JSON.stringify({ tenantId, targetRoundId: Number(targetRound.id), sourceRoundId: Number(sourceRound.id), actorUserId: Number(authUser.id || 0), addedVenueIds: plan.addedVenueIds, addedRoomIds: plan.addedRoomIds, timestamp: new Date().toISOString() })}`);
+
+    return {
+      sourceRound: plan.sourceRound,
+      summary: {
+        addedVenues: plan.summary.addedVenues,
+        addedRooms: plan.summary.addedRooms,
+        skippedVenues: plan.summary.skippedVenues,
+        skippedRooms: plan.summary.skippedRooms,
+      },
+      warnings: plan.warnings,
+      configuration,
+    };
   });
 }
 

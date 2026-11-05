@@ -1234,6 +1234,54 @@ export default {
     },
     {
       method: 'GET',
+      path: '/exam-rounds/eligibilities/import-template',
+      handler: 'exam-round-management.downloadEligibilityImportTemplate',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              keys: ['exam-round.manage', 'exam-round.approve'],
+            },
+          },
+        ],
+      },
+    },
+    {
+      method: 'POST',
+      path: '/exam-rounds/:id/eligibilities/import/preview',
+      handler: 'exam-round-management.previewEligibilityImport',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'exam-round.manage',
+            },
+          },
+        ],
+      },
+    },
+    {
+      method: 'POST',
+      path: '/exam-rounds/:id/eligibilities/import/commit',
+      handler: 'exam-round-management.commitEligibilityImport',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'exam-round.manage',
+            },
+          },
+        ],
+      },
+    },
+    {
+      method: 'GET',
       path: '/exam-rounds/:id/eligibilities',
       handler: 'exam-round-management.listEligibilities',
       config: {
@@ -1275,6 +1323,54 @@ export default {
             name: 'global::has-tenant-permission',
             config: {
               keys: ['exam-round.manage', 'exam-round.approve'],
+            },
+          },
+        ],
+      },
+    },
+    {
+      method: 'GET',
+      path: '/exam-rounds/:id/venue-room-copy-sources',
+      handler: 'exam-round-management.listVenueRoomCopySources',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'exam-round.manage',
+            },
+          },
+        ],
+      },
+    },
+    {
+      method: 'GET',
+      path: '/exam-rounds/:id/venue-room-copy-preview',
+      handler: 'exam-round-management.previewVenueRoomCopy',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'exam-round.manage',
+            },
+          },
+        ],
+      },
+    },
+    {
+      method: 'POST',
+      path: '/exam-rounds/:id/venue-room-copy',
+      handler: 'exam-round-management.copyVenueRoomConfiguration',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'exam-round.manage',
             },
           },
         ],
@@ -1524,6 +1620,22 @@ export default {
       method: 'PUT',
       path: '/exam-rounds/:id/eligibilities/:eligibilityId',
       handler: 'exam-round-management.updateEligibility',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'exam-round.manage',
+            },
+          },
+        ],
+      },
+    },
+    {
+      method: 'DELETE',
+      path: '/exam-rounds/:id/eligibilities/:eligibilityId',
+      handler: 'exam-round-management.deleteEligibility',
       config: {
         auth: false,
         policies: [

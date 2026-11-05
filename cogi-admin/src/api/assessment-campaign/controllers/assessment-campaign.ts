@@ -13,6 +13,7 @@ import {
   getAssessmentCampaignDetail,
   getAssessmentCampaignResultGate,
   getPublicAssessmentCampaignBySlug,
+  requestAssessmentCampaignOtp,
   getTenantIdFromContext,
   listAssessmentCampaignFields,
   listAssessmentCampaignLeads,
@@ -25,6 +26,7 @@ import {
   resolveAssessmentCampaignAssessment,
   resolvePublicAssessmentCampaign,
   resolvePublicAssessmentAttemptAccess,
+  verifyAssessmentCampaignOtp,
   startAssessmentCampaignRetake,
   startPublicAssessmentCampaign,
   updateAssessmentCampaign,
@@ -155,6 +157,12 @@ export default {
   },
   async resolvePublicAssessmentCampaign(ctx: any) {
     return runPublicHandler(ctx, () => resolvePublicAssessmentCampaign(ctx.params?.slug, ctx.request?.body || {}, getTenantIdFromContext(ctx)));
+  },
+  async requestAssessmentCampaignOtp(ctx: any) {
+    return runPublicHandler(ctx, () => requestAssessmentCampaignOtp(ctx.params?.slug, ctx.request?.body || {}, getTenantIdFromContext(ctx)));
+  },
+  async verifyAssessmentCampaignOtp(ctx: any) {
+    return runPublicHandler(ctx, () => verifyAssessmentCampaignOtp(ctx.params?.slug, ctx.request?.body || {}, getTenantIdFromContext(ctx)));
   },
   async startPublicAssessmentCampaign(ctx: any) {
     return runPublicHandler(ctx, () => startPublicAssessmentCampaign(ctx.params?.slug, ctx.request?.body || {}, getTenantIdFromContext(ctx)));

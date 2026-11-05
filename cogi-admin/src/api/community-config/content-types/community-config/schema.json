@@ -1,0 +1,58 @@
+{
+  "kind": "collectionType",
+  "collectionName": "community_configs",
+  "info": {
+    "singularName": "community-config",
+    "pluralName": "community-configs",
+    "displayName": "CommunityConfig",
+    "description": "Tenant-scoped community presentation and behavior configuration versions."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "communityConfigs",
+      "required": true
+    },
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "active",
+        "archived"
+      ],
+      "required": true,
+      "default": "draft"
+    },
+    "headerConfig": {
+      "type": "json"
+    },
+    "sidebarConfig": {
+      "type": "json"
+    },
+    "feedConfig": {
+      "type": "json"
+    },
+    "policyConfig": {
+      "type": "json"
+    },
+    "effectiveFrom": {
+      "type": "datetime"
+    },
+    "effectiveTo": {
+      "type": "datetime"
+    }
+  }
+}

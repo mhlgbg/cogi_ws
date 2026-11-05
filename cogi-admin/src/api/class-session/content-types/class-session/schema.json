@@ -1,0 +1,95 @@
+{
+  "kind": "collectionType",
+  "collectionName": "class_sessions",
+  "info": {
+    "singularName": "class-session",
+    "pluralName": "class-sessions",
+    "displayName": "ClassSession",
+    "description": "Tenant-scoped scheduled class sessions for attendance and teacher reporting."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "class": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::class.class",
+      "inversedBy": "classSessions",
+      "required": true
+    },
+    "sessionDate": {
+      "type": "date",
+      "required": true
+    },
+    "startTime": {
+      "type": "time",
+      "required": true
+    },
+    "endTime": {
+      "type": "time",
+      "required": true
+    },
+    "teacher": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "room": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "scheduled",
+        "in_progress",
+        "completed",
+        "cancelled"
+      ],
+      "default": "scheduled"
+    },
+    "cancelReason": {
+      "type": "text"
+    },
+    "note": {
+      "type": "text"
+    },
+    "lessonContent": {
+      "type": "text"
+    },
+    "homework": {
+      "type": "text"
+    },
+    "teacherComment": {
+      "type": "text"
+    },
+    "completedAt": {
+      "type": "datetime"
+    },
+    "completedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "attendances": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::class-session-attendance.class-session-attendance",
+      "mappedBy": "classSession"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

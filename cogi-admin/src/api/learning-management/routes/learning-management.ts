@@ -330,6 +330,15 @@ export default {
       },
     },
     {
+      method: 'GET',
+      path: '/learning-management/question-stimuli/:id/usage',
+      handler: 'learning-management.getQuestionStimulusUsage',
+      config: {
+        auth: false,
+        policies: [{ name: 'global::has-tenant-permission', config: { keys: ['learning.question.manage', 'learning.question-stimulus.manage', 'learning.learning-object.manage'] } }],
+      },
+    },
+    {
       method: 'POST',
       path: '/learning-management/question-stimuli',
       handler: 'learning-management.createQuestionStimulus',

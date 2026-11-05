@@ -1,0 +1,62 @@
+{
+  "kind": "collectionType",
+  "collectionName": "community_comments",
+  "info": {
+    "singularName": "community-comment",
+    "pluralName": "community-comments",
+    "displayName": "CommunityComment",
+    "description": "Tenant-scoped comments for community posts."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "communityComments",
+      "required": true
+    },
+    "post": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::community-post.community-post",
+      "required": true
+    },
+    "author": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "parentComment": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::community-comment.community-comment"
+    },
+    "content": {
+      "type": "text",
+      "required": true
+    },
+    "media": {
+      "type": "media",
+      "multiple": true,
+      "required": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "hidden",
+        "deleted"
+      ],
+      "required": true,
+      "default": "active"
+    }
+  }
+}

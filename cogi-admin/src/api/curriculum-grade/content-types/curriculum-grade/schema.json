@@ -1,0 +1,40 @@
+{
+  "kind": "collectionType",
+  "collectionName": "curriculum_grades",
+  "info": {
+    "singularName": "curriculum-grade",
+    "pluralName": "curriculum-grades",
+    "displayName": "Curriculum Grade",
+    "description": "Global grade catalog used for curriculum scopes."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "gradeNumber": {
+      "type": "integer",
+      "required": true
+    },
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "sortOrder": {
+      "type": "integer",
+      "default": 0,
+      "required": true
+    },
+    "educationLevel": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::education-level.education-level",
+      "required": true
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "kind": "collectionType",
+  "collectionName": "curriculum_scopes",
+  "info": {
+    "singularName": "curriculum-scope",
+    "pluralName": "curriculum-scopes",
+    "displayName": "Curriculum Scope",
+    "description": "A subject-by-grade scope within a curriculum version."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "subjectCurriculumVersion": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::subject-curriculum-version.subject-curriculum-version",
+      "required": true
+    },
+    "curriculumGrade": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::curriculum-grade.curriculum-grade",
+      "required": true
+    },
+    "sortOrder": {
+      "type": "integer",
+      "default": 0,
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "active",
+        "archived"
+      ],
+      "default": "draft",
+      "required": true
+    }
+  }
+}

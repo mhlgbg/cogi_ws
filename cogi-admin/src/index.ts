@@ -1,5 +1,8 @@
 // import type { Core } from '@strapi/strapi';
+import { ensureGameDatabaseIndexes } from './bootstrap/ensure-game-indexes';
+import { startGameXpEventRunner, stopGameXpEventRunner } from './bootstrap/game-xp-event-runner';
 import { initServiceSalesMasterData } from './bootstrap/init-service-sales-master-data';
+import { seedGameTypes } from './bootstrap/seed-game-types';
 import { seedSurvey } from './bootstrap/seed-survey';
 import stravaService from './api/strava/services/strava';
 import { startStravaWebhookRunner, stopStravaWebhookRunner } from './bootstrap/strava-webhook-runner';
@@ -89,6 +92,8 @@ export default {
     }
 
     await initServiceSalesMasterData(strapi);
+    await seedGameTypes(strapi);
+    await ensureGameDatabaseIndexes(strapi);
     await seedSurvey(strapi);
 
     if (stravaService.shouldCheckStravaWebhookOnBoot()) {
@@ -106,9 +111,11 @@ export default {
 
     await startStravaSyncRunner(strapi);
     await startStravaWebhookRunner(strapi);
+    await startGameXpEventRunner(strapi);
   },
 
   async destroy({ strapi } /* : { strapi: Core.Strapi } */) {
+    await stopGameXpEventRunner(strapi);
     await stopStravaWebhookRunner(strapi);
     await stopStravaSyncRunner(strapi);
   },

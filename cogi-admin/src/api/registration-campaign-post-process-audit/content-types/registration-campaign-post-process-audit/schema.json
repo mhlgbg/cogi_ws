@@ -1,0 +1,85 @@
+{
+  "kind": "collectionType",
+  "collectionName": "registration_campaign_post_process_audits",
+  "info": {
+    "singularName": "registration-campaign-post-process-audit",
+    "pluralName": "registration-campaign-post-process-audits",
+    "displayName": "Registration Campaign Post Process Audit",
+    "description": "Audit logs for post-registration processing actions."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "campaign": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::registration-campaign.registration-campaign",
+      "required": true
+    },
+    "registration": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::campaign-registration.campaign-registration"
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "sportsProfile": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::sports-profile.sports-profile"
+    },
+    "actor": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "taskType": {
+      "type": "enumeration",
+      "enum": [
+        "sports_profile_link"
+      ],
+      "required": true,
+      "default": "sports_profile_link"
+    },
+    "actionType": {
+      "type": "string",
+      "required": true,
+      "maxLength": 100
+    },
+    "resultStatus": {
+      "type": "enumeration",
+      "enum": [
+        "success",
+        "skipped",
+        "failed"
+      ],
+      "required": true
+    },
+    "resultCode": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "resultMessage": {
+      "type": "text"
+    },
+    "metadata": {
+      "type": "json",
+      "default": {}
+    },
+    "executedAt": {
+      "type": "datetime",
+      "required": true
+    }
+  }
+}

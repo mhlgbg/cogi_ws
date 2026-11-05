@@ -1,0 +1,53 @@
+{
+  "kind": "collectionType",
+  "collectionName": "assignment_submission_items",
+  "info": {
+    "singularName": "assignment-submission-item",
+    "pluralName": "assignment-submission-items",
+    "displayName": "Assignment Submission Item",
+    "description": "One content item inside a learner submission version."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "assignmentSubmission": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assignment-submission.assignment-submission",
+      "inversedBy": "items",
+      "required": true
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": ["html", "link", "image", "video", "audio", "file"],
+      "required": true
+    },
+    "order": {
+      "type": "integer",
+      "default": 0
+    },
+    "caption": {
+      "type": "string",
+      "maxLength": 255
+    },
+    "contentHtml": {
+      "type": "text"
+    },
+    "url": {
+      "type": "string"
+    },
+    "fileAsset": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::file-asset.file-asset"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

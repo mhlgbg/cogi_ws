@@ -23,6 +23,15 @@
       "type": "richtext",
       "required": true
     },
+    "questionTextType": {
+      "type": "enumeration",
+      "enum": [
+        "plain_text",
+        "html"
+      ],
+      "default": "plain_text",
+      "required": true
+    },
     "type": {
       "type": "enumeration",
       "enum": [
@@ -117,6 +126,11 @@
       "relation": "manyToOne",
       "target": "api::question-stimulus.question-stimulus",
       "inversedBy": "questions"
+    },
+    "questionImageAsset": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::file-asset.file-asset"
     },
     "tenant": {
       "type": "relation",

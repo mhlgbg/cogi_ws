@@ -1,0 +1,100 @@
+{
+  "kind": "collectionType",
+  "collectionName": "events",
+  "info": {
+    "singularName": "event",
+    "pluralName": "events",
+    "displayName": "Event",
+    "description": "Tenant-scoped events with configurable registration flows for groups, clubs, or public audiences."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "events",
+      "required": true
+    },
+    "title": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200
+    },
+    "slug": {
+      "type": "uid",
+      "targetField": "title",
+      "required": true,
+      "unique": true
+    },
+    "description": {
+      "type": "richtext"
+    },
+    "coverImage": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": ["images"]
+    },
+    "startAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "endAt": {
+      "type": "datetime"
+    },
+    "locationType": {
+      "type": "enumeration",
+      "enum": ["offline", "online", "hybrid"],
+      "default": "offline",
+      "required": true
+    },
+    "location": {
+      "type": "text"
+    },
+    "organizer": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "group": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::community-group.community-group"
+    },
+    "club": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::sports-club.sports-club"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["draft", "published", "cancelled", "completed"],
+      "default": "draft",
+      "required": true
+    },
+    "registrationSettings": {
+      "type": "json",
+      "default": {
+        "enabled": true,
+        "openAt": null,
+        "closeAt": null,
+        "capacity": null,
+        "eligibility": "registered_users",
+        "requireLogin": true,
+        "approvalMode": "auto",
+        "allowCancellation": true,
+        "allowMultipleParticipants": false,
+        "customFields": [],
+        "paymentSettings": null
+      }
+    },
+    "registrations": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::event-registration.event-registration",
+      "mappedBy": "event"
+    }
+  }
+}

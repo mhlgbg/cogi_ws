@@ -52,6 +52,9 @@
     "publicDescription": {
       "type": "text"
     },
+    "landingHtml": {
+      "type": "richtext"
+    },
     "publicContent": {
       "type": "richtext"
     },

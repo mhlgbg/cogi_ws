@@ -1,0 +1,89 @@
+{
+  "kind": "collectionType",
+  "collectionName": "assignment_task_learner_progresses",
+  "info": {
+    "singularName": "assignment-task-learner-progress",
+    "pluralName": "assignment-task-learner-progresses",
+    "displayName": "Assignment Task Learner Progress",
+    "description": "Per-learner progress for each assignment task."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "assignmentTask": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assignment-task.assignment-task",
+      "inversedBy": "learnerProgress",
+      "required": true
+    },
+    "learner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::learner.learner",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["assigned", "in_progress", "submitted", "completed", "returned", "missing"],
+      "default": "assigned",
+      "required": true
+    },
+    "startedAt": {
+      "type": "datetime"
+    },
+    "submittedAt": {
+      "type": "datetime"
+    },
+    "completedAt": {
+      "type": "datetime"
+    },
+    "score": {
+      "type": "decimal"
+    },
+    "maxScore": {
+      "type": "decimal"
+    },
+    "teacherFeedback": {
+      "type": "text"
+    },
+    "aiSuggestedScore": {
+      "type": "decimal"
+    },
+    "aiSuggestedMaxScore": {
+      "type": "decimal"
+    },
+    "aiSuggestedFeedback": {
+      "type": "text"
+    },
+    "aiGradingVersion": {
+      "type": "integer"
+    },
+    "aiGradedAt": {
+      "type": "datetime"
+    },
+    "aiModel": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "teacherReviewGradingVersion": {
+      "type": "integer"
+    },
+    "reviewedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "reviewedAt": {
+      "type": "datetime"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

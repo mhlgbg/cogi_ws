@@ -1,0 +1,122 @@
+{
+  "kind": "collectionType",
+  "collectionName": "games",
+  "info": {
+    "singularName": "game",
+    "pluralName": "games",
+    "displayName": "Game",
+    "description": "Tenant-scoped game instance with lifecycle, rules and participation tracking."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "gameType": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::game-type.game-type",
+      "required": true
+    },
+    "code": {
+      "type": "string",
+      "required": true,
+      "maxLength": 120
+    },
+    "name": {
+      "type": "string",
+      "required": true,
+      "maxLength": 180
+    },
+    "description": {
+      "type": "text"
+    },
+    "adminStatus": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "published",
+        "running",
+        "ended",
+        "finalized"
+      ],
+      "default": "draft",
+      "required": true
+    },
+    "currentRunVersion": {
+      "type": "integer",
+      "default": 1,
+      "min": 1,
+      "required": true
+    },
+    "registrationOpenAt": {
+      "type": "datetime"
+    },
+    "registrationCloseAt": {
+      "type": "datetime"
+    },
+    "trialStartAt": {
+      "type": "datetime"
+    },
+    "trialEndAt": {
+      "type": "datetime"
+    },
+    "startsAt": {
+      "type": "datetime"
+    },
+    "endsAt": {
+      "type": "datetime"
+    },
+    "timezone": {
+      "type": "string",
+      "default": "Asia/Ho_Chi_Minh",
+      "maxLength": 80
+    },
+    "lateRegistrationEnabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "isPublic": {
+      "type": "boolean",
+      "default": false
+    },
+    "settings": {
+      "type": "json"
+    },
+    "createdBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "participants": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::game-participant.game-participant",
+      "mappedBy": "game"
+    },
+    "rules": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::game-activity-rule.game-activity-rule",
+      "mappedBy": "game"
+    },
+    "events": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::game-event.game-event",
+      "mappedBy": "game"
+    },
+    "ledgers": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::game-ledger.game-ledger",
+      "mappedBy": "game"
+    }
+  }
+}

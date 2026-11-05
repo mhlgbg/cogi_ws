@@ -1,3 +1,4 @@
+import { sanitizeQuickMessageHtml } from '../../quick-message/services/quick-message-html';
 import { extractRelationRef, findEntityByRef, hasOwn, mergeTenantWhere, normalizeSortInput, parseOptionalPositiveInt, resolveCurrentTenantId, toText, whereByParam } from '../../../utils/tenant-scope';
 
 const LEARNING_OBJECT_UID = 'api::learning-object.learning-object';
@@ -10,16 +11,24 @@ const FORMULA_UID = 'api::formula.formula';
 const QUESTION_UID = 'api::question.question';
 const QUESTION_OPTION_UID = 'api::question-option.question-option';
 const QUESTION_STIMULUS_UID = 'api::question-stimulus.question-stimulus';
+const ASSESSMENT_SECTION_UID = 'api::assessment-section.assessment-section';
 const FILE_ASSET_UID = 'api::file-asset.file-asset';
 const VISUAL_ASSET_UID = 'api::visual-asset.visual-asset';
 const UPLOAD_FILE_UID = 'plugin::upload.file';
+const STIMULUS_CONTENT_TYPES = ['plain_text', 'html'] as const;
+const QUESTION_TEXT_TYPES = ['plain_text', 'html'] as const;
+
+type StimulusContentType = (typeof STIMULUS_CONTENT_TYPES)[number];
+type QuestionTextType = (typeof QUESTION_TEXT_TYPES)[number];
 
 class LearningManagementError extends Error {
   status: number;
+  details: Record<string, unknown> | null;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, details: Record<string, unknown> | null = null) {
     super(message);
     this.status = status;
+    this.details = details;
   }
 }
 
@@ -74,17 +83,55 @@ function ensureRequiredText(value: unknown, fieldName: string) {
   return text;
 }
 
+function normalizeQuestionStimulusContentType(value: unknown, fallback: StimulusContentType = 'plain_text'): StimulusContentType {
+  const text = toText(value).toLowerCase();
+  if (!text) return fallback;
+  if (STIMULUS_CONTENT_TYPES.includes(text as StimulusContentType)) {
+    return text as StimulusContentType;
+  }
+  throw new LearningManagementError(400, 'contentType must be one of: plain_text, html');
+}
+
+function normalizeQuestionStimulusContent(value: unknown, contentType: StimulusContentType): string | null {
+  const text = toNullableText(value);
+  if (!text) return null;
+  return contentType === 'html' ? (sanitizeQuickMessageHtml(text) || null) : text;
+}
+
+function normalizeQuestionTextType(value: unknown, fallback: QuestionTextType = 'plain_text'): QuestionTextType {
+  const text = toText(value).toLowerCase();
+  if (!text) return fallback;
+  if (QUESTION_TEXT_TYPES.includes(text as QuestionTextType)) {
+    return text as QuestionTextType;
+  }
+  throw new LearningManagementError(400, 'questionTextType must be one of: plain_text, html');
+}
+
+function normalizeQuestionTextContent(value: unknown, questionTextType: QuestionTextType): string {
+  const text = ensureRequiredText(value, 'questionText');
+  if (questionTextType !== 'html') return text;
+  const sanitized = sanitizeQuickMessageHtml(text);
+  if (!sanitized) {
+    throw new LearningManagementError(400, 'questionText must contain supported HTML content');
+  }
+  return sanitized;
+}
+
 function parseJsonField(value: unknown, fieldName: string) {
   if (value === undefined) return undefined;
   if (value === null || value === '') return null;
-  if (typeof value === 'object') return value;
+  if (typeof value === 'object' || typeof value === 'number' || typeof value === 'boolean') return value;
 
   const text = toText(value);
   if (!text) return null;
 
   try {
-    return JSON.parse(text);
+    const parsed = JSON.parse(text);
+    return typeof parsed === 'string' ? JSON.stringify(parsed) : parsed;
   } catch {
+    if (typeof value === 'string') {
+      return JSON.stringify(text);
+    }
     throw new LearningManagementError(400, `${fieldName} must be valid JSON`);
   }
 }
@@ -169,6 +216,7 @@ function mapQuestionStimulus(row: any, options: { includeQuestions?: boolean } =
     type: row?.type || '',
     instruction: row?.instruction || '',
     content: row?.content || '',
+    contentType: normalizeQuestionStimulusContentType(row?.contentType, 'plain_text'),
     audioAsset: row?.audioAsset || null,
     imageAsset: row?.imageAsset || null,
     stimulusStatus: row?.stimulusStatus || 'draft',
@@ -233,6 +281,7 @@ function getQuestionPopulateConfig() {
     subject: { select: ['id', 'documentId', 'code', 'title'] },
     grade: { select: ['id', 'documentId', 'code', 'title'] },
     knowledgeNode: { select: ['id', 'documentId', 'code', 'title'] },
+    questionImageAsset: getFileAssetPopulateConfig(),
     skills: { select: ['id', 'documentId', 'code', 'title'] },
     formulas: { select: ['id', 'documentId', 'code', 'title'] },
     options: {
@@ -243,7 +292,7 @@ function getQuestionPopulateConfig() {
     },
     learningObjects: { select: ['id', 'documentId', 'code', 'title'] },
     stimulus: {
-      select: ['id', 'documentId', 'code', 'title', 'type', 'instruction', 'content', 'stimulusStatus'],
+      select: ['id', 'documentId', 'code', 'title', 'type', 'instruction', 'content', 'contentType', 'stimulusStatus'],
       populate: {
         audioAsset: getFileAssetPopulateConfig(),
         imageAsset: getFileAssetPopulateConfig(),
@@ -278,7 +327,7 @@ function assertFileAssetMimeCategory(fileAsset: any, category: 'audio' | 'image'
 
 async function resolveTenantFileAssetRef(ref: unknown, tenantId: number | string, label: string) {
   if (ref === null || ref === undefined || ref === '') return null;
-  return ensureEntityInTenant(FILE_ASSET_UID, ref, tenantId, label).catch(() => null);
+  return ensureEntityInTenant(FILE_ASSET_UID, ref, tenantId, label);
 }
 
 async function findQuestionStimulusByCode(code: string, tenantId: number | string) {
@@ -335,13 +384,21 @@ async function sanitizeQuestionStimulusPayload(body: any, tenantId: number | str
   const imageAssetRef = hasOwn(payload, 'imageAsset') ? payload.imageAsset : existing?.imageAsset;
   const audioAsset = await resolveTenantFileAssetRef(audioAssetRef, tenantId, 'audioAsset');
   const imageAsset = await resolveTenantFileAssetRef(imageAssetRef, tenantId, 'imageAsset');
+  const contentType = normalizeQuestionStimulusContentType(
+    hasOwn(payload, 'contentType') ? payload.contentType : existing?.contentType,
+    'plain_text',
+  );
 
   const data = {
     code,
     title: toNullableText(hasOwn(payload, 'title') ? payload.title : existing?.title),
     type: ensureRequiredText(hasOwn(payload, 'type') ? payload.type : existing?.type, 'type'),
     instruction: toNullableText(hasOwn(payload, 'instruction') ? payload.instruction : existing?.instruction),
-    content: toNullableText(hasOwn(payload, 'content') ? payload.content : existing?.content),
+    content: normalizeQuestionStimulusContent(
+      hasOwn(payload, 'content') ? payload.content : existing?.content,
+      contentType,
+    ),
+    contentType,
     audioAsset: audioAsset ? audioAsset.id : null,
     imageAsset: imageAsset ? imageAsset.id : null,
     stimulusStatus: toText(hasOwn(payload, 'stimulusStatus') ? payload.stimulusStatus : existing?.stimulusStatus) || 'draft',
@@ -373,6 +430,127 @@ async function findQuestionStimulusOrThrow(id: unknown, tenantId: number | strin
   return row;
 }
 
+async function countRowsSafe(uid: string, where: any) {
+  try {
+    return await strapi.db.query(uid).count({ where });
+  } catch {
+    const rows = await strapi.db.query(uid).findMany({ where, select: ['id'] });
+    return Array.isArray(rows) ? rows.length : 0;
+  }
+}
+
+async function listStimulusPartReferences(stimulusId: number, tenantId: number | string) {
+  return strapi.db.query(ASSESSMENT_SECTION_UID).findMany({
+    where: mergeTenantWhere({ stimulus: { id: { $eq: stimulusId } } }, tenantId),
+    select: ['id', 'documentId', 'code', 'title'],
+    orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+    populate: {
+      assessmentVersion: { select: ['id', 'documentId', 'code', 'title', 'versionStatus', 'version'] },
+    },
+  });
+}
+
+async function buildFileAssetUsageSummary(fileAsset: any, tenantId: number | string, options: { excludeStimulusId?: number | null } = {}) {
+  if (!fileAsset?.id) return null;
+
+  const excludeStimulusId = Number(options.excludeStimulusId || 0) || null;
+  const stimulusAudioWhere = mergeTenantWhere({
+    audioAsset: { id: { $eq: Number(fileAsset.id) } },
+    ...(excludeStimulusId ? { id: { $ne: excludeStimulusId } } : {}),
+  }, tenantId);
+  const stimulusImageWhere = mergeTenantWhere({
+    imageAsset: { id: { $eq: Number(fileAsset.id) } },
+    ...(excludeStimulusId ? { id: { $ne: excludeStimulusId } } : {}),
+  }, tenantId);
+  const questionImageWhere = mergeTenantWhere({ questionImageAsset: { id: { $eq: Number(fileAsset.id) } } }, tenantId);
+  const optionImageWhere = mergeTenantWhere({ imageAsset: { id: { $eq: Number(fileAsset.id) } } }, tenantId);
+
+  const [stimulusAudioCount, stimulusImageCount, questionImageCount, questionOptionImageCount] = await Promise.all([
+    countRowsSafe(QUESTION_STIMULUS_UID, stimulusAudioWhere),
+    countRowsSafe(QUESTION_STIMULUS_UID, stimulusImageWhere),
+    countRowsSafe(QUESTION_UID, questionImageWhere),
+    countRowsSafe(QUESTION_OPTION_UID, optionImageWhere),
+  ]);
+
+  const totalLiveReferences = Number(stimulusAudioCount || 0) + Number(stimulusImageCount || 0) + Number(questionImageCount || 0) + Number(questionOptionImageCount || 0);
+  return {
+    asset: {
+      id: normalizeId(fileAsset),
+      documentId: fileAsset?.documentId || null,
+      code: fileAsset?.code || '',
+      originalName: fileAsset?.originalName || '',
+      fileName: fileAsset?.fileName || '',
+      mimeType: fileAsset?.mimeType || '',
+      moduleKey: fileAsset?.moduleKey || '',
+      status: fileAsset?.status || '',
+      isDeleted: fileAsset?.isDeleted === true,
+    },
+    stimulusAudioCount: Number(stimulusAudioCount || 0),
+    stimulusImageCount: Number(stimulusImageCount || 0),
+    questionImageCount: Number(questionImageCount || 0),
+    questionOptionImageCount: Number(questionOptionImageCount || 0),
+    totalLiveReferences,
+    projectedLiveReferencesAfterStimulusDelete: totalLiveReferences,
+    canDelete: totalLiveReferences === 0,
+  };
+}
+
+async function softDeleteFileAsset(fileAssetId: number, tenantId: number | string) {
+  const fileAsset = await ensureEntityInTenant(FILE_ASSET_UID, fileAssetId, tenantId, 'fileAsset');
+  if (!fileAsset?.id) return null;
+  await strapi.db.query(FILE_ASSET_UID).update({
+    where: { id: Number(fileAsset.id) },
+    data: {
+      status: 'DELETED',
+      isDeleted: true,
+    },
+  });
+  return normalizeId(fileAsset);
+}
+
+export async function getQuestionStimulusUsage(id: unknown, tenantId: number | string) {
+  const existing = await findQuestionStimulusOrThrow(id, tenantId, { includeQuestions: true });
+  const questions = Array.isArray(existing?.questions) ? existing.questions : [];
+  const parts = await listStimulusPartReferences(Number(existing.id), tenantId);
+  const audioAssetUsage = await buildFileAssetUsageSummary(existing?.audioAsset, tenantId, { excludeStimulusId: Number(existing.id) });
+  const imageAssetUsage = await buildFileAssetUsageSummary(existing?.imageAsset, tenantId, { excludeStimulusId: Number(existing.id) });
+
+  return {
+    stimulus: {
+      id: normalizeId(existing),
+      documentId: existing?.documentId || null,
+      code: existing?.code || '',
+      title: existing?.title || '',
+      type: existing?.type || '',
+    },
+    questionCount: questions.length,
+    partCount: Array.isArray(parts) ? parts.length : 0,
+    totalLiveReferences: questions.length + (Array.isArray(parts) ? parts.length : 0),
+    questions: questions.map((row: any) => ({
+      id: normalizeId(row),
+      documentId: row?.documentId || null,
+      code: row?.code || '',
+      title: row?.title || '',
+      type: row?.type || '',
+      questionStatus: row?.questionStatus || 'draft',
+    })),
+    parts: (Array.isArray(parts) ? parts : []).map((row: any) => ({
+      id: normalizeId(row),
+      documentId: row?.documentId || null,
+      code: row?.code || '',
+      title: row?.title || '',
+      versionCode: row?.assessmentVersion?.code || '',
+      versionTitle: row?.assessmentVersion?.title || '',
+      versionStatus: row?.assessmentVersion?.versionStatus || 'draft',
+      version: Number(row?.assessmentVersion?.version || 0) || null,
+    })),
+    media: {
+      audioAsset: audioAssetUsage,
+      imageAsset: imageAssetUsage,
+    },
+  };
+}
+
 async function replaceQuestionOptions(questionId: number, options: any[], tenantId: number | string) {
   const existingOptions = await strapi.db.query(QUESTION_OPTION_UID).findMany({
     where: mergeTenantWhere({ question: { id: { $eq: questionId } } }, tenantId),
@@ -398,12 +576,15 @@ function mapQuestion(row: any) {
     code: row?.code || '',
     title: row?.title || '',
     questionText: row?.questionText || '',
+    questionTextType: normalizeQuestionTextType(row?.questionTextType, 'plain_text'),
     type: row?.type || '',
     difficulty: row?.difficulty || '',
     correctAnswer: row?.correctAnswer ?? null,
     explanation: row?.explanation || '',
     rubric: row?.rubric ?? null,
     questionStatus: row?.questionStatus || 'draft',
+    questionImageAssetCode: row?.questionImageAsset?.code || null,
+    questionImageAsset: row?.questionImageAsset || null,
     stimulus: mapQuestionStimulus(row?.stimulus),
     subject: mapSimpleRelation(row?.subject),
     grade: mapSimpleRelation(row?.grade),
@@ -575,6 +756,7 @@ async function findLearningObjectOrThrow(id: unknown, tenantId: number | string)
           subject: { select: ['id', 'documentId', 'code', 'title'] },
           grade: { select: ['id', 'documentId', 'code', 'title'] },
           knowledgeNode: { select: ['id', 'documentId', 'code', 'title'] },
+          questionImageAsset: getFileAssetPopulateConfig(),
           skills: { select: ['id', 'documentId', 'code', 'title'] },
           formulas: { select: ['id', 'documentId', 'code', 'title'] },
           options: {
@@ -1360,15 +1542,41 @@ export async function updateQuestionStimulus(id: unknown, body: any, tenantId: n
   return mapQuestionStimulus(row, { includeQuestions: true });
 }
 
-export async function deleteQuestionStimulus(id: unknown, tenantId: number | string) {
+export async function deleteQuestionStimulus(id: unknown, tenantId: number | string, options: { deleteUnusedMedia?: boolean } = {}) {
   const existing = await findQuestionStimulusOrThrow(id, tenantId, { includeQuestions: true });
-  const linkedQuestionCount = Array.isArray(existing?.questions) ? existing.questions.length : 0;
-  if (linkedQuestionCount > 0) {
-    throw new LearningManagementError(409, 'Question Stimulus is currently used by one or more questions. Detach or archive it first.');
+  const usage = await getQuestionStimulusUsage(existing.id, tenantId);
+
+  if (Number(usage.totalLiveReferences || 0) > 0) {
+    throw new LearningManagementError(
+      409,
+      `Question Stimulus is still used by ${usage.questionCount} question(s) and ${usage.partCount} part(s).`,
+      usage,
+    );
   }
 
   await strapi.db.query(QUESTION_STIMULUS_UID).delete({ where: { id: existing.id } });
-  return { id: normalizeId(existing) };
+
+  const deletedMediaAssetIds: Array<string | number> = [];
+  const retainedMediaAssets = [] as Array<Record<string, unknown>>;
+  if (options.deleteUnusedMedia === true) {
+    for (const assetUsage of [usage.media?.audioAsset, usage.media?.imageAsset]) {
+      if (!assetUsage?.asset?.id) continue;
+      if (assetUsage.canDelete === true) {
+        const deletedAssetId = await softDeleteFileAsset(Number(assetUsage.asset.id), tenantId);
+        if (deletedAssetId) deletedMediaAssetIds.push(deletedAssetId);
+      } else {
+        retainedMediaAssets.push(assetUsage);
+      }
+    }
+  }
+
+  return {
+    id: normalizeId(existing),
+    usage,
+    mediaDeletionAttempted: options.deleteUnusedMedia === true,
+    deletedMediaAssetIds,
+    retainedMediaAssets,
+  };
 }
 
 export async function getQuestions(query: any, tenantId: number | string) {
@@ -1480,18 +1688,30 @@ async function sanitizeQuestionPayload(body: any, tenantId: number | string, exi
   const knowledgeNode = await ensureEntityInTenant(KNOWLEDGE_NODE_UID, payload.knowledgeNode ?? existing?.knowledgeNode, tenantId, 'knowledgeNode');
   const stimulusRef = hasOwn(payload, 'stimulus') ? payload.stimulus : existing?.stimulus;
   const stimulus = await ensureEntityInTenant(QUESTION_STIMULUS_UID, stimulusRef, tenantId, 'stimulus');
+  const hasQuestionImageAsset = hasOwn(payload, 'questionImageAsset');
+  const hasQuestionImageAssetCode = hasOwn(payload, 'questionImageAssetCode');
+  const questionImageAssetRef = hasQuestionImageAsset
+    ? payload.questionImageAsset
+    : hasQuestionImageAssetCode
+      ? payload.questionImageAssetCode
+      : existing?.questionImageAsset;
+  const questionImageAsset = await resolveTenantFileAssetRef(questionImageAssetRef, tenantId, 'questionImageAssetCode');
   const skillRefs = payload.skills !== undefined ? toRelationIdList(payload.skills) : mapRelationIds(existing?.skills);
   const formulaRefs = payload.formulas !== undefined ? toRelationIdList(payload.formulas) : mapRelationIds(existing?.formulas);
   const learningObjectRefs = payload.learningObjects !== undefined ? toRelationIdList(payload.learningObjects) : mapRelationIds(existing?.learningObjects);
   const skills = await ensureEntityListInTenant(SKILL_UID, skillRefs, tenantId, 'skill');
   const formulas = await ensureEntityListInTenant(FORMULA_UID, formulaRefs, tenantId, 'formula');
   const learningObjects = await ensureEntityListInTenant(LEARNING_OBJECT_UID, learningObjectRefs, tenantId, 'learningObject');
+  assertFileAssetMimeCategory(questionImageAsset, 'image', 'questionImageAssetCode');
+  const questionTextType = normalizeQuestionTextType(payload.questionTextType ?? existing?.questionTextType, 'plain_text');
 
   return {
     code: ensureRequiredText(payload.code ?? existing?.code, 'code'),
     title: toNullableText(payload.title ?? existing?.title),
-    questionText: ensureRequiredText(payload.questionText ?? existing?.questionText, 'questionText'),
+    questionText: normalizeQuestionTextContent(payload.questionText ?? existing?.questionText, questionTextType),
+    questionTextType,
     type: ensureRequiredText(payload.type ?? existing?.type, 'type'),
+    questionImageAsset: questionImageAsset ? questionImageAsset.id : null,
     stimulus: stimulus ? stimulus.id : null,
     subject: subject ? subject.id : null,
     grade: grade ? grade.id : null,

@@ -444,8 +444,7 @@ type PlatformStravaWebhookEventDetail = PlatformStravaWebhookEventListItem & {
   nextAttemptAt: string | null;
   ownerId: string | null;
   subscriptionId: number | null;
-  updates: Record<string, unknown> | null;
-  rawPayload: unknown;
+  idempotencyKey: string | null;
   timeline: PlatformStravaWebhookEventTimelineItem[];
 };
 
@@ -1877,8 +1876,7 @@ export async function getPlatformStravaWebhookEventDetail(eventId: unknown): Pro
       'swe.last_error as lastError',
       'swe.owner_id as ownerId',
       'swe.subscription_id as subscriptionId',
-      'swe.updates as updates',
-      'swe.raw_payload as rawPayload',
+      'swe.idempotency_key as idempotencyKey',
       strapi.db.connection.raw(`coalesce(t.id, fallback_conn.tenant_id) as "tenantId"`),
       strapi.db.connection.raw(`coalesce(t.name, fallback_conn.tenant_name) as "tenantName"`),
       strapi.db.connection.raw(`coalesce(sc.id, fallback_conn.connection_id) as "connectionId"`),
@@ -1909,8 +1907,7 @@ export async function getPlatformStravaWebhookEventDetail(eventId: unknown): Pro
     nextAttemptAt: row?.nextAttemptAt || null,
     ownerId: toText(row?.ownerId) || null,
     subscriptionId: toPositiveInt(row?.subscriptionId),
-    updates: parseJsonRecord(row?.updates),
-    rawPayload: parseJsonValue(row?.rawPayload),
+    idempotencyKey: toText(row?.idempotencyKey) || null,
     timeline: [],
   };
 
@@ -6632,7 +6629,6 @@ function normalizeStravaActivity(activity: Record<string, any>) {
 }
 
 function buildActivityPayload(tenantId: number | string, userId: number, connectionId: number, activity: Record<string, any>) {
-  const mapData = activity?.map && typeof activity.map === 'object' ? activity.map : {};
   return {
     tenant: tenantId,
     user: userId,
@@ -6657,11 +6653,11 @@ function buildActivityPayload(tenantId: number | string, userId: number, connect
     kudosCount: toPositiveInt(activity?.kudos_count) ?? 0,
     locationCountry: toText(activity?.location_country) || null,
     locationCity: toText(activity?.location_city) || null,
-    hasMap: Boolean(mapData?.summary_polyline),
-    mapSummaryPolyline: toText(mapData?.summary_polyline) || null,
+    hasMap: false,
+    mapSummaryPolyline: null,
     visibility: normalizeVisibility(activity?.visibility),
     syncStatus: 'SYNCED',
-    rawActivity: activity,
+    rawActivity: null,
   };
 }
 
@@ -7269,7 +7265,7 @@ export async function upsertStravaConnection(
     terminationReason: null,
     status: 'ACTIVE',
     disconnectedAt: null,
-    rawAthlete: athlete,
+    rawAthlete: null,
     lastSyncStatus: toText(existing?.lastSyncStatus) || 'NEVER',
   };
 

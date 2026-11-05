@@ -1,0 +1,111 @@
+{
+  "kind": "collectionType",
+  "collectionName": "game_ledgers",
+  "info": {
+    "singularName": "game-ledger",
+    "pluralName": "game-ledgers",
+    "displayName": "Game Ledger",
+    "description": "XP accounting ledger with credit/debit and reversal support."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "game": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::game.game",
+      "required": true
+    },
+    "participant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::game-participant.game-participant",
+      "inversedBy": "ledgers"
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "activityCode": {
+      "type": "string",
+      "required": true,
+      "maxLength": 120
+    },
+    "runVersion": {
+      "type": "integer",
+      "default": 1,
+      "min": 1,
+      "required": true
+    },
+    "phase": {
+      "type": "enumeration",
+      "enum": [
+        "trial",
+        "official"
+      ],
+      "default": "official",
+      "required": true
+    },
+    "sourceType": {
+      "type": "string",
+      "required": true,
+      "maxLength": 80
+    },
+    "sourceId": {
+      "type": "string",
+      "required": true,
+      "maxLength": 255
+    },
+    "localDateKey": {
+      "type": "string",
+      "maxLength": 20
+    },
+    "entryType": {
+      "type": "enumeration",
+      "enum": [
+        "credit",
+        "debit",
+        "reversal"
+      ],
+      "default": "credit",
+      "required": true
+    },
+    "xpAmount": {
+      "type": "integer",
+      "required": true,
+      "min": -2147483648,
+      "max": 2147483647
+    },
+    "balanceAfter": {
+      "type": "integer",
+      "default": 0,
+      "min": -2147483648,
+      "max": 2147483647
+    },
+    "reason": {
+      "type": "text"
+    },
+    "metadata": {
+      "type": "json"
+    },
+    "recordedAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "referenceEvent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::game-event.game-event"
+    }
+  }
+}

@@ -84,7 +84,7 @@
     },
     "sourceType": {
       "type": "enumeration",
-      "enum": ["admin", "campaign", "public", "learner", "exam", "other"]
+      "enum": ["admin", "admin_test", "campaign", "public", "learner", "exam", "other"]
     },
     "sourceRef": {
       "type": "string"

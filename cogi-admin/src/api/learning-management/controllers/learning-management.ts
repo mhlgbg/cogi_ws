@@ -29,6 +29,7 @@ import {
   getLearningObjectDetail,
   getQuestions,
   getQuestionStimulusDetail,
+  getQuestionStimulusUsage,
   listQuestionStimuli,
   getSkills,
   getSubjects,
@@ -270,6 +271,10 @@ export default {
     return runHandler(ctx, () => getQuestionStimulusDetail(ctx.params?.id, getTenantIdFromContext(ctx)));
   },
 
+  async getQuestionStimulusUsage(ctx: any) {
+    return runHandler(ctx, () => getQuestionStimulusUsage(ctx.params?.id, getTenantIdFromContext(ctx)));
+  },
+
   async createQuestionStimulus(ctx: any) {
     return runHandler(ctx, () => createQuestionStimulus(ctx.request?.body || {}, getTenantIdFromContext(ctx)));
   },
@@ -279,7 +284,9 @@ export default {
   },
 
   async deleteQuestionStimulus(ctx: any) {
-    return runHandler(ctx, () => deleteQuestionStimulus(ctx.params?.id, getTenantIdFromContext(ctx)));
+    return runHandler(ctx, () => deleteQuestionStimulus(ctx.params?.id, getTenantIdFromContext(ctx), {
+      deleteUnusedMedia: String(ctx.request?.query?.deleteUnusedMedia || '').trim().toLowerCase() === 'true',
+    }));
   },
 
   async createQuestion(ctx: any) {

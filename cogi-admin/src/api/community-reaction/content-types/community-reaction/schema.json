@@ -1,0 +1,45 @@
+{
+  "kind": "collectionType",
+  "collectionName": "community_reactions",
+  "info": {
+    "singularName": "community-reaction",
+    "pluralName": "community-reactions",
+    "displayName": "CommunityReaction",
+    "description": "Tenant-scoped reactions for community posts."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "communityReactions",
+      "required": true
+    },
+    "post": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::community-post.community-post",
+      "required": true
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": [
+        "like",
+        "love",
+        "support"
+      ],
+      "required": true,
+      "default": "like"
+    }
+  }
+}

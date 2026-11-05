@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { computeMessageEffectiveStatus, createQuickMessageAccessLogEntry, validatePin } from './quick-message-admin';
+import { sanitizeQuickMessageHtml } from './quick-message-html';
 
 const bcrypt = require('bcryptjs');
 
@@ -25,6 +26,7 @@ type QuickMessagePublicOpenResponse = {
   message: {
     title: string | null;
     content: string | null;
+    contentType: 'text' | 'html';
     links: Array<{ label: string | null; url: string }>;
     replyEnabled: boolean;
     replyMode: string | null;
@@ -158,11 +160,14 @@ function serializePublicLookup(access: any, effectiveStatus: string) {
 
 function buildOpenResponse(access: any, openedAt: string): QuickMessagePublicOpenResponse {
   const effectiveStatus = computeQuickMessagePublicLookupStatus(access?.message, access);
+  const contentType = toText(access?.message?.contentType).toLowerCase() === 'html' ? 'html' : 'text';
+  const rawContent = toText(access?.message?.content) || '';
   return {
     code: toText(access?.code).toUpperCase(),
     message: {
       title: toText(access?.message?.title) || null,
-      content: toText(access?.message?.content) || null,
+      content: contentType === 'html' ? sanitizeQuickMessageHtml(rawContent) || '' : (rawContent || null),
+      contentType,
       links: sanitizePublicLinks(access?.message?.links),
       replyEnabled: resolvePublicReplyEnabled(access, effectiveStatus),
       replyMode: toText(access?.message?.replyMode) || null,
@@ -332,7 +337,7 @@ async function findQuickMessageAccessByCode(codeParam: unknown) {
         },
       },
       message: {
-        select: ['id', 'title', 'content', 'links', 'status', 'expiresAt', 'allowReply', 'replyMode', 'senderDisplayName'],
+        select: ['id', 'title', 'content', 'contentType', 'links', 'status', 'expiresAt', 'allowReply', 'replyMode', 'senderDisplayName'],
         populate: {
           tenant: {
             select: ['id', 'name', 'shortName', 'siteTitle', 'primaryColor'],

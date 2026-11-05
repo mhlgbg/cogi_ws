@@ -4,6 +4,13 @@ type TenantLite = {
   tenantStatus: 'draft' | 'active' | 'inactive' | 'suspended';
 };
 
+type TenantCodeMatchResult = {
+  tenant: TenantLite | null;
+  conflict: boolean;
+  normalizedCode: string;
+  candidates: TenantLite[];
+};
+
 import { isMainDomainHost } from '../utils/main-domain';
 
 const TENANT_UID = 'api::tenant.tenant';
@@ -65,7 +72,12 @@ export function getTenantCodeFromTenantPath(path?: string | null): string {
   const [firstSegment = '', secondSegment = ''] = trimmed.split('/');
   if (firstSegment.toLowerCase() !== 't') return '';
 
-  return secondSegment.trim().toLowerCase();
+  return normalizeTenantCode(secondSegment);
+}
+
+function normalizeTenantCode(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return String(value).trim().toLowerCase();
 }
 
 export function isSystemHost(host: string): boolean {
@@ -112,42 +124,74 @@ function getDomainLookupHosts(ctx: any): string[] {
 function getTenantCodeHeader(ctx: any): string {
   const headerValue = ctx.get?.('x-tenant-code');
   if (typeof headerValue === 'string' && headerValue.trim()) {
-    return headerValue.trim().toLowerCase();
+    return normalizeTenantCode(headerValue);
   }
 
   const normalizedHeaderValue = ctx.request?.header?.['x-tenant-code'];
   if (typeof normalizedHeaderValue === 'string' && normalizedHeaderValue.trim()) {
-    return normalizedHeaderValue.trim().toLowerCase();
+    return normalizeTenantCode(normalizedHeaderValue);
   }
 
   if (Array.isArray(normalizedHeaderValue) && normalizedHeaderValue.length > 0) {
-    return String(normalizedHeaderValue[0]).trim().toLowerCase();
+    return normalizeTenantCode(normalizedHeaderValue[0]);
   }
 
   const raw = ctx.request?.headers?.['x-tenant-code'];
   if (typeof raw === 'string') {
-    return raw.trim().toLowerCase();
+    return normalizeTenantCode(raw);
   }
 
   if (Array.isArray(raw) && raw.length > 0) {
-    return String(raw[0]).trim().toLowerCase();
+    return normalizeTenantCode(raw[0]);
   }
 
   return '';
 }
 
-async function findActiveTenantByCode(strapi: any, code?: string): Promise<TenantLite | null> {
-  if (!code) return null;
+async function findActiveTenantsByCodeInsensitive(strapi: any, code?: string): Promise<TenantLite[]> {
+  const normalizedCode = normalizeTenantCode(code);
+  if (!normalizedCode) return [];
 
-  const tenant = await strapi.db.query(TENANT_UID).findOne({
+  const tenants = await strapi.db.query(TENANT_UID).findMany({
     where: {
-      code,
+      code: {
+        $eqi: normalizedCode,
+      },
       tenantStatus: ACTIVE_STATUS,
     },
     select: ['id', 'code', 'tenantStatus'],
   });
 
-  return (tenant as TenantLite | null) || null;
+  return (tenants as TenantLite[] | null) || [];
+}
+
+async function findActiveTenantByCode(strapi: any, code?: string): Promise<TenantCodeMatchResult> {
+  const normalizedCode = normalizeTenantCode(code);
+  if (!normalizedCode) {
+    return {
+      tenant: null,
+      conflict: false,
+      normalizedCode,
+      candidates: [],
+    };
+  }
+
+  const candidates = await findActiveTenantsByCodeInsensitive(strapi, normalizedCode);
+  if (candidates.length > 1) {
+    return {
+      tenant: null,
+      conflict: true,
+      normalizedCode,
+      candidates,
+    };
+  }
+
+  return {
+    tenant: candidates[0] || null,
+    conflict: false,
+    normalizedCode,
+    candidates,
+  };
 }
 
 async function findActiveTenantByHost(strapi: any, host: string): Promise<TenantLite | null> {
@@ -244,20 +288,55 @@ export default (_config: unknown, { strapi }: { strapi: any }) => {
       return;
     }
 
-    const priorityTenantFromPath = hasPathTenantCode
+    const pathTenantMatch = hasPathTenantCode
       ? await findActiveTenantByCode(strapi, pathTenantCode)
-      : null;
-    const priorityTenantFromDomain = systemHost
-      ? await findActiveTenantByHosts(strapi, domainLookupHosts.filter((candidate) => candidate !== host))
-      : await findActiveTenantByHosts(strapi, domainLookupHosts);
-
-    const tenantFromHeader = hasTenantCodeHeader
+      : { tenant: null, conflict: false, normalizedCode: '', candidates: [] } as TenantCodeMatchResult;
+    const headerTenantMatch = hasTenantCodeHeader
       ? await findActiveTenantByCode(strapi, tenantCodeHeader)
-      : null;
-    const tenantFromPath = hasTenantCodeHeader || hasPathTenantCode
-      ? null
+      : { tenant: null, conflict: false, normalizedCode: '', candidates: [] } as TenantCodeMatchResult;
+    const legacyPathTenantMatch = hasTenantCodeHeader || hasPathTenantCode
+      ? { tenant: null, conflict: false, normalizedCode: '', candidates: [] } as TenantCodeMatchResult
       : await findActiveTenantByCode(strapi, firstSegment);
-    const tenantFromHost = hasTenantCodeHeader || priorityTenantFromDomain
+
+    const hasTenantCodeConflict = Boolean(
+      pathTenantMatch.conflict || headerTenantMatch.conflict || legacyPathTenantMatch.conflict,
+    );
+    if (hasTenantCodeConflict) {
+      const conflictCode = pathTenantMatch.conflict
+        ? pathTenantMatch.normalizedCode
+        : headerTenantMatch.conflict
+          ? headerTenantMatch.normalizedCode
+          : legacyPathTenantMatch.normalizedCode;
+      const candidates = pathTenantMatch.conflict
+        ? pathTenantMatch.candidates
+        : headerTenantMatch.conflict
+          ? headerTenantMatch.candidates
+          : legacyPathTenantMatch.candidates;
+
+      ctx.state.tenantConflict = true;
+      strapi.log.warn('[tenant-resolver] tenant code conflict', {
+        reason: 'tenant_code_case_insensitive_conflict',
+        tenantCode: conflictCode,
+        matchedTenantIds: candidates.map((item) => item.id),
+        matchedTenantCodes: candidates.map((item) => item.code),
+        path,
+        host,
+        tenantCodeHeader,
+        pathTenantCode,
+      });
+      return ctx.throw(409, `Tenant code conflict for "${conflictCode}"`);
+    }
+
+    const hasExplicitTenantCode = hasTenantCodeHeader || hasPathTenantCode;
+    const priorityTenantFromPath = pathTenantMatch.tenant;
+    const tenantFromHeader = headerTenantMatch.tenant;
+    const tenantFromPath = legacyPathTenantMatch.tenant;
+    const priorityTenantFromDomain = hasExplicitTenantCode
+      ? null
+      : (systemHost
+        ? await findActiveTenantByHosts(strapi, domainLookupHosts.filter((candidate) => candidate !== host))
+        : await findActiveTenantByHosts(strapi, domainLookupHosts));
+    const tenantFromHost = hasExplicitTenantCode || priorityTenantFromDomain
       ? null
       : await findActiveTenantByHosts(strapi, domainLookupHosts);
 

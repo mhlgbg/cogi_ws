@@ -1,0 +1,166 @@
+export default {
+  routes: [
+    {
+      method: 'GET',
+      path: '/teacher/sessions/:sessionId/assignments',
+      handler: 'assignment.listTeacherSessionAssignments',
+      config: { auth: false },
+    },
+    {
+      method: 'POST',
+      path: '/teacher/sessions/:sessionId/assignments',
+      handler: 'assignment.createTeacherSessionAssignment',
+      config: { auth: false },
+    },
+    {
+      method: 'GET',
+      path: '/teacher/sessions/:sessionId/assignment-assessment-options',
+      handler: 'assignment.listTeacherSessionAssessmentOptions',
+      config: { auth: false },
+    },
+    {
+      method: 'POST',
+      path: '/teacher/sessions/:sessionId/assignment-assessment-preview',
+      handler: 'assignment.startTeacherSessionAssessmentPreviewAttempt',
+      config: { auth: false },
+    },
+    {
+      method: 'GET',
+      path: '/teacher/assignments/:assignmentId',
+      handler: 'assignment.getTeacherAssignment',
+      config: { auth: false },
+    },
+    {
+      method: 'PUT',
+      path: '/teacher/assignments/:assignmentId',
+      handler: 'assignment.updateTeacherAssignment',
+      config: { auth: false },
+    },
+    {
+      method: 'GET',
+      path: '/teacher/assignments/:assignmentId/assessment-options',
+      handler: 'assignment.listTeacherAssignmentAssessmentOptions',
+      config: { auth: false },
+    },
+    {
+      method: 'PUT',
+      path: '/teacher/assignments/:assignmentId/tasks/:taskId/grading-definition',
+      handler: 'assignment.updateTeacherAssignmentTaskGradingDefinition',
+      config: { auth: false },
+    },
+    {
+      method: 'POST',
+      path: '/teacher/assignments/:assignmentId/assessment-preview',
+      handler: 'assignment.startTeacherAssignmentAssessmentPreviewAttempt',
+      config: { auth: false },
+    },
+    {
+      method: 'POST',
+      path: '/teacher/assignments/:assignmentId/publish',
+      handler: 'assignment.publishTeacherAssignment',
+      config: { auth: false },
+    },
+    {
+      method: 'POST',
+      path: '/teacher/assignments/:assignmentId/close',
+      handler: 'assignment.closeTeacherAssignment',
+      config: { auth: false },
+    },
+    {
+      method: 'POST',
+      path: '/teacher/assignments/:assignmentId/cancel',
+      handler: 'assignment.cancelTeacherAssignment',
+      config: { auth: false },
+    },
+    {
+      method: 'POST',
+      path: '/teacher/assignments/:assignmentId/reopen',
+      handler: 'assignment.reopenTeacherAssignment',
+      config: { auth: false },
+    },
+    {
+      method: 'POST',
+      path: '/teacher/assignments/:assignmentId/tasks/:taskId/learners/:learnerId/auto-grade',
+      handler: 'assignment.autoGradeTeacherAssignmentLearnerTask',
+      config: { auth: false },
+    },
+    {
+      method: 'POST',
+      path: '/teacher/assignments/:assignmentId/tasks/:taskId/regrade-stale-unreviewed',
+      handler: 'assignment.batchRegradeStaleUnreviewedTeacherAssignmentTask',
+      config: { auth: false },
+    },
+    {
+      method: 'POST',
+      path: '/teacher/assignments/:assignmentId/tasks/:taskId/learners/:learnerId/review',
+      handler: 'assignment.reviewTeacherAssignmentLearnerTask',
+      config: { auth: false },
+    },
+    {
+      method: 'GET',
+      path: '/teacher/assignments/:assignmentId/tasks/:taskId/learners/:learnerId',
+      handler: 'assignment.getTeacherAssignmentLearnerTask',
+      config: { auth: false },
+    },
+    {
+      method: 'GET',
+      path: '/student/sessions/:sessionId/assignments',
+      handler: 'assignment.listStudentSessionAssignments',
+      config: { auth: false },
+    },
+    {
+      method: 'GET',
+      path: '/student/assignments',
+      handler: 'assignment.listStudentAssignments',
+      config: { auth: false },
+    },
+    {
+      method: 'GET',
+      path: '/student/assignments/:assignmentId',
+      handler: 'assignment.getStudentAssignment',
+      config: { auth: false },
+    },
+    {
+      method: 'GET',
+      path: '/student/assignment-tasks/:taskId',
+      handler: 'assignment.getStudentAssignmentTask',
+      config: { auth: false },
+    },
+    {
+      method: 'GET',
+      path: '/student/submissions/:submissionId',
+      handler: 'assignment.getStudentSubmissionVersion',
+      config: { auth: false },
+    },
+    {
+      method: 'POST',
+      path: '/student/assignment-tasks/:taskId/progress',
+      handler: 'assignment.updateStudentTodoProgress',
+      config: { auth: false },
+    },
+    {
+      method: 'POST',
+      path: '/student/assignment-tasks/:taskId/assessment-attempt',
+      handler: 'assignment.startStudentAssessmentTaskAttempt',
+      config: { auth: false },
+    },
+    {
+      method: 'POST',
+      path: '/student/assignment-tasks/:taskId/upload',
+      handler: 'assignment.uploadStudentAssignmentFile',
+      config: { auth: false },
+    },
+    {
+      method: 'POST',
+      path: '/student/assignment-tasks/:taskId/submissions/draft',
+      handler: 'assignment.saveStudentSubmissionDraft',
+      config: { auth: false },
+    },
+    {
+      method: 'POST',
+      path: '/student/assignment-tasks/:taskId/submissions/submit',
+      handler: 'assignment.submitStudentSubmission',
+      config: { auth: false },
+    }
+  ]
+}

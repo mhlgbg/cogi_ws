@@ -55,6 +55,17 @@
       "default": 0,
       "min": 0
     },
+    "listenRequirementSatisfied": {
+      "type": "boolean",
+      "required": true,
+      "default": false
+    },
+    "listenRequirementSatisfiedAt": {
+      "type": "datetime"
+    },
+    "runtimeMeta": {
+      "type": "json"
+    },
     "scores": {
       "type": "relation",
       "relation": "oneToMany",

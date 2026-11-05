@@ -325,6 +325,15 @@ export default {
       },
     },
     {
+      method: 'POST',
+      path: '/platform/tenants/:tenantId/storage-configs/:storageConfigId/test-connection',
+      handler: 'platform.testTenantStorageConfigConnection',
+      config: {
+        auth: false,
+        middlewares: ['global::is-platform-admin'],
+      },
+    },
+    {
       method: 'GET',
       path: '/platform/permission-debug',
       handler: 'platform.permissionDebug',

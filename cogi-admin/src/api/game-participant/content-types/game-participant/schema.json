@@ -1,0 +1,85 @@
+{
+  "kind": "collectionType",
+  "collectionName": "game_participants",
+  "info": {
+    "singularName": "game-participant",
+    "pluralName": "game-participants",
+    "displayName": "Game Participant",
+    "description": "Explicit registration of one user into one game."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "game": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::game.game",
+      "required": true
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "withdrawn",
+        "banned"
+      ],
+      "default": "active",
+      "required": true
+    },
+    "runVersion": {
+      "type": "integer",
+      "default": 1,
+      "min": 1,
+      "required": true
+    },
+    "registeredAt": {
+      "type": "datetime"
+    },
+    "lastActiveAt": {
+      "type": "datetime"
+    },
+    "totalXp": {
+      "type": "integer",
+      "default": 0,
+      "min": 0
+    },
+    "trialXp": {
+      "type": "integer",
+      "default": 0,
+      "min": 0
+    },
+    "officialXp": {
+      "type": "integer",
+      "default": 0,
+      "min": 0
+    },
+    "rankScore": {
+      "type": "integer",
+      "default": 0,
+      "min": 0
+    },
+    "settings": {
+      "type": "json"
+    },
+    "ledgers": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::game-ledger.game-ledger",
+      "mappedBy": "participant"
+    }
+  }
+}

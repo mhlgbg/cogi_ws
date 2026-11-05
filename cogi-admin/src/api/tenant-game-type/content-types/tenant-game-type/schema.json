@@ -1,0 +1,38 @@
+{
+  "kind": "collectionType",
+  "collectionName": "tenant_game_types",
+  "info": {
+    "singularName": "tenant-game-type",
+    "pluralName": "tenant-game-types",
+    "displayName": "Tenant Game Type",
+    "description": "Game type enablement for a tenant."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "gameType": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::game-type.game-type",
+      "required": true
+    },
+    "isEnabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "settings": {
+      "type": "json"
+    },
+    "enabledAt": {
+      "type": "datetime"
+    }
+  }
+}

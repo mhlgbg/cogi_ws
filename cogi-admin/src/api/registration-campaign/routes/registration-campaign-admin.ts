@@ -209,6 +209,72 @@ export default {
       },
     },
     {
+      method: 'GET',
+      path: '/registration-campaigns/:id/post-registration/sports-profiles',
+      handler: 'registration-campaign-management.postRegistrationSportsProfiles',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'registration-campaign.manage',
+            },
+          },
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'sports-profile.manage',
+            },
+          },
+        ],
+      },
+    },
+    {
+      method: 'POST',
+      path: '/registration-campaigns/:id/post-registration/sports-profiles/link',
+      handler: 'registration-campaign-management.linkPostRegistrationSportsProfiles',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'registration-campaign.manage',
+            },
+          },
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'sports-profile.manage',
+            },
+          },
+        ],
+      },
+    },
+    {
+      method: 'POST',
+      path: '/registration-campaigns/:id/post-registration/sports-profiles/manual-link',
+      handler: 'registration-campaign-management.manualLinkPostRegistrationSportsProfile',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'registration-campaign.manage',
+            },
+          },
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'sports-profile.manage',
+            },
+          },
+        ],
+      },
+    },
+    {
       method: 'POST',
       path: '/registration-campaigns/:id/registrations/:registrationId/resend-verification',
       handler: 'registration-campaign-management.resendRegistration',

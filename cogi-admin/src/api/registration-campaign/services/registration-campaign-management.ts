@@ -12,6 +12,14 @@ import {
   resendVerificationNotificationForRegistration,
   retryCompleteApprovedRegistration,
 } from './registration-campaign'
+import {
+  getCampaignSportsProfilePostRegistrationSummary,
+  linkCampaignSportsProfilePostRegistration,
+  listCampaignSportsProfilePostRegistration,
+  manualLinkCampaignSportsProfilePostRegistration,
+  normalizeCampaignPostRegistrationConfigInput,
+  toCampaignPostRegistrationConfig,
+} from './registration-campaign-post-registration'
 
 const REGISTRATION_CAMPAIGN_UID = 'api::registration-campaign.registration-campaign'
 const CAMPAIGN_REGISTRATION_UID = 'api::campaign-registration.campaign-registration'
@@ -892,6 +900,7 @@ function toCampaignStatusMeta(status: string) {
 
 async function toCampaignListItem(ctx: any, campaign: any) {
   const counts = await countCampaignRegistrations(Number(campaign.id))
+  const postRegistration = await getCampaignSportsProfilePostRegistrationSummary(campaign, Number(campaign?.tenant?.id || campaign?.tenant || 0))
   const roleAvailability = campaign?.defaultTenantRole?.id
     ? await resolveTenantRoleAvailability(Number(campaign?.tenant?.id || campaign?.tenant || 0), campaign.defaultTenantRole.id)
     : null
@@ -913,6 +922,12 @@ async function toCampaignListItem(ctx: any, campaign: any) {
     defaultTenantRole: roleAvailability?.role
       ? toSerializableRole(roleAvailability.role, roleAvailability.availabilityStatus, roleAvailability.availabilityLabel)
       : null,
+    postRegistration: {
+      sportsProfileLink: {
+        task: postRegistration.task,
+        stats: postRegistration.stats,
+      },
+    },
     publicJoinPath,
     publicJoinUrl: publicJoinPath ? await buildCampaignPublicJoinUrl(ctx, campaign) : null,
   }
@@ -939,6 +954,8 @@ async function toCampaignDetail(ctx: any, campaign: any) {
   const publicJoinUrl = publicJoinPath ? await buildCampaignPublicJoinUrl(ctx, campaign) : null
   const approvedRegistrations = counts.approved
   const formValidation = validateFormConfig(campaign?.formConfig, normalizeBoolean(campaign?.verificationRequired, true))
+  const postRegistrationSummary = await getCampaignSportsProfilePostRegistrationSummary(campaign, Number(campaign?.tenant?.id || campaign?.tenant || 0))
+  const postRegistrationConfig = toCampaignPostRegistrationConfig(campaign?.postRegistrationConfig)
 
   return {
     id: campaign.id,
@@ -967,6 +984,7 @@ async function toCampaignDetail(ctx: any, campaign: any) {
     updatedAt: campaign.updatedAt || null,
     coverImage: toSerializableMedia(campaign.coverImage),
     formConfig: formValidation.config,
+    postRegistrationConfig,
     formValidation,
     counts,
     publicJoinPath,
@@ -981,6 +999,12 @@ async function toCampaignDetail(ctx: any, campaign: any) {
         }
       : null,
     emailTemplates,
+    postRegistration: {
+      sportsProfileLink: {
+        task: postRegistrationSummary.task,
+        stats: postRegistrationSummary.stats,
+      },
+    },
     validation,
     readiness: {
       hasName: Boolean(normalizeText(campaign.name)),
@@ -1473,7 +1497,7 @@ async function findCampaignMailLogDetail(tenantId: number, campaignId: number, m
   return buildMailMonitorItem(log)
 }
 
-async function resendRegistrationVerificationById(registrationId: number) {
+async function resendRegistrationVerificationById(ctx: any, tenantId: number, registrationId: number) {
   const registration = await strapi.db.query(CAMPAIGN_REGISTRATION_UID).findOne({
     where: { id: registrationId },
     populate: {
@@ -1487,55 +1511,7 @@ async function resendRegistrationVerificationById(registrationId: number) {
     },
   })
 
-  if (!registration?.id) {
-    httpError(404, 'Registration not found')
-  }
-
-  const status = normalizeStatus(registration.status)
-  if (!['pending_verification', 'expired'].includes(status)) {
-    httpError(409, 'Only pending verification registrations can resend email')
-  }
-
-  const verificationExpireMinutes = normalizePositiveInteger(registration?.campaign?.verificationExpireMinutes) || 1440
-  const token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
-  const crypto = await import('node:crypto')
-  const verificationTokenHash = crypto.createHash('sha256').update(token).digest('hex')
-  const now = new Date()
-  const verificationExpiresAt = new Date(now.getTime() + verificationExpireMinutes * 60 * 1000)
-
-  await strapi.db.query(CAMPAIGN_REGISTRATION_UID).update({
-    where: { id: registrationId },
-    data: {
-      verificationTokenHash,
-      verificationExpiresAt,
-      verificationSentAt: now,
-      lastVerificationRequestAt: now,
-      verificationSendCount: (normalizePositiveInteger(registration.verificationSendCount) || 0) + 1,
-      status: 'pending_verification',
-    },
-  })
-
-  const verificationLink = `${normalizeText(process.env.BACKEND_URL).replace(/\/+$/, '') || 'http://localhost:1339'}/api/public/campaign-registrations/verify?token=${encodeURIComponent(token)}`
-  const notificationService = strapi.service('api::notification.notification') as any
-  try {
-    await notificationService.sendNotification(REGISTRATION_VERIFICATION_TEMPLATE_CODE, Number(registration.campaign.tenant.id), {
-      email: ensureEmail(registration.email),
-      fullName: normalizeText(registration.fullName) || ensureEmail(registration.email),
-      tenantName: normalizeText(registration.campaign.tenant.name) || normalizeText(registration.campaign.tenant.shortName) || 'the system',
-      tenantCode: normalizeText(registration.campaign.tenant.code),
-      campaignName: normalizeText(registration.campaign.name),
-      verificationLink,
-    })
-    return {
-      ok: true,
-      message: 'Đã gửi lại email xác minh',
-    }
-  } catch {
-    return {
-      ok: true,
-      message: 'Đã cập nhật token xác minh. Hệ thống sẽ dùng fallback email nếu template không sẵn sàng.',
-    }
-  }
+  return resendVerificationNotificationForRegistration(ctx, tenantId, registrationId)
 }
 
 export async function listAdminRegistrationCampaigns(ctx: any, tenantId: number, query: Record<string, unknown>) {
@@ -1584,6 +1560,18 @@ export async function listAdminRegistrationCampaigns(ctx: any, tenantId: number,
 
 export async function getRegistrationCampaignFormOptions(tenantId: number) {
   const availableRoles = await getTenantEnabledRoles(tenantId)
+  const sportsProfileModuleEnabled = await strapi.db.query(TENANT_FEATURE_UID).findOne({
+    where: {
+      tenant: tenantId,
+      isEnabled: true,
+      feature: {
+        key: {
+          $eq: 'sports-profile.manage',
+        },
+      },
+    },
+    select: ['id'],
+  })
   return {
     targetFeatures: await getTargetFeatureOptions(tenantId),
     availableRoles,
@@ -1599,6 +1587,12 @@ export async function getRegistrationCampaignFormOptions(tenantId: number) {
       { value: 'email_otp', label: 'Mã OTP qua email', disabled: true },
       { value: 'none', label: 'Không xác minh', disabled: true },
     ],
+    postRegistrationTasks: {
+      sportsProfileLink: {
+        moduleFeatureKey: 'sports-profile.manage',
+        moduleEnabled: Boolean(sportsProfileModuleEnabled?.id),
+      },
+    },
     verificationExpirePresets: [30, 60, 360, 1440, 2880],
     supportedTargetFeatureKeys: SUPPORTED_TARGET_FEATURES,
   }
@@ -1654,6 +1648,7 @@ export async function createAdminRegistrationCampaign(tenantId: number, payload:
       autoApprove: true,
       requireTermsAcceptance: false,
       formConfig: buildDefaultFormConfig(),
+      postRegistrationConfig: toCampaignPostRegistrationConfig(null),
       ...(await buildCampaignTemplateRelationData(tenantId, payload)),
     },
   })
@@ -1774,6 +1769,9 @@ export async function updateAdminRegistrationCampaignConfig(tenantId: number, ca
 
   const redirectPath = ensurePathOrNull(payload.redirectPath)
   const termsContent = normalizeText(payload.termsContent) || null
+  const postRegistrationConfig = hasOwn(payload, 'postRegistrationConfig')
+    ? normalizeCampaignPostRegistrationConfigInput(payload.postRegistrationConfig, campaign?.postRegistrationConfig)
+    : toCampaignPostRegistrationConfig(campaign?.postRegistrationConfig)
   if (requireTermsAcceptance && !termsContent) {
     httpError(400, 'termsContent is required when requireTermsAcceptance is true')
   }
@@ -1790,6 +1788,7 @@ export async function updateAdminRegistrationCampaignConfig(tenantId: number, ca
       termsContent,
       successMessage: normalizeText(payload.successMessage) || null,
       redirectPath,
+      postRegistrationConfig,
       ...(await buildCampaignTemplateRelationData(tenantId, payload)),
     },
   })
@@ -2106,6 +2105,28 @@ export async function getAdminCampaignRegistrationDetail(tenantId: number, campa
   )
 }
 
+export async function listAdminCampaignPostRegistrationSportsProfiles(tenantId: number, campaignId: number, query: Record<string, unknown>) {
+  return listCampaignSportsProfilePostRegistration(tenantId, campaignId, query)
+}
+
+export async function linkAdminCampaignPostRegistrationSportsProfiles(
+  tenantId: number,
+  campaignId: number,
+  payload: Record<string, unknown>,
+  actor: { id?: number | null } | null,
+) {
+  return linkCampaignSportsProfilePostRegistration(tenantId, campaignId, payload, actor)
+}
+
+export async function manualLinkAdminCampaignPostRegistrationSportsProfile(
+  tenantId: number,
+  campaignId: number,
+  payload: Record<string, unknown>,
+  actor: { id?: number | null } | null,
+) {
+  return manualLinkCampaignSportsProfilePostRegistration(tenantId, campaignId, payload, actor)
+}
+
 export async function adminResendRegistrationVerification(ctx: any, tenantId: number, campaignId: number, registrationId: number) {
   const registration = await findRegistrationById(tenantId, campaignId, registrationId)
   if (!registration?.id) {
@@ -2133,7 +2154,7 @@ export async function adminResendRejectionNotification(ctx: any, tenantId: numbe
   return resendRejectionNotificationForRegistration(ctx, tenantId, registrationId)
 }
 
-export async function adminChangeRegistrationEmail(tenantId: number, campaignId: number, registrationId: number, payload: Record<string, unknown>) {
+export async function adminChangeRegistrationEmail(ctx: any, tenantId: number, campaignId: number, registrationId: number, payload: Record<string, unknown>) {
   const registration = await findRegistrationById(tenantId, campaignId, registrationId)
   if (!registration?.id) {
     httpError(404, 'Registration not found')
@@ -2157,7 +2178,7 @@ export async function adminChangeRegistrationEmail(tenantId: number, campaignId:
     },
   })
 
-  return resendRegistrationVerificationById(registrationId)
+  return resendRegistrationVerificationById(ctx, tenantId, registrationId)
 }
 
 export async function listAdminCampaignEmails(tenantId: number, campaignId: number, query: Record<string, unknown>) {

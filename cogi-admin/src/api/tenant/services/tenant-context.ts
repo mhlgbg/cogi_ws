@@ -35,8 +35,53 @@ function readRequestHost(ctx: any): string {
 }
 
 function readTenantSettings(settings: unknown): Record<string, any> {
-  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return {};
-  return settings as Record<string, any>;
+  if (!settings) return {};
+
+  if (typeof settings === 'string') {
+    const trimmed = settings.trim();
+    if (!trimmed) return {};
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+      return parsed as Record<string, any>;
+    } catch {
+      return {};
+    }
+  }
+
+  if (typeof settings === 'object' && !Array.isArray(settings)) {
+    return settings as Record<string, any>;
+  }
+
+  return {};
+}
+
+function normalizeTenantHomeLinkConfig(value: unknown): Record<string, any> | null {
+  const current = value && typeof value === 'object' ? value as Record<string, any> : (typeof value === 'string' ? { url: value } : null);
+  if (!current) return null;
+
+  const url = normalizeText(current.url || current.homeUrl || '').trim();
+  if (!url) return null;
+
+  const lowerUrl = url.toLowerCase();
+  if (url.startsWith('//') || /^(javascript:|data:|vbscript:)/i.test(lowerUrl)) return null;
+
+  const schemeMatch = lowerUrl.match(/^([a-z][a-z0-9+.-]*):/);
+  if (schemeMatch && !/^https?:$/.test(schemeMatch[1])) return null;
+
+  if (!/^https?:\/\//i.test(url) && !url.startsWith('/') && !url.startsWith('./') && !url.startsWith('../')) {
+    return null;
+  }
+
+  return {
+    enabled: current.enabled !== false,
+    url,
+    label: normalizeText(current.label || 'Về trang chủ') || 'Về trang chủ',
+    logoClickable: current.logoClickable !== false,
+    showInSidebar: current.showInSidebar !== false,
+    showInCommunityHeader: current.showInCommunityHeader !== false,
+  };
 }
 
 function buildDefaultPublicRoute(tenant: any, tenantCode: string, settings: Record<string, any>): string {
@@ -97,6 +142,7 @@ export async function buildTenantContextPayload(strapi: any, ctx: any) {
   const settings = readTenantSettings((tenant as any).settings);
   const code = normalizeText((tenant as any).code);
   const displayName = normalizeText((tenant as any).shortName) || normalizeText((tenant as any).name) || code || 'Tenant';
+  const tenantHomeLink = normalizeTenantHomeLinkConfig(settings.tenantHomeLink ?? settings.tenantHomeLinkConfig ?? settings.homeLink);
 
   return {
     code: code || 'default',
@@ -115,6 +161,8 @@ export async function buildTenantContextPayload(strapi: any, ctx: any) {
     slogan: normalizeText((tenant as any).slogan),
     banner: extractMediaUrl((tenant as any).banner),
     chatAvatar: extractMediaUrl((tenant as any).chatAvatar),
+    tenantHomeLink,
+    settings,
     defaultPublicRoute: buildDefaultPublicRoute(tenant, code, settings),
     defaultProtectedRoute: buildDefaultProtectedRoute(tenant, settings),
     isMainDomain: Boolean(ctx.state?.isMainDomain),

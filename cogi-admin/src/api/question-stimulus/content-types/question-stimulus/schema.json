@@ -35,6 +35,15 @@
     "content": {
       "type": "richtext"
     },
+    "contentType": {
+      "type": "enumeration",
+      "enum": [
+        "plain_text",
+        "html"
+      ],
+      "default": "plain_text",
+      "required": true
+    },
     "audioAsset": {
       "type": "relation",
       "relation": "manyToOne",

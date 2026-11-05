@@ -1,4 +1,4 @@
-import { extractRelationRef, findEntityByRef, mergeTenantWhere, normalizeSortInput, resolveCurrentTenantId, toText, whereByParam } from '../../../utils/tenant-scope';
+import { extractRelationRef, findEntityByRef, mergeTenantWhere, normalizeSortInput, resolveCurrentTenantId, toRelationKey, toText, whereByParam } from '../../../utils/tenant-scope';
 
 const ASSESSMENT_UID = 'api::assessment.assessment';
 const ASSESSMENT_VERSION_UID = 'api::assessment-version.assessment-version';
@@ -10,6 +10,7 @@ const ASSESSMENT_ATTEMPT_UID = 'api::assessment-attempt.assessment-attempt';
 const QUESTION_UID = 'api::question.question';
 const QUESTION_STIMULUS_UID = 'api::question-stimulus.question-stimulus';
 const QUESTION_OPTION_UID = 'api::question-option.question-option';
+const FILE_ASSET_UID = 'api::file-asset.file-asset';
 const SUBJECT_UID = 'api::subject.subject';
 const SKILL_UID = 'api::skill.skill';
 const TENANT_UID = 'api::tenant.tenant';
@@ -26,6 +27,8 @@ class AssessmentManagementError extends Error {
   }
 }
 
+const PUBLISHED_VERSION_METADATA_FIELDS = ['title', 'description', 'instructions'] as const;
+
 function extractBody(body: any) {
   if (body?.data && typeof body.data === 'object' && !Array.isArray(body.data)) return body.data;
   if (body && typeof body === 'object' && !Array.isArray(body)) return body;
@@ -39,6 +42,21 @@ function normalizeId(row: any) {
 function toNullableText(value: unknown): string | null {
   const text = toText(value);
   return text || null;
+}
+
+function normalizeHtmlContentType(value: unknown): 'plain_text' | 'html' {
+  return toText(value).toLowerCase() === 'html' ? 'html' : 'plain_text';
+}
+
+function normalizeQuestionDisplayMode(value: unknown): 'single' | 'all' | 'inline_fill' {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === 'all') return 'all';
+  if (normalized === 'inline_fill') return 'inline_fill';
+  return 'single';
+}
+
+function normalizeQuestionLayoutContentType(_: unknown): 'html' {
+  return 'html';
 }
 
 function ensureRequiredText(value: unknown, fieldName: string) {
@@ -88,6 +106,10 @@ function parseJsonField(value: unknown, fieldName: string) {
   } catch {
     throw new AssessmentManagementError(400, `${fieldName} must be valid JSON`);
   }
+}
+
+function hasOwnField(source: Record<string, unknown>, fieldName: string) {
+  return Object.prototype.hasOwnProperty.call(source, fieldName);
 }
 
 function compareCefrLevel(from: CefrLevel | null, to: CefrLevel | null) {
@@ -166,6 +188,7 @@ function mapQuestionStimulus(row: any) {
     type: row?.type || '',
     instruction: row?.instruction || '',
     content: row?.content || '',
+    contentType: toText(row?.contentType).toLowerCase() === 'html' ? 'html' : 'plain_text',
     audioAsset: getFileAssetResponse(row?.audioAsset),
     imageAsset: getFileAssetResponse(row?.imageAsset),
     stimulusStatus: row?.stimulusStatus || 'draft',
@@ -179,12 +202,15 @@ function mapQuestion(row: any) {
     code: row?.code || '',
     title: row?.title || '',
     questionText: row?.questionText || '',
+    questionTextType: toText(row?.questionTextType).toLowerCase() === 'html' ? 'html' : 'plain_text',
     type: row?.type || '',
     difficulty: row?.difficulty || '',
     correctAnswer: row?.correctAnswer ?? null,
     explanation: row?.explanation || '',
     rubric: row?.rubric ?? null,
     questionStatus: row?.questionStatus || 'draft',
+    questionImageAssetCode: row?.questionImageAsset?.code || null,
+    questionImageAsset: getFileAssetResponse(row?.questionImageAsset),
     subject: mapSimpleRelation(row?.subject),
     grade: mapSimpleRelation(row?.grade),
     knowledgeNode: mapSimpleRelation(row?.knowledgeNode),
@@ -205,6 +231,7 @@ function mapAssessmentQuestion(row: any) {
     required: row?.required !== false,
     audioPlayLimit: row?.audioPlayLimit ?? null,
     allowSeek: row?.allowSeek !== false,
+    minListenRatioBeforeAnswer: row?.minListenRatioBeforeAnswer ?? null,
     minWords: row?.minWords ?? null,
     maxWords: row?.maxWords ?? null,
     config: row?.config ?? null,
@@ -220,6 +247,15 @@ function mapAssessmentSection(row: any) {
     title: row?.title || '',
     description: row?.description || '',
     instruction: row?.instruction || '',
+    instructionContentType: normalizeHtmlContentType(row?.instructionContentType),
+    instructionImageAssetCode: row?.instructionImageAsset?.code || null,
+    instructionImageAsset: getFileAssetResponse(row?.instructionImageAsset),
+    stimulusCode: row?.stimulus?.code || null,
+    stimulus: mapQuestionStimulus(row?.stimulus),
+    questionDisplayMode: normalizeQuestionDisplayMode(row?.questionDisplayMode),
+    questionLayoutContent: row?.questionLayoutContent || '',
+    questionLayoutContentType: normalizeQuestionLayoutContentType(row?.questionLayoutContentType),
+    audioPlayLimit: row?.audioPlayLimit ?? null,
     order: Number(row?.order || 0),
     skill: mapSimpleRelation(row?.skill),
     assessmentQuestions: Array.isArray(row?.questions) ? row.questions.map(mapAssessmentQuestion) : [],
@@ -430,6 +466,13 @@ function getAssessmentVersionDetailPopulate() {
     sections: {
       populate: {
         skill: { select: ['id', 'documentId', 'code', 'title'] },
+        instructionImageAsset: { select: ['id', 'documentId', 'code', 'moduleKey', 'originalName', 'fileName', 'mimeType', 'url', 'relativePath', 'provider', 'status', 'isPublic'] },
+        stimulus: {
+          populate: {
+            audioAsset: { select: ['id', 'documentId', 'code', 'moduleKey', 'originalName', 'fileName', 'mimeType', 'url', 'relativePath', 'provider', 'status', 'isPublic'] },
+            imageAsset: { select: ['id', 'documentId', 'code', 'moduleKey', 'originalName', 'fileName', 'mimeType', 'url', 'relativePath', 'provider', 'status', 'isPublic'] },
+          },
+        },
         questions: {
           populate: {
             question: {
@@ -439,6 +482,7 @@ function getAssessmentVersionDetailPopulate() {
                 knowledgeNode: { select: ['id', 'documentId', 'code', 'title'] },
                 skills: { select: ['id', 'documentId', 'code', 'title'] },
                 formulas: { select: ['id', 'documentId', 'code', 'title'] },
+                questionImageAsset: { select: ['id', 'documentId', 'code', 'moduleKey', 'originalName', 'fileName', 'mimeType', 'url', 'relativePath', 'provider', 'status', 'isPublic'] },
                 stimulus: {
                   populate: {
                     audioAsset: { select: ['id', 'documentId', 'code', 'moduleKey', 'originalName', 'fileName', 'mimeType', 'url', 'relativePath', 'provider', 'status', 'isPublic'] },
@@ -481,11 +525,18 @@ async function findAssessmentSectionOrThrow(id: unknown, tenantId: number | stri
     where: mergeTenantWhere(where, tenantId),
     populate: {
       skill: { select: ['id', 'documentId', 'code', 'title'] },
+      instructionImageAsset: { select: ['id', 'documentId', 'code', 'moduleKey', 'originalName', 'fileName', 'mimeType', 'url', 'relativePath', 'provider', 'status', 'isPublic'] },
+      stimulus: {
+        populate: {
+          audioAsset: { select: ['id', 'documentId', 'code', 'moduleKey', 'originalName', 'fileName', 'mimeType', 'url', 'relativePath', 'provider', 'status', 'isPublic'] },
+          imageAsset: { select: ['id', 'documentId', 'code', 'moduleKey', 'originalName', 'fileName', 'mimeType', 'url', 'relativePath', 'provider', 'status', 'isPublic'] },
+        },
+      },
       assessmentVersion: { select: ['id', 'documentId', 'code', 'versionStatus'] },
       questions: options.includeQuestions ? {
         populate: {
           question: {
-            select: ['id', 'documentId', 'code', 'title', 'questionText', 'type', 'questionStatus'],
+            select: ['id', 'documentId', 'code', 'title', 'questionText', 'questionTextType', 'type', 'questionStatus'],
           },
         },
       } : undefined,
@@ -555,6 +606,13 @@ function validateAssessmentQuestionConfig(data: any) {
   if (audioPlayLimit !== null && Number(audioPlayLimit) < 1) {
     throw new AssessmentManagementError(400, 'audioPlayLimit must be greater than or equal to 1');
   }
+  const minListenRatioBeforeAnswer = data?.minListenRatioBeforeAnswer ?? null;
+  if (minListenRatioBeforeAnswer !== null) {
+    const ratio = Number(minListenRatioBeforeAnswer);
+    if (!Number.isFinite(ratio) || ratio < 0 || ratio > 1) {
+      throw new AssessmentManagementError(400, 'minListenRatioBeforeAnswer must be between 0 and 1');
+    }
+  }
 }
 
 async function sanitizeAssessmentPayload(body: any, tenantId: number | string, existing?: any) {
@@ -597,15 +655,52 @@ async function sanitizeAssessmentVersionPayload(body: any, tenantId: number | st
   return data;
 }
 
+function sanitizePublishedAssessmentVersionMetadataPayload(body: any, existing: any) {
+  const payload = extractBody(body);
+  const disallowedFields = Object.keys(payload).filter((field) => !PUBLISHED_VERSION_METADATA_FIELDS.includes(field as (typeof PUBLISHED_VERSION_METADATA_FIELDS)[number]));
+  if (disallowedFields.length > 0) {
+    throw new AssessmentManagementError(409, 'PUBLISHED_VERSION_STRUCTURAL_UPDATE_NOT_ALLOWED');
+  }
+  return {
+    title: ensureRequiredText(hasOwnField(payload, 'title') ? payload.title : existing?.title, 'title'),
+    description: hasOwnField(payload, 'description') ? toNullableText(payload.description) : toNullableText(existing?.description),
+    instructions: hasOwnField(payload, 'instructions') ? toNullableText(payload.instructions) : toNullableText(existing?.instructions),
+  };
+}
+
 async function sanitizeAssessmentSectionPayload(body: any, tenantId: number | string, existing?: any) {
   const payload = extractBody(body);
   const assessmentVersion = await ensureEntityInTenant(ASSESSMENT_VERSION_UID, payload.assessmentVersion ?? existing?.assessmentVersion, tenantId, 'assessmentVersion');
   const skill = await ensureEntityInTenant(SKILL_UID, payload.skill ?? existing?.skill, tenantId, 'skill');
+  const instructionImageAssetRef = hasOwnField(payload, 'instructionImageAsset')
+    ? payload.instructionImageAsset
+    : hasOwnField(payload, 'instructionImageAssetCode')
+      ? payload.instructionImageAssetCode
+      : existing?.instructionImageAsset;
+  const instructionImageAsset = await ensureEntityInTenant(FILE_ASSET_UID, instructionImageAssetRef, tenantId, 'instructionImageAsset');
+  const stimulusRef = hasOwnField(payload, 'stimulus')
+    ? payload.stimulus
+    : hasOwnField(payload, 'stimulusCode')
+      ? payload.stimulusCode
+      : existing?.stimulus;
+  const stimulus = await ensureEntityInTenant(QUESTION_STIMULUS_UID, stimulusRef, tenantId, 'stimulus');
+  const questionDisplayMode = normalizeQuestionDisplayMode(payload.questionDisplayMode ?? existing?.questionDisplayMode);
+  const audioPlayLimit = parseOptionalInteger(payload.audioPlayLimit ?? existing?.audioPlayLimit, 'audioPlayLimit');
+  if (audioPlayLimit !== null && Number(audioPlayLimit) < 1) {
+    throw new AssessmentManagementError(400, 'audioPlayLimit must be greater than or equal to 1');
+  }
   return {
     code: ensureRequiredText(payload.code ?? existing?.code, 'code'),
     title: ensureRequiredText(payload.title ?? existing?.title, 'title'),
     description: toNullableText(payload.description ?? existing?.description),
     instruction: toNullableText(payload.instruction ?? existing?.instruction),
+    instructionContentType: normalizeHtmlContentType(payload.instructionContentType ?? existing?.instructionContentType),
+    instructionImageAsset: instructionImageAsset ? instructionImageAsset.id : null,
+    stimulus: stimulus ? stimulus.id : null,
+    questionDisplayMode,
+    questionLayoutContent: toNullableText(payload.questionLayoutContent ?? existing?.questionLayoutContent),
+    questionLayoutContentType: normalizeQuestionLayoutContentType(payload.questionLayoutContentType ?? existing?.questionLayoutContentType),
+    audioPlayLimit,
     order: parseRequiredInteger(payload.order ?? existing?.order ?? 0, 'order'),
     skill: skill ? skill.id : null,
     assessmentVersion: assessmentVersion ? assessmentVersion.id : null,
@@ -625,6 +720,7 @@ async function sanitizeAssessmentQuestionPayload(body: any, tenantId: number | s
     required: parseBoolean(payload.required ?? existing?.required, true),
     audioPlayLimit: parseOptionalInteger(payload.audioPlayLimit ?? existing?.audioPlayLimit, 'audioPlayLimit'),
     allowSeek: parseBoolean(payload.allowSeek ?? existing?.allowSeek, true),
+    minListenRatioBeforeAnswer: parseOptionalDecimal(payload.minListenRatioBeforeAnswer ?? existing?.minListenRatioBeforeAnswer, 'minListenRatioBeforeAnswer'),
     minWords: parseOptionalInteger(payload.minWords ?? existing?.minWords, 'minWords'),
     maxWords: parseOptionalInteger(payload.maxWords ?? existing?.maxWords, 'maxWords'),
     config: parseJsonField(payload.config ?? existing?.config, 'config'),
@@ -929,7 +1025,10 @@ export async function createAssessmentVersion(body: any, tenantId: number | stri
 export async function updateAssessmentVersion(id: unknown, body: any, tenantId: number | string) {
   const existing = await findAssessmentVersionOrThrow(id, tenantId, { includeSections: true });
   if (toText(existing?.versionStatus) === 'published') {
-    throw new AssessmentManagementError(409, 'Published assessment versions cannot be modified structurally. Create a new version instead.');
+    const data = sanitizePublishedAssessmentVersionMetadataPayload(body, existing);
+    await strapi.db.query(ASSESSMENT_VERSION_UID).update({ where: { id: existing.id }, data });
+    const row = await findAssessmentVersionOrThrow(existing.id, tenantId, { includeSections: true });
+    return mapAssessmentVersion(row, { includeSections: true });
   }
   if (toText(existing?.versionStatus) === 'retired') {
     throw new AssessmentManagementError(409, 'Retired assessment versions cannot be modified.');
@@ -965,7 +1064,7 @@ export async function deleteAssessmentVersion(id: unknown, tenantId: number | st
     throw new AssessmentManagementError(409, 'Only draft assessment versions can be deleted');
   }
   const attemptCount = await strapi.db.query(ASSESSMENT_ATTEMPT_UID).count({
-    where: mergeTenantWhere({ assessmentVersion: { id: { $eq: Number(existing.id) } } }, tenantId),
+    where: mergeTenantWhere({ assessmentVersion: { id: { $eq: Number(existing.id) } }, sourceType: { $ne: 'admin_test' } }, tenantId),
   });
   if (Number(attemptCount || 0) > 0) {
     throw new AssessmentManagementError(409, 'Assessment Version cannot be deleted because it already has attempts');
@@ -1016,6 +1115,13 @@ export async function cloneAssessmentVersion(id: unknown, body: any, tenantId: n
         title: section.title,
         description: section.description,
         instruction: section.instruction,
+        instructionContentType: normalizeHtmlContentType(section.instructionContentType),
+        instructionImageAsset: extractRelationRef(section.instructionImageAsset) || section.instructionImageAsset?.id || null,
+        stimulus: extractRelationRef(section.stimulus) || section.stimulus?.id || null,
+        questionDisplayMode: normalizeQuestionDisplayMode(section.questionDisplayMode),
+        questionLayoutContent: section.questionLayoutContent || null,
+        questionLayoutContentType: normalizeQuestionLayoutContentType(section.questionLayoutContentType),
+        audioPlayLimit: section.audioPlayLimit ?? null,
         order: section.order,
         skill: extractRelationRef(section.skill) || section.skill?.id || null,
         assessmentVersion: createdVersion.id,
@@ -1033,6 +1139,7 @@ export async function cloneAssessmentVersion(id: unknown, body: any, tenantId: n
           required: assessmentQuestion.required,
           audioPlayLimit: assessmentQuestion.audioPlayLimit,
           allowSeek: assessmentQuestion.allowSeek,
+          minListenRatioBeforeAnswer: assessmentQuestion.minListenRatioBeforeAnswer,
           minWords: assessmentQuestion.minWords,
           maxWords: assessmentQuestion.maxWords,
           config: assessmentQuestion.config,
@@ -1136,20 +1243,59 @@ export async function deleteAssessmentSection(id: unknown, tenantId: number | st
 }
 
 export async function reorderAssessmentSections(versionId: unknown, body: any, tenantId: number | string) {
-  const version = await findAssessmentVersionOrThrow(versionId, tenantId);
+  const version = await findAssessmentVersionOrThrow(versionId, tenantId, { includeSections: true });
   ensureVersionDraft(version);
   const payload = extractBody(body);
-  const items = Array.isArray(payload.items) ? payload.items : [];
-  for (const item of items) {
-    const section = await findAssessmentSectionOrThrow(item.id, tenantId);
-    if (String(extractRelationRef(section?.assessmentVersion) || section?.assessmentVersion?.id || '') !== String(version.id)) {
-      throw new AssessmentManagementError(400, 'Section does not belong to the specified assessment version');
+  const items = Array.isArray(payload.items) ? payload.items : null;
+  if (!items || items.length === 0) {
+    throw new AssessmentManagementError(400, 'items must contain at least one section reorder entry');
+  }
+
+  const versionSections = Array.isArray(version?.sections) ? version.sections : [];
+  if (versionSections.length === 0) {
+    throw new AssessmentManagementError(409, 'Assessment Version does not have any sections to reorder');
+  }
+
+  if (items.length !== versionSections.length) {
+    throw new AssessmentManagementError(400, 'items must include every section in the assessment version exactly once');
+  }
+
+  const sectionMap = new Map<string, any>();
+  for (const section of versionSections) {
+    const keys = [toRelationKey(section?.id), toRelationKey(section?.documentId), toRelationKey(extractRelationRef(section))].filter(Boolean);
+    for (const key of keys) {
+      if (key) sectionMap.set(key, section);
     }
+  }
+
+  const seenSectionIds = new Set<string>();
+  const seenOrders = new Set<number>();
+  const normalizedItems = items.map((item, index) => {
+    const sectionKey = toRelationKey(item?.id);
+    if (!sectionKey) throw new AssessmentManagementError(400, `items[${index}].id is required`);
+    if (seenSectionIds.has(sectionKey)) throw new AssessmentManagementError(400, 'Duplicate section id in reorder payload');
+    seenSectionIds.add(sectionKey);
+
+    const section = sectionMap.get(sectionKey);
+    if (!section?.id) throw new AssessmentManagementError(400, 'Section does not belong to the specified assessment version');
+
+    const order = parseRequiredInteger(item?.order, `items[${index}].order`);
+    if (seenOrders.has(order)) throw new AssessmentManagementError(400, 'Duplicate order value in reorder payload');
+    seenOrders.add(order);
+
+    return { section, order };
+  });
+
+  normalizedItems.sort((left, right) => left.order - right.order);
+
+  for (let index = 0; index < normalizedItems.length; index += 1) {
+    const item = normalizedItems[index];
     await strapi.db.query(ASSESSMENT_SECTION_UID).update({
-      where: { id: section.id },
-      data: { order: parseRequiredInteger(item.order, 'order') },
+      where: { id: item.section.id },
+      data: { order: index + 1 },
     });
   }
+
   return getAssessmentVersionDetail(version.id, tenantId);
 }
 
@@ -1181,6 +1327,7 @@ export async function addAssessmentQuestion(body: any, tenantId: number | string
         required: data.required,
         audioPlayLimit: data.audioPlayLimit,
         allowSeek: data.allowSeek,
+        minListenRatioBeforeAnswer: data.minListenRatioBeforeAnswer,
         minWords: data.minWords,
         maxWords: data.maxWords,
         config: data.config,
@@ -1200,6 +1347,7 @@ export async function addAssessmentQuestion(body: any, tenantId: number | string
       required: data.required !== false,
       audioPlayLimit: data.audioPlayLimit ?? null,
       allowSeek: data.allowSeek !== false,
+      minListenRatioBeforeAnswer: data.minListenRatioBeforeAnswer ?? null,
       minWords: data.minWords ?? null,
       maxWords: data.maxWords ?? null,
       config: data.config ?? null,

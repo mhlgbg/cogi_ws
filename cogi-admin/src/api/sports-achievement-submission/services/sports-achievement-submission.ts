@@ -1,6 +1,7 @@
 import { extractRelationRef, hasOwn, mergeTenantWhere, normalizeSortInput, toText, whereByParam } from '../../../utils/tenant-scope';
 import {
   acquireSubmissionVerifyLock,
+  acquireAchievementImportFingerprintLock,
   AuthUser,
   buildPagination,
   canCancelSubmissionStatus,
@@ -16,7 +17,10 @@ import {
   mapSportsAchievementSubmissionRow,
   mapSubmissionSourceToAchievementSource,
   normalizeDateTime,
+  normalizeDistanceKm,
+  normalizeDurationSeconds,
   normalizeEvidenceRefs,
+  normalizeBooleanFlag,
   normalizeOptionalRelationRef,
   normalizeOptionalText,
   normalizePaginationQuery,
@@ -24,7 +28,10 @@ import {
   normalizePositiveNumber,
   normalizeRequiredRelationRef,
   normalizeRequiredText,
+  normalizeRaceType,
   normalizeSportType,
+  isRunningPerformanceType,
+  formatDurationSeconds,
   normalizeSubmissionSource,
   normalizeSubmissionStatus,
   parseErrorMessage,
@@ -35,6 +42,9 @@ import {
   ACHIEVEMENT_TYPE_VALUES,
 } from '../../sports-achievement/services/achievement-shared';
 import { createVerifiedAchievementFromSubmission, findAchievementInTenant } from '../../sports-achievement/services/sports-achievement';
+import { findAchievementTemplateInTenant, resolveAchievementTemplateForEntity } from '../../sports-achievement-template/services/sports-achievement-template';
+
+const CLUB_MEMBERSHIP_UID = 'api::club-membership.club-membership' as any;
 
 export class SportsAchievementSubmissionError extends Error {
   status: number;
@@ -62,6 +72,77 @@ function toDomainError(error: any): never {
   throw error;
 }
 
+function buildImportDedupFingerprint(prepared: Record<string, any>): string | null {
+  if (toText(prepared?.source).toLowerCase() !== 'import') return null;
+  if (toText(prepared?.sourceReference)) {
+    return `source-ref|${toText(prepared.sourceReference).toUpperCase()}`;
+  }
+  if (!toText(prepared?.eventCode) || !prepared?.achievedAt) return null;
+  if (prepared?.distanceKm === null || prepared?.distanceKm === undefined) {
+    if (!toText(prepared?.bib)) return null;
+    return [
+      'no-distance',
+      String(prepared?.sportsProfile?.id || ''),
+      String(prepared?.club?.id || ''),
+      toText(prepared?.eventCode).toUpperCase(),
+      toText(prepared?.bib).toUpperCase(),
+      String(prepared?.achievedAt || '').slice(0, 19),
+    ].join('|');
+  }
+  return [
+    'distance',
+    String(prepared?.sportsProfile?.id || ''),
+    String(prepared?.club?.id || ''),
+    toText(prepared?.eventCode).toUpperCase(),
+    String(prepared?.distanceKm ?? ''),
+    toText(prepared?.bib).toUpperCase() || '-',
+    String(prepared?.achievedAt || '').slice(0, 19),
+    String(prepared?.durationSeconds || 0),
+  ].join('|');
+}
+
+function buildExistingImportSubmissionWhere(prepared: Record<string, any>) {
+  const baseWhere: Record<string, unknown> = {
+    sportsProfile: { id: { $eq: Number(prepared.sportsProfile.id) } },
+    club: { id: { $eq: Number(prepared.club.id) } },
+    source: { $eq: 'import' },
+  };
+  if (toText(prepared.sourceReference)) {
+    return {
+      ...baseWhere,
+      sourceReference: { $eq: toText(prepared.sourceReference) },
+      status: { $in: ['draft', 'submitted', 'verified'] },
+    };
+  }
+  if (!toText(prepared.eventCode) || !prepared.achievedAt) return null;
+  const extraWhere: Record<string, unknown> = {
+    eventCode: { $eq: toText(prepared.eventCode) },
+    achievedAt: { $eq: prepared.achievedAt },
+    status: { $in: ['draft', 'submitted', 'verified'] },
+  };
+  if (prepared.distanceKm === null || prepared.distanceKm === undefined) {
+    if (!toText(prepared.bib)) return null;
+    extraWhere.bib = { $eq: toText(prepared.bib) };
+    extraWhere.distancePending = { $eq: true };
+    return { ...baseWhere, ...extraWhere };
+  }
+  extraWhere.distanceKm = { $eq: prepared.distanceKm };
+  if (toText(prepared.bib)) extraWhere.bib = { $eq: toText(prepared.bib) };
+  if (prepared.durationSeconds) extraWhere.durationSeconds = { $eq: prepared.durationSeconds };
+  return { ...baseWhere, ...extraWhere };
+}
+
+async function findExistingImportedSubmission(prepared: Record<string, any>, tenantId: number | string, transacting?: any) {
+  const where = buildExistingImportSubmissionWhere(prepared);
+  if (!where) return null;
+  return await strapi.db.query(SPORTS_ACHIEVEMENT_SUBMISSION_UID).findOne({
+    where: mergeTenantWhere(where, tenantId),
+    populate: normalizePopulateForSubmission(),
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    ...(transacting ? { transacting } : {}),
+  } as any);
+}
+
 function ensureNoUnknownWriteFields(payload: GenericRecord) {
   ensureNoUnknownFields(payload, [
     'sportsProfile',
@@ -69,9 +150,15 @@ function ensureNoUnknownWriteFields(payload: GenericRecord) {
     'achievementType',
     'sportType',
     'title',
+    'eventCode',
+    'raceType',
+    'bib',
+    'distancePending',
     'description',
     'achievedAt',
     'resultValue',
+    'distanceKm',
+    'durationSeconds',
     'resultUnit',
     'resultText',
     'source',
@@ -104,6 +191,9 @@ function buildListWhere(query: Record<string, unknown>) {
     clauses.push({
       $or: [
         { title: { $containsi: keyword } },
+        { eventCode: { $containsi: keyword } },
+        { raceType: { $containsi: keyword } },
+        { bib: { $containsi: keyword } },
         { resultText: { $containsi: keyword } },
         { sourceReference: { $containsi: keyword } },
         { sportsProfile: { code: { $containsi: keyword } } },
@@ -193,6 +283,18 @@ async function findOpenCorrectionSubmissionForAchievement(sourceAchievementId: n
   } as any);
 }
 
+async function findActiveMembershipForSubmission(clubId: number, sportsProfileId: number, tenantId: number | string, transacting?: any) {
+  return await strapi.db.query(CLUB_MEMBERSHIP_UID).findOne({
+    where: mergeTenantWhere({
+      club: { id: { $eq: Number(clubId) } },
+      sportsProfile: { id: { $eq: Number(sportsProfileId) } },
+      status: { $eq: 'active' },
+    }, tenantId),
+    select: ['id', 'documentId', 'memberCode', 'status'],
+    ...(transacting ? { transacting } : {}),
+  } as any);
+}
+
 async function prepareWriteData(input: GenericRecord, tenantId: number | string, existing?: any, transacting?: any) {
   ensureNoUnknownWriteFields(input);
   try {
@@ -205,15 +307,30 @@ async function prepareWriteData(input: GenericRecord, tenantId: number | string,
     const club = await findSportsClubInTenant(clubRef, tenantId, transacting);
     const sourceAchievementRef = hasOwn(input, 'sourceAchievement') ? normalizeOptionalRelationRef(input.sourceAchievement) : normalizeOptionalRelationRef(existing?.sourceAchievement);
     const sourceAchievement = sourceAchievementRef ? await findAchievementInTenant(sourceAchievementRef, tenantId, transacting) : null;
+    if (!sourceAchievement?.id) {
+      const activeMembership = await findActiveMembershipForSubmission(Number(club.id), Number(sportsProfile.id), tenantId, transacting);
+      if (!activeMembership?.id) {
+        httpError(409, 'Sports profile must have an active club membership in the selected club.', 'ACTIVE_CLUB_MEMBERSHIP_REQUIRED', {
+          clubId: Number(club.id),
+          sportsProfileId: Number(sportsProfile.id),
+        });
+      }
+    }
 
     const status = hasOwn(input, 'status') ? normalizeSubmissionStatus(input.status) : normalizeSubmissionStatus(existing?.status);
     const achievementType = hasOwn(input, 'achievementType') ? toText(input.achievementType).toLowerCase() : toText(existing?.achievementType).toLowerCase();
     if (!ACHIEVEMENT_TYPE_VALUES.has(achievementType)) httpError(400, 'achievementType is invalid', 'INVALID_ACHIEVEMENT_TYPE', { field: 'achievementType' });
     const title = hasOwn(input, 'title') ? normalizeRequiredText(input.title, 'title', 200) : normalizeRequiredText(existing?.title, 'title', 200);
+    const eventCode = hasOwn(input, 'eventCode') ? normalizeOptionalText(input.eventCode, 120) : normalizeOptionalText(existing?.eventCode, 120);
+    const raceType = hasOwn(input, 'raceType') ? normalizeRaceType(input.raceType) : normalizeRaceType(existing?.raceType);
+    const bib = hasOwn(input, 'bib') ? normalizeOptionalText(input.bib, 120) : normalizeOptionalText(existing?.bib, 120);
+    const requestedDistancePending = hasOwn(input, 'distancePending') ? normalizeBooleanFlag(input.distancePending, 'distancePending') : normalizeBooleanFlag(existing?.distancePending, 'distancePending');
     const description = hasOwn(input, 'description') ? normalizeOptionalText(input.description) : normalizeOptionalText(existing?.description);
     const sportType = hasOwn(input, 'sportType') ? normalizeSportType(input.sportType) : normalizeSportType(existing?.sportType);
     const achievedAt = hasOwn(input, 'achievedAt') ? normalizeDateTime(input.achievedAt, 'achievedAt') : normalizeDateTime(existing?.achievedAt, 'achievedAt');
     const resultValue = hasOwn(input, 'resultValue') ? normalizePositiveNumber(input.resultValue, 'resultValue') : normalizePositiveNumber(existing?.resultValue, 'resultValue');
+    const distanceKm = hasOwn(input, 'distanceKm') ? normalizeDistanceKm(input.distanceKm) : normalizeDistanceKm(existing?.distanceKm);
+    const durationSeconds = hasOwn(input, 'durationSeconds') ? normalizeDurationSeconds(input.durationSeconds) : normalizeDurationSeconds(existing?.durationSeconds);
     const resultUnit = hasOwn(input, 'resultUnit') ? normalizeOptionalText(input.resultUnit, 50) : normalizeOptionalText(existing?.resultUnit, 50);
     const resultText = hasOwn(input, 'resultText') ? normalizeOptionalText(input.resultText, 255) : normalizeOptionalText(existing?.resultText, 255);
     const source = hasOwn(input, 'source') ? normalizeSubmissionSource(input.source) : normalizeSubmissionSource(existing?.source || 'other');
@@ -221,8 +338,47 @@ async function prepareWriteData(input: GenericRecord, tenantId: number | string,
     const evidenceIds = hasOwn(input, 'evidence') ? normalizeEvidenceRefs(input.evidence) : normalizeEvidenceRefs(existing?.evidence);
     const reviewNote = hasOwn(input, 'reviewNote') ? normalizeOptionalText(input.reviewNote) : normalizeOptionalText(existing?.reviewNote);
     const note = hasOwn(input, 'note') ? normalizeOptionalText(input.note) : normalizeOptionalText(existing?.note);
+    const runningMode = isRunningPerformanceType(sportType, achievementType);
+    const allowsMissingDistance = runningMode && achievementType === 'race_result';
+    const distancePending = distanceKm === null ? requestedDistancePending : false;
+    if (runningMode) {
+      if (!achievedAt) httpError(400, 'achievedAt is required for running results', 'INVALID_REQUEST_BODY', { field: 'achievedAt' });
+      if (durationSeconds === null) httpError(400, 'durationSeconds is required for running results', 'INVALID_REQUEST_BODY', { field: 'durationSeconds' });
+      if (distanceKm === null) {
+        if (!allowsMissingDistance) {
+          httpError(400, 'distanceKm is required for running results', 'INVALID_REQUEST_BODY', { field: 'distanceKm' });
+        }
+        if (!distancePending) {
+          httpError(400, 'distanceKm is required for running results unless distancePending is explicitly true', 'INVALID_REQUEST_BODY', { field: 'distanceKm' });
+        }
+      }
+    }
 
-    return { sportsProfile, club, sourceAchievement, status, achievementType, title, description, sportType, achievedAt, resultValue, resultUnit, resultText, source, sourceReference, evidenceIds, reviewNote, note };
+    return {
+      sportsProfile,
+      club,
+      sourceAchievement,
+      status,
+      achievementType,
+      title,
+      eventCode,
+      raceType,
+      bib,
+      distancePending,
+      description,
+      sportType,
+      achievedAt,
+      resultValue: runningMode ? durationSeconds : resultValue,
+      distanceKm,
+      durationSeconds,
+      resultUnit: runningMode ? 'seconds' : resultUnit,
+      resultText: runningMode ? formatDurationSeconds(durationSeconds) : resultText,
+      source,
+      sourceReference,
+      evidenceIds,
+      reviewNote,
+      note,
+    };
   } catch (error) {
     toDomainError(error);
   }
@@ -247,8 +403,19 @@ export async function getTenantSportsAchievementSubmission(submissionRef: unknow
 }
 
 export async function createTenantSportsAchievementSubmission(payload: Record<string, unknown>, tenantId: number | string, authUser: AuthUser = null, options: { transacting?: any } = {}) {
+  if (!options.transacting) {
+    return await strapi.db.transaction(async ({ trx }: any) => createTenantSportsAchievementSubmission(payload, tenantId, authUser, { transacting: trx }));
+  }
   try {
     const prepared = await prepareWriteData(payload || {}, tenantId, undefined, options.transacting);
+    const importFingerprint = buildImportDedupFingerprint(prepared);
+    if (importFingerprint) {
+      await acquireAchievementImportFingerprintLock(options.transacting, tenantId, 'submission', importFingerprint);
+      const existing = await findExistingImportedSubmission(prepared, tenantId, options.transacting);
+      if (existing?.id) {
+        return mapSportsAchievementSubmissionRow(existing, { includeLongText: true });
+      }
+    }
     if (!canCreateSubmissionWithStatus(prepared.status)) {
       httpError(400, 'Submission can only be created as draft or submitted.', 'INVALID_SUBMISSION_CREATE_STATUS');
     }
@@ -261,9 +428,15 @@ export async function createTenantSportsAchievementSubmission(payload: Record<st
         achievementType: prepared.achievementType,
         sportType: prepared.sportType,
         title: prepared.title,
+        eventCode: prepared.eventCode,
+        raceType: prepared.raceType,
+        bib: prepared.bib,
+        distancePending: prepared.distancePending,
         description: prepared.description,
         achievedAt: prepared.achievedAt,
         resultValue: prepared.resultValue,
+        distanceKm: prepared.distanceKm,
+        durationSeconds: prepared.durationSeconds,
         resultUnit: prepared.resultUnit,
         resultText: prepared.resultText,
         evidence: prepared.evidenceIds,
@@ -305,9 +478,15 @@ export async function updateTenantSportsAchievementSubmission(submissionRef: unk
         achievementType: prepared.achievementType,
         sportType: prepared.sportType,
         title: prepared.title,
+        eventCode: prepared.eventCode,
+        raceType: prepared.raceType,
+        bib: prepared.bib,
+        distancePending: prepared.distancePending,
         description: prepared.description,
         achievedAt: prepared.achievedAt,
         resultValue: prepared.resultValue,
+        distanceKm: prepared.distanceKm,
+        durationSeconds: prepared.durationSeconds,
         resultUnit: prepared.resultUnit,
         resultText: prepared.resultText,
         evidence: prepared.evidenceIds,
@@ -410,9 +589,21 @@ export async function verifyAchievementSubmission(submissionRef: unknown, tenant
     }
 
     const reviewNote = hasOwn(payload || {}, 'reviewNote') ? normalizeOptionalText(payload.reviewNote) : normalizeOptionalText(locked.reviewNote);
+    const selectedTemplate = payload?.shareTemplate || payload?.template || payload?.shareTemplateId || null;
+    const resolvedTemplate = selectedTemplate ? await findAchievementTemplateInTenant(selectedTemplate, tenantId, trx) : await resolveAchievementTemplateForEntity({
+      ...locked,
+      club: locked.club?.id || extractRelationRef(locked.club),
+      sportType: locked.sportType,
+      achievementType: locked.achievementType,
+      distanceLabel: locked.distanceKm ? 'distance' : null,
+      shareTemplate: null,
+    }, tenantId);
+
     const achievement = await createVerifiedAchievementFromSubmission({
       ...locked,
       source: mapSubmissionSourceToAchievementSource(locked.source),
+      shareTemplate: selectedTemplate || (resolvedTemplate?.template?.id ? resolvedTemplate.template.id : null),
+      shareTemplateSource: selectedTemplate ? 'explicit' : (resolvedTemplate?.status === 'resolved' ? 'auto' : 'none'),
     }, tenantId, authUser, { transacting: trx });
 
     await strapi.db.query(SPORTS_ACHIEVEMENT_SUBMISSION_UID).update({
@@ -459,9 +650,15 @@ export async function createCorrectionSubmissionFromAchievement(achievementRef: 
     achievementType: achievement?.achievementType,
     sportType: achievement?.sportType,
     title: achievement?.title,
+    eventCode: achievement?.eventCode,
+    raceType: achievement?.raceType,
+    bib: achievement?.bib,
+    distancePending: Boolean(achievement?.distancePending),
     description: achievement?.description,
     achievedAt: achievement?.achievedAt,
     resultValue: achievement?.resultValue,
+    distanceKm: achievement?.distanceKm,
+    durationSeconds: achievement?.durationSeconds,
     resultUnit: achievement?.resultUnit,
     resultText: achievement?.resultText,
     evidence: Array.isArray(achievement?.evidence) ? achievement.evidence.map((item: any) => item?.id || extractRelationRef(item)).filter(Boolean) : [],

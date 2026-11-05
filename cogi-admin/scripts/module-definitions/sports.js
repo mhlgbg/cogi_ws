@@ -16,6 +16,11 @@ module.exports = {
       path: '/sports/profiles',
       icon: 'cilChartLine',
       showInMenu: true,
+      upload: {
+        enabled: true,
+        moduleKey: 'sports-profile',
+        entityType: 'sports-profile',
+      },
     },
     {
       name: 'Sports Club Management',
@@ -43,6 +48,11 @@ module.exports = {
       path: '/sports/achievements',
       icon: 'cilTrophy',
       showInMenu: true,
+      upload: {
+        enabled: true,
+        moduleKey: 'sports-achievement',
+        entityType: 'sports-achievement',
+      },
     },
     {
       name: 'Sports Achievement Submission Management',
@@ -52,6 +62,11 @@ module.exports = {
       path: '/sports/achievement-submissions',
       icon: 'cilTask',
       showInMenu: true,
+      upload: {
+        enabled: true,
+        moduleKey: 'sports-achievement-submission',
+        entityType: 'sports-achievement-submission',
+      },
     },
     {
       name: 'Sports Club Manager Assignment',

@@ -1,0 +1,153 @@
+{
+  "kind": "collectionType",
+  "collectionName": "ghost_race_attempts",
+  "info": {
+    "singularName": "ghost-race-attempt",
+    "pluralName": "ghost-race-attempts",
+    "displayName": "Ghost Race Attempt",
+    "description": "Recorded Ghost Race run attempt with replay payload and verification state."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "game": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::game.game",
+      "required": true
+    },
+    "participant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::game-participant.game-participant",
+      "required": true
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "attemptToken": {
+      "type": "uid"
+    },
+    "phase": {
+      "type": "enumeration",
+      "enum": [
+        "trial",
+        "official"
+      ],
+      "required": true
+    },
+    "runVersion": {
+      "type": "integer",
+      "required": true,
+      "default": 1,
+      "min": 1
+    },
+    "laneNumberSnapshot": {
+      "type": "integer",
+      "required": true,
+      "min": 1
+    },
+    "engineVersion": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "physicsVersion": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "trackVersion": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "rulesVersion": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "authorizedStartAt": {
+      "type": "datetime"
+    },
+    "goTick": {
+      "type": "integer",
+      "min": 0
+    },
+    "goAt": {
+      "type": "datetime"
+    },
+    "submittedAt": {
+      "type": "datetime"
+    },
+    "elapsedSeconds": {
+      "type": "decimal"
+    },
+    "cutoffSecondsSnapshot": {
+      "type": "decimal"
+    },
+    "distanceMeters": {
+      "type": "decimal"
+    },
+    "finishTimeSeconds": {
+      "type": "decimal"
+    },
+    "averageSpeed": {
+      "type": "decimal"
+    },
+    "averageCadence": {
+      "type": "decimal"
+    },
+    "validSteps": {
+      "type": "integer",
+      "min": 0
+    },
+    "invalidRepeatedPresses": {
+      "type": "integer",
+      "min": 0
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "created",
+        "ready",
+        "running",
+        "submitted",
+        "verified",
+        "rejected",
+        "timeout",
+        "false_start",
+        "cancelled",
+        "expired"
+      ],
+      "default": "created",
+      "required": true
+    },
+    "verificationStatus": {
+      "type": "enumeration",
+      "enum": [
+        "pending_verification",
+        "verified",
+        "rejected"
+      ],
+      "default": "pending_verification",
+      "required": true
+    },
+    "verificationReason": {
+      "type": "text"
+    },
+    "replayMeta": {
+      "type": "json"
+    },
+    "replayPayload": {
+      "type": "json"
+    }
+  }
+}

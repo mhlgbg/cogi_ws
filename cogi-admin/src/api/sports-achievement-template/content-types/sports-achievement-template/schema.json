@@ -1,0 +1,106 @@
+{
+  "kind": "collectionType",
+  "collectionName": "sports_achievement_templates",
+  "info": {
+    "singularName": "sports-achievement-template",
+    "pluralName": "sports-achievement-templates",
+    "displayName": "Sports Achievement Template",
+    "description": "Club-scoped poster template metadata for achievement share images."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true,
+      "inversedBy": "sportsAchievementTemplates"
+    },
+    "club": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::sports-club.sports-club",
+      "required": true
+    },
+    "name": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200,
+      "index": true
+    },
+    "code": {
+      "type": "string",
+      "required": true,
+      "maxLength": 100,
+      "index": true
+    },
+    "sportType": {
+      "type": "enumeration",
+      "enum": [
+        "running",
+        "cycling",
+        "badminton",
+        "football",
+        "swimming",
+        "multisport",
+        "other"
+      ],
+      "required": true,
+      "default": "running",
+      "index": true
+    },
+    "achievementTypes": {
+      "type": "json"
+    },
+    "distanceLabels": {
+      "type": "json"
+    },
+    "priority": {
+      "type": "integer",
+      "default": 100,
+      "index": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "active",
+        "archived"
+      ],
+      "required": true,
+      "default": "draft",
+      "index": true
+    },
+    "backgroundAsset": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "previewAsset": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "layoutKey": {
+      "type": "enumeration",
+      "enum": [
+        "default",
+        "race_result",
+        "personal_best"
+      ],
+      "required": true,
+      "default": "default",
+      "index": true
+    },
+    "layoutConfig": {
+      "type": "json"
+    }
+  }
+}

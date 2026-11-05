@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises';
+import XLSX from 'xlsx';
 import { extractRelationRef, hasOwn, mergeTenantWhere, normalizeSortInput, toPositiveInt, toText, whereByParam } from '../../../utils/tenant-scope';
 
 const SPORTS_PROFILE_UID = 'api::sports-profile.sports-profile' as any;
@@ -10,6 +12,40 @@ type GenericRecord = Record<string, unknown>;
 const GENDER_VALUES = new Set(['male', 'female', 'other', 'unspecified']);
 const STATUS_VALUES = new Set(['active', 'inactive', 'merged']);
 const SOURCE_VALUES = new Set(['manual_import', 'self_registration', 'campaign', 'admin_created', 'other']);
+const IMPORT_TEMPLATE_FIELDS = [
+	'profileCode',
+	'fullName',
+	'displayName',
+	'gender',
+	'birthYear',
+	'dateOfBirth',
+	'hometown',
+	'phone',
+	'email',
+	'facebookName',
+	'facebookUrl',
+	'bio',
+	'status',
+	'source',
+	'sourceRef',
+];
+const IMPORT_FIELD_ALIASES: Record<string, string[]> = {
+	profileCode: ['profilecode', 'profile_code', 'code', 'vklid', 'vkl id', 'vkl_id', 'vkl id', 'mã hồ sơ', 'ma ho so', 'profile code'],
+	fullName: ['fullname', 'full_name', 'full name', 'ho ten', 'họ tên', 'name', 'ten'],
+	displayName: ['displayname', 'display_name', 'display name', 'ten hien thi', 'tên hiển thị'],
+	gender: ['gender', 'sex', 'gioi tinh', 'giới tính', 'sexs', 'gender_code'],
+	birthYear: ['birthyear', 'birth_year', 'birth year', 'nam sinh', 'năm sinh', 'ns'],
+	dateOfBirth: ['dateofbirth', 'date_of_birth', 'date of birth', 'ngay sinh', 'ngày sinh', 'dob'],
+	hometown: ['hometown', 'home_town', 'que quan', 'quê quán', 'city'],
+	phone: ['phone', 'mobile', 'contactphone', 'contact_phone', 'sdt', 'so dien thoai', 'số điện thoại'],
+	email: ['email', 'e-mail', 'mail', 'contactemail', 'contact_email'],
+	facebookName: ['facebookname', 'facebook_name', 'fb_name', 'fb name', 'name fb', 'ten fb'],
+	facebookUrl: ['facebookurl', 'facebook_url', 'fb_url', 'fb url', 'link fb', 'link facebook'],
+	bio: ['bio', 'description', 'note', 'ghi chu', 'ghi chú'],
+	status: ['status', 'trang thai', 'trạng thái'],
+	source: ['source', 'nguon', 'nguồn'],
+	sourceRef: ['sourceref', 'source_ref', 'source reference', 'source_reference', 'ref', 'ghi chu', 'ghi chú'],
+};
 
 export class SportsProfileError extends Error {
 	status: number;
@@ -66,6 +102,13 @@ function normalizeOptionalText(value: unknown, maxLength?: number): string | nul
 		httpError(400, `Text exceeds max length ${maxLength}`, 'INVALID_TEXT_LENGTH');
 	}
 	return text;
+}
+
+function summarizeOptionalText(value: unknown, maxLength?: number): string | null {
+	const text = toText(value);
+	if (!text) return null;
+	if (!maxLength || text.length <= maxLength) return text;
+	return text.slice(0, maxLength);
 }
 
 function normalizeRequiredText(value: unknown, fieldName: string, maxLength?: number): string {
@@ -203,17 +246,17 @@ function mapSportsProfileRow(row: any, options: { includeLongText?: boolean } = 
 		documentId: row?.documentId || null,
 		code: toText(row?.code),
 		fullName: toText(row?.fullName),
-		displayName: normalizeOptionalText(row?.displayName, 150),
+		displayName: summarizeOptionalText(row?.displayName, 150),
 		gender: toText(row?.gender).toLowerCase() || 'unspecified',
 		dateOfBirth: row?.dateOfBirth || null,
 		birthYear: Number.isInteger(Number(row?.birthYear)) ? Number(row.birthYear) : null,
-		hometown: normalizeOptionalText(row?.hometown, 150),
-		bio: options.includeLongText ? normalizeOptionalText(row?.bio) : normalizeOptionalText(row?.bio, 240),
-		contactPhone: normalizeOptionalText(row?.contactPhone, 30),
+		hometown: summarizeOptionalText(row?.hometown, 150),
+		bio: options.includeLongText ? summarizeOptionalText(row?.bio) : summarizeOptionalText(row?.bio, 240),
+		contactPhone: summarizeOptionalText(row?.contactPhone, 30),
 		contactEmail: normalizeEmail(row?.contactEmail),
 		status: toText(row?.status).toLowerCase() || 'active',
 		source: toText(row?.source).toLowerCase() || null,
-		sourceReference: normalizeOptionalText(row?.sourceReference, 255),
+		sourceReference: summarizeOptionalText(row?.sourceReference, 255),
 		avatar: mapMedia(row?.avatar),
 		user: mapUser(row?.user),
 		hasUser: Boolean(row?.user?.id),
@@ -238,6 +281,9 @@ function buildListWhere(query: Record<string, unknown>) {
 				{ displayName: { $containsi: keyword } },
 				{ contactPhone: { $containsi: keyword } },
 				{ contactEmail: { $containsi: keyword } },
+				{ user: { email: { $containsi: keyword } } },
+				{ user: { phone: { $containsi: keyword } } },
+				{ user: { fullName: { $containsi: keyword } } },
 			],
 		});
 	}
@@ -497,6 +543,292 @@ function buildWriteData(input: GenericRecord, existing?: any) {
 	};
 }
 
+function normalizeImportKey(value: unknown): string {
+	return toText(value).trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function getImportColumnValue(row: Record<string, unknown>, aliases: string[]) {
+	const normalizedAliases = new Set(aliases.map((alias: string) => normalizeImportKey(alias)));
+	for (const [key, value] of Object.entries(row || {})) {
+		if (normalizedAliases.has(normalizeImportKey(key))) return value;
+	}
+	return null;
+}
+
+function normalizeImportText(value: unknown): string {
+	return toText(value).replace(/\s+/g, ' ').trim();
+}
+
+function normalizeImportGender(value: unknown): 'male' | 'female' | 'other' | 'unspecified' {
+	const text = normalizeImportText(value).toLowerCase();
+	if (!text) return 'unspecified';
+	if (['m', 'male', 'nam', 'man', 'boy'].includes(text)) return 'male';
+	if (['f', 'female', 'nu', 'nữ', 'woman', 'girl'].includes(text)) return 'female';
+	if (['other', 'khac', 'khác'].includes(text)) return 'other';
+	return 'unspecified';
+}
+
+function normalizeImportStatus(value: unknown): 'active' | 'inactive' | 'merged' {
+	const text = normalizeImportText(value).toLowerCase();
+	if (!text) return 'active';
+	if (['active', 'đang hoạt động', 'hoat dong', 'enabled', '1'].includes(text)) return 'active';
+	if (['inactive', 'ngung hoat dong', 'ngừng hoạt động', 'disabled', '0'].includes(text)) return 'inactive';
+	if (['merged', 'gop', 'gộp'].includes(text)) return 'merged';
+	return 'active';
+}
+
+function normalizeImportSource(value: unknown): 'manual_import' | 'self_registration' | 'campaign' | 'admin_created' | 'other' | null {
+	const text = normalizeImportText(value).toLowerCase();
+	if (!text) return null;
+	if (['manual_import', 'manual-import', 'manual import', 'import tay', 'nhập tay', 'import'].includes(text)) return 'manual_import';
+	if (['self_registration', 'self-registration', 'self registration', 'tự đăng ký', 'tu dang ky'].includes(text)) return 'self_registration';
+	if (['campaign', 'chiến dịch', 'chien dich'].includes(text)) return 'campaign';
+	if (['admin_created', 'admin-created', 'admin created', 'admin tao', 'admin tạo'].includes(text)) return 'admin_created';
+	return 'other';
+}
+
+function parseImportDate(value: unknown): string | null {
+	if (value === null || value === undefined || value === '') return null;
+	if (value instanceof Date) {
+		if (Number.isNaN(value.getTime())) return null;
+		return value.toISOString().slice(0, 10);
+	}
+	if (typeof value === 'number') {
+		const asDate = new Date(Date.UTC(1899, 11, 30 + value));
+		if (!Number.isNaN(asDate.getTime())) return asDate.toISOString().slice(0, 10);
+		return null;
+	}
+	const text = normalizeImportText(value);
+	if (!text) return null;
+	const match = text.match(/^\d{4}-\d{2}-\d{2}$/);
+	if (match) {
+		const parsed = new Date(`${text}T00:00:00Z`);
+		if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+	}
+	const dayMatch = text.match(/^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/);
+	if (dayMatch) {
+		const normalized = text.replace(/\//g, '-');
+		const parsed = new Date(normalized);
+		if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+	}
+	const parsed = new Date(text);
+	if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+	return null;
+}
+
+function normalizeImportPhone(value: unknown): string | null {
+	const text = normalizeImportText(value);
+	if (!text) return null;
+	return text;
+}
+
+function normalizeImportEmail(value: unknown): string | null {
+	const text = normalizeImportText(value).toLowerCase();
+	if (!text) return null;
+	if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text)) return text;
+	return text;
+}
+
+function buildImportRecord(rawRow: Record<string, unknown>) {
+	const candidate = {
+		profileCode: normalizeImportText(getImportColumnValue(rawRow, IMPORT_FIELD_ALIASES.profileCode) ?? rawRow.profileCode ?? rawRow.code),
+		fullName: normalizeImportText(getImportColumnValue(rawRow, IMPORT_FIELD_ALIASES.fullName) ?? rawRow.fullName ?? rawRow.name),
+		displayName: normalizeImportText(getImportColumnValue(rawRow, IMPORT_FIELD_ALIASES.displayName) ?? rawRow.displayName),
+		gender: normalizeImportGender(getImportColumnValue(rawRow, IMPORT_FIELD_ALIASES.gender) ?? rawRow.gender ?? rawRow.sex),
+		birthYear: normalizeImportText(getImportColumnValue(rawRow, IMPORT_FIELD_ALIASES.birthYear) ?? rawRow.birthYear ?? rawRow.ns),
+		dateOfBirth: parseImportDate(getImportColumnValue(rawRow, IMPORT_FIELD_ALIASES.dateOfBirth) ?? rawRow.dateOfBirth ?? rawRow.dob),
+		hometown: normalizeImportText(getImportColumnValue(rawRow, IMPORT_FIELD_ALIASES.hometown) ?? rawRow.hometown),
+		phone: normalizeImportPhone(getImportColumnValue(rawRow, IMPORT_FIELD_ALIASES.phone) ?? rawRow.phone ?? rawRow.contactPhone),
+		email: normalizeImportEmail(getImportColumnValue(rawRow, IMPORT_FIELD_ALIASES.email) ?? rawRow.email ?? rawRow.contactEmail),
+		facebookName: normalizeImportText(getImportColumnValue(rawRow, IMPORT_FIELD_ALIASES.facebookName) ?? rawRow.facebookName),
+		facebookUrl: normalizeImportText(getImportColumnValue(rawRow, IMPORT_FIELD_ALIASES.facebookUrl) ?? rawRow.facebookUrl),
+		bio: normalizeImportText(getImportColumnValue(rawRow, IMPORT_FIELD_ALIASES.bio) ?? rawRow.bio ?? rawRow.note),
+		status: normalizeImportStatus(getImportColumnValue(rawRow, IMPORT_FIELD_ALIASES.status) ?? rawRow.status),
+		source: normalizeImportSource(getImportColumnValue(rawRow, IMPORT_FIELD_ALIASES.source) ?? rawRow.source),
+		sourceRef: normalizeImportText(getImportColumnValue(rawRow, IMPORT_FIELD_ALIASES.sourceRef) ?? rawRow.sourceRef ?? rawRow.sourceReference),
+	};
+
+	if (candidate.profileCode) candidate.profileCode = candidate.profileCode.toUpperCase();
+	if (candidate.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate.email)) {
+		candidate.email = candidate.email.replace(/\s+/g, '');
+	}
+	return candidate;
+}
+
+function validateImportedProfileRecord(record: Record<string, any>, isCreate: boolean) {
+	const errors: string[] = [];
+	const warnings: string[] = [];
+	const normalizedCode = normalizeImportText(record.profileCode || '').toUpperCase();
+	if (!normalizedCode) errors.push('profileCode is required');
+	if (isCreate && !normalizeImportText(record.fullName)) errors.push('fullName is required when creating a new sports profile');
+	if (record.birthYear) {
+		const yearValue = Number(record.birthYear);
+		if (!Number.isInteger(yearValue) || yearValue < 1900 || yearValue > 2100) {
+			errors.push('birthYear must be a valid year between 1900 and 2100');
+		}
+	}
+	if (record.dateOfBirth) {
+		const parsedDate = parseImportDate(record.dateOfBirth);
+		if (!parsedDate) {
+			errors.push('dateOfBirth is invalid');
+		}
+	}
+	if (record.birthYear && record.dateOfBirth) {
+		const yearValue = Number(record.birthYear);
+		const parsedYear = Number(String(parseImportDate(record.dateOfBirth) || '').slice(0, 4));
+		if (Number.isInteger(yearValue) && Number.isInteger(parsedYear) && yearValue !== parsedYear) {
+			warnings.push('birthYear and dateOfBirth are inconsistent; the year will be derived from dateOfBirth');
+		}
+	}
+	if (record.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(record.email)) {
+		errors.push('email is invalid');
+	}
+	if (record.status && !STATUS_VALUES.has(record.status)) {
+		errors.push('status is invalid');
+	}
+	if (record.gender && !GENDER_VALUES.has(record.gender)) {
+		errors.push('gender is invalid');
+	}
+	if (record.source && record.source !== null && !SOURCE_VALUES.has(record.source)) {
+		errors.push('source is invalid');
+	}
+	return { errors, warnings };
+}
+
+function buildImportPayload(record: Record<string, any>) {
+	const payload: GenericRecord = {
+		code: normalizeImportText(record.profileCode || '').toUpperCase(),
+		fullName: normalizeImportText(record.fullName) || undefined,
+		displayName: normalizeImportText(record.displayName) || undefined,
+		gender: normalizeImportGender(record.gender),
+		dateOfBirth: parseImportDate(record.dateOfBirth),
+		birthYear: normalizeImportText(record.birthYear) ? Number(String(normalizeImportText(record.birthYear)).slice(0, 4)) : undefined,
+		hometown: normalizeImportText(record.hometown) || undefined,
+		bio: normalizeImportText(record.bio) || undefined,
+		contactPhone: normalizeImportPhone(record.phone) || undefined,
+		contactEmail: normalizeImportEmail(record.email) || undefined,
+		status: normalizeImportStatus(record.status),
+		source: normalizeImportSource(record.source) || undefined,
+		sourceReference: normalizeImportText(record.sourceRef) || undefined,
+	};
+	if (payload.dateOfBirth && payload.birthYear && payload.birthYear !== Number(String(payload.dateOfBirth).slice(0, 4))) {
+		payload.birthYear = Number(String(payload.dateOfBirth).slice(0, 4));
+	}
+	if (!payload.fullName) delete payload.fullName;
+	if (!payload.displayName) delete payload.displayName;
+	if (!payload.dateOfBirth) delete payload.dateOfBirth;
+	if (!payload.contactPhone) delete payload.contactPhone;
+	if (!payload.contactEmail) delete payload.contactEmail;
+	if (!payload.hometown) delete payload.hometown;
+	if (!payload.bio) delete payload.bio;
+	if (!payload.sourceReference) delete payload.sourceReference;
+	if (!payload.source) delete payload.source;
+	if (!payload.birthYear) delete payload.birthYear;
+	if (!payload.code) delete payload.code;
+	return payload;
+}
+
+function applySafeUpdatePatch(existing: Record<string, any>, record: Record<string, any>) {
+	const payload: GenericRecord = {};
+	const fieldMap: Record<string, string> = {
+		fullName: 'fullName',
+		displayName: 'displayName',
+		gender: 'gender',
+		dateOfBirth: 'dateOfBirth',
+		birthYear: 'birthYear',
+		hometown: 'hometown',
+		bio: 'bio',
+		contactPhone: 'contactPhone',
+		contactEmail: 'contactEmail',
+		status: 'status',
+		source: 'source',
+		sourceReference: 'sourceReference',
+	};
+	for (const [inputKey, modelKey] of Object.entries(fieldMap)) {
+		const value = (record as Record<string, any>)[inputKey];
+		if (value === null || value === undefined || value === '') continue;
+		const normalizedValue = modelKey === 'fullName' ? normalizeImportText(value) : value;
+		if (normalizedValue !== existing?.[modelKey]) {
+			payload[modelKey] = normalizedValue;
+		}
+	}
+	return payload;
+}
+
+function summarizeCurrentProfile(existing: any) {
+	if (!existing?.id) return null;
+	return {
+		id: Number(existing.id),
+		code: toText(existing.code),
+		fullName: toText(existing.fullName),
+		displayName: toText(existing.displayName),
+		gender: toText(existing.gender),
+		dateOfBirth: existing.dateOfBirth || null,
+		birthYear: Number.isInteger(Number(existing.birthYear)) ? Number(existing.birthYear) : null,
+		contactPhone: toText(existing.contactPhone),
+		contactEmail: toText(existing.contactEmail),
+		status: toText(existing.status),
+		source: toText(existing.source),
+		sourceReference: toText(existing.sourceReference),
+	};
+}
+
+function getUploadedFilePath(file: any): string {
+	return toText(file?.filepath || file?.path || file?.tempFilePath);
+}
+
+async function readUploadedFileBuffer(file: any): Promise<Buffer> {
+	if (file?.buffer && Buffer.isBuffer(file.buffer)) {
+		return file.buffer;
+	}
+
+	if (file?.data && Buffer.isBuffer(file.data)) {
+		return file.data;
+	}
+
+	const filePath = getUploadedFilePath(file);
+	if (!filePath) {
+		throw new SportsProfileError(400, 'Excel file content is required', 'SPORTS_PROFILE_IMPORT_INVALID_FILE');
+	}
+
+	return fs.readFile(filePath);
+}
+
+async function readImportWorksheet(file: any) {
+	if (!file) {
+		throw new SportsProfileError(400, 'Excel file is required', 'SPORTS_PROFILE_IMPORT_INVALID_FILE');
+	}
+	const buffer = await readUploadedFileBuffer(file);
+	const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true, raw: false });
+	const sheetNames = workbook?.SheetNames || [];
+	const preferredName = sheetNames.find((name) => normalizeImportKey(name) === 'sportsprofiles') || sheetNames.find((name) => normalizeImportKey(name) === 'data');
+	const worksheet = preferredName ? workbook.Sheets[preferredName] : workbook.Sheets[sheetNames[0]];
+	if (!worksheet) {
+		throw new SportsProfileError(400, 'The uploaded Excel file does not contain a valid worksheet', 'SPORTS_PROFILE_IMPORT_INVALID_FILE');
+	}
+	const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: false, blankrows: false });
+	return rows as Record<string, unknown>[];
+}
+
+function computeImportSummary(rows: any[]) {
+	const summary = {
+		totalRows: rows.length,
+		createCount: 0,
+		updateCount: 0,
+		unchangedCount: 0,
+		errorCount: 0,
+		warningCount: 0,
+	};
+	for (const row of rows) {
+		if (row.status === 'CREATE') summary.createCount += 1;
+		if (row.status === 'UPDATE') summary.updateCount += 1;
+		if (row.status === 'UNCHANGED') summary.unchangedCount += 1;
+		if (row.status === 'ERROR') summary.errorCount += 1;
+		summary.warningCount += Number(Array.isArray(row.warnings) ? row.warnings.length : 0);
+	}
+	return summary;
+}
+
 function parseErrorMessage(error: any) {
 	return toText(error?.message || error?.details?.message || error?.response?.data?.error?.message);
 }
@@ -565,6 +897,191 @@ export async function listTenantSportsProfiles(query: Record<string, unknown>, t
 export async function getTenantSportsProfile(profileRef: unknown, tenantId: number | string) {
 	const profile = await findSportsProfileInTenant(profileRef, tenantId);
 	return mapSportsProfileRow(profile, { includeLongText: true });
+}
+
+export async function getSportsProfileImportTemplate() {
+	const workbook = XLSX.utils.book_new();
+	const rows = [{
+		profileCode: 'VKL0001',
+		fullName: 'Nguyễn Văn A',
+		displayName: 'A',
+		gender: 'M',
+		birthYear: 2001,
+		dateOfBirth: '2001-01-15',
+		hometown: 'Hà Nội',
+		phone: '0901234567',
+		email: 'a@example.com',
+		facebookName: 'nguyenvana',
+		facebookUrl: 'https://facebook.com/nguyenvana',
+		bio: 'Runner',
+		status: 'active',
+		source: 'manual_import',
+		sourceRef: 'VKL Import 2025',
+	}];
+	const worksheet = XLSX.utils.json_to_sheet(rows);
+	worksheet['!cols'] = [
+		{ wch: 18 }, { wch: 24 }, { wch: 18 }, { wch: 10 }, { wch: 10 }, { wch: 18 }, { wch: 18 }, { wch: 20 }, { wch: 28 }, { wch: 24 }, { wch: 30 }, { wch: 24 }, { wch: 16 }, { wch: 16 }, { wch: 24 },
+	];
+	XLSX.utils.book_append_sheet(workbook, worksheet, 'SportsProfiles');
+	const instructions = XLSX.utils.aoa_to_sheet([
+		['Instructions'],
+		['1. Use the first sheet named SportsProfiles.'],
+		['2. profileCode is required and unique per tenant.'],
+		['3. fullName is required when creating a new profile.'],
+		['4. Empty cells do not clear existing values during update.'],
+		['5. birthYear and dateOfBirth must be consistent if both are provided.'],
+		['6. gender accepts M/F or male/female etc.'],
+		['7. status accepts active, inactive, merged.'],
+		['8. facebookName and facebookUrl are optional metadata and are not persisted in the current model schema.'],
+	]);
+	XLSX.utils.book_append_sheet(workbook, instructions, 'Instructions');
+	return {
+		contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+		fileName: 'sports-profiles-import-template.xlsx',
+		buffer: XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }) as Buffer,
+	};
+}
+
+export async function previewSportsProfileImport(file: any, tenantId: number | string) {
+	const rows = await readImportWorksheet(file);
+	if (!rows.length) {
+		throw new SportsProfileError(400, 'The Excel file is empty or has no data rows.', 'SPORTS_PROFILE_IMPORT_EMPTY');
+	}
+	const fileRows: any[] = [];
+	const seenCodes = new Map<string, number>();
+	const validCodes = new Set<string>();
+
+	for (const [index, rawRow] of rows.entries()) {
+		const record = buildImportRecord(rawRow as Record<string, unknown>);
+		const rowNumber = index + 2;
+		const isCreate = !record.profileCode ? false : !(await findSportsProfileByCode(tenantId, record.profileCode));
+		const validation = validateImportedProfileRecord(record, isCreate);
+		const warnings = [...validation.warnings];
+		const errors = [...validation.errors];
+		const duplicateCode = record.profileCode ? seenCodes.get(record.profileCode) : null;
+		if (duplicateCode) {
+			errors.push(`Duplicate profileCode "${record.profileCode}" in the same file at row ${duplicateCode}`);
+		}
+		if (record.profileCode) {
+			seenCodes.set(record.profileCode, rowNumber);
+			validCodes.add(record.profileCode);
+		}
+		const existing = record.profileCode ? await findSportsProfileByCode(tenantId, record.profileCode) : null;
+		let status = 'ERROR';
+		let action: 'CREATE' | 'UPDATE' | 'UNCHANGED' | 'ERROR' = 'ERROR';
+		let currentProfile: any = null;
+		let newValues: Record<string, any> | null = null;
+		let reason = null as string | null;
+
+		if (errors.length === 0) {
+			if (existing?.id) {
+				currentProfile = await strapi.db.query(SPORTS_PROFILE_UID).findOne({
+					where: { id: existing.id },
+					populate: {
+						avatar: { select: ['id', 'name', 'url', 'mime'] },
+						user: { select: ['id', 'documentId', 'username', 'email', 'fullName', 'phone', 'blocked', 'confirmed'] },
+					},
+				} as any);
+				const payload = buildImportPayload(record);
+				const safePatch = applySafeUpdatePatch(currentProfile || {}, payload);
+				newValues = safePatch;
+				if (Object.keys(safePatch).length === 0) {
+					status = 'UNCHANGED';
+					action = 'UNCHANGED';
+					reason = 'No allowed field differs from the current record';
+				} else {
+					status = 'UPDATE';
+					action = 'UPDATE';
+					reason = 'Allowed fields will be updated without affecting user ownership, tenant, or memberships';
+				}
+			} else {
+				newValues = buildImportPayload(record);
+				status = 'CREATE';
+				action = 'CREATE';
+				reason = 'New sports profile will be created';
+			}
+		} else {
+			reason = errors.join('; ');
+		}
+
+		const previewRow = {
+			rowNumber,
+			profileCode: record.profileCode || null,
+			fullName: record.fullName || null,
+			status,
+			action,
+			currentProfile: summarizeCurrentProfile(currentProfile),
+			newValues,
+			warnings,
+			errors,
+			reason,
+		};
+		fileRows.push(previewRow);
+	}
+
+	const summary = computeImportSummary(fileRows);
+	return {
+		fileName: 'sports-profiles-import.xlsx',
+		summary,
+		rows: fileRows,
+	};
+}
+
+export async function confirmSportsProfileImport(file: any, tenantId: number | string, actorUserId: number | null = null) {
+	const preview = await previewSportsProfileImport(file, tenantId);
+	const errors = preview.rows.filter((row: any) => row.status === 'ERROR');
+	if (errors.length > 0) {
+		throw new SportsProfileError(400, 'Import contains unresolved validation errors. Fix the file and retry the import.', 'SPORTS_PROFILE_IMPORT_VALIDATION_FAILED', { errors: errors.map((row: any) => ({ rowNumber: row.rowNumber, profileCode: row.profileCode, errors: row.errors })) });
+	}
+
+	let createdCount = 0;
+	let updatedCount = 0;
+	let unchangedCount = 0;
+	const createdRows: any[] = [];
+	const updatedRows: any[] = [];
+	const unchangedRows: any[] = [];
+	const auditRows: any[] = [];
+
+	for (const row of preview.rows) {
+		if (row.status === 'UNCHANGED') {
+			unchangedCount += 1;
+			unchangedRows.push({ rowNumber: row.rowNumber, profileCode: row.profileCode, action: 'UNCHANGED' });
+			continue;
+		}
+		if (row.status === 'CREATE') {
+			const created = await createTenantSportsProfile(row.newValues || {}, tenantId);
+			createdCount += 1;
+			createdRows.push({ rowNumber: row.rowNumber, profileCode: row.profileCode, id: created?.id || null, action: 'CREATE' });
+			auditRows.push({ rowNumber: row.rowNumber, profileCode: row.profileCode, action: 'CREATE', actorUserId, tenantId, createdAt: new Date().toISOString() });
+			continue;
+		}
+		if (row.status === 'UPDATE') {
+			const existing = row.currentProfile ? await findSportsProfileInTenant(row.currentProfile.id, tenantId) : null;
+			if (!existing?.id) {
+				throw new SportsProfileError(404, `Unable to find sports profile for update: ${row.profileCode || row.rowNumber}`, 'SPORTS_PROFILE_NOT_FOUND');
+			}
+			const updated = await updateTenantSportsProfile(existing.id, row.newValues || {}, tenantId);
+			updatedCount += 1;
+			updatedRows.push({ rowNumber: row.rowNumber, profileCode: row.profileCode, id: updated?.id || null, action: 'UPDATE' });
+			auditRows.push({ rowNumber: row.rowNumber, profileCode: row.profileCode, action: 'UPDATE', actorUserId, tenantId, createdAt: new Date().toISOString() });
+		}
+	}
+
+	strapi.log.info(`[sports-profile-import] tenant=${tenantId} actorUserId=${actorUserId} created=${createdCount} updated=${updatedCount} unchanged=${unchangedCount} total=${preview.summary.totalRows}`);
+	return {
+		fileName: 'sports-profiles-import.xlsx',
+		summary: {
+			totalRows: preview.summary.totalRows,
+			createdCount,
+			updatedCount,
+			unchangedCount,
+			errorCount: 0,
+		},
+		created: createdRows,
+		updated: updatedRows,
+		unchanged: unchangedRows,
+		audit: auditRows,
+	};
 }
 
 export async function createTenantSportsProfile(input: GenericRecord, tenantId: number | string) {

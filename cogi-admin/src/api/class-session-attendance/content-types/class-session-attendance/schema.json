@@ -1,0 +1,58 @@
+{
+  "kind": "collectionType",
+  "collectionName": "class_session_attendances",
+  "info": {
+    "singularName": "class-session-attendance",
+    "pluralName": "class-session-attendances",
+    "displayName": "ClassSessionAttendance",
+    "description": "Tenant-scoped learner attendance snapshots for each class session."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "classSession": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::class-session.class-session",
+      "inversedBy": "attendances",
+      "required": true
+    },
+    "learner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::learner.learner",
+      "inversedBy": "classSessionAttendances",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "not_marked",
+        "present",
+        "absent",
+        "late",
+        "excused"
+      ],
+      "default": "not_marked"
+    },
+    "note": {
+      "type": "text"
+    },
+    "markedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "markedAt": {
+      "type": "datetime"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

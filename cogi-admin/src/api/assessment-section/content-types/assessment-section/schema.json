@@ -26,6 +26,37 @@
     "instruction": {
       "type": "richtext"
     },
+    "instructionContentType": {
+      "type": "enumeration",
+      "enum": ["plain_text", "html"],
+      "default": "plain_text"
+    },
+    "instructionImageAsset": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::file-asset.file-asset"
+    },
+    "stimulus": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::question-stimulus.question-stimulus"
+    },
+    "questionDisplayMode": {
+      "type": "enumeration",
+      "enum": ["single", "all", "inline_fill"],
+      "default": "single"
+    },
+    "questionLayoutContent": {
+      "type": "richtext"
+    },
+    "questionLayoutContentType": {
+      "type": "enumeration",
+      "enum": ["html"],
+      "default": "html"
+    },
+    "audioPlayLimit": {
+      "type": "integer"
+    },
     "order": {
       "type": "integer",
       "required": true,

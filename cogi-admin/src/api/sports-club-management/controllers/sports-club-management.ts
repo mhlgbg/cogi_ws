@@ -2,13 +2,17 @@ import { resolveCurrentTenantId } from '../../../utils/tenant-scope';
 import {
 	activateManagedClubMember,
 	createManagedClubAchievementCorrectionSubmission,
+	confirmManagedClubAchievementImport,
+	confirmManagedClubMemberImport,
 	createManagedClubMember,
 	createManagedClubMemberHistory,
+	getManagedClubMemberImportTemplate,
 	createManagedClubProfile,
 	deactivateManagedClubMember,
 	deactivateManagedClubMemberWithEvent,
 	deleteManagedClubMemberHistory,
 	getManagedClubAchievementDetail,
+	getManagedClubAchievementImportTemplate,
 	getManagedClubAchievementSubmissionDetail,
 	getManagedClubMemberDetail,
 	getMyManagedClubDetail,
@@ -18,19 +22,27 @@ import {
 	listManagedClubAchievementProfileOptions,
 	listManagedClubAchievements,
 	listManagedClubAchievementSubmissions,
+	previewManagedClubAchievementImport,
 	listManagedClubMemberHistory,
 	listManagedClubMembers,
 	listManagedClubProfileOptions,
+	previewManagedClubMemberImport,
 	listMyManagedClubs,
 	revokeManagedClubAchievement,
 	rejectManagedClubAchievementSubmission,
 	reactivateManagedClubMember,
 	rejoinManagedClubMember,
 	createManagedClubAchievementSubmission,
+	createManagedClubAchievementTemplate,
+	listManagedClubAchievementTemplates,
+	getManagedClubAchievementTemplateDetail,
 	submitManagedClubAchievementSubmission,
 	updateManagedClubAchievementSubmission,
+	updateManagedClubAchievementTemplate,
 	updateManagedClubMemberHistory,
 	updateManagedClubMember,
+	uploadManagedClubAchievementTemplateAsset,
+	updateManagedClubAchievementShareTemplate,
 	verifyManagedClubAchievementSubmission,
 } from '../services/sports-club-management';
 
@@ -76,6 +88,20 @@ function extractPayload(ctx: any): Record<string, unknown> {
 	return {};
 }
 
+function flattenUploadedFiles(value: unknown): any[] {
+	if (!value) return [];
+	if (Array.isArray(value)) return value.flatMap((item) => flattenUploadedFiles(item));
+	if (typeof value === 'object' && value && ('filepath' in (value as Record<string, unknown>) || 'path' in (value as Record<string, unknown>) || 'tempFilePath' in (value as Record<string, unknown>))) {
+		return [value];
+	}
+	if (typeof value === 'object') return Object.values(value as Record<string, unknown>).flatMap((item) => flattenUploadedFiles(item));
+	return [];
+}
+
+function extractFirstUploadedFile(ctx: any) {
+	return flattenUploadedFiles(ctx.request?.files)[0] || null;
+}
+
 export default {
 	async listMyManagedClubs(ctx: any) {
 		const authUser = await requireAuthenticatedUser(ctx);
@@ -106,6 +132,52 @@ export default {
 			const tenantId = resolveCurrentTenantId(ctx);
 			const data = await listManagedClubMembers(Number(authUser.id), ctx.params?.clubId, tenantId, ctx.query || {});
 			ctx.body = { data: data.rows, meta: { pagination: data.pagination } };
+		} catch (error) {
+			return handleSportsClubManagementError(ctx, error);
+		}
+	},
+
+	async memberImportTemplate(ctx: any) {
+		const authUser = await requireAuthenticatedUser(ctx);
+		if (!authUser?.id) return;
+		try {
+			const tenantId = resolveCurrentTenantId(ctx);
+			const template = await getManagedClubMemberImportTemplate(Number(authUser.id), ctx.params?.clubId, tenantId);
+			ctx.set('Content-Type', template.contentType);
+			ctx.set('Content-Disposition', `attachment; filename="${template.fileName}"`);
+			ctx.body = template.buffer;
+		} catch (error) {
+			return handleSportsClubManagementError(ctx, error);
+		}
+	},
+
+	async memberImportPreview(ctx: any) {
+		const authUser = await requireAuthenticatedUser(ctx);
+		if (!authUser?.id) return;
+		try {
+			const tenantId = resolveCurrentTenantId(ctx);
+			const file = extractFirstUploadedFile(ctx);
+			if (!file) {
+				ctx.badRequest('File Excel is required');
+				return;
+			}
+			ctx.body = { success: true, data: await previewManagedClubMemberImport(Number(authUser.id), ctx.params?.clubId, tenantId, file) };
+		} catch (error) {
+			return handleSportsClubManagementError(ctx, error);
+		}
+	},
+
+	async memberImportConfirm(ctx: any) {
+		const authUser = await requireAuthenticatedUser(ctx);
+		if (!authUser?.id) return;
+		try {
+			const tenantId = resolveCurrentTenantId(ctx);
+			const file = extractFirstUploadedFile(ctx);
+			if (!file) {
+				ctx.badRequest('File Excel is required');
+				return;
+			}
+			ctx.body = { success: true, data: await confirmManagedClubMemberImport(Number(authUser.id), ctx.params?.clubId, tenantId, file, authUser) };
 		} catch (error) {
 			return handleSportsClubManagementError(ctx, error);
 		}
@@ -279,6 +351,52 @@ export default {
 		}
 	},
 
+	async achievementImportTemplate(ctx: any) {
+		const authUser = await requireAuthenticatedUser(ctx);
+		if (!authUser?.id) return;
+		try {
+			const tenantId = resolveCurrentTenantId(ctx);
+			const template = await getManagedClubAchievementImportTemplate(Number(authUser.id), ctx.params?.clubId, tenantId);
+			ctx.set('Content-Type', template.contentType);
+			ctx.set('Content-Disposition', `attachment; filename="${template.fileName}"`);
+			ctx.body = template.buffer;
+		} catch (error) {
+			return handleSportsClubManagementError(ctx, error);
+		}
+	},
+
+	async achievementImportPreview(ctx: any) {
+		const authUser = await requireAuthenticatedUser(ctx);
+		if (!authUser?.id) return;
+		try {
+			const tenantId = resolveCurrentTenantId(ctx);
+			const file = extractFirstUploadedFile(ctx);
+			if (!file) {
+				ctx.badRequest('File Excel is required');
+				return;
+			}
+			ctx.body = { success: true, data: await previewManagedClubAchievementImport(Number(authUser.id), ctx.params?.clubId, tenantId, file, extractPayload(ctx)) };
+		} catch (error) {
+			return handleSportsClubManagementError(ctx, error);
+		}
+	},
+
+	async achievementImportConfirm(ctx: any) {
+		const authUser = await requireAuthenticatedUser(ctx);
+		if (!authUser?.id) return;
+		try {
+			const tenantId = resolveCurrentTenantId(ctx);
+			const file = extractFirstUploadedFile(ctx);
+			if (!file) {
+				ctx.badRequest('File Excel is required');
+				return;
+			}
+			ctx.body = { success: true, data: await confirmManagedClubAchievementImport(Number(authUser.id), ctx.params?.clubId, tenantId, file, extractPayload(ctx), authUser) };
+		} catch (error) {
+			return handleSportsClubManagementError(ctx, error);
+		}
+	},
+
 	async listAchievementSubmissions(ctx: any) {
 		const authUser = await requireAuthenticatedUser(ctx);
 		if (!authUser?.id) return;
@@ -291,12 +409,94 @@ export default {
 		}
 	},
 
+	async listAchievementTemplates(ctx: any) {
+		const authUser = await requireAuthenticatedUser(ctx);
+		if (!authUser?.id) return;
+		try {
+			const tenantId = resolveCurrentTenantId(ctx);
+			const data = await listManagedClubAchievementTemplates(Number(authUser.id), ctx.params?.clubId, tenantId, ctx.query || {});
+			ctx.body = { data: data.rows, meta: { pagination: data.pagination } };
+		} catch (error) {
+			return handleSportsClubManagementError(ctx, error);
+		}
+	},
+
+	async getAchievementTemplateDetail(ctx: any) {
+		const authUser = await requireAuthenticatedUser(ctx);
+		if (!authUser?.id) return;
+		try {
+			const tenantId = resolveCurrentTenantId(ctx);
+			ctx.body = { success: true, data: await getManagedClubAchievementTemplateDetail(Number(authUser.id), ctx.params?.clubId, ctx.params?.id, tenantId) };
+		} catch (error) {
+			return handleSportsClubManagementError(ctx, error);
+		}
+	},
+
+	async createAchievementTemplate(ctx: any) {
+		const authUser = await requireAuthenticatedUser(ctx);
+		if (!authUser?.id) return;
+		try {
+			const tenantId = resolveCurrentTenantId(ctx);
+			ctx.body = { success: true, data: await createManagedClubAchievementTemplate(Number(authUser.id), ctx.params?.clubId, tenantId, extractPayload(ctx), authUser) };
+		} catch (error) {
+			return handleSportsClubManagementError(ctx, error);
+		}
+	},
+
+	async updateAchievementTemplate(ctx: any) {
+		const authUser = await requireAuthenticatedUser(ctx);
+		if (!authUser?.id) return;
+		try {
+			const tenantId = resolveCurrentTenantId(ctx);
+			ctx.body = { success: true, data: await updateManagedClubAchievementTemplate(Number(authUser.id), ctx.params?.clubId, ctx.params?.id, tenantId, extractPayload(ctx), authUser) };
+		} catch (error) {
+			return handleSportsClubManagementError(ctx, error);
+		}
+	},
+
+	async uploadAchievementTemplateAsset(ctx: any) {
+		const authUser = await requireAuthenticatedUser(ctx);
+		if (!authUser?.id) return;
+		try {
+			const tenantId = resolveCurrentTenantId(ctx);
+			const file = ctx.request?.files?.file;
+			const payload = extractPayload(ctx);
+			ctx.body = {
+				success: true,
+				data: await uploadManagedClubAchievementTemplateAsset(Number(authUser.id), ctx.params?.clubId, tenantId, file, payload, authUser),
+			};
+		} catch (error) {
+			return handleSportsClubManagementError(ctx, error);
+		}
+	},
+
 	async getAchievementSubmissionDetail(ctx: any) {
 		const authUser = await requireAuthenticatedUser(ctx);
 		if (!authUser?.id) return;
 		try {
 			const tenantId = resolveCurrentTenantId(ctx);
 			ctx.body = { success: true, data: await getManagedClubAchievementSubmissionDetail(Number(authUser.id), ctx.params?.clubId, ctx.params?.id, tenantId) };
+		} catch (error) {
+			return handleSportsClubManagementError(ctx, error);
+		}
+	},
+
+	async updateAchievementShareTemplate(ctx: any) {
+		const authUser = await requireAuthenticatedUser(ctx);
+		if (!authUser?.id) return;
+		try {
+			const tenantId = resolveCurrentTenantId(ctx);
+			ctx.body = {
+				success: true,
+				data: await updateManagedClubAchievementShareTemplate(
+					Number(authUser.id),
+					ctx.params?.clubId,
+					ctx.params?.achievementId,
+					tenantId,
+					extractPayload(ctx),
+					authUser,
+				),
+			};
 		} catch (error) {
 			return handleSportsClubManagementError(ctx, error);
 		}

@@ -66,6 +66,31 @@
       "maxLength": 200,
       "index": true
     },
+    "eventCode": {
+      "type": "string",
+      "maxLength": 120,
+      "index": true
+    },
+    "raceType": {
+      "type": "enumeration",
+      "enum": [
+        "road",
+        "trail",
+        "track",
+        "virtual",
+        "other"
+      ]
+    },
+    "bib": {
+      "type": "string",
+      "maxLength": 120,
+      "index": true
+    },
+    "distancePending": {
+      "type": "boolean",
+      "default": false,
+      "index": true
+    },
     "description": {
       "type": "text"
     },
@@ -75,6 +100,13 @@
     },
     "resultValue": {
       "type": "decimal"
+    },
+    "distanceKm": {
+      "type": "decimal"
+    },
+    "durationSeconds": {
+      "type": "integer",
+      "min": 1
     },
     "resultUnit": {
       "type": "string",
@@ -102,6 +134,21 @@
     "sourceReference": {
       "type": "string",
       "maxLength": 255
+    },
+    "shareTemplate": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::sports-achievement-template.sports-achievement-template"
+    },
+    "shareTemplateSource": {
+      "type": "enumeration",
+      "enum": [
+        "explicit",
+        "auto",
+        "none"
+      ],
+      "default": "none",
+      "index": true
     },
     "evidence": {
       "type": "media",

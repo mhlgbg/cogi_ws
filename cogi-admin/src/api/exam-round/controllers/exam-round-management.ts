@@ -3,12 +3,16 @@ import {
   applyPaymentProfileToExamRound,
   approveExamRound,
   bulkCreateExamRoundEligibilities,
+  commitExamEligibilityImport,
+  copyExamRoundVenueRoomConfiguration,
   createExamConfigurationComponent,
   createExamConfigurationOutcome,
   createExamConfigurationProgram,
   createExamConfigurationSubject,
   closeExamRoundRegistration,
   createExamRoundEligibility,
+  deleteExamRoundEligibility,
+  downloadExamEligibilityImportTemplate,
   createLearnerProfileForExamRound,
   createExamRoomForRound,
   createExamVenueForRound,
@@ -29,6 +33,7 @@ import {
   getExamRoundPaymentDetail,
   getExamRoundPaymentSummary,
   getExamRoundVenueRoomConfiguration,
+  listExamRoundVenueRoomCopySources,
   listExamRoundPayments,
   confirmPaymentForExamRegistration,
   rejectPaymentReportForExamRegistration,
@@ -47,6 +52,8 @@ import {
   openExamRoundRegistration,
   registerCurrentLearnerForExamRound,
   pauseExamRoundRegistration,
+  previewExamEligibilityImport,
+  previewExamRoundVenueRoomCopy,
   replaceExamConfigurationSubjectComponents,
   replaceExamConfigurationProgramSubjects,
   returnExamRoundToDraft,
@@ -1059,6 +1066,45 @@ export default {
     }
   },
 
+  async listVenueRoomCopySources(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const tenantId = Number(resolveCurrentTenantId(ctx));
+      const data = await listExamRoundVenueRoomCopySources(tenantId, ctx.params?.id, ctx.query || {});
+      ctx.body = data;
+    } catch (error) {
+      return handleExamRoundManagementError(ctx, error);
+    }
+  },
+
+  async previewVenueRoomCopy(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const tenantId = Number(resolveCurrentTenantId(ctx));
+      const data = await previewExamRoundVenueRoomCopy(tenantId, ctx.params?.id, ctx.query?.sourceRoundId);
+      ctx.body = { success: true, data };
+    } catch (error) {
+      return handleExamRoundManagementError(ctx, error);
+    }
+  },
+
+  async copyVenueRoomConfiguration(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const tenantId = Number(resolveCurrentTenantId(ctx));
+      const data = await copyExamRoundVenueRoomConfiguration(tenantId, ctx.params?.id, extractPayload(ctx), authUser);
+      ctx.body = { success: true, data };
+    } catch (error) {
+      return handleExamRoundManagementError(ctx, error);
+    }
+  },
+
   async createVenueForRound(ctx: any) {
     const authUser = await requireAuthenticatedUser(ctx);
     if (!authUser?.id) return;
@@ -1195,6 +1241,62 @@ export default {
     }
   },
 
+  async downloadEligibilityImportTemplate(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const template = await downloadExamEligibilityImportTemplate();
+      ctx.set('Content-Type', template.contentType);
+      ctx.set('Content-Disposition', `attachment; filename="${template.fileName}"`);
+      ctx.body = template.buffer;
+    } catch (error) {
+      return handleExamRoundManagementError(ctx, error);
+    }
+  },
+
+  async previewEligibilityImport(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const tenantId = Number(resolveCurrentTenantId(ctx));
+      const file = resolveUploadFile(ctx.request?.files);
+      if (!file) {
+        return ctx.badRequest('File Excel is required');
+      }
+
+      const data = await previewExamEligibilityImport(tenantId, ctx.params?.id, file, authUser);
+      ctx.body = {
+        success: true,
+        data,
+      };
+    } catch (error) {
+      return handleExamRoundManagementError(ctx, error);
+    }
+  },
+
+  async commitEligibilityImport(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const tenantId = Number(resolveCurrentTenantId(ctx));
+      const file = resolveUploadFile(ctx.request?.files);
+      if (!file) {
+        return ctx.badRequest('File Excel is required');
+      }
+
+      const data = await commitExamEligibilityImport(tenantId, ctx.params?.id, file, authUser);
+      ctx.body = {
+        success: true,
+        data,
+      };
+    } catch (error) {
+      return handleExamRoundManagementError(ctx, error);
+    }
+  },
+
   async listEligibilities(ctx: any) {
     const authUser = await requireAuthenticatedUser(ctx);
     if (!authUser?.id) return;
@@ -1244,6 +1346,22 @@ export default {
     try {
       const tenantId = Number(resolveCurrentTenantId(ctx));
       const data = await updateExamRoundEligibility(tenantId, ctx.params?.id, ctx.params?.eligibilityId, extractPayload(ctx), authUser);
+      ctx.body = {
+        success: true,
+        data,
+      };
+    } catch (error) {
+      return handleExamRoundManagementError(ctx, error);
+    }
+  },
+
+  async deleteEligibility(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx);
+    if (!authUser?.id) return;
+
+    try {
+      const tenantId = Number(resolveCurrentTenantId(ctx));
+      const data = await deleteExamRoundEligibility(tenantId, ctx.params?.id, ctx.params?.eligibilityId, authUser);
       ctx.body = {
         success: true,
         data,

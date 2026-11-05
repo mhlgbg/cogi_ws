@@ -1,0 +1,56 @@
+{
+  "kind": "collectionType",
+  "collectionName": "game_admin_audits",
+  "info": {
+    "singularName": "game-admin-audit",
+    "pluralName": "game-admin-audits",
+    "displayName": "Game Admin Audit",
+    "description": "Administrative audit trail for game unpublish and reset operations."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "game": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::game.game",
+      "required": true
+    },
+    "actor": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "actionType": {
+      "type": "enumeration",
+      "enum": [
+        "unpublish",
+        "reset"
+      ],
+      "required": true
+    },
+    "reason": {
+      "type": "text"
+    },
+    "oldRunVersion": {
+      "type": "integer",
+      "min": 1
+    },
+    "newRunVersion": {
+      "type": "integer",
+      "min": 1
+    },
+    "metadata": {
+      "type": "json"
+    }
+  }
+}

@@ -132,9 +132,14 @@ function normalizeBooleanFilter(value: unknown): boolean | null {
 
 function mapMedia(media: any) {
 	if (!media?.id) return null;
+	const providerMetadata = media.provider_metadata && typeof media.provider_metadata === 'object'
+		? media.provider_metadata
+		: (media.providerMetadata && typeof media.providerMetadata === 'object' ? media.providerMetadata : null);
 	return {
 		id: Number(media.id),
+		fileAssetId: Number(providerMetadata?.bridgedFromFileAssetId || 0) || null,
 		name: toText(media.name) || null,
+		provider: toText(media.provider) || null,
 		url: toText(media.url) || null,
 		mime: toText(media.mime) || null,
 	};
@@ -305,7 +310,7 @@ async function findSportsClubInTenant(clubRef: unknown, tenantId: number | strin
 	if (!where) httpError(404, 'Sports club not found', 'SPORTS_CLUB_NOT_FOUND');
 	const row = await strapi.db.query(SPORTS_CLUB_UID).findOne({
 		where: mergeTenantWhere(where, tenantId),
-		populate: { logo: { select: ['id', 'name', 'url', 'mime'] } },
+		populate: { logo: { select: ['id', 'name', 'url', 'mime', 'provider', 'provider_metadata'] } },
 		...(transacting ? { transacting } : {}),
 	} as any);
 	if (!row?.id) httpError(400, 'club must belong to current tenant', 'SPORTS_CLUB_OUTSIDE_TENANT', { field: 'club' });
@@ -473,7 +478,7 @@ function prepareWriteData(input: GenericRecord, existing?: any) {
 	const joinMessage = hasOwn(input, 'joinMessage') ? normalizeOptionalText(input.joinMessage) : normalizeOptionalText(existing?.joinMessage);
 	const note = hasOwn(input, 'note') ? normalizeOptionalText(input.note) : normalizeOptionalText(existing?.note);
 
-	if (!joinedAt && status === 'active') {
+	if (!existing?.id && !joinedAt && status === 'active') {
 		joinedAt = new Date().toISOString().slice(0, 10);
 	}
 	if (status === 'left' && !leftAt) {

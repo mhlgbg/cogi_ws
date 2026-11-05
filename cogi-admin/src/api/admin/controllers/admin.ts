@@ -21,7 +21,7 @@ import {
   cleanupOneTenantDuplicateGroup,
   scanTenantDuplicateUsers,
 } from '../services/user-duplicate-cleanup';
-import { readTenantUsersImportFile } from '../services/import-tenant-users';
+import { createOrAttachTenantUser, readTenantUsersImportFile } from '../services/import-tenant-users';
 import {
   cancelImportTenantUsersJob,
   createImportTenantUsersJob,
@@ -409,6 +409,56 @@ export default {
     } catch (error) {
       console.error('[listTenantUsers] Unexpected error:', error);
       return ctx.internalServerError('Failed to load tenant users');
+    }
+  },
+
+  async createTenantUser(ctx) {
+    try {
+      const tenantId = ctx.state?.tenantId ?? ctx.state?.tenant?.id;
+      if (!tenantId) {
+        return ctx.badRequest('Tenant context is required');
+      }
+
+      const body = ctx.request?.body || {};
+      const roleIdsRaw = Array.isArray(body.roleIds)
+        ? body.roleIds
+        : body.roleId !== undefined && body.roleId !== null && body.roleId !== ''
+          ? [body.roleId]
+          : [];
+      const roleIds = roleIdsRaw.map((value: unknown) => Number(value));
+
+      const result = await createOrAttachTenantUser({
+        tenantId: Number(tenantId),
+        roleIds,
+        username: typeof body.username === 'string' ? body.username : '',
+        email: typeof body.email === 'string' ? body.email : '',
+        fullName: typeof body.fullName === 'string' ? body.fullName : '',
+        phone: typeof body.phone === 'string' ? body.phone : '',
+        password: typeof body.password === 'string' ? body.password : '',
+      });
+
+      ctx.body = {
+        ok: true,
+        data: result,
+        message: result.caseType === 'EXISTING_USER'
+          ? 'Existing framework user added to tenant successfully'
+          : 'User created successfully',
+      };
+    } catch (error: any) {
+      const message = typeof error?.message === 'string' ? error.message : 'Failed to create tenant user';
+      if (
+        message.includes('required')
+        || message.includes('invalid')
+        || message.includes('exists')
+        || message.includes('Role is not enabled')
+        || message.includes('different existing users')
+        || message.includes('at least')
+      ) {
+        return ctx.badRequest(message);
+      }
+
+      console.error('[createTenantUser] Unexpected error:', error);
+      return ctx.internalServerError('Failed to create tenant user');
     }
   },
 

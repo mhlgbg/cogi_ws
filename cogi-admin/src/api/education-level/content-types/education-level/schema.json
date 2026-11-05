@@ -1,0 +1,30 @@
+{
+  "kind": "collectionType",
+  "collectionName": "education_levels",
+  "info": {
+    "singularName": "education-level",
+    "pluralName": "education-levels",
+    "displayName": "Education Level",
+    "description": "Global education level catalog."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "sortOrder": {
+      "type": "integer",
+      "default": 0,
+      "required": true
+    }
+  }
+}

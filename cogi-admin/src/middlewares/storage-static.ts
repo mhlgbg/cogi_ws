@@ -69,11 +69,17 @@ async function serveStaticFile(ctx: any, requestPath: string, routePrefix: '/upl
             $ne: 'DELETED',
           },
         },
-        select: ['id', 'isPublic'],
+        select: ['id', 'isPublic', 'provider', 'metadata'],
       })
 
       if (!fileAsset?.id) {
         ctx.status = 404
+        return true
+      }
+
+      if (String(fileAsset?.provider || '').toLowerCase() === 's3') {
+        ctx.status = 404
+        ctx.body = 'S3-backed file must be served via the storage API download endpoint'
         return true
       }
 

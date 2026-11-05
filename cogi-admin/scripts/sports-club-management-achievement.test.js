@@ -165,19 +165,25 @@ async function createFixture() {
   const profileB = await createSportsProfile(tenant.id, `${key}-profile-b`)
   cleanup.push(() => destroyEntity('api::sports-profile.sports-profile', profileB.id))
 
+  const profileNoMembership = await createSportsProfile(tenant.id, `${key}-profile-no-membership`)
+  cleanup.push(() => destroyEntity('api::sports-profile.sports-profile', profileNoMembership.id))
+
   const otherTenantProfile = await createSportsProfile(otherTenant.id, `${key}-profile-other`)
   cleanup.push(() => destroyEntity('api::sports-profile.sports-profile', otherTenantProfile.id))
 
   const assignment = await createAssignment(tenant.id, clubA.id, manager.id, `${key}-club-a`)
   cleanup.push(() => destroyEntity('api::sports-club-user-assignment.sports-club-user-assignment', assignment.id))
 
-  const membership = await createMembership(tenant.id, profileA.id, clubA.id, 'MGR001')
-  cleanup.push(() => destroyEntity('api::club-membership.club-membership', membership.id))
+  const membershipA = await createMembership(tenant.id, profileA.id, clubA.id, 'MGR001')
+  cleanup.push(() => destroyEntity('api::club-membership.club-membership', membershipA.id))
+
+  const membershipB = await createMembership(tenant.id, profileB.id, clubA.id, 'MGR002')
+  cleanup.push(() => destroyEntity('api::club-membership.club-membership', membershipB.id))
 
   const evidence = await createUploadFile(`${key}-evidence`)
   cleanup.push(() => destroyEntity('plugin::upload.file', evidence.id))
 
-  return { cleanup, tenant, manager, outsiderUser, otherTenant, clubA, clubB, otherTenantClub, profileA, profileB, otherTenantProfile, evidence }
+  return { cleanup, tenant, manager, outsiderUser, otherTenant, clubA, clubB, otherTenantClub, profileA, profileB, profileNoMembership, otherTenantProfile, evidence }
 }
 
 async function cleanupFixture(fixture) {
@@ -208,7 +214,9 @@ test('managed club achievements: manager can create submitted submission and mem
       achievementType: 'race_result',
       sportType: 'running',
       title: '10K Night Run',
-      resultText: '46:00',
+      achievedAt: '2026-01-04',
+      distanceKm: 10,
+      durationSeconds: 2760,
       evidence: [fixture.evidence.id],
     }, fixture.manager)
     assert.equal(created.status, 'submitted')
@@ -216,6 +224,9 @@ test('managed club achievements: manager can create submitted submission and mem
     assert.equal(created.achievement, null)
     assert.equal(created.clubMembership.memberCode, 'MGR001')
     assert.equal(created.evidence.length, 1)
+    assert.equal(created.distanceKm, 10)
+    assert.equal(created.durationSeconds, 2760)
+    assert.equal(created.resultText, '00:46:00')
   } finally {
     await cleanupFixture(fixture)
   }
@@ -229,7 +240,9 @@ test('managed club achievements: direct record creates verified submission and o
       achievementType: 'personal_best',
       sportType: 'running',
       title: '5K PB',
-      resultText: '20:11',
+      achievedAt: '2026-01-05',
+      distanceKm: 5,
+      durationSeconds: 1211,
       evidence: [fixture.evidence.id],
       verifyNow: true,
     }, fixture.manager)
@@ -241,6 +254,8 @@ test('managed club achievements: direct record creates verified submission and o
     assert.equal(listed.rows[0].id, created.achievement.id)
     assert.equal(listed.rows[0].status, 'active')
     assert.equal(listed.rows[0].clubMembership.memberCode, 'MGR001')
+    assert.equal(listed.rows[0].distanceKm, 5)
+    assert.equal(listed.rows[0].durationSeconds, 1211)
   } finally {
     await cleanupFixture(fixture)
   }
@@ -355,6 +370,15 @@ test('managed club achievements: assignment and tenant scope block other clubs a
     await assert.rejects(
       () => service.listManagedClubAchievements(fixture.manager.id, fixture.clubB.id, fixture.tenant.id, {}),
       (error) => error && error.status === 403,
+    )
+
+    await assert.rejects(
+      () => service.createManagedClubAchievementSubmission(fixture.manager.id, fixture.clubA.id, fixture.tenant.id, {
+        sportsProfile: fixture.profileNoMembership.id,
+        achievementType: 'other',
+        title: 'No active membership',
+      }, fixture.manager),
+      (error) => error && error.code === 'ACTIVE_CLUB_MEMBERSHIP_REQUIRED',
     )
 
     await assert.rejects(

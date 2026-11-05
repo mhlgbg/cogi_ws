@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { extractRelationRef, findEntityByRef, mergeTenantWhere, normalizeSortInput, resolveCurrentTenantId, toText, whereByParam } from '../../../utils/tenant-scope';
 import { getAssessmentVersionDetail } from '../../assessment-management/services/assessment-management';
 import { scoreAssessmentAttempt } from '../../assessment-scoring/services/assessment-scoring';
@@ -11,13 +12,15 @@ const ASSESSMENT_ANSWER_UID = 'api::assessment-answer.assessment-answer';
 const ASSESSMENT_RESULT_UID = 'api::assessment-result.assessment-result';
 const ASSESSMENT_SPEAKING_REVIEW_UID = 'api::assessment-speaking-review.assessment-speaking-review';
 const ASSESSMENT_PLACEMENT_CONFIRMATION_UID = 'api::assessment-placement-confirmation.assessment-placement-confirmation';
+const ASSIGNMENT_TASK_UID = 'api::assignment-task.assignment-task';
+const FILE_ASSET_UID = 'api::file-asset.file-asset';
 const QUESTION_UID = 'api::question.question';
 const LEARNER_UID = 'api::learner.learner';
 const LEAD_UID = 'api::lead.lead';
 const USER_UID = 'plugin::users-permissions.user';
 
 const ATTEMPT_STATUSES = ['created', 'in_progress', 'submitted', 'expired', 'cancelled'] as const;
-const SOURCE_TYPES = ['admin', 'campaign', 'public', 'learner', 'exam', 'other'] as const;
+const SOURCE_TYPES = ['admin', 'admin_test', 'campaign', 'public', 'learner', 'exam', 'other'] as const;
 type AttemptStatus = (typeof ATTEMPT_STATUSES)[number];
 type SourceType = (typeof SOURCE_TYPES)[number];
 
@@ -32,6 +35,32 @@ type FinalizeExpiredAttemptOptions = {
   rejectIfNotOverdue?: boolean;
   rejectIfDeadlineMissing?: boolean;
   submittedAt?: string | null;
+};
+
+type AssessmentRuntimeAudioTokenPayload = {
+  purpose: 'assessment_runtime_audio';
+  tenantId: number | string;
+  tenantCode?: string | null;
+  attemptId: string;
+  assessmentQuestionId: string;
+  fileAssetRef: string;
+  exp: number;
+};
+
+type AssessmentRuntimeFileAssetTokenPayload = {
+  purpose: 'assessment_runtime_file_asset';
+  tenantId: number | string;
+  tenantCode?: string | null;
+  attemptId: string;
+  fileAssetRef: string;
+  exp: number;
+};
+
+type AnswerRuntimeMeta = {
+  activeAudioPlay?: {
+    playId: string;
+    startedAt: string;
+  } | null;
 };
 
 class AssessmentRuntimeError extends Error {
@@ -91,6 +120,16 @@ function parseNonNegativeInteger(value: unknown, fieldName: string): number {
   return parsed;
 }
 
+function parseAssignmentTaskSourceRef(sourceRef: unknown) {
+  const text = toText(sourceRef);
+  const match = /^assignment-task:(\d+):learner:(\d+)$/i.exec(text);
+  if (!match) return null;
+  return {
+    taskId: Number(match[1]),
+    learnerId: Number(match[2]),
+  };
+}
+
 function parseJsonObject(value: unknown, fieldName: string) {
   if (value === undefined) return undefined;
   if (value === null || value === '') return null;
@@ -104,6 +143,106 @@ function parseJsonObject(value: unknown, fieldName: string) {
   }
 }
 
+function resolveEffectiveSnapshotStimulus(snapshotQuestion: any) {
+  return snapshotQuestion?.sectionStimulus || snapshotQuestion?.question?.stimulus || null;
+}
+
+function hasAudioStimulus(snapshotQuestion: any) {
+  return Boolean(resolveEffectiveSnapshotStimulus(snapshotQuestion)?.audioAsset);
+}
+
+function normalizeListenRequirementRatio(snapshotQuestion: any) {
+  const ratio = Number(snapshotQuestion?.minListenRatioBeforeAnswer || 0);
+  if (!Number.isFinite(ratio) || ratio <= 0) return 0;
+  return Math.max(0, Math.min(1, ratio));
+}
+
+function hasListenRequirement(snapshotQuestion: any) {
+  return normalizeListenRequirementRatio(snapshotQuestion) > 0;
+}
+
+function buildSnapshotStimulus(row: any) {
+  if (!row) return null;
+  return {
+    id: normalizeId(row),
+    documentId: row?.documentId || null,
+    code: row?.code || '',
+    title: row?.title || '',
+    type: row?.type || '',
+    instruction: row?.instruction || '',
+    content: row?.content || '',
+    contentType: toText(row?.contentType).toLowerCase() === 'html' ? 'html' : 'plain_text',
+    audioAsset: sanitizeFileAssetSnapshot(row?.audioAsset),
+    imageAsset: sanitizeFileAssetSnapshot(row?.imageAsset),
+  };
+}
+
+function normalizeHtmlContentType(value: unknown): 'plain_text' | 'html' {
+  return toText(value).toLowerCase() === 'html' ? 'html' : 'plain_text';
+}
+
+function normalizeQuestionDisplayMode(value: unknown): 'single' | 'all' | 'inline_fill' {
+  const normalized = toText(value).toLowerCase();
+  if (normalized === 'all') return 'all';
+  if (normalized === 'inline_fill') return 'inline_fill';
+  return 'single';
+}
+
+function normalizeQuestionLayoutContentType(_: unknown): 'html' {
+  return 'html';
+}
+
+function parseAnswerRuntimeMeta(value: unknown): AnswerRuntimeMeta {
+  const payload = parseJsonObject(value, 'runtimeMeta');
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return {};
+  return payload as AnswerRuntimeMeta;
+}
+
+function buildActiveAudioPlayMeta(playId: string): AnswerRuntimeMeta {
+  return {
+    activeAudioPlay: {
+      playId,
+      startedAt: new Date().toISOString(),
+    },
+  };
+}
+
+function clearActiveAudioPlayMeta(meta: AnswerRuntimeMeta = {}): AnswerRuntimeMeta {
+  return {
+    ...meta,
+    activeAudioPlay: null,
+  };
+}
+
+function isPersistedListenRequirementSatisfied(answer: any) {
+  return answer?.listenRequirementSatisfied === true;
+}
+
+function hasStartedAnyAudioPlay(answer: any) {
+  return Number(answer?.audioPlayCount || 0) >= 1;
+}
+
+function resolveEffectiveAudioPlayLimit(snapshotQuestion: any) {
+  if (snapshotQuestion?.sectionStimulus && snapshotQuestion?.sectionAudioPlayLimit !== null && snapshotQuestion?.sectionAudioPlayLimit !== undefined) {
+    return snapshotQuestion.sectionAudioPlayLimit;
+  }
+  return snapshotQuestion?.audioPlayLimit ?? null;
+}
+
+function canSaveAudioAnswer(snapshotQuestion: any, answer: any) {
+  if (!hasAudioStimulus(snapshotQuestion)) return { allowed: true, errorCode: null };
+  if (hasListenRequirement(snapshotQuestion)) {
+    return {
+      allowed: isPersistedListenRequirementSatisfied(answer),
+      errorCode: 'LISTEN_REQUIREMENT_NOT_SATISFIED',
+    };
+  }
+  return {
+    allowed: hasStartedAnyAudioPlay(answer),
+    errorCode: 'AUDIO_NOT_STARTED',
+  };
+}
+
 function normalizeDate(value: unknown) {
   if (!value) return null;
   const date = value instanceof Date ? value : new Date(String(value));
@@ -113,6 +252,101 @@ function normalizeDate(value: unknown) {
 function addMinutes(date: Date, minutes: number | null) {
   if (!minutes || minutes <= 0) return null;
   return new Date(date.getTime() + minutes * 60 * 1000);
+}
+
+function getAssessmentRuntimeMediaSigningSecret() {
+  const appKeys = toText(process.env.APP_KEYS);
+  if (appKeys) {
+    const first = appKeys.split(',').map((item) => item.trim()).find(Boolean);
+    if (first) return first;
+  }
+  const jwtSecret = toText(process.env.JWT_SECRET || process.env.ADMIN_JWT_SECRET);
+  if (jwtSecret) return jwtSecret;
+  return 'assessment-runtime-media-secret';
+}
+
+function signAssessmentRuntimeAudioToken(payload: AssessmentRuntimeAudioTokenPayload) {
+  const encodedPayload = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  const signature = crypto.createHmac('sha256', getAssessmentRuntimeMediaSigningSecret()).update(encodedPayload).digest('base64url');
+  return `${encodedPayload}.${signature}`;
+}
+
+function signAssessmentRuntimeFileAssetToken(payload: AssessmentRuntimeFileAssetTokenPayload) {
+  const encodedPayload = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  const signature = crypto.createHmac('sha256', getAssessmentRuntimeMediaSigningSecret()).update(encodedPayload).digest('base64url');
+  return `${encodedPayload}.${signature}`;
+}
+
+export function verifyAssessmentRuntimeAudioToken(token: string, expectedAttemptId?: unknown, expectedAssessmentQuestionId?: unknown) {
+  const normalizedToken = toText(token);
+  if (!normalizedToken || !normalizedToken.includes('.')) {
+    throw new AssessmentRuntimeError(400, 'Invalid assessment runtime audio token');
+  }
+
+  const [encodedPayload, signature] = normalizedToken.split('.');
+  const expectedSignature = crypto.createHmac('sha256', getAssessmentRuntimeMediaSigningSecret()).update(encodedPayload).digest('base64url');
+  if (signature !== expectedSignature) {
+    throw new AssessmentRuntimeError(400, 'Invalid assessment runtime audio token');
+  }
+
+  let payload: AssessmentRuntimeAudioTokenPayload | null = null;
+  try {
+    payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8')) as AssessmentRuntimeAudioTokenPayload;
+  } catch {
+    throw new AssessmentRuntimeError(400, 'Invalid assessment runtime audio token');
+  }
+
+  if (payload?.purpose !== 'assessment_runtime_audio') {
+    throw new AssessmentRuntimeError(400, 'Invalid assessment runtime audio token');
+  }
+
+  if (!Number.isFinite(Number(payload?.exp || 0)) || Number(payload?.exp || 0) <= Date.now()) {
+    throw new AssessmentRuntimeError(401, 'Assessment runtime audio token expired');
+  }
+
+  if (expectedAttemptId !== undefined && String(payload?.attemptId || '') !== String(expectedAttemptId || '')) {
+    throw new AssessmentRuntimeError(403, 'Assessment runtime audio token does not match attempt');
+  }
+
+  if (expectedAssessmentQuestionId !== undefined && String(payload?.assessmentQuestionId || '') !== String(expectedAssessmentQuestionId || '')) {
+    throw new AssessmentRuntimeError(403, 'Assessment runtime audio token does not match question');
+  }
+
+  return payload;
+}
+
+export function verifyAssessmentRuntimeFileAssetToken(token: string, expectedAttemptId?: unknown) {
+  const normalizedToken = toText(token);
+  if (!normalizedToken || !normalizedToken.includes('.')) {
+    throw new AssessmentRuntimeError(400, 'Invalid assessment runtime file asset token');
+  }
+
+  const [encodedPayload, signature] = normalizedToken.split('.');
+  const expectedSignature = crypto.createHmac('sha256', getAssessmentRuntimeMediaSigningSecret()).update(encodedPayload).digest('base64url');
+  if (signature !== expectedSignature) {
+    throw new AssessmentRuntimeError(400, 'Invalid assessment runtime file asset token');
+  }
+
+  let payload: AssessmentRuntimeFileAssetTokenPayload | null = null;
+  try {
+    payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8')) as AssessmentRuntimeFileAssetTokenPayload;
+  } catch {
+    throw new AssessmentRuntimeError(400, 'Invalid assessment runtime file asset token');
+  }
+
+  if (payload?.purpose !== 'assessment_runtime_file_asset') {
+    throw new AssessmentRuntimeError(400, 'Invalid assessment runtime file asset token');
+  }
+
+  if (!Number.isFinite(Number(payload?.exp || 0)) || Number(payload?.exp || 0) <= Date.now()) {
+    throw new AssessmentRuntimeError(401, 'Assessment runtime file asset token expired');
+  }
+
+  if (expectedAttemptId !== undefined && String(payload?.attemptId || '') !== String(expectedAttemptId || '')) {
+    throw new AssessmentRuntimeError(403, 'Assessment runtime file asset token does not match attempt');
+  }
+
+  return payload;
 }
 
 function normalizeDurationMinutes(value: unknown) {
@@ -177,6 +411,65 @@ function sanitizeFileAssetSnapshot(row: any) {
   };
 }
 
+function buildLegacyRuntimeFileAssetUrl(asset: any) {
+  const explicitUrl = toText(asset?.url);
+  if (explicitUrl) return explicitUrl;
+  const relativePath = toText(asset?.relativePath).replace(/^\/+/, '');
+  return relativePath ? `/storage/${relativePath}` : '';
+}
+
+function buildRuntimeFileAssetDeliveryUrl(attempt: any, asset: any) {
+  const fileAssetRef = toText(asset?.id || asset?.documentId);
+  if (!fileAssetRef) return buildLegacyRuntimeFileAssetUrl(asset);
+
+  const attemptRefValue = String(normalizeId(attempt) || '');
+  const token = signAssessmentRuntimeFileAssetToken({
+    purpose: 'assessment_runtime_file_asset',
+    tenantId: extractRelationRef(attempt?.tenant) || '',
+    tenantCode: toText(attempt?.tenant?.code) || null,
+    attemptId: attemptRefValue,
+    fileAssetRef,
+    exp: Date.now() + 10 * 60 * 1000,
+  });
+
+  return `/api/storage/files/${encodeURIComponent(fileAssetRef)}/download?mediaToken=${encodeURIComponent(token)}`;
+}
+
+function buildRuntimeFileAssetDescriptor(attempt: any, asset: any) {
+  if (!asset || typeof asset !== 'object') return null;
+
+  return {
+    ...asset,
+    name: toText(asset?.fileName || asset?.originalName || asset?.code || 'file'),
+    url: buildRuntimeFileAssetDeliveryUrl(attempt, asset),
+  };
+}
+
+function buildRuntimeAudioAssetDescriptor(attempt: any, assessmentQuestionRef: unknown, audioAsset: any) {
+  if (!audioAsset || typeof audioAsset !== 'object') return null;
+
+  const attemptRefValue = String(normalizeId(attempt) || '');
+  const assessmentQuestionRefValue = String(assessmentQuestionRef || '');
+  const fileAssetRef = String(normalizeId(audioAsset) || audioAsset?.documentId || '');
+  const token = signAssessmentRuntimeAudioToken({
+    purpose: 'assessment_runtime_audio',
+    tenantId: extractRelationRef(attempt?.tenant) || '',
+    tenantCode: toText(attempt?.tenant?.code) || null,
+    attemptId: attemptRefValue,
+    assessmentQuestionId: assessmentQuestionRefValue,
+    fileAssetRef,
+    exp: Date.now() + 10 * 60 * 1000,
+  });
+  const runtimeUrl = `/api/assessment-runtime/assessment-attempts/${encodeURIComponent(attemptRefValue)}/questions/${encodeURIComponent(assessmentQuestionRefValue)}/audio?mediaToken=${encodeURIComponent(token)}`;
+
+  return {
+    ...audioAsset,
+    name: toText(audioAsset?.fileName || audioAsset?.originalName || audioAsset?.code || 'audio'),
+    url: runtimeUrl,
+    runtimeUrl,
+  };
+}
+
 function sortByOrder<T extends Record<string, any>>(rows: T[] = []) {
   return [...rows].sort((left, right) => {
     const leftOrder = Number(left?.order || 0);
@@ -208,27 +501,22 @@ function buildCandidateQuestionSnapshot(item: any) {
     required: item?.required !== false,
     audioPlayLimit: item?.audioPlayLimit ?? null,
     allowSeek: item?.allowSeek !== false,
+    minListenRatioBeforeAnswer: item?.minListenRatioBeforeAnswer ?? null,
     minWords: item?.minWords ?? null,
     maxWords: item?.maxWords ?? null,
+    config: item?.config ?? null,
     question: {
       id: normalizeId(question),
       documentId: question?.documentId || null,
       code: question?.code || '',
       title: question?.title || '',
       questionText: question?.questionText || '',
+      questionTextType: toText(question?.questionTextType).toLowerCase() === 'html' ? 'html' : 'plain_text',
       type: question?.type || '',
       difficulty: question?.difficulty || '',
-      stimulus: question?.stimulus ? {
-        id: normalizeId(question.stimulus),
-        documentId: question.stimulus?.documentId || null,
-        code: question.stimulus?.code || '',
-        title: question.stimulus?.title || '',
-        type: question.stimulus?.type || '',
-        instruction: question.stimulus?.instruction || '',
-        content: question.stimulus?.content || '',
-        audioAsset: sanitizeFileAssetSnapshot(question.stimulus?.audioAsset),
-        imageAsset: sanitizeFileAssetSnapshot(question.stimulus?.imageAsset),
-      } : null,
+      questionImageAssetCode: question?.questionImageAsset?.code || null,
+      questionImageAsset: sanitizeFileAssetSnapshot(question?.questionImageAsset),
+      stimulus: buildSnapshotStimulus(question?.stimulus),
       options,
     },
   };
@@ -267,7 +555,18 @@ function buildAttemptSnapshots(versionDetail: any) {
       documentId: section?.documentId || null,
       code: section?.code || '',
       title: section?.title || '',
+      description: section?.description || '',
       instruction: section?.instruction || '',
+      instructionContentType: normalizeHtmlContentType(section?.instructionContentType),
+      instructionImageAssetCode: section?.instructionImageAsset?.code || null,
+      instructionImageAsset: sanitizeFileAssetSnapshot(section?.instructionImageAsset),
+      stimulusCode: section?.stimulus?.code || null,
+      stimulus: buildSnapshotStimulus(section?.stimulus),
+      questionDisplayMode: normalizeQuestionDisplayMode(section?.questionDisplayMode),
+      questionLayoutContent: section?.questionLayoutContent || '',
+      questionLayoutContentType: normalizeQuestionLayoutContentType(section?.questionLayoutContentType),
+      audioPlayLimit: section?.audioPlayLimit ?? null,
+      listenLimit: section?.audioPlayLimit ?? null,
       order: Number(section?.order || 0),
       skill: normalizeSimpleRelation(section?.skill),
       questions: assessmentQuestions.map(buildCandidateQuestionSnapshot),
@@ -310,7 +609,18 @@ function buildAttemptSnapshots(versionDetail: any) {
         documentId: section.documentId,
         code: section.code,
         title: section.title,
+        description: section.description,
         instruction: section.instruction,
+        instructionContentType: section.instructionContentType,
+        instructionImageAssetCode: section.instructionImageAssetCode,
+        instructionImageAsset: section.instructionImageAsset,
+        stimulusCode: section.stimulusCode,
+        stimulus: section.stimulus,
+        questionDisplayMode: section.questionDisplayMode,
+        questionLayoutContent: section.questionLayoutContent,
+        questionLayoutContentType: section.questionLayoutContentType,
+        audioPlayLimit: section.audioPlayLimit,
+        listenLimit: section.listenLimit,
         order: section.order,
         skill: section.skill,
         questions: section.questions,
@@ -347,7 +657,16 @@ function flattenAttemptQuestions(definitionSnapshot: any) {
   for (const section of sections) {
     const questions = Array.isArray(section?.questions) ? section.questions : [];
     for (const item of questions) {
-      rows.push({ ...item, sectionCode: section?.code || '', sectionTitle: section?.title || '', sectionOrder: Number(section?.order || 0) });
+      rows.push({
+        ...item,
+        sectionCode: section?.code || '',
+        sectionTitle: section?.title || '',
+        sectionOrder: Number(section?.order || 0),
+        sectionStimulus: section?.stimulus || null,
+        sectionStimulusCode: section?.stimulusCode || null,
+        questionDisplayMode: normalizeQuestionDisplayMode(section?.questionDisplayMode),
+        sectionAudioPlayLimit: section?.listenLimit ?? section?.audioPlayLimit ?? null,
+      });
     }
   }
   return sortByOrder(rows);
@@ -357,6 +676,64 @@ function findAttemptQuestionSnapshot(definitionSnapshot: any, assessmentQuestion
   const target = String(assessmentQuestionRef || '').trim();
   if (!target) return null;
   return flattenAttemptQuestions(definitionSnapshot).find((item) => String(item?.assessmentQuestionId || '') === target || String(item?.assessmentQuestionDocumentId || '') === target) || null;
+}
+
+async function resolveSnapshotAudioFileAsset(snapshotAudioAsset: any, tenantId: number | string) {
+  const refs = [snapshotAudioAsset?.id, snapshotAudioAsset?.documentId].filter(Boolean);
+  for (const ref of refs) {
+    const entity = await findEntityByRef(FILE_ASSET_UID, ref, { tenant: { select: ['id', 'documentId'] } });
+    if (!entity?.id) continue;
+    const entityTenantRef = extractRelationRef(entity?.tenant);
+    if (String(entityTenantRef || '') !== String(tenantId)) continue;
+    return entity;
+  }
+  return null;
+}
+
+async function buildAttemptQuestionAudioResponse(attemptRef: unknown, assessmentQuestionRef: unknown, tenantId: number | string, context: RuntimeContext = {}) {
+  const attempt = await markAttemptExpiredIfNeeded(await findAttemptOrThrow(attemptRef, tenantId, { includeAnswers: false }), tenantId);
+  await ensureAttemptAccess(attempt, context);
+  const snapshotQuestion = findAttemptQuestionSnapshot(attempt?.definitionSnapshot, assessmentQuestionRef);
+  if (!snapshotQuestion) throw new AssessmentRuntimeError(404, 'assessmentQuestion does not belong to this attempt');
+  const snapshotAudioAsset = resolveEffectiveSnapshotStimulus(snapshotQuestion)?.audioAsset;
+  if (!snapshotAudioAsset) throw new AssessmentRuntimeError(404, 'Audio stimulus not found');
+
+  const fileAsset = await resolveSnapshotAudioFileAsset(snapshotAudioAsset, tenantId);
+  if (!fileAsset?.id && !snapshotAudioAsset?.relativePath) throw new AssessmentRuntimeError(404, 'Audio stimulus file path not found');
+
+  return {
+    attempt,
+    assessmentQuestionId: snapshotQuestion?.assessmentQuestionId || snapshotQuestion?.assessmentQuestionDocumentId || null,
+    fileAsset,
+    snapshotAudioAsset,
+    fileName: toText(fileAsset?.fileName || fileAsset?.originalName || snapshotAudioAsset?.fileName || snapshotAudioAsset?.originalName || 'audio.mp3') || 'audio.mp3',
+    contentType: toText(fileAsset?.mimeType || snapshotAudioAsset?.mimeType) || 'application/octet-stream',
+  };
+}
+
+export async function getAssessmentQuestionAudioDelivery(attemptRef: unknown, assessmentQuestionRef: unknown, tenantId: number | string, context: RuntimeContext = {}) {
+  const resolved = await buildAttemptQuestionAudioResponse(attemptRef, assessmentQuestionRef, tenantId, context);
+  const attemptRefValue = String(normalizeId(resolved.attempt) || '');
+  const assessmentQuestionRefValue = String(resolved.assessmentQuestionId || '');
+  const fileAssetRef = String(normalizeId(resolved.fileAsset) || normalizeId(resolved.snapshotAudioAsset) || '');
+  const token = signAssessmentRuntimeAudioToken({
+    purpose: 'assessment_runtime_audio',
+    tenantId,
+    tenantCode: toText(resolved.attempt?.tenant?.code) || null,
+    attemptId: attemptRefValue,
+    assessmentQuestionId: assessmentQuestionRefValue,
+    fileAssetRef,
+    exp: Date.now() + 10 * 60 * 1000,
+  });
+  return {
+    url: `/api/assessment-runtime/assessment-attempts/${encodeURIComponent(attemptRefValue)}/questions/${encodeURIComponent(assessmentQuestionRefValue)}/audio?mediaToken=${encodeURIComponent(token)}`,
+    fileName: resolved.fileName,
+    mimeType: resolved.contentType,
+  };
+}
+
+export async function streamAssessmentQuestionAudio(attemptRef: unknown, assessmentQuestionRef: unknown, tenantId: number | string, context: RuntimeContext = {}) {
+  return buildAttemptQuestionAudioResponse(attemptRef, assessmentQuestionRef, tenantId, context);
 }
 
 function getAllowedOptionRefs(questionSnapshot: any) {
@@ -476,6 +853,8 @@ function mapAnswer(row: any) {
     lastAnsweredAt: row?.lastAnsweredAt || null,
     timeSpentSeconds: Number(row?.timeSpentSeconds || 0),
     audioPlayCount: Number(row?.audioPlayCount || 0),
+    listenRequirementSatisfied: row?.listenRequirementSatisfied === true,
+    listenRequirementSatisfiedAt: row?.listenRequirementSatisfiedAt || null,
   };
 }
 
@@ -518,6 +897,7 @@ async function generateAttemptCode(tenantId: number | string) {
 
 function buildAttemptPopulate(options: { includeAnswers?: boolean } = {}) {
   const populate: any = {
+    tenant: { select: ['id', 'documentId', 'code'] },
     assessment: { select: ['id', 'documentId', 'code', 'name', 'assessmentType', 'status'] },
     assessmentVersion: { select: ['id', 'documentId', 'code', 'title', 'versionStatus', 'version', 'durationMinutes', 'resultMode', 'requiresSpeaking', 'requiresTeacherConfirmation'] },
     user: { select: ['id', 'username', 'email', 'fullName'] },
@@ -700,11 +1080,56 @@ function resolveAttemptProgress(definitionSnapshot: any, answers: any[], progres
 
 function buildRuntimeResponse(attempt: any, answers: any[] = []) {
   const mappedAnswers = (answers || []).map(mapAnswer);
+  const buildRuntimeStimulusDescriptor = (stimulus: any, assessmentQuestionRef: unknown) => {
+    if (!stimulus) return null;
+    return {
+      ...stimulus,
+      imageAsset: buildRuntimeFileAssetDescriptor(attempt, stimulus?.imageAsset),
+      audioAsset: buildRuntimeAudioAssetDescriptor(attempt, assessmentQuestionRef, stimulus?.audioAsset),
+    };
+  };
+  const candidateDefinition = attempt?.definitionSnapshot && Array.isArray(attempt?.definitionSnapshot?.sections)
+    ? {
+        ...attempt.definitionSnapshot,
+        sections: attempt.definitionSnapshot.sections.map((section: any) => ({
+          ...section,
+          description: section?.description || '',
+          instructionContentType: normalizeHtmlContentType(section?.instructionContentType),
+          instructionImage: buildRuntimeFileAssetDescriptor(attempt, section?.instructionImageAsset),
+          stimulus: buildRuntimeStimulusDescriptor(section?.stimulus, section?.questions?.[0]?.assessmentQuestionId || section?.questions?.[0]?.assessmentQuestionDocumentId || ''),
+          questionDisplayMode: normalizeQuestionDisplayMode(section?.questionDisplayMode),
+          questionLayoutContent: section?.questionLayoutContent || '',
+          questionLayoutContentType: normalizeQuestionLayoutContentType(section?.questionLayoutContentType),
+          audioPlayLimit: section?.listenLimit ?? section?.audioPlayLimit ?? null,
+          listenLimit: section?.listenLimit ?? section?.audioPlayLimit ?? null,
+          questions: Array.isArray(section?.questions)
+            ? section.questions.map((item: any) => {
+                const assessmentQuestionRefValue = String(item?.assessmentQuestionId || item?.assessmentQuestionDocumentId || '');
+                const question = item?.question || {};
+                return {
+                  ...item,
+                  question: {
+                    ...question,
+                    questionImageAsset: buildRuntimeFileAssetDescriptor(attempt, question?.questionImageAsset),
+                    options: Array.isArray(question?.options)
+                      ? question.options.map((option: any) => ({
+                          ...option,
+                          imageAsset: buildRuntimeFileAssetDescriptor(attempt, option?.imageAsset),
+                        }))
+                      : [],
+                    stimulus: buildRuntimeStimulusDescriptor(question?.stimulus, assessmentQuestionRefValue),
+                  },
+                };
+              })
+            : [],
+        })),
+      }
+    : attempt?.definitionSnapshot || null;
   return {
     attempt: mapAttempt(attempt),
-    candidateDefinition: attempt?.definitionSnapshot || null,
+    candidateDefinition,
     answers: mappedAnswers,
-    progress: resolveAttemptProgress(attempt?.definitionSnapshot, mappedAnswers, attempt?.progressState || null),
+    progress: resolveAttemptProgress(candidateDefinition, mappedAnswers, attempt?.progressState || null),
     serverTime: new Date().toISOString(),
     expiresAt: attempt?.expiresAt || null,
   };
@@ -713,6 +1138,11 @@ function buildRuntimeResponse(attempt: any, answers: any[] = []) {
 function mapCandidateResult(row: any, options: { revealScores?: boolean } = {}) {
   if (!row) return null
   const revealScores = options.revealScores === true
+  const objectiveScore = revealScores ? row?.objectiveScore ?? null : null
+  const objectiveMaxScore = revealScores ? row?.objectiveMaxScore ?? null : null
+  const objectivePercentage = objectiveScore === null || objectiveScore === undefined || objectiveMaxScore === null || objectiveMaxScore === undefined || Number(objectiveMaxScore) <= 0
+    ? null
+    : Number(((Number(objectiveScore) / Number(objectiveMaxScore)) * 100).toFixed(2))
   return {
     id: normalizeId(row),
     documentId: row?.documentId || null,
@@ -720,8 +1150,11 @@ function mapCandidateResult(row: any, options: { revealScores?: boolean } = {}) 
     rawScore: revealScores ? row?.rawScore ?? null : null,
     maxScore: revealScores ? row?.maxScore ?? null : null,
     percentage: revealScores ? row?.percentage ?? null : null,
-    provisionalLevel: row?.provisionalLevel || null,
-    placementLabel: row?.placementLabel || null,
+    objectiveScore,
+    objectiveMaxScore,
+    objectivePercentage,
+    provisionalLevel: revealScores ? (row?.provisionalLevel || null) : null,
+    placementLabel: revealScores ? (row?.placementLabel || null) : null,
     pendingManualCount: Number(row?.pendingManualCount || 0),
     pendingManualMaxScore: row?.pendingManualMaxScore ?? null,
     configuredTotalMaxScore: row?.configuredTotalMaxScore ?? null,
@@ -738,19 +1171,55 @@ function mapCandidateSpeakingReview(row: any, options: { revealScores?: boolean 
     overallScore: revealScores ? row?.overallScore ?? null : null,
     overallMaxScore: revealScores ? row?.maxScore ?? null : null,
     percentage: revealScores ? row?.percentage ?? null : null,
-    suggestedLevel: row?.suggestedLevel || null,
+    suggestedLevel: revealScores ? (row?.suggestedLevel || null) : null,
     reviewedAt: row?.reviewedAt || null,
   }
 }
 
-function mapCandidateConfirmation(row: any) {
+function mapCandidateConfirmation(row: any, options: { revealScores?: boolean } = {}) {
   if (!row) return null
+  const revealScores = options.revealScores === true
   return {
     status: row?.status || 'draft',
-    confirmedLevel: row?.confirmedLevel || null,
-    confirmedLabel: row?.confirmedLabel || null,
+    confirmedLevel: revealScores ? (row?.confirmedLevel || null) : null,
+    confirmedLabel: revealScores ? (row?.confirmedLabel || null) : null,
     confirmedAt: row?.confirmedAt || null,
   }
+}
+
+async function resolveAssignmentAttemptVisibility(attempt: any, tenantId: number | string) {
+  if (toText(attempt?.sourceType) !== 'learner') return null
+  const parsed = parseAssignmentTaskSourceRef(attempt?.sourceRef)
+  if (!parsed?.taskId) return null
+  const task = await strapi.db.query(ASSIGNMENT_TASK_UID).findOne({
+    where: mergeTenantWhere({ id: { $eq: parsed.taskId } }, tenantId),
+    select: ['id', 'taskType', 'assessmentSettings'],
+  })
+  if (!task?.id || toText(task?.taskType) !== 'assessment') return null
+  const settings = task?.assessmentSettings && typeof task.assessmentSettings === 'object' && !Array.isArray(task.assessmentSettings)
+    ? task.assessmentSettings
+    : {}
+  return {
+    taskId: Number(task.id),
+    showScoreAfterSubmit: settings?.showScoreAfterSubmit !== false,
+  }
+}
+
+function shouldRevealCandidateScores(result: any, confirmation: any, visibility: { showScoreAfterSubmit: boolean } | null) {
+  if (visibility?.showScoreAfterSubmit === false) return false
+  if (!result?.id) return false
+  if (Number(result?.pendingManualCount || 0) > 0) return false
+  return rowHasCandidateVisibleScore(result, confirmation)
+}
+
+function rowHasCandidateVisibleScore(result: any, confirmation: any) {
+  return result?.rawScore !== null
+    && result?.rawScore !== undefined
+    || result?.percentage !== null
+    && result?.percentage !== undefined
+    || Boolean(result?.provisionalLevel)
+    || Boolean(confirmation?.confirmedLevel)
+    || (Array.isArray(result?.sectionScores) && result.sectionScores.length > 0)
 }
 
 function deriveCandidateWorkflowState(attempt: any, result: any, speakingReview: any, confirmation: any) {
@@ -870,7 +1339,9 @@ async function resolveActorPayload(payload: any, tenantId: number | string, auth
     lead,
     sourceType,
     sourceRef: toNullableText(payload.sourceRef),
-    candidateNameSnapshot: toNullableText(payload.candidateNameSnapshot) || learner?.fullName || lead?.fullName || authUser?.fullName || null,
+    candidateNameSnapshot: sourceType === 'admin_test'
+      ? toNullableText(payload.candidateNameSnapshot) || `Test by ${authUser?.fullName || authUser?.username || authUser?.email || 'Admin'}`
+      : toNullableText(payload.candidateNameSnapshot) || learner?.fullName || lead?.fullName || authUser?.fullName || null,
     candidateEmailSnapshot: toNullableText(payload.candidateEmailSnapshot) || user?.email || null,
     candidatePhoneSnapshot: toNullableText(payload.candidatePhoneSnapshot) || learner?.parentPhone || lead?.phone || null,
   };
@@ -901,9 +1372,18 @@ async function resolveRunnableVersion(versionRef: unknown, tenantId: number | st
 
 async function resolveAttemptDefinitionContext(versionRef: unknown, tenantId: number | string, allowDraft = false) {
   const versionDetail = await resolveRunnableVersion(versionRef, tenantId, allowDraft);
-  const assessmentVersionEntity = await ensureEntityInTenant(ASSESSMENT_VERSION_UID, versionRef, tenantId, 'assessmentVersion');
+  const assessmentVersionEntity = await findEntityByRef(ASSESSMENT_VERSION_UID, versionRef, {
+    assessment: { select: ['id', 'documentId'] },
+    tenant: { select: ['id', 'documentId'] },
+  });
+  if (!assessmentVersionEntity) throw new AssessmentRuntimeError(400, 'assessmentVersion is invalid');
+  const versionTenantRef = extractRelationRef(assessmentVersionEntity?.tenant);
+  if (String(versionTenantRef || '') !== String(tenantId)) {
+    throw new AssessmentRuntimeError(403, 'assessmentVersion does not belong to current tenant');
+  }
   if (!assessmentVersionEntity?.id) throw new AssessmentRuntimeError(400, 'Assessment Version is missing database id');
-  const assessmentEntity = await ensureEntityInTenant(ASSESSMENT_UID, versionDetail?.assessment?.id, tenantId, 'assessment');
+  const assessmentRef = extractRelationRef(assessmentVersionEntity?.assessment) || versionDetail?.assessment?.documentId || versionDetail?.assessment?.id;
+  const assessmentEntity = await ensureEntityInTenant(ASSESSMENT_UID, assessmentRef, tenantId, 'assessment');
   if (!assessmentEntity?.id) throw new AssessmentRuntimeError(400, 'Assessment is missing database id');
   return {
     versionDetail,
@@ -935,11 +1415,19 @@ export function getTenantIdFromContext(ctx: any) {
 
 export async function startAssessmentAttempt(versionId: unknown, body: any, tenantId: number | string, context: RuntimeContext = {}) {
   const payload = extractBody(body);
-  const allowDraft = parseBoolean(payload.allowDraft, false);
-  const resumeExisting = parseBoolean(payload.resumeExisting, true);
   const actor = await resolveActorPayload(payload, tenantId, context.authUserId);
+  const isAdminTest = actor?.sourceType === 'admin_test';
+  if (isAdminTest && !context.authUserId) throw new AssessmentRuntimeError(401, 'Unauthorized');
+  const allowDraft = parseBoolean(payload.allowDraft, isAdminTest);
+  const resumeExisting = parseBoolean(payload.resumeExisting, isAdminTest ? false : true);
 
-  if (resumeExisting) {
+  if (isAdminTest) {
+    actor.sourceRef = actor.sourceRef || toText((await getAssessmentVersionDetail(versionId, tenantId))?.code) || toText(versionId);
+    actor.learner = null;
+    actor.lead = null;
+  }
+
+  if (resumeExisting && !isAdminTest) {
     const reuseWhere = buildAttemptReuseWhere(versionId, actor, tenantId);
     if (reuseWhere) {
       const existing = await strapi.db.query(ASSESSMENT_ATTEMPT_UID).findOne({
@@ -1057,6 +1545,10 @@ export async function saveAssessmentAnswer(attemptId: unknown, assessmentQuestio
   const existing = await findAttemptAnswer(attempt.id, normalizeId(assessmentQuestion), tenantId);
   const now = new Date().toISOString();
   const complete = isAnswerComplete(snapshotQuestion?.question?.type, answerData);
+  const audioAnswerGate = canSaveAudioAnswer(snapshotQuestion, existing);
+  if (!audioAnswerGate.allowed && audioAnswerGate.errorCode) {
+    throw new AssessmentRuntimeError(409, audioAnswerGate.errorCode);
+  }
 
   let saved: any;
   if (existing?.id) {
@@ -1067,6 +1559,7 @@ export async function saveAssessmentAnswer(attemptId: unknown, assessmentQuestio
         lastAnsweredAt: now,
         firstAnsweredAt: existing?.firstAnsweredAt || (complete ? now : null),
         timeSpentSeconds: Number(existing?.timeSpentSeconds || 0) + timeSpentDelta,
+        runtimeMeta: existing?.runtimeMeta ?? null,
       },
       populate: {
         assessmentQuestion: { select: ['id', 'documentId'] },
@@ -1085,6 +1578,9 @@ export async function saveAssessmentAnswer(attemptId: unknown, assessmentQuestio
         lastAnsweredAt: now,
         timeSpentSeconds: timeSpentDelta,
         audioPlayCount: 0,
+        listenRequirementSatisfied: false,
+        listenRequirementSatisfiedAt: null,
+        runtimeMeta: null,
         tenant: tenantId,
       },
       populate: {
@@ -1106,20 +1602,23 @@ export async function saveAssessmentAnswer(attemptId: unknown, assessmentQuestio
 }
 
 export async function registerAssessmentAudioPlay(attemptId: unknown, assessmentQuestionId: unknown, body: any, tenantId: number | string, context: RuntimeContext = {}) {
-  const payload = extractBody(body);
+  extractBody(body);
   const attempt = await markAttemptExpiredIfNeeded(await findAttemptOrThrow(attemptId, tenantId, { includeAnswers: true }), tenantId);
   await ensureAttemptAccess(attempt, context);
   ensureWritableAttempt(attempt);
   const snapshotQuestion = findAttemptQuestionSnapshot(attempt?.definitionSnapshot, assessmentQuestionId);
   if (!snapshotQuestion) throw new AssessmentRuntimeError(400, 'assessmentQuestion does not belong to this attempt');
-  if (!snapshotQuestion?.question?.stimulus?.audioAsset) throw new AssessmentRuntimeError(400, 'assessmentQuestion does not have audio stimulus');
+  if (!hasAudioStimulus(snapshotQuestion)) throw new AssessmentRuntimeError(400, 'assessmentQuestion does not have audio stimulus');
+  const mediaDelivery = await getAssessmentQuestionAudioDelivery(attempt.id, assessmentQuestionId, tenantId, context);
 
   const assessmentQuestion = await ensureEntityInTenant(ASSESSMENT_QUESTION_UID, snapshotQuestion.assessmentQuestionId || snapshotQuestion.assessmentQuestionDocumentId, tenantId, 'assessmentQuestion');
   const question = await ensureEntityInTenant(QUESTION_UID, snapshotQuestion.questionId || snapshotQuestion.questionDocumentId, tenantId, 'question');
-  const audioPlayLimit = snapshotQuestion?.audioPlayLimit ?? null;
+  const audioPlayLimit = resolveEffectiveAudioPlayLimit(snapshotQuestion);
   const allowSeek = snapshotQuestion?.allowSeek !== false;
   const existing = await findAttemptAnswer(attempt.id, normalizeId(assessmentQuestion), tenantId);
   const currentCount = Number(existing?.audioPlayCount || 0);
+  const playId = crypto.randomUUID();
+  const runtimeMeta = buildActiveAudioPlayMeta(playId);
 
   if (audioPlayLimit !== null && currentCount >= Number(audioPlayLimit)) {
     throw new AssessmentRuntimeError(409, 'Audio play limit exceeded for this question');
@@ -1129,7 +1628,7 @@ export async function registerAssessmentAudioPlay(attemptId: unknown, assessment
   if (existing?.id) {
     saved = await strapi.db.query(ASSESSMENT_ANSWER_UID).update({
       where: { id: existing.id },
-      data: { audioPlayCount: currentCount + 1 },
+      data: { audioPlayCount: currentCount + 1, runtimeMeta },
       populate: {
         assessmentQuestion: { select: ['id', 'documentId'] },
         question: { select: ['id', 'documentId', 'code', 'type'] },
@@ -1147,6 +1646,9 @@ export async function registerAssessmentAudioPlay(attemptId: unknown, assessment
         lastAnsweredAt: null,
         timeSpentSeconds: 0,
         audioPlayCount: 1,
+        listenRequirementSatisfied: false,
+        listenRequirementSatisfiedAt: null,
+        runtimeMeta,
         tenant: tenantId,
       },
       populate: {
@@ -1163,6 +1665,68 @@ export async function registerAssessmentAudioPlay(attemptId: unknown, assessment
     audioPlayLimit,
     remaining: audioPlayLimit === null ? null : Math.max(0, Number(audioPlayLimit) - used),
     allowSeek,
+    minListenRatioBeforeAnswer: normalizeListenRequirementRatio(snapshotQuestion),
+    listenRequirementSatisfied: saved?.listenRequirementSatisfied === true,
+    playId,
+    mediaUrl: mediaDelivery.url,
+    mediaMimeType: mediaDelivery.mimeType,
+  };
+}
+
+export async function markAudioListenRequirementSatisfied(attemptId: unknown, assessmentQuestionId: unknown, body: any, tenantId: number | string, context: RuntimeContext = {}) {
+  const payload = extractBody(body);
+  const attempt = await markAttemptExpiredIfNeeded(await findAttemptOrThrow(attemptId, tenantId, { includeAnswers: true }), tenantId);
+  await ensureAttemptAccess(attempt, context);
+  ensureWritableAttempt(attempt);
+  const snapshotQuestion = findAttemptQuestionSnapshot(attempt?.definitionSnapshot, assessmentQuestionId);
+  if (!snapshotQuestion) throw new AssessmentRuntimeError(400, 'assessmentQuestion does not belong to this attempt');
+  if (!hasAudioStimulus(snapshotQuestion)) throw new AssessmentRuntimeError(400, 'assessmentQuestion does not have audio stimulus');
+  if (!hasListenRequirement(snapshotQuestion)) {
+    return {
+      assessmentQuestionId: snapshotQuestion?.assessmentQuestionId || snapshotQuestion?.assessmentQuestionDocumentId || null,
+      listenRequirementSatisfied: true,
+      listenRequirementSatisfiedAt: null,
+      minListenRatioBeforeAnswer: 0,
+    };
+  }
+
+  const assessmentQuestion = await ensureEntityInTenant(ASSESSMENT_QUESTION_UID, snapshotQuestion.assessmentQuestionId || snapshotQuestion.assessmentQuestionDocumentId, tenantId, 'assessmentQuestion');
+  const existing = await findAttemptAnswer(attempt.id, normalizeId(assessmentQuestion), tenantId);
+  if (!existing?.id) throw new AssessmentRuntimeError(409, 'LISTEN_REQUIREMENT_PLAY_NOT_FOUND');
+  if (existing?.listenRequirementSatisfied === true) {
+    return {
+      assessmentQuestionId: normalizeId(existing?.assessmentQuestion),
+      listenRequirementSatisfied: true,
+      listenRequirementSatisfiedAt: existing?.listenRequirementSatisfiedAt || null,
+      minListenRatioBeforeAnswer: normalizeListenRequirementRatio(snapshotQuestion),
+    };
+  }
+
+  const playId = ensureRequiredText(payload.playId, 'playId');
+  const runtimeMeta = parseAnswerRuntimeMeta(existing?.runtimeMeta);
+  if (String(runtimeMeta?.activeAudioPlay?.playId || '') !== playId) {
+    throw new AssessmentRuntimeError(409, 'LISTEN_REQUIREMENT_PLAY_NOT_ACTIVE');
+  }
+
+  const now = new Date().toISOString();
+  const saved = await strapi.db.query(ASSESSMENT_ANSWER_UID).update({
+    where: { id: existing.id },
+    data: {
+      listenRequirementSatisfied: true,
+      listenRequirementSatisfiedAt: now,
+      runtimeMeta: clearActiveAudioPlayMeta(runtimeMeta),
+    },
+    populate: {
+      assessmentQuestion: { select: ['id', 'documentId'] },
+      question: { select: ['id', 'documentId', 'code', 'type'] },
+    },
+  });
+
+  return {
+    assessmentQuestionId: normalizeId(saved?.assessmentQuestion),
+    listenRequirementSatisfied: true,
+    listenRequirementSatisfiedAt: now,
+    minListenRatioBeforeAnswer: normalizeListenRequirementRatio(snapshotQuestion),
   };
 }
 
@@ -1206,10 +1770,14 @@ export async function getCandidateAssessmentResultPayloadByAttempt(attemptId: un
   const result = await findCurrentResultByAttemptOrNull(attempt.id, tenantId)
   const speakingReview = result?.id ? await findCurrentSpeakingReviewByResultOrNull(result.id, tenantId) : null
   const confirmation = result?.id ? await findCurrentPlacementConfirmationByResultOrNull(result.id, tenantId) : null
+  const visibility = await resolveAssignmentAttemptVisibility(attempt, tenantId)
 
   const workflowState = deriveCandidateWorkflowState(attempt, result, speakingReview, confirmation)
-  const revealScores = Boolean(result?.id) && Number(result?.pendingManualCount || 0) === 0 && Boolean(result?.provisionalLevel || confirmation?.confirmedLevel)
-  const banner = buildCandidateStatusBanner(workflowState, attempt?.assessmentVersion)
+  const revealScores = shouldRevealCandidateScores(result, confirmation, visibility)
+  const effectiveWorkflowState = visibility?.showScoreAfterSubmit === false && workflowState === 'provisional_ready'
+    ? 'submitted'
+    : workflowState
+  const banner = buildCandidateStatusBanner(effectiveWorkflowState, attempt?.assessmentVersion)
 
   return {
     attempt: {
@@ -1234,9 +1802,10 @@ export async function getCandidateAssessmentResultPayloadByAttempt(attemptId: un
     },
     result: mapCandidateResult(result, { revealScores }),
     speaking: mapCandidateSpeakingReview(speakingReview, { revealScores }),
-    confirmation: mapCandidateConfirmation(confirmation),
-    workflowState,
+    confirmation: mapCandidateConfirmation(confirmation, { revealScores }),
+    workflowState: effectiveWorkflowState,
     statusBanner: banner,
+    allowResultView: visibility?.showScoreAfterSubmit !== false,
     revealScores,
   }
 }
@@ -1256,15 +1825,19 @@ export default {
   getTenantIdFromContext,
   startAssessmentAttempt,
   getAssessmentAttempt,
+  getAssessmentQuestionAudioDelivery,
+  streamAssessmentQuestionAudio,
   getCandidateAssessmentResult,
   getCandidateAssessmentResultPayloadByAttempt,
   resumeAssessmentAttempt,
   listAssessmentAttempts,
   saveAssessmentAnswer,
   registerAssessmentAudioPlay,
+  markAudioListenRequirementSatisfied,
   updateAssessmentProgress,
   submitAssessmentAttempt,
   finalizeExpiredAssessmentAttempt,
   hasAttemptsForAssessmentVersion,
   ensureAttemptVersionExists,
+  verifyAssessmentRuntimeFileAssetToken,
 };

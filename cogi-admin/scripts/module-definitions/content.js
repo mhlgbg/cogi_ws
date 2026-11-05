@@ -78,5 +78,23 @@ module.exports = {
       icon: 'cilDescription',
       showInMenu: true,
     },
+    {
+      name: 'Frame Campaign Manage',
+      key: 'photo-frame-campaign.manage',
+      order: 9,
+      description: 'Manage tenant photo frame campaigns',
+      path: '/frame-campaigns',
+      icon: 'cilImagePlus',
+      showInMenu: true,
+    },
+    {
+      name: 'Frame Campaign Manage All',
+      key: 'photo-frame-campaign.manage.all',
+      order: 10,
+      description: 'Manage all photo frame campaigns in the current tenant, including records owned by other users',
+      path: '/frame-campaigns',
+      icon: 'cilImagePlus',
+      showInMenu: false,
+    },
   ],
 }

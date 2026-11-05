@@ -118,6 +118,7 @@ async function findRoleFeatures(roleIds: number[]) {
           $in: roleIds,
         },
       },
+      isActive: true,
     },
     populate: {
       feature: {

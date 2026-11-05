@@ -1,0 +1,113 @@
+{
+  "kind": "collectionType",
+  "collectionName": "community_posts",
+  "info": {
+    "singularName": "community-post",
+    "pluralName": "community-posts",
+    "displayName": "CommunityPost",
+    "description": "Tenant-scoped posts for public/community/group feeds."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "communityPosts",
+      "required": true
+    },
+    "author": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "scope": {
+      "type": "enumeration",
+      "enum": [
+        "public",
+        "community",
+        "group"
+      ],
+      "required": true,
+      "default": "community"
+    },
+    "group": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::community-group.community-group",
+      "inversedBy": "posts"
+    },
+    "title": {
+      "type": "string"
+    },
+    "content": {
+      "type": "text"
+    },
+    "contentType": {
+      "type": "enumeration",
+      "enum": [
+        "text",
+        "html"
+      ],
+      "required": true,
+      "default": "text"
+    },
+    "media": {
+      "type": "media",
+      "multiple": true,
+      "required": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "youtubeUrl": {
+      "type": "string"
+    },
+    "youtubeVideoId": {
+      "type": "string"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "pending",
+        "rejected",
+        "published",
+        "hidden"
+      ],
+      "required": true,
+      "default": "draft"
+    },
+    "allowComment": {
+      "type": "boolean",
+      "default": true
+    },
+    "isPinned": {
+      "type": "boolean",
+      "default": false
+    },
+    "isFeatured": {
+      "type": "boolean",
+      "default": false
+    },
+    "publishedAt": {
+      "type": "datetime"
+    },
+    "isDeleted": {
+      "type": "boolean",
+      "default": false
+    },
+    "deletedAt": {
+      "type": "datetime"
+    },
+    "deletedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "kind": "collectionType",
+  "collectionName": "assignment_tasks",
+  "info": {
+    "singularName": "assignment-task",
+    "pluralName": "assignment-tasks",
+    "displayName": "Assignment Task",
+    "description": "Individual tasks under one assignment."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "assignment": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assignment.assignment",
+      "inversedBy": "tasks",
+      "required": true
+    },
+    "title": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200
+    },
+    "description": {
+      "type": "text"
+    },
+    "expectedOutcome": {
+      "type": "text"
+    },
+    "gradingRubric": {
+      "type": "text"
+    },
+    "gradingVersion": {
+      "type": "integer",
+      "default": 1
+    },
+    "order": {
+      "type": "integer",
+      "default": 0
+    },
+    "required": {
+      "type": "boolean",
+      "default": true
+    },
+    "taskType": {
+      "type": "enumeration",
+      "enum": ["todo", "submission", "assessment"],
+      "default": "todo",
+      "required": true
+    },
+    "assessment": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment.assessment"
+    },
+    "assessmentSettings": {
+      "type": "json"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "learnerProgress": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assignment-task-learner-progress.assignment-task-learner-progress",
+      "mappedBy": "assignmentTask"
+    },
+    "submissions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assignment-submission.assignment-submission",
+      "mappedBy": "assignmentTask"
+    }
+  }
+}

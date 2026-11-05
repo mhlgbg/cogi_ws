@@ -23,6 +23,7 @@ async function getPermissionKeysByRoleIds(roleIds: number[]): Promise<Set<string
           $in: uniqueRoleIds,
         },
       },
+      isActive: true,
     },
     populate: ['feature'],
   });

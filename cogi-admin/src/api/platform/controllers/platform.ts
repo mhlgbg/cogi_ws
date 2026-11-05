@@ -12,6 +12,7 @@ const USER_UID = 'plugin::users-permissions.user';
 const ROLE_DISABLED_FOR_TENANT_REASON = 'ROLE_DISABLED_FOR_TENANT';
 const MANUAL_PLATFORM_ADMIN_ACTION_REASON = 'MANUAL_PLATFORM_ADMIN_ACTION';
 const STORAGE_PROVIDER_VALUES = ['local', 's3', 'minio', 'wasabi', 'azure', 'gcs'] as const;
+const TENANTS_CODE_CI_UNIQUE_INDEX = 'tenants_code_ci_unique';
 
 import {
   findPlatformSettingByKey,
@@ -20,6 +21,7 @@ import {
   upsertPlatformSettingByKey,
 } from '../../../services/platform-settings';
 
+import storageService from '../../../services/storage-service';
 import { createUserTenant } from '../../admin/services/invite-user';
 
 const PLATFORM_STATUS_TO_TENANT_STATUS: Record<string, 'active' | 'suspended' | 'inactive'> = {
@@ -254,6 +256,18 @@ function readTenantPayload(body: any) {
     facebookPixelId,
     logo: logoId,
   };
+}
+
+function isTenantCodeCaseInsensitiveUniqueViolation(error: any): boolean {
+  if (toText(error?.code) !== '23505') return false;
+
+  const payload = [
+    toText(error?.constraint),
+    toText(error?.message),
+    toText(error?.detail),
+  ].join(' ').toLowerCase();
+
+  return payload.includes(TENANTS_CODE_CI_UNIQUE_INDEX);
 }
 
 function toNonNegativeInt(value: unknown): number | null {
@@ -1628,6 +1642,10 @@ export default {
         data: buildPlatformTenantRow(created),
       };
     } catch (error: any) {
+      if (isTenantCodeCaseInsensitiveUniqueViolation(error)) {
+        return ctx.conflict('Tenant code da ton tai');
+      }
+
       if (error?.message === 'Tenant name is required' || error?.message === 'Tenant code is required' || error?.message === 'Tenant code chi duoc gom chu thuong, so va dau gach ngang' || error?.message === 'tenantStatus must be one of: draft, active, inactive, suspended' || String(error?.message || '').includes('must match format')) {
         return ctx.badRequest(error.message);
       }
@@ -1685,6 +1703,10 @@ export default {
         data: buildPlatformTenantRow(updated),
       };
     } catch (error: any) {
+      if (isTenantCodeCaseInsensitiveUniqueViolation(error)) {
+        return ctx.conflict('Tenant code da ton tai');
+      }
+
       if (error?.message === 'Tenant name is required' || error?.message === 'Tenant code is required' || error?.message === 'Tenant code chi duoc gom chu thuong, so va dau gach ngang' || error?.message === 'tenantStatus must be one of: draft, active, inactive, suspended' || String(error?.message || '').includes('must match format')) {
         return ctx.badRequest(error.message);
       }
@@ -2421,6 +2443,48 @@ export default {
 
       strapi.log.error('[platform.updateTenantDefaultStorageConfig] unexpected error', error);
       return ctx.internalServerError('Failed to update tenant default storage config');
+    }
+  },
+
+  async testTenantStorageConfigConnection(ctx: any) {
+    const tenantId = toPositiveInt(ctx.params?.tenantId ?? ctx.params?.id);
+    const storageConfigId = toPositiveInt(ctx.params?.storageConfigId);
+
+    if (!tenantId) {
+      return ctx.badRequest('Invalid tenant id');
+    }
+    if (!storageConfigId) {
+      return ctx.badRequest('Invalid storage config id');
+    }
+
+    try {
+      await findTenantOrThrow(tenantId);
+      const storageConfig = await findTenantStorageConfigOrThrow(tenantId, storageConfigId);
+
+      if (toText(storageConfig?.provider).toLowerCase() !== 's3') {
+        return ctx.badRequest('Connection test is supported for S3 provider only');
+      }
+
+      const result = await storageService.testS3StorageConnection(storageConfig);
+      ctx.body = {
+        ok: true,
+        data: result,
+      };
+    } catch (error: any) {
+      if (error?.message === 'Tenant not found') {
+        return ctx.notFound('Tenant not found');
+      }
+      if (error?.message === 'Storage config not found') {
+        return ctx.notFound('Storage config not found');
+      }
+
+      const message = String(error?.message || 'Failed to test S3 connection');
+      if (message.includes('S3 storage is misconfigured') || message.includes('credentialRef') || message.includes('not configured in backend environment')) {
+        return ctx.badRequest(message);
+      }
+
+      strapi.log.error('[platform.testTenantStorageConfigConnection] unexpected error', error);
+      return ctx.internalServerError('Failed to test storage connection');
     }
   },
 

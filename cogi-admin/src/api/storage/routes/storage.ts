@@ -39,12 +39,7 @@ export default {
       config: {
         auth: false,
         policies: [
-          {
-            name: 'global::has-tenant-permission',
-            config: {
-              key: 'storage.manage',
-            },
-          },
+          'global::tenant-storage-upload-access',
         ],
       },
     },

@@ -1,0 +1,37 @@
+{
+  "kind": "collectionType",
+  "collectionName": "curriculum_subjects",
+  "info": {
+    "singularName": "curriculum-subject",
+    "pluralName": "curriculum-subjects",
+    "displayName": "Curriculum Subject",
+    "description": "Global standard subject catalog used across tenants."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "archived"
+      ],
+      "default": "active",
+      "required": true
+    }
+  }
+}

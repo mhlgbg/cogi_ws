@@ -1,0 +1,58 @@
+{
+  "kind": "collectionType",
+  "collectionName": "game_types",
+  "info": {
+    "singularName": "game-type",
+    "pluralName": "game-types",
+    "displayName": "Game Type",
+    "description": "Platform-supported game families that can be enabled per tenant."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true,
+      "unique": true,
+      "maxLength": 120
+    },
+    "name": {
+      "type": "string",
+      "required": true,
+      "maxLength": 180
+    },
+    "description": {
+      "type": "text"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "archived"
+      ],
+      "default": "active",
+      "required": true
+    },
+    "isBuiltIn": {
+      "type": "boolean",
+      "default": true
+    },
+    "defaultSettings": {
+      "type": "json"
+    },
+    "tenantGameTypes": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::tenant-game-type.tenant-game-type",
+      "mappedBy": "gameType"
+    },
+    "games": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::game.game",
+      "mappedBy": "gameType"
+    }
+  }
+}

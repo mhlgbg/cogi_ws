@@ -48,6 +48,12 @@
       "target": "api::class-teacher-assignment.class-teacher-assignment",
       "mappedBy": "class"
     },
+    "classSessions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::class-session.class-session",
+      "mappedBy": "class"
+    },
     "feeSheetClasses": {
       "type": "relation",
       "relation": "oneToMany",

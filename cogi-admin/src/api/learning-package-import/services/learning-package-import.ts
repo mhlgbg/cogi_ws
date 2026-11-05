@@ -8,6 +8,7 @@ const FORMULA_UID = 'api::formula.formula';
 const VISUAL_ASSET_UID = 'api::visual-asset.visual-asset';
 const QUESTION_UID = 'api::question.question';
 const QUESTION_OPTION_UID = 'api::question-option.question-option';
+const FILE_ASSET_UID = 'api::file-asset.file-asset';
 const LEARNING_OBJECT_UID = 'api::learning-object.learning-object';
 const CONTENT_BLOCK_UID = 'api::content-block.content-block';
 
@@ -58,6 +59,50 @@ function parseJson(value: unknown) {
   return JSON.parse(text);
 }
 
+function usesChoiceOptions(type: unknown) {
+  const normalizedType = normalizeText(type).toLowerCase();
+  return normalizedType === 'single_choice' || normalizedType === 'multiple_choice' || normalizedType === 'true_false';
+}
+
+function toCorrectAnswerTokenSet(correctAnswer: unknown) {
+  if (Array.isArray(correctAnswer)) {
+    return new Set(correctAnswer.map((item) => normalizeText(item)).filter(Boolean));
+  }
+  const token = normalizeText(correctAnswer);
+  return token ? new Set([token]) : new Set<string>();
+}
+
+function normalizeImportedCorrectAnswer(correctAnswer: unknown) {
+  if (correctAnswer === undefined || correctAnswer === null || correctAnswer === '') return null;
+  if (typeof correctAnswer === 'string') return JSON.stringify(normalizeText(correctAnswer));
+  if (typeof correctAnswer === 'number' || typeof correctAnswer === 'boolean') return correctAnswer;
+  return parseJson(correctAnswer);
+}
+
+function normalizeImportedQuestionOptions(item: any, existingQuestion?: any) {
+  const correctAnswerTokens = toCorrectAnswerTokenSet(item?.correctAnswer);
+  const hasDerivedCorrectAnswer = correctAnswerTokens.size > 0;
+
+  return normalizeArray(item?.options).map((option, index) => {
+    const label = normalizeText(option?.label) || String.fromCharCode(65 + index);
+    const value = normalizeText(option?.value) || label;
+    const existingOption = normalizeArray(existingQuestion?.options).find((candidate) => normalizeText(candidate?.label) === label || normalizeText(candidate?.value) === value) || normalizeArray(existingQuestion?.options)[index] || null;
+    const matchesDerivedAnswer = hasDerivedCorrectAnswer
+      ? correctAnswerTokens.has(label) || correctAnswerTokens.has(value)
+      : false;
+
+    return {
+      label,
+      value,
+      content: normalizeText(option?.content) || null,
+      imageAsset: normalizeText(option?.imageAssetCode) || existingOption?.imageAsset?.documentId || existingOption?.imageAsset?.id || null,
+      isCorrect: hasDerivedCorrectAnswer ? matchesDerivedAnswer : option?.isCorrect === true,
+      order: Number(option?.order ?? index + 1) || index + 1,
+      explanation: normalizeText(option?.explanation) || null,
+    };
+  });
+}
+
 function slugify(value: string) {
   return String(value || '')
     .normalize('NFD')
@@ -97,6 +142,25 @@ async function findByCode(uid: string, code: string, tenantId: number | string) 
     },
   });
 }
+
+  async function findQuestionWithOptionsByCode(code: string, tenantId: number | string) {
+    return strapi.db.query(QUESTION_UID).findOne({
+      where: mergeTenantWhere({ code: { $eq: code } }, tenantId),
+      populate: {
+        questionImageAsset: {
+          select: ['id', 'documentId', 'code'],
+        },
+        options: {
+          populate: {
+            imageAsset: {
+              select: ['id', 'documentId', 'code'],
+            },
+          },
+        },
+        tenant: { select: ['id', 'documentId'] },
+      },
+    });
+  }
 
 async function findSubjectByPackageValue(value: string, tenantId: number | string) {
   const text = normalizeText(value);
@@ -697,6 +761,7 @@ async function replaceQuestionOptions(questionId: number, options: any[], tenant
         label: normalizeText(option?.label) || null,
         value: normalizeText(option?.value) || null,
         content: normalizeText(option?.content) || null,
+        imageAsset: option?.imageAsset || null,
         isCorrect: option?.isCorrect === true,
         order: Number(option?.order ?? index + 1) || index + 1,
         explanation: normalizeText(option?.explanation) || null,
@@ -714,7 +779,16 @@ async function upsertQuestions(items: any[], ctx: any) {
 
   for (const item of items) {
     const code = normalizeText(item?.code);
-    const existing = await findByCode(QUESTION_UID, code, tenantId);
+    const type = ensureRequiredText(item?.type, 'question.type');
+    const choiceQuestion = usesChoiceOptions(type);
+    const existing = await findQuestionWithOptionsByCode(code, tenantId);
+    const questionImageAssetCode = normalizeText(item?.questionImageAssetCode);
+    const questionImageAsset = questionImageAssetCode
+      ? await findByCode(FILE_ASSET_UID, questionImageAssetCode, tenantId)
+      : null;
+    if (questionImageAssetCode && !questionImageAsset?.id) {
+      throw new LearningPackageImportError(400, `question ${code} references unknown questionImageAssetCode ${questionImageAssetCode}`);
+    }
     const knowledgeNodeCode = normalizeText(item?.knowledgeNode);
     const knowledgeNode = knowledgeNodeCode ? (knowledgeNodeMap.get(knowledgeNodeCode) || await findByCode(KNOWLEDGE_NODE_UID, knowledgeNodeCode, tenantId)) : null;
     const skillIds = [] as number[];
@@ -732,11 +806,13 @@ async function upsertQuestions(items: any[], ctx: any) {
       code,
       title: normalizeText(item?.title) || code,
       questionText: ensureRequiredText(item?.questionText, 'question.questionText'),
-      type: ensureRequiredText(item?.type, 'question.type'),
+      questionTextType: normalizeText(item?.questionTextType).toLowerCase() === 'html' ? 'html' : 'plain_text',
+      type,
       difficulty: normalizeText(item?.difficulty) || null,
-      correctAnswer: item?.correctAnswer ?? null,
+      correctAnswer: choiceQuestion ? null : normalizeImportedCorrectAnswer(item?.correctAnswer),
       explanation: normalizeText(item?.explanation) || null,
       rubric: item?.rubric ?? null,
+      questionImageAsset: questionImageAsset?.id || existing?.questionImageAsset?.id || null,
       questionStatus: existing?.questionStatus && ALLOWED_UPDATE_STATUSES.includes(normalizeText(existing.questionStatus).toLowerCase())
         ? existing.questionStatus
         : status,
@@ -752,7 +828,7 @@ async function upsertQuestions(items: any[], ctx: any) {
       ? await strapi.db.query(QUESTION_UID).update({ where: { id: existing.id }, data: payload })
       : await strapi.db.query(QUESTION_UID).create({ data: payload });
 
-    await replaceQuestionOptions(row.id, normalizeArray(item?.options), tenantId);
+    await replaceQuestionOptions(row.id, choiceQuestion ? normalizeImportedQuestionOptions(item, existing) : normalizeArray(item?.options), tenantId);
     resultMap.set(code, row);
   }
 

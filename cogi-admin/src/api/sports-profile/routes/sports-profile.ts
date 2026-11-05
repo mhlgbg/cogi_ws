@@ -15,6 +15,24 @@ export default {
 		},
 		{
 			method: 'GET',
+			path: '/sports/profiles/import-template',
+			handler: 'sports-profile.importTemplate',
+			config: { auth: false, policies: [SPORTS_PROFILE_POLICY] },
+		},
+		{
+			method: 'POST',
+			path: '/sports/profiles/import-preview',
+			handler: 'sports-profile.importPreview',
+			config: { auth: false, policies: [SPORTS_PROFILE_POLICY] },
+		},
+		{
+			method: 'POST',
+			path: '/sports/profiles/import-confirm',
+			handler: 'sports-profile.importConfirm',
+			config: { auth: false, policies: [SPORTS_PROFILE_POLICY] },
+		},
+		{
+			method: 'GET',
 			path: '/sports/profiles/:id',
 			handler: 'sports-profile.getDetail',
 			config: { auth: false, policies: [SPORTS_PROFILE_POLICY] },

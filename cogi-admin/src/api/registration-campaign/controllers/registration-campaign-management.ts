@@ -1,4 +1,4 @@
-import { resolveCurrentTenantId, toText } from '../../../utils/tenant-scope'
+import { resolveCurrentTenantId } from '../../../utils/tenant-scope'
 import {
   adminChangeRegistrationEmail,
   adminResendRegistrationVerification,
@@ -10,8 +10,11 @@ import {
   getAdminRegistrationCampaignDetail,
   getRegistrationCampaignFormOptions,
   handleRegistrationCampaignError,
+  linkAdminCampaignPostRegistrationSportsProfiles,
+  manualLinkAdminCampaignPostRegistrationSportsProfile,
   listAdminCampaignEmailTemplates,
   listAdminCampaignEmails,
+  listAdminCampaignPostRegistrationSportsProfiles,
   listAdminCampaignRegistrations,
   listAdminRegistrationCampaigns,
   previewAdminCampaignEmailTemplate,
@@ -268,6 +271,45 @@ export default {
     }
   },
 
+  async postRegistrationSportsProfiles(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx)
+    if (!authUser?.id) return
+    try {
+      const tenantId = Number(resolveCurrentTenantId(ctx))
+      const campaignId = Number(ctx.params?.id || 0)
+      const data = await listAdminCampaignPostRegistrationSportsProfiles(tenantId, campaignId, ctx.request?.query || {})
+      ctx.body = { success: true, data }
+    } catch (error) {
+      return handleRegistrationCampaignError(ctx, error)
+    }
+  },
+
+  async linkPostRegistrationSportsProfiles(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx)
+    if (!authUser?.id) return
+    try {
+      const tenantId = Number(resolveCurrentTenantId(ctx))
+      const campaignId = Number(ctx.params?.id || 0)
+      const data = await linkAdminCampaignPostRegistrationSportsProfiles(tenantId, campaignId, extractPayload(ctx), authUser)
+      ctx.body = { success: true, data }
+    } catch (error) {
+      return handleRegistrationCampaignError(ctx, error)
+    }
+  },
+
+  async manualLinkPostRegistrationSportsProfile(ctx: any) {
+    const authUser = await requireAuthenticatedUser(ctx)
+    if (!authUser?.id) return
+    try {
+      const tenantId = Number(resolveCurrentTenantId(ctx))
+      const campaignId = Number(ctx.params?.id || 0)
+      const data = await manualLinkAdminCampaignPostRegistrationSportsProfile(tenantId, campaignId, extractPayload(ctx), authUser)
+      ctx.body = { success: true, data }
+    } catch (error) {
+      return handleRegistrationCampaignError(ctx, error)
+    }
+  },
+
   async resendRegistration(ctx: any) {
     const authUser = await requireAuthenticatedUser(ctx)
     if (!authUser?.id) return
@@ -289,7 +331,7 @@ export default {
       const tenantId = Number(resolveCurrentTenantId(ctx))
       const campaignId = Number(ctx.params?.id || 0)
       const registrationId = Number(ctx.params?.registrationId || 0)
-      const data = await adminChangeRegistrationEmail(tenantId, campaignId, registrationId, extractPayload(ctx))
+      const data = await adminChangeRegistrationEmail(ctx, tenantId, campaignId, registrationId, extractPayload(ctx))
       ctx.body = data
     } catch (error) {
       return handleRegistrationCampaignError(ctx, error)

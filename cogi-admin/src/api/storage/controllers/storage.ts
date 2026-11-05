@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
-import fs from 'node:fs/promises';
-import path from 'node:path';
 import storageService from '../../../services/storage-service';
-import { resolveCurrentTenantId } from '../../../utils/tenant-scope';
+import { sendStoredFileResponse } from '../../../utils/file-asset-delivery';
+import { findEntityByRef, resolveCurrentTenantId } from '../../../utils/tenant-scope';
+import { verifyAssessmentRuntimeFileAssetToken } from '../../assessment-runtime/services/assessment-runtime';
 
 const TENANT_UID = 'api::tenant.tenant';
 const TENANT_STORAGE_UID = 'api::tenant-storage.tenant-storage';
@@ -30,31 +30,6 @@ function toBoolean(value: unknown, fallback = true): boolean {
   }
 
   return fallback;
-}
-
-function resolveStorageRoot() {
-  const configuredRoot = String(process.env.STORAGE_ROOT || './storage').trim() || './storage';
-  return path.isAbsolute(configuredRoot)
-    ? configuredRoot
-    : path.resolve(process.cwd(), configuredRoot);
-}
-
-function isPathInsideRoot(rootPath: string, absolutePath: string) {
-  const relativePath = path.relative(rootPath, absolutePath);
-  if (!relativePath) return true;
-  return !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
-}
-
-function guessContentType(filePath: string) {
-  const extension = path.extname(filePath).toLowerCase();
-  if (extension === '.pdf') return 'application/pdf';
-  if (extension === '.png') return 'image/png';
-  if (extension === '.jpg' || extension === '.jpeg') return 'image/jpeg';
-  if (extension === '.gif') return 'image/gif';
-  if (extension === '.webp') return 'image/webp';
-  if (extension === '.svg') return 'image/svg+xml';
-  if (extension === '.txt') return 'text/plain; charset=utf-8';
-  return 'application/octet-stream';
 }
 
 function resolveUploadFile(value: any): any {
@@ -149,24 +124,22 @@ async function hasActiveTenantMembership(userId: number, tenantId: number) {
   return Boolean(membership?.id);
 }
 
-async function findFileAssetForDownloadOrThrow(fileAssetId: number) {
-  const fileAsset = await strapi.db.query(FILE_ASSET_UID).findOne({
-    where: {
-      id: fileAssetId,
-      status: {
-        $ne: 'DELETED',
-      },
-    },
-    populate: {
-      tenant: { select: ['id', 'code'] },
-    },
+async function findFileAssetForDownloadOrThrow(fileAssetRef: unknown) {
+  const fileAsset = await findEntityByRef(FILE_ASSET_UID, fileAssetRef, {
+    tenant: { select: ['id', 'code'] },
   });
 
-  if (!fileAsset?.id) {
+  if (!fileAsset?.id || toText(fileAsset?.status).toUpperCase() === 'DELETED') {
     throw new Error('FileAsset not found');
   }
 
   return fileAsset;
+}
+
+function fileAssetMatchesRef(fileAsset: any, ref: unknown) {
+  const normalizedRef = toText(ref);
+  if (!normalizedRef) return false;
+  return normalizedRef === toText(fileAsset?.id) || normalizedRef === toText(fileAsset?.documentId);
 }
 
 async function assertAdmissionTokenCanAccessFile(token: string, fileAsset: any) {
@@ -214,24 +187,6 @@ async function assertJwtCanAccessFile(jwtToken: string, fileAsset: any) {
   if (!hasMembership) {
     throw new Error('Forbidden');
   }
-}
-
-async function sendFileAssetResponse(ctx: any, fileAsset: any) {
-  const storageRoot = resolveStorageRoot();
-  const relativePath = toText(fileAsset?.relativePath);
-  const absolutePath = path.resolve(storageRoot, ...relativePath.split('/').filter(Boolean));
-  if (!relativePath || !isPathInsideRoot(storageRoot, absolutePath)) {
-    throw new Error('Forbidden');
-  }
-
-  const stats = await fs.stat(absolutePath);
-  if (!stats.isFile()) {
-    throw new Error('File not found');
-  }
-
-  ctx.type = guessContentType(absolutePath);
-  ctx.set('Content-Disposition', `inline; filename="${toText(fileAsset?.fileName || fileAsset?.originalName || fileAsset?.id)}"`);
-  ctx.body = await fs.readFile(absolutePath);
 }
 
 async function findCurrentTenantOrThrow(ctx: any) {
@@ -353,30 +308,44 @@ async function findTenantFileAssetOrThrow(tenantId: number, fileAssetId: number)
 
 export default {
   async downloadFileAsset(ctx: any) {
-    const fileAssetId = toPositiveInt(ctx.params?.id);
-    if (!fileAssetId) {
+    const fileAssetRef = toText(ctx.params?.id);
+    if (!fileAssetRef) {
       return ctx.badRequest('Invalid file id');
     }
 
     try {
-      const fileAsset = await findFileAssetForDownloadOrThrow(fileAssetId);
+      const fileAsset = await findFileAssetForDownloadOrThrow(fileAssetRef);
       if (fileAsset.isPublic === true) {
-        await sendFileAssetResponse(ctx, fileAsset);
+        await sendStoredFileResponse(ctx, fileAsset);
         return;
       }
 
       const jwtToken = toText(ctx.request?.query?.jwt);
       const admissionToken = toText(ctx.request?.query?.token);
+      const runtimeMediaToken = toText(ctx.request?.query?.mediaToken);
+
+      if (runtimeMediaToken) {
+        const tokenPayload = verifyAssessmentRuntimeFileAssetToken(runtimeMediaToken);
+        const fileTenantId = toPositiveInt(fileAsset?.tenant?.id ?? fileAsset?.tenant);
+        if (!fileTenantId || String(fileTenantId) !== String(tokenPayload?.tenantId || '')) {
+          return ctx.forbidden('Forbidden');
+        }
+        if (!fileAssetMatchesRef(fileAsset, tokenPayload?.fileAssetRef)) {
+          return ctx.forbidden('Forbidden');
+        }
+        await sendStoredFileResponse(ctx, fileAsset);
+        return;
+      }
 
       if (jwtToken) {
         await assertJwtCanAccessFile(jwtToken, fileAsset);
-        await sendFileAssetResponse(ctx, fileAsset);
+        await sendStoredFileResponse(ctx, fileAsset);
         return;
       }
 
       if (admissionToken) {
         await assertAdmissionTokenCanAccessFile(admissionToken, fileAsset);
-        await sendFileAssetResponse(ctx, fileAsset);
+        await sendStoredFileResponse(ctx, fileAsset);
         return;
       }
 
@@ -390,6 +359,15 @@ export default {
       }
       if (error?.message === 'token has expired') {
         return ctx.unauthorized('token has expired');
+      }
+      if (error?.message === 'Invalid assessment runtime file asset token') {
+        return ctx.badRequest('Invalid assessment runtime file asset token');
+      }
+      if (error?.message === 'Assessment runtime file asset token expired') {
+        return ctx.unauthorized('Assessment runtime file asset token expired');
+      }
+      if (error?.message === 'Assessment runtime file asset token does not match attempt') {
+        return ctx.forbidden('Forbidden');
       }
 
       if (error?.message === 'Forbidden') {

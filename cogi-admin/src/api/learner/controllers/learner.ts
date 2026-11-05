@@ -102,6 +102,10 @@ function normalizeEmail(value: unknown) {
 	return toText(value).toLowerCase();
 }
 
+function normalizePhone(value: unknown) {
+	return toText(value);
+}
+
 function normalizeColumnKey(value: unknown) {
 	return toText(value)
 		.toLowerCase()
@@ -170,6 +174,7 @@ function mapLearnerRow(row: any) {
 			id: row.user.id,
 			username: row.user.username || '',
 			email: row.user.email || '',
+			phone: row.user.phone || '',
 			fullName: row.user.fullName || '',
 		}
 		: null;
@@ -178,6 +183,8 @@ function mapLearnerRow(row: any) {
 		id: row.id,
 		code: row.code || '',
 		fullName: row.fullName || '',
+		email: row.email || user?.email || '',
+		phone: row.phone || user?.phone || '',
 		dateOfBirth: row.dateOfBirth || null,
 		parentName: row.parentName || '',
 		parentPhone: row.parentPhone || '',
@@ -193,7 +200,7 @@ async function findLearnerOrThrow(idParam: unknown, tenantId: number | string) {
 		where: mergeTenantWhere(whereByParam(idParam), tenantId),
 		populate: {
 			user: {
-				select: ['id', 'username', 'email', 'fullName'],
+				select: ['id', 'username', 'email', 'phone', 'fullName'],
 			},
 		},
 	});
@@ -341,6 +348,8 @@ function buildFilters(query: Record<string, unknown>) {
 			$or: [
 				{ code: { $containsi: keyword } },
 				{ fullName: { $containsi: keyword } },
+				{ email: { $containsi: keyword } },
+				{ phone: { $containsi: keyword } },
 				{ parentName: { $containsi: keyword } },
 				{ parentPhone: { $containsi: keyword } },
 				{
@@ -348,6 +357,7 @@ function buildFilters(query: Record<string, unknown>) {
 						$or: [
 							{ username: { $containsi: keyword } },
 							{ email: { $containsi: keyword } },
+							{ phone: { $containsi: keyword } },
 							{ fullName: { $containsi: keyword } },
 						],
 					},
@@ -382,7 +392,7 @@ export default factories.createCoreController(LEARNER_UID, () => ({
 				orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
 				populate: {
 					user: {
-						select: ['id', 'username', 'email', 'fullName'],
+						select: ['id', 'username', 'email', 'phone', 'fullName'],
 					},
 				},
 			}),
@@ -455,6 +465,8 @@ export default factories.createCoreController(LEARNER_UID, () => ({
 				data: {
 					code,
 					fullName,
+					email: normalizeEmail(data.email) || null,
+					phone: normalizePhone(data.phone) || null,
 					dateOfBirth: toIsoDate(data.dateOfBirth),
 					parentName: toText(data.parentName) || null,
 					parentPhone: toText(data.parentPhone) || null,
@@ -468,7 +480,7 @@ export default factories.createCoreController(LEARNER_UID, () => ({
 				where: { id: created.id },
 				populate: {
 					user: {
-						select: ['id', 'username', 'email', 'fullName'],
+						select: ['id', 'username', 'email', 'phone', 'fullName'],
 					},
 				},
 			});
@@ -502,6 +514,8 @@ export default factories.createCoreController(LEARNER_UID, () => ({
 				data: {
 					code: toText(data.code ?? learner.code),
 					fullName: toText(data.fullName ?? learner.fullName),
+					email: normalizeEmail(data.email ?? learner.email) || null,
+					phone: normalizePhone(data.phone ?? learner.phone) || null,
 					dateOfBirth: toIsoDate(data.dateOfBirth ?? learner.dateOfBirth),
 					parentName: toText(data.parentName ?? learner.parentName) || null,
 					parentPhone: toText(data.parentPhone ?? learner.parentPhone) || null,
@@ -515,7 +529,7 @@ export default factories.createCoreController(LEARNER_UID, () => ({
 				where: { id: learner.id },
 				populate: {
 					user: {
-						select: ['id', 'username', 'email', 'fullName'],
+						select: ['id', 'username', 'email', 'phone', 'fullName'],
 					},
 				},
 			});

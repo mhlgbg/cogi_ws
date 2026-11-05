@@ -1,0 +1,53 @@
+{
+  "kind": "collectionType",
+  "collectionName": "game_activity_rules",
+  "info": {
+    "singularName": "game-activity-rule",
+    "pluralName": "game-activity-rules",
+    "displayName": "Game Activity Rule",
+    "description": "XP rule definition for one activity within a game."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "game": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::game.game",
+      "required": true
+    },
+    "activityCode": {
+      "type": "string",
+      "required": true,
+      "maxLength": 120
+    },
+    "isEnabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "xpAmount": {
+      "type": "integer",
+      "default": 0,
+      "min": 0
+    },
+    "maxCount": {
+      "type": "integer",
+      "default": 0,
+      "min": 0
+    },
+    "limitPeriod": {
+      "type": "enumeration",
+      "enum": [
+        "daily",
+        "game"
+      ],
+      "default": "daily",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    }
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "kind": "collectionType",
+  "collectionName": "curriculum_import_mappings",
+  "info": {
+    "singularName": "curriculum-import-mapping",
+    "pluralName": "curriculum-import-mappings",
+    "displayName": "Curriculum Import Mapping",
+    "description": "Stable mapping between a source importKey and the target section or source location document."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "sourceDocument": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::curriculum-source-document.curriculum-source-document",
+      "required": true
+    },
+    "entityType": {
+      "type": "enumeration",
+      "enum": [
+        "section",
+        "source-location"
+      ],
+      "required": true
+    },
+    "importKey": {
+      "type": "string",
+      "required": true
+    },
+    "targetDocumentId": {
+      "type": "string",
+      "required": true
+    },
+    "lastImportBatch": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::curriculum-import-batch.curriculum-import-batch"
+    },
+    "sourceHash": {
+      "type": "string",
+      "required": true
+    },
+    "lastImportedAt": {
+      "type": "datetime"
+    }
+  }
+}

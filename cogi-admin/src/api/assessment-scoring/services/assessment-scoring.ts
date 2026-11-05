@@ -890,6 +890,7 @@ function buildAnswerReviewItems(resultRow: any) {
       questionType: question?.question?.type || scoringQuestion?.questionType || score?.question?.type || '',
       questionTitle: question?.question?.title || '',
       questionPrompt: question?.question?.questionText || '',
+      questionPromptType: toText(question?.question?.questionTextType).toLowerCase() === 'html' ? 'html' : 'plain_text',
       stimulus: question?.question?.stimulus || null,
       options: Array.isArray(question?.question?.options) ? question.question.options : [],
       candidateAnswer: answer?.answerData ?? null,
@@ -1505,6 +1506,9 @@ export async function listAssessmentResults(query: Record<string, unknown> = {},
     if (submittedFrom) submittedAtWhere.$gte = submittedFrom;
     if (submittedTo) submittedAtWhere.$lte = submittedTo;
     whereClauses.push({ attempt: { submittedAt: submittedAtWhere } });
+  }
+  if (query?.includeAdminTest !== true && query?.includeAdminTest !== 'true') {
+    whereClauses.push({ attempt: { sourceType: { $ne: 'admin_test' } } });
   }
 
   const where = mergeTenantWhere(whereClauses.length > 0 ? { $and: whereClauses } : {}, tenantId);

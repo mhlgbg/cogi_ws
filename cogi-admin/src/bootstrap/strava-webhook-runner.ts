@@ -276,6 +276,8 @@ async function markWebhookEventFailed(options: {
         processedAt: new Date(),
         lastError: sanitizedError,
         nextAttemptAt: null,
+        rawPayload: null,
+        updates: null,
       },
     })
     return { deadLetter: true, nextAttemptAt: null as Date | null }

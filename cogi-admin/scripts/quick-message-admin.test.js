@@ -158,6 +158,90 @@ test('quick message admin: create message defaults expiresAt about 24 hours ahea
   assert.equal(data.plainPin, null);
   assert.ok(expiresAtMs >= before + 23 * 60 * 60 * 1000);
   assert.ok(expiresAtMs <= after + 25 * 60 * 60 * 1000);
+  assert.equal(data.message.contentType, 'text');
+});
+
+test('quick message admin: create and update message support html contentType', async () => {
+  const creates = [];
+  const updates = [];
+  global.strapi = {
+    db: {
+      transaction: async (callback) => callback({ trx: { id: 'trx-html' } }),
+      query(uid) {
+        if (uid === 'api::quick-message.quick-message') {
+          return {
+            async create(params) {
+              creates.push(params);
+              return {
+                id: 901,
+                documentId: 'msg-901',
+                ...params.data,
+              };
+            },
+            async findOne() {
+              return {
+                id: 901,
+                documentId: 'msg-901',
+                title: 'HTML',
+                content: '<div class="old-box" style="background:#4668ad;color:#fff;padding:16px;border-radius:10px">Hello</div>',
+                contentType: 'html',
+                status: 'draft',
+                allowReply: true,
+                replyMode: 'quick_and_text',
+              };
+            },
+            async update(params) {
+              updates.push(params);
+              return {
+                id: 901,
+                documentId: 'msg-901',
+                title: params.data.title || 'HTML',
+                content: params.data.content || '<p><strong>Hello</strong></p>',
+                contentType: params.data.contentType || 'html',
+                status: 'draft',
+                allowReply: true,
+                replyMode: 'quick_and_text',
+              };
+            },
+          };
+        }
+        if (uid === 'api::quick-message-access.quick-message-access') {
+          return {
+            async findOne() { return null; },
+            async create(params) {
+              return { id: 902, documentId: 'acc-902', ...params.data };
+            },
+          };
+        }
+        throw new Error(`Unexpected uid ${uid}`);
+      },
+    },
+  };
+
+  const service = loadService();
+  const created = await service.createQuickMessage({
+    title: 'HTML',
+    content: '<div class="test-box" style="background:#4668ad;color:#fff;padding:16px;border-radius:10px;position:fixed" onclick="alert(1)">TEST HTML STYLE</div><script>alert(1)</script>',
+    contentType: 'html',
+    initialAccess: { label: 'A', requirePin: false },
+  }, 7, { id: 11, username: 'dan' });
+
+  assert.equal(creates[0].data.contentType, 'html');
+  assert.match(creates[0].data.content, /<div class="test-box" style="background:#4668ad;color:#fff;padding:16px;border-radius:10px">TEST HTML STYLE<\/div>/);
+  assert.doesNotMatch(creates[0].data.content, /position\s*:/i);
+  assert.doesNotMatch(creates[0].data.content, /onclick=/i);
+  assert.doesNotMatch(creates[0].data.content, /<script/i);
+  assert.equal(created.message.contentType, 'html');
+
+  const updated = await service.updateQuickMessage(901, {
+    contentType: 'html',
+    content: '<div class="test-box" style="background:#4668ad;color:#fff;padding:16px;border-radius:10px;position:fixed">TEST HTML STYLE</div>',
+  }, 7, { id: 11, username: 'dan' });
+
+  assert.equal(updates[0].data.contentType, 'html');
+  assert.match(updates[0].data.content, /<div class="test-box" style="background:#4668ad;color:#fff;padding:16px;border-radius:10px">TEST HTML STYLE<\/div>/);
+  assert.equal(updated.message.contentType, 'html');
+  assert.equal(updated.message.content, '<div class="test-box" style="background:#4668ad;color:#fff;padding:16px;border-radius:10px">TEST HTML STYLE</div>');
 });
 
 test('quick message admin: create message rejects missing or invalid PIN when required', async () => {
@@ -212,6 +296,49 @@ test('quick message admin: create message rejects missing or invalid PIN when re
     }, 7, { id: 1, username: 'u1' }),
     (error) => error && error.status === 400 && /status must be one of/i.test(error.message),
   );
+
+  await assert.rejects(
+    () => service.createQuickMessage({
+      title: 'Message',
+      contentType: 'markdown',
+      initialAccess: { requirePin: false },
+    }, 7, { id: 1, username: 'u1' }),
+    (error) => error && error.status === 400 && /contentType must be one of: text, html/i.test(error.message),
+  );
+});
+
+test('quick message admin: serializer falls back contentType to text for legacy rows', async () => {
+  global.strapi = {
+    db: {
+      query(uid) {
+        if (uid === 'api::quick-message.quick-message') {
+          return {
+            async findOne() {
+              return {
+                id: 777,
+                documentId: 'legacy-777',
+                title: 'Legacy',
+                content: '<h1>Hello</h1>',
+                contentType: null,
+                status: 'active',
+                allowReply: true,
+                replyMode: 'quick',
+              };
+            },
+          };
+        }
+        if (uid === 'api::quick-message-access.quick-message-access' || uid === 'api::quick-message-reply.quick-message-reply') {
+          return { async findMany() { return []; } };
+        }
+        throw new Error(`Unexpected uid ${uid}`);
+      },
+    },
+  };
+
+  const service = loadService();
+  const detail = await service.getQuickMessageDetail(777, 7);
+  assert.equal(detail.message.contentType, 'text');
+  assert.equal(detail.message.content, '<h1>Hello</h1>');
 });
 
 test('quick message admin: validateLinks rejects javascript URLs', async () => {

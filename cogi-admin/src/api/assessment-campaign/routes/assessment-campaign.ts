@@ -7,6 +7,8 @@ export default {
   routes: [
     { method: 'GET', path: '/public/assessment-campaigns/:slug', handler: 'assessment-campaign.getPublicAssessmentCampaign', config: { auth: false } },
     { method: 'POST', path: '/public/assessment-campaigns/:slug/resolve', handler: 'assessment-campaign.resolvePublicAssessmentCampaign', config: { auth: false } },
+    { method: 'POST', path: '/public/assessment-campaigns/:slug/request-otp', handler: 'assessment-campaign.requestAssessmentCampaignOtp', config: { auth: false } },
+    { method: 'POST', path: '/public/assessment-campaigns/:slug/verify-otp', handler: 'assessment-campaign.verifyAssessmentCampaignOtp', config: { auth: false } },
     { method: 'POST', path: '/public/assessment-campaigns/:slug/start', handler: 'assessment-campaign.startPublicAssessmentCampaign', config: { auth: false } },
     { method: 'POST', path: '/public/assessment-campaigns/attempts/:attemptId/start-retake', handler: 'assessment-campaign.startAssessmentCampaignRetake', config: { auth: false } },
     { method: 'POST', path: '/public/assessment-campaigns/:slug/recover', handler: 'assessment-campaign.recoverPublicAssessmentCampaignParticipations', config: { auth: false } },

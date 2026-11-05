@@ -94,6 +94,15 @@
         "fields": []
       }
     },
+    "postRegistrationConfig": {
+      "type": "json",
+      "default": {
+        "sportsProfileLink": {
+          "enabled": false,
+          "formFieldKey": null
+        }
+      }
+    },
     "requireTermsAcceptance": {
       "type": "boolean",
       "default": false,

@@ -1,16 +1,20 @@
 import {
   getCandidateAssessmentResult,
   getAssessmentAttempt,
+  streamAssessmentQuestionAudio,
   getTenantIdFromContext,
   listAssessmentAttempts,
+  markAudioListenRequirementSatisfied,
   registerAssessmentAudioPlay,
   resumeAssessmentAttempt,
   saveAssessmentAnswer,
   startAssessmentAttempt,
   submitAssessmentAttempt,
+  verifyAssessmentRuntimeAudioToken,
   updateAssessmentProgress,
 } from '../services/assessment-runtime';
 import { resolvePublicAssessmentAttemptAccess } from '../../assessment-campaign/services/assessment-campaign';
+import { sendStoredFileResponse } from '../../../utils/file-asset-delivery';
 
 type AuthUser = {
   id: number;
@@ -157,6 +161,58 @@ export default {
 
   async registerAssessmentAudioPlay(ctx: any) {
     return runAttemptHandler(ctx, (context) => registerAssessmentAudioPlay(ctx.params?.id, ctx.params?.assessmentQuestionId, ctx.request?.body || {}, getTenantIdFromContext(ctx), context));
+  },
+
+  async markAudioListenRequirementSatisfied(ctx: any) {
+    return runAttemptHandler(ctx, (context) => markAudioListenRequirementSatisfied(ctx.params?.id, ctx.params?.assessmentQuestionId, ctx.request?.body || {}, getTenantIdFromContext(ctx), context));
+  },
+
+  async getAssessmentQuestionAudio(ctx: any) {
+    const authUser = await resolveUserFromJwt(ctx) || ctx.state?.user || null;
+
+    if (authUser?.blocked) {
+      ctx.unauthorized('Account is blocked');
+      return;
+    }
+
+    try {
+      const signedAudioToken = String(ctx.request?.query?.mediaToken || ctx.request?.query?.token || '').trim();
+      const signedPayload = signedAudioToken
+        ? verifyAssessmentRuntimeAudioToken(signedAudioToken, ctx.params?.id, ctx.params?.assessmentQuestionId)
+        : null;
+      const tenantId = signedPayload?.tenantId || getTenantIdFromContext(ctx);
+      if (signedPayload?.tenantId) {
+        ctx.state.tenantId = signedPayload.tenantId;
+        ctx.state.runtimeAudioTenantCode = signedPayload.tenantCode || null;
+      }
+
+      let context: { authUserId?: number; allowManagerAccess: boolean } | null = null;
+      if (signedPayload) {
+        context = { allowManagerAccess: true };
+      } else if (authUser?.id) {
+        context = { authUserId: authUser.id, allowManagerAccess: false };
+      } else {
+        const publicAccessToken = getPublicAccessToken(ctx);
+        if (!publicAccessToken) {
+          ctx.unauthorized('Unauthorized');
+          return;
+        }
+        await resolvePublicAssessmentAttemptAccess(ctx.params?.id, tenantId, publicAccessToken);
+        context = { allowManagerAccess: true };
+      }
+
+      const payload = await streamAssessmentQuestionAudio(ctx.params?.id, ctx.params?.assessmentQuestionId, tenantId, context);
+      if (signedPayload?.fileAssetRef && String(signedPayload.fileAssetRef) !== String(payload?.fileAsset?.documentId || payload?.fileAsset?.id || payload?.snapshotAudioAsset?.documentId || payload?.snapshotAudioAsset?.id || '')) {
+        return ctx.forbidden('Forbidden');
+      }
+      await sendStoredFileResponse(ctx, payload.fileAsset, {
+        fallbackRelativePath: payload.snapshotAudioAsset?.relativePath,
+        fallbackMimeType: payload.contentType,
+        fallbackFileName: payload.fileName,
+      });
+    } catch (error: any) {
+      return handleError(ctx, error);
+    }
   },
 
   async updateAssessmentProgress(ctx: any) {

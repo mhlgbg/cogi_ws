@@ -17,7 +17,10 @@ import {
   normalizeAchievementStatus,
   normalizeAchievementType,
   normalizeDateTime,
+  normalizeDistanceKm,
+  normalizeDurationSeconds,
   normalizeEvidenceRefs,
+  normalizeBooleanFlag,
   normalizeOptionalRelationRef,
   normalizeOptionalText,
   normalizePaginationQuery,
@@ -25,7 +28,10 @@ import {
   normalizePositiveNumber,
   normalizeRequiredRelationRef,
   normalizeRequiredText,
+  normalizeRaceType,
   normalizeSportType,
+  isRunningPerformanceType,
+  formatDurationSeconds,
   parseErrorMessage,
   SPORTS_ACHIEVEMENT_UID,
 } from './achievement-shared';
@@ -63,13 +69,21 @@ function ensureNoUnknownWriteFields(payload: GenericRecord) {
     'achievementType',
     'sportType',
     'title',
+    'eventCode',
+    'raceType',
+    'bib',
+    'distancePending',
     'description',
     'achievedAt',
     'resultValue',
+    'distanceKm',
+    'durationSeconds',
     'resultUnit',
     'resultText',
     'source',
     'sourceReference',
+    'shareTemplate',
+    'shareTemplateSource',
     'evidence',
     'note',
     'verifiedAt',
@@ -77,6 +91,15 @@ function ensureNoUnknownWriteFields(payload: GenericRecord) {
     'status',
   ]);
   ensureNoManagedTenantField(payload);
+}
+
+function ensureNoWorkflowWriteFields(payload: GenericRecord, options: { allowWorkflowFields?: boolean } = {}) {
+  if (options.allowWorkflowFields) return;
+  const workflowFields = ['status', 'verifiedAt', 'verifiedBy', 'revokedAt', 'revokedBy', 'revokeReason'];
+  const attemptedFields = workflowFields.filter((field) => hasOwn(payload, field));
+  if (attemptedFields.length > 0) {
+    httpError(400, 'workflow fields are managed by the system', 'WORKFLOW_FIELDS_READONLY', { fields: attemptedFields });
+  }
 }
 
 function buildListWhere(query: Record<string, unknown>) {
@@ -97,6 +120,9 @@ function buildListWhere(query: Record<string, unknown>) {
     clauses.push({
       $or: [
         { title: { $containsi: keyword } },
+        { eventCode: { $containsi: keyword } },
+        { raceType: { $containsi: keyword } },
+        { bib: { $containsi: keyword } },
         { description: { $containsi: keyword } },
         { resultText: { $containsi: keyword } },
         { sourceReference: { $containsi: keyword } },
@@ -176,8 +202,15 @@ export async function findAchievementInTenant(achievementRef: unknown, tenantId:
   return row;
 }
 
-async function prepareWriteData(input: GenericRecord, tenantId: number | string, existing?: any, transacting?: any) {
+async function prepareWriteData(
+  input: GenericRecord,
+  tenantId: number | string,
+  existing?: any,
+  transacting?: any,
+  options: { allowWorkflowFields?: boolean } = {},
+) {
   ensureNoUnknownWriteFields(input);
+  ensureNoWorkflowWriteFields(input, options);
 
   try {
     const sportsProfileRef = hasOwn(input, 'sportsProfile') ? normalizeRequiredRelationRef(input.sportsProfile, 'sportsProfile') : normalizeOptionalRelationRef(existing?.sportsProfile);
@@ -192,17 +225,43 @@ async function prepareWriteData(input: GenericRecord, tenantId: number | string,
     const status = hasOwn(input, 'status') ? normalizeAchievementStatus(input.status) : normalizeAchievementStatus(existing?.status);
     const achievementType = hasOwn(input, 'achievementType') ? normalizeAchievementType(input.achievementType) : normalizeAchievementType(existing?.achievementType);
     const title = hasOwn(input, 'title') ? normalizeRequiredText(input.title, 'title', 200) : normalizeRequiredText(existing?.title, 'title', 200);
+    const eventCode = hasOwn(input, 'eventCode') ? normalizeOptionalText(input.eventCode, 120) : normalizeOptionalText(existing?.eventCode, 120);
+    const raceType = hasOwn(input, 'raceType') ? normalizeRaceType(input.raceType) : normalizeRaceType(existing?.raceType);
+    const bib = hasOwn(input, 'bib') ? normalizeOptionalText(input.bib, 120) : normalizeOptionalText(existing?.bib, 120);
+    const requestedDistancePending = hasOwn(input, 'distancePending') ? normalizeBooleanFlag(input.distancePending, 'distancePending') : normalizeBooleanFlag(existing?.distancePending, 'distancePending');
     const description = hasOwn(input, 'description') ? normalizeOptionalText(input.description) : normalizeOptionalText(existing?.description);
     const sportType = hasOwn(input, 'sportType') ? normalizeSportType(input.sportType) : normalizeSportType(existing?.sportType);
     const achievedAt = hasOwn(input, 'achievedAt') ? normalizeDateTime(input.achievedAt, 'achievedAt') : normalizeDateTime(existing?.achievedAt, 'achievedAt');
     const resultValue = hasOwn(input, 'resultValue') ? normalizePositiveNumber(input.resultValue, 'resultValue') : normalizePositiveNumber(existing?.resultValue, 'resultValue');
+    const distanceKm = hasOwn(input, 'distanceKm') ? normalizeDistanceKm(input.distanceKm) : normalizeDistanceKm(existing?.distanceKm);
+    const durationSeconds = hasOwn(input, 'durationSeconds') ? normalizeDurationSeconds(input.durationSeconds) : normalizeDurationSeconds(existing?.durationSeconds);
     const resultUnit = hasOwn(input, 'resultUnit') ? normalizeOptionalText(input.resultUnit, 50) : normalizeOptionalText(existing?.resultUnit, 50);
     const resultText = hasOwn(input, 'resultText') ? normalizeOptionalText(input.resultText, 255) : normalizeOptionalText(existing?.resultText, 255);
     const source = hasOwn(input, 'source') ? normalizeAchievementSource(input.source) : normalizeAchievementSource(existing?.source || 'manual');
     const sourceReference = hasOwn(input, 'sourceReference') ? normalizeOptionalText(input.sourceReference, 255) : normalizeOptionalText(existing?.sourceReference, 255);
+    const shareTemplate = hasOwn(input, 'shareTemplate') ? normalizeOptionalRelationRef(input.shareTemplate) : normalizeOptionalRelationRef(existing?.shareTemplate);
+    const shareTemplateSource = hasOwn(input, 'shareTemplateSource') ? toText(input.shareTemplateSource).toLowerCase() : toText(existing?.shareTemplateSource || 'none').toLowerCase();
+    if (!['explicit', 'auto', 'none'].includes(shareTemplateSource)) {
+      httpError(400, 'shareTemplateSource is invalid', 'INVALID_SHARE_TEMPLATE_SOURCE', { field: 'shareTemplateSource' });
+    }
     const evidenceIds = hasOwn(input, 'evidence') ? normalizeEvidenceRefs(input.evidence) : normalizeEvidenceRefs(existing?.evidence);
     const note = hasOwn(input, 'note') ? normalizeOptionalText(input.note) : normalizeOptionalText(existing?.note);
     const verifiedAt = hasOwn(input, 'verifiedAt') ? normalizeDateTime(input.verifiedAt, 'verifiedAt') : normalizeDateTime(existing?.verifiedAt, 'verifiedAt');
+    const runningMode = isRunningPerformanceType(sportType, achievementType);
+    const allowsMissingDistance = runningMode && achievementType === 'race_result';
+    const distancePending = distanceKm === null ? requestedDistancePending : false;
+    if (runningMode) {
+      if (!achievedAt) httpError(400, 'achievedAt is required for running results', 'INVALID_REQUEST_BODY', { field: 'achievedAt' });
+      if (durationSeconds === null) httpError(400, 'durationSeconds is required for running results', 'INVALID_REQUEST_BODY', { field: 'durationSeconds' });
+      if (distanceKm === null) {
+        if (!allowsMissingDistance) {
+          httpError(400, 'distanceKm is required for running results', 'INVALID_REQUEST_BODY', { field: 'distanceKm' });
+        }
+        if (!distancePending) {
+          httpError(400, 'distanceKm is required for running results unless distancePending is explicitly true', 'INVALID_REQUEST_BODY', { field: 'distanceKm' });
+        }
+      }
+    }
 
     return {
       sportsProfile,
@@ -211,14 +270,22 @@ async function prepareWriteData(input: GenericRecord, tenantId: number | string,
       status,
       achievementType,
       title,
+      eventCode,
+      raceType,
+      bib,
+      distancePending,
       description,
       sportType,
       achievedAt,
-      resultValue,
-      resultUnit,
-      resultText,
+      resultValue: runningMode ? durationSeconds : resultValue,
+      distanceKm,
+      durationSeconds,
+      resultUnit: runningMode ? 'seconds' : resultUnit,
+      resultText: runningMode ? formatDurationSeconds(durationSeconds) : resultText,
       source,
       sourceReference,
+      shareTemplate,
+      shareTemplateSource,
       evidenceIds,
       note,
       verifiedAt,
@@ -254,9 +321,14 @@ export async function getTenantSportsAchievement(achievementRef: unknown, tenant
   return mapSportsAchievementRow(await findAchievementInTenant(achievementRef, tenantId), { includeLongText: true });
 }
 
-export async function createTenantSportsAchievement(payload: Record<string, unknown>, tenantId: number | string, authUser: AuthUser = null, options: { transacting?: any } = {}) {
+export async function createTenantSportsAchievement(
+  payload: Record<string, unknown>,
+  tenantId: number | string,
+  authUser: AuthUser = null,
+  options: { transacting?: any; allowWorkflowFields?: boolean } = {},
+) {
   try {
-    const prepared = await prepareWriteData(payload || {}, tenantId, undefined, options.transacting);
+    const prepared = await prepareWriteData(payload || {}, tenantId, undefined, options.transacting, { allowWorkflowFields: options.allowWorkflowFields === true });
     const now = new Date().toISOString();
     const created = await strapi.db.query(SPORTS_ACHIEVEMENT_UID).create({
       data: {
@@ -266,13 +338,21 @@ export async function createTenantSportsAchievement(payload: Record<string, unkn
         achievementType: prepared.achievementType,
         sportType: prepared.sportType,
         title: prepared.title,
+        eventCode: prepared.eventCode,
+        raceType: prepared.raceType,
+        bib: prepared.bib,
+        distancePending: prepared.distancePending,
         description: prepared.description,
         achievedAt: prepared.achievedAt,
         resultValue: prepared.resultValue,
+        distanceKm: prepared.distanceKm,
+        durationSeconds: prepared.durationSeconds,
         resultUnit: prepared.resultUnit,
         resultText: prepared.resultText,
         source: prepared.source,
         sourceReference: prepared.sourceReference,
+        shareTemplate: prepared.shareTemplate ? Number(prepared.shareTemplate) : null,
+        shareTemplateSource: prepared.shareTemplateSource || 'none',
         evidence: prepared.evidenceIds,
         note: prepared.note,
         status: prepared.status || 'active',
@@ -287,10 +367,16 @@ export async function createTenantSportsAchievement(payload: Record<string, unkn
   }
 }
 
-export async function updateTenantSportsAchievement(achievementRef: unknown, payload: Record<string, unknown>, tenantId: number | string, authUser: AuthUser = null, options: { transacting?: any } = {}) {
+export async function updateTenantSportsAchievement(
+  achievementRef: unknown,
+  payload: Record<string, unknown>,
+  tenantId: number | string,
+  authUser: AuthUser = null,
+  options: { transacting?: any; allowWorkflowFields?: boolean } = {},
+) {
   const current = await findAchievementInTenant(achievementRef, tenantId, options.transacting);
   try {
-    const prepared = await prepareWriteData(payload || {}, tenantId, current, options.transacting);
+    const prepared = await prepareWriteData(payload || {}, tenantId, current, options.transacting, { allowWorkflowFields: options.allowWorkflowFields === true });
     const updated = await strapi.db.query(SPORTS_ACHIEVEMENT_UID).update({
       where: { id: Number(current.id) },
       data: {
@@ -299,13 +385,21 @@ export async function updateTenantSportsAchievement(achievementRef: unknown, pay
         achievementType: prepared.achievementType,
         sportType: prepared.sportType,
         title: prepared.title,
+        eventCode: prepared.eventCode,
+        raceType: prepared.raceType,
+        bib: prepared.bib,
+        distancePending: prepared.distancePending,
         description: prepared.description,
         achievedAt: prepared.achievedAt,
         resultValue: prepared.resultValue,
+        distanceKm: prepared.distanceKm,
+        durationSeconds: prepared.durationSeconds,
         resultUnit: prepared.resultUnit,
         resultText: prepared.resultText,
         source: prepared.source,
         sourceReference: prepared.sourceReference,
+        shareTemplate: prepared.shareTemplate ? Number(prepared.shareTemplate) : null,
+        shareTemplateSource: prepared.shareTemplateSource || 'none',
         evidence: prepared.evidenceIds,
         note: prepared.note,
         status: prepared.status,
@@ -349,25 +443,35 @@ export async function revokeSportsAchievement(achievementRef: unknown, tenantId:
 }
 
 export async function createVerifiedAchievementFromSubmission(submission: any, tenantId: number | string, authUser: AuthUser, options: { transacting?: any } = {}) {
+  const shareTemplateRef = submission?.shareTemplate?.id || extractRelationRef(submission?.shareTemplate) || submission?.shareTemplateId || submission?.shareTemplate || null;
+  const shareTemplateSource = submission?.shareTemplateSource || (shareTemplateRef ? 'explicit' : 'none');
   const result = await createTenantSportsAchievement({
     sportsProfile: submission?.sportsProfile?.id || extractRelationRef(submission?.sportsProfile),
     club: submission?.club?.id || extractRelationRef(submission?.club),
     achievementType: submission?.achievementType,
     sportType: submission?.sportType,
     title: submission?.title,
+    eventCode: submission?.eventCode,
+    raceType: submission?.raceType,
+    bib: submission?.bib,
+    distancePending: Boolean(submission?.distancePending),
     description: submission?.description,
     achievedAt: submission?.achievedAt,
     resultValue: submission?.resultValue,
+    distanceKm: submission?.distanceKm,
+    durationSeconds: submission?.durationSeconds,
     resultUnit: submission?.resultUnit,
     resultText: submission?.resultText,
     source: submission?.source,
     sourceReference: submission?.sourceReference,
+    shareTemplate: shareTemplateRef,
+    shareTemplateSource,
     evidence: Array.isArray(submission?.evidence) ? submission.evidence.map((item: any) => item?.id || extractRelationRef(item)).filter(Boolean) : [],
     note: submission?.note,
     status: 'active',
     verifiedAt: new Date().toISOString(),
     verifiedBy: authUser?.id || null,
-  }, tenantId, authUser, options);
+  }, tenantId, authUser, { ...options, allowWorkflowFields: true });
   return result;
 }
 

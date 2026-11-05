@@ -69,6 +69,7 @@ async function getTenantScopedPermissionKeys(userId: number, tenantId: number): 
           $in: roleIds,
         },
       },
+      isActive: true,
     },
     populate: ['feature'],
   });

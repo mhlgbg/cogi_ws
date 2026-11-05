@@ -12,6 +12,7 @@ export const ACHIEVEMENT_SOURCE_VALUES = new Set(['club', 'event', 'manual', 'sy
 export const SUBMISSION_SOURCE_VALUES = new Set(['club_manager', 'member', 'event', 'public_form', 'import', 'system', 'strava', 'other']);
 export const SUBMISSION_STATUS_VALUES = new Set(['draft', 'submitted', 'verified', 'rejected', 'cancelled']);
 export const SPORT_TYPE_VALUES = new Set(['running', 'cycling', 'badminton', 'football', 'swimming', 'multisport', 'other']);
+export const RACE_TYPE_VALUES = new Set(['road', 'trail', 'track', 'virtual', 'other']);
 
 export type AuthUser = { id: number; blocked?: boolean | null } | null;
 export type GenericRecord = Record<string, unknown>;
@@ -76,6 +77,38 @@ export function normalizePositiveNumber(value: unknown, fieldName: string): numb
   return parsed;
 }
 
+export function normalizeDistanceKm(value: unknown): number | null {
+  const parsed = normalizePositiveNumber(value, 'distanceKm');
+  if (parsed === null) return null;
+  if (parsed <= 0) {
+    throw Object.assign(new Error('distanceKm must be greater than 0'), { status: 400, code: 'INVALID_DISTANCE_KM', details: { field: 'distanceKm' } });
+  }
+  return Number(parsed.toFixed(3));
+}
+
+export function normalizeDurationSeconds(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw Object.assign(new Error('durationSeconds must be a positive integer'), { status: 400, code: 'INVALID_DURATION_SECONDS', details: { field: 'durationSeconds' } });
+  }
+  return parsed;
+}
+
+export function isRunningPerformanceType(sportType: unknown, achievementType: unknown): boolean {
+  return toText(sportType).toLowerCase() === 'running'
+    && (toText(achievementType).toLowerCase() === 'race_result' || toText(achievementType).toLowerCase() === 'personal_best');
+}
+
+export function formatDurationSeconds(value: number | null): string | null {
+  if (!Number.isInteger(Number(value)) || Number(value) <= 0) return null;
+  const total = Number(value);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  return [hours, minutes, seconds].map((item) => String(item).padStart(2, '0')).join(':');
+}
+
 export function normalizeAchievementStatus(value: unknown): 'active' | 'revoked' {
   const text = toText(value).toLowerCase() || 'active';
   if (!ACHIEVEMENT_STATUS_VALUES.has(text)) {
@@ -123,6 +156,24 @@ export function normalizeSportType(value: unknown): string | null {
     throw Object.assign(new Error('sportType is invalid'), { status: 400, code: 'INVALID_SPORT_TYPE', details: { field: 'sportType' } });
   }
   return text;
+}
+
+export function normalizeRaceType(value: unknown): string | null {
+  const text = toText(value).toLowerCase();
+  if (!text) return null;
+  if (!RACE_TYPE_VALUES.has(text)) {
+    throw Object.assign(new Error('raceType is invalid'), { status: 400, code: 'INVALID_RACE_TYPE', details: { field: 'raceType' } });
+  }
+  return text;
+}
+
+export function normalizeBooleanFlag(value: unknown, fieldName: string): boolean {
+  if (typeof value === 'boolean') return value;
+  const text = toText(value).toLowerCase();
+  if (!text) return false;
+  if (text === 'true' || text === '1' || text === 'yes') return true;
+  if (text === 'false' || text === '0' || text === 'no') return false;
+  throw Object.assign(new Error(`${fieldName} is invalid`), { status: 400, code: 'INVALID_BOOLEAN', details: { field: fieldName } });
 }
 
 export function normalizeEvidenceRefs(value: unknown): number[] {
@@ -229,16 +280,37 @@ export function mapSportsAchievementRow(row: any, options: { includeLongText?: b
     id: Number(row.id),
     documentId: toText(row.documentId) || null,
     title: toText(row.title) || null,
+    eventCode: toText(row.eventCode) || null,
+    raceType: toText(row.raceType) || null,
+    bib: toText(row.bib) || null,
+    distancePending: Boolean(row.distancePending),
     description: options.includeLongText ? normalizeOptionalText(row.description) : normalizeOptionalText(row.description, 240),
     achievementType: toText(row.achievementType) || 'other',
     sportType: toText(row.sportType) || null,
     achievedAt: row.achievedAt || null,
     resultValue: row.resultValue === null || row.resultValue === undefined || row.resultValue === '' ? null : Number(row.resultValue),
+    distanceKm: row.distanceKm === null || row.distanceKm === undefined || row.distanceKm === '' ? null : Number(row.distanceKm),
+    durationSeconds: row.durationSeconds === null || row.durationSeconds === undefined || row.durationSeconds === '' ? null : Number(row.durationSeconds),
     resultUnit: toText(row.resultUnit) || null,
     resultText: toText(row.resultText) || null,
     status: toText(row.status) || 'active',
     source: toText(row.source) || 'manual',
     sourceReference: toText(row.sourceReference) || null,
+    shareTemplateSource: toText(row.shareTemplateSource).toLowerCase() || 'none',
+    shareTemplate: row.shareTemplate?.id
+      ? {
+        id: Number(row.shareTemplate.id),
+        documentId: toText(row.shareTemplate.documentId) || null,
+        name: toText(row.shareTemplate.name) || null,
+        code: toText(row.shareTemplate.code) || null,
+        status: toText(row.shareTemplate.status) || null,
+        sportType: toText(row.shareTemplate.sportType) || null,
+        layoutKey: toText(row.shareTemplate.layoutKey) || null,
+        layoutConfig: row.shareTemplate.layoutConfig ?? null,
+        backgroundAsset: mapMedia(row.shareTemplate.backgroundAsset),
+        previewAsset: mapMedia(row.shareTemplate.previewAsset),
+      }
+      : null,
     evidence: Array.isArray(row.evidence) ? row.evidence.map((item: any) => mapMedia(item)).filter(Boolean) : [],
     note: options.includeLongText ? normalizeOptionalText(row.note) : normalizeOptionalText(row.note, 240),
     verifiedAt: row.verifiedAt || null,
@@ -259,11 +331,17 @@ export function mapSportsAchievementSubmissionRow(row: any, options: { includeLo
     id: Number(row.id),
     documentId: toText(row.documentId) || null,
     title: toText(row.title) || null,
+    eventCode: toText(row.eventCode) || null,
+    raceType: toText(row.raceType) || null,
+    bib: toText(row.bib) || null,
+    distancePending: Boolean(row.distancePending),
     description: options.includeLongText ? normalizeOptionalText(row.description) : normalizeOptionalText(row.description, 240),
     achievementType: toText(row.achievementType) || 'other',
     sportType: toText(row.sportType) || null,
     achievedAt: row.achievedAt || null,
     resultValue: row.resultValue === null || row.resultValue === undefined || row.resultValue === '' ? null : Number(row.resultValue),
+    distanceKm: row.distanceKm === null || row.distanceKm === undefined || row.distanceKm === '' ? null : Number(row.distanceKm),
+    durationSeconds: row.durationSeconds === null || row.durationSeconds === undefined || row.durationSeconds === '' ? null : Number(row.durationSeconds),
     resultUnit: toText(row.resultUnit) || null,
     resultText: toText(row.resultText) || null,
     source: toText(row.source) || 'other',
@@ -341,6 +419,11 @@ export async function acquireSubmissionVerifyLock(trx: any, tenantId: number | s
   await trx.raw('select pg_advisory_xact_lock(hashtext(?), hashtext(?))', [String(tenantId), `sports-achievement-submission:${String(submissionId)}`]);
 }
 
+export async function acquireAchievementImportFingerprintLock(trx: any, tenantId: number | string, scope: string, fingerprint: string | null | undefined) {
+  if (!isPostgresClient() || !fingerprint) return;
+  await trx.raw('select pg_advisory_xact_lock(hashtext(?), hashtext(?))', [String(tenantId), `sports-achievement-import:${scope}:${String(fingerprint)}`]);
+}
+
 export function buildPagination(page: number, pageSize: number, total: number) {
   return {
     page,
@@ -391,6 +474,13 @@ export function normalizePopulateForAchievement() {
     verifiedBy: { select: ['id', 'documentId', 'username', 'email', 'fullName'] },
     revokedBy: { select: ['id', 'documentId', 'username', 'email', 'fullName'] },
     evidence: { select: ['id', 'name', 'url', 'mime'] },
+    shareTemplate: {
+      select: ['id', 'documentId', 'name', 'code', 'status', 'sportType', 'layoutKey', 'layoutConfig'],
+      populate: {
+        backgroundAsset: { select: ['id', 'name', 'url', 'mime', 'provider', 'provider_metadata'] },
+        previewAsset: { select: ['id', 'name', 'url', 'mime', 'provider', 'provider_metadata'] },
+      },
+    },
   };
 }
 

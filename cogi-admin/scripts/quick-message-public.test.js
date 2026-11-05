@@ -466,12 +466,13 @@ test('quick message public: open content increments first and last view timestam
     message: {
       ...buildActiveAccess().message,
       title: 'Tai lieu cuoc hop',
-      content: 'Noi dung can doc',
+      content: '<!DOCTYPE html><html><head><title>X</title><style>body{background:red}</style><script>alert(1)</script></head><body><h2 onclick="alert(1)">Lịch trình Châu Âu</h2><p>Thông tin lịch trình của gia đình.</p><table><thead><tr><th>Ngày</th><th>Hoạt động</th></tr></thead><tbody><tr><td>02/09</td><td>Khởi hành</td></tr></tbody></table><a href="javascript:alert(1)">Bad link</a><a href="https://example.com/doc">Good link</a></body></html>',
+      contentType: 'html',
       links: [{ label: 'Mo tai lieu', url: 'https://example.com/doc' }, { label: 'Bad', url: 'javascript:alert(1)' }],
       allowReply: true,
       replyMode: 'quick_and_text',
       senderDisplayName: 'Nguyen Duc Dan',
-      expiresAt: '2026-08-02T00:00:00.000Z',
+      expiresAt: '2026-12-02T00:00:00.000Z',
     },
   });
   installStrapiWithAccess(access);
@@ -481,7 +482,16 @@ test('quick message public: open content increments first and last view timestam
 
   assert.equal(result.code, 'CPA866');
   assert.equal(result.message.title, 'Tai lieu cuoc hop');
-  assert.equal(result.message.content, 'Noi dung can doc');
+  assert.equal(result.message.contentType, 'html');
+  assert.match(result.message.content, /<h2>Lịch trình Châu Âu<\/h2>/);
+  assert.match(result.message.content, /<table>/);
+  assert.match(result.message.content, /<a href="https:\/\/example.com\/doc" target="_blank" rel="noopener noreferrer">Good link<\/a>/);
+  assert.doesNotMatch(result.message.content, /<!DOCTYPE/i);
+  assert.doesNotMatch(result.message.content, /<html/i);
+  assert.doesNotMatch(result.message.content, /<style/i);
+  assert.doesNotMatch(result.message.content, /<script/i);
+  assert.doesNotMatch(result.message.content, /onclick=/i);
+  assert.doesNotMatch(result.message.content, /javascript:/i);
   assert.equal(result.message.links.length, 1);
   assert.equal(result.message.links[0].url, 'https://example.com/doc');
   assert.equal(result.message.replyEnabled, true);
@@ -489,6 +499,53 @@ test('quick message public: open content increments first and last view timestam
   assert.equal(result.message.senderDisplayName, 'Nguyen Duc Dan');
   assert.equal(result.access.recipientName, 'Co Lan');
   assert.ok(result.openedAt);
+});
+
+test('quick message public: html content keeps safe class and style attributes', async () => {
+  const access = buildActiveAccess({
+    message: {
+      ...buildActiveAccess().message,
+      title: 'Styled HTML',
+      content: '<div class="test-box" style="background:#4668ad;color:#fff;padding:16px;border-radius:10px;position:fixed" onclick="alert(1)">\n  TEST HTML STYLE\n</div><script>alert(1)</script>',
+      contentType: 'html',
+      links: [],
+      allowReply: true,
+      replyMode: 'quick_and_text',
+    },
+  });
+
+  installStrapiWithAccess(access);
+  const service = loadPublicService();
+  const token = service.issueQuickMessagePublicAccessToken(access).accessToken;
+  const result = await service.openQuickMessageContentPublic('CPA866', `Bearer ${token}`);
+
+  assert.equal(result.message.contentType, 'html');
+  assert.match(result.message.content, /<div class="test-box" style="background:#4668ad;color:#fff;padding:16px;border-radius:10px">/);
+  assert.match(result.message.content, /TEST HTML STYLE/);
+  assert.doesNotMatch(result.message.content, /position\s*:/i);
+  assert.doesNotMatch(result.message.content, /onclick=/i);
+  assert.doesNotMatch(result.message.content, /<script/i);
+});
+
+test('quick message public: text content stays literal even if it looks like html', async () => {
+  const access = buildActiveAccess({
+    message: {
+      ...buildActiveAccess().message,
+      title: 'Legacy text',
+      content: '<h1>Hello</h1>',
+      contentType: null,
+      links: [],
+      allowReply: false,
+      replyMode: 'quick',
+    },
+  });
+  installStrapiWithAccess(access);
+  const service = loadPublicService();
+  const token = service.issueQuickMessagePublicAccessToken(access).accessToken;
+  const result = await service.openQuickMessageContentPublic('CPA866', `Bearer ${token}`);
+
+  assert.equal(result.message.contentType, 'text');
+  assert.equal(result.message.content, '<h1>Hello</h1>');
 });
 
 test('quick message public: list messages merges admin and public messages for the same access', async () => {

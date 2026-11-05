@@ -1,0 +1,39 @@
+{
+  "kind": "collectionType",
+  "collectionName": "curriculum_source_locations",
+  "info": {
+    "singularName": "curriculum-source-location",
+    "pluralName": "curriculum-source-locations",
+    "displayName": "Curriculum Source Location",
+    "description": "Reference to the exact location of a curriculum concept inside a source document."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "sourceDocument": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::curriculum-source-document.curriculum-source-document",
+      "required": true
+    },
+    "section": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::curriculum-section.curriculum-section"
+    },
+    "startPage": {
+      "type": "integer"
+    },
+    "endPage": {
+      "type": "integer"
+    },
+    "locator": {
+      "type": "string"
+    },
+    "excerpt": {
+      "type": "text"
+    }
+  }
+}

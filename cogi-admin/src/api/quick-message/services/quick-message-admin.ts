@@ -7,6 +7,7 @@ import {
   toText,
   whereByParam,
 } from '../../../utils/tenant-scope';
+import { sanitizeQuickMessageHtml } from './quick-message-html';
 
 const bcrypt = require('bcryptjs');
 
@@ -40,6 +41,7 @@ type LinkItem = {
 type QuickMessageStatus = 'draft' | 'active' | 'locked' | 'expired' | 'cancelled';
 type QuickMessageAccessStatus = 'active' | 'locked' | 'expired' | 'cancelled';
 type QuickMessageReplyType = 'quick' | 'text';
+type QuickMessageContentType = 'text' | 'html';
 
 const QUICK_RESPONSE_LABELS: Record<string, string> = {
   received: 'Đã nhận được thông điệp',
@@ -221,6 +223,15 @@ function normalizeReplyMode(value: unknown): 'quick' | 'text' | 'quick_and_text'
   throw new QuickMessageAdminError(400, 'replyMode must be one of: quick, text, quick_and_text');
 }
 
+function normalizeContentType(value: unknown, fallback: QuickMessageContentType = 'text'): QuickMessageContentType {
+  const normalized = toText(value).toLowerCase();
+  if (!normalized) return fallback;
+  if (normalized === 'text' || normalized === 'html') {
+    return normalized;
+  }
+  throw new QuickMessageAdminError(400, 'contentType must be one of: text, html');
+}
+
 export function computeMessageEffectiveStatus(message: any, now = new Date()): QuickMessageStatus {
   const status = toText(message?.status).toLowerCase() as QuickMessageStatus;
   if (status === 'cancelled' || status === 'locked' || status === 'draft') return status;
@@ -365,7 +376,13 @@ function assertAccessWritable(message: any) {
 
 function buildMessageMutationPayload(payload: Record<string, unknown>, senderUser: AuthUser, options: { isCreate?: boolean; current?: any } = {}) {
   const title = options.isCreate ? toRequiredText(payload.title, 'title', 200) : (payload.title === undefined ? undefined : toRequiredText(payload.title, 'title', 200));
-  const content = payload.content === undefined ? undefined : toNullableText(payload.content);
+  const contentType = payload.contentType === undefined
+    ? (options.isCreate ? 'text' : undefined)
+    : normalizeContentType(payload.contentType, normalizeContentType(options.current?.contentType, 'text'));
+  const rawContent = payload.content === undefined ? undefined : toNullableText(payload.content);
+  const content = rawContent === undefined
+    ? undefined
+    : (contentType === 'html' ? sanitizeQuickMessageHtml(rawContent) || null : rawContent);
   const expiresAt = payload.expiresAt === undefined
     ? (options.isCreate ? buildDefaultMessageExpiresAt() : undefined)
     : toFutureDateTime(payload.expiresAt, 'expiresAt');
@@ -374,6 +391,7 @@ function buildMessageMutationPayload(payload: Record<string, unknown>, senderUse
   return {
     title,
     content,
+    contentType,
     links: payload.links === undefined ? undefined : validateLinks(payload.links),
     status: nextStatus,
     expiresAt,
@@ -463,6 +481,7 @@ function serializeMessage(message: any) {
     documentId: message.documentId || null,
     title: message.title || '',
     content: message.content || null,
+    contentType: normalizeContentType(message.contentType, 'text'),
     links: Array.isArray(message.links) ? message.links : message.links || null,
     status: message.status || 'draft',
     expiresAt: message.expiresAt || null,
@@ -487,6 +506,7 @@ function serializeMessageListItem(message: any, stats: {
     id: message.id,
     documentId: message.documentId || null,
     title: message.title || '',
+    contentType: normalizeContentType(message.contentType, 'text'),
     status: message.status || 'draft',
     expiresAt: message.expiresAt || null,
     allowReply: message.allowReply !== false,
@@ -1253,7 +1273,7 @@ export async function listQuickMessages(query: Record<string, unknown>, tenantId
   const [rows, total] = await Promise.all([
     strapi.db.query(QUICK_MESSAGE_UID).findMany({
       where,
-      select: ['id', 'documentId', 'title', 'status', 'expiresAt', 'allowReply', 'replyMode', 'senderDisplayName', 'createdAt', 'updatedAt'],
+      select: ['id', 'documentId', 'title', 'contentType', 'status', 'expiresAt', 'allowReply', 'replyMode', 'senderDisplayName', 'createdAt', 'updatedAt'],
       orderBy,
       offset: (page - 1) * pageSize,
       limit: pageSize,
@@ -1322,6 +1342,7 @@ export async function createQuickMessage(body: any, tenantId: number | string, s
       data: {
         title: mutation.title,
         content: mutation.content,
+        contentType: mutation.contentType,
         links: mutation.links ?? null,
         status: mutation.status,
         expiresAt: mutation.expiresAt,
@@ -1350,6 +1371,7 @@ export async function createQuickMessage(body: any, tenantId: number | string, s
       id: result.createdMessage.id,
       documentId: result.createdMessage.documentId || null,
       title: result.createdMessage.title || '',
+      contentType: normalizeContentType(result.createdMessage.contentType, 'text'),
     },
     access: serializeAccess(result.createdMessage, result.createdAccess),
     plainPin: result.plainPin,
@@ -1375,6 +1397,7 @@ export async function updateQuickMessage(idParam: unknown, body: any, tenantId: 
     data: {
       ...(payload.title !== undefined ? { title: mutation.title } : {}),
       ...(payload.content !== undefined ? { content: mutation.content } : {}),
+      ...(payload.contentType !== undefined ? { contentType: mutation.contentType } : {}),
       ...(payload.links !== undefined ? { links: mutation.links } : {}),
       ...(payload.expiresAt !== undefined ? { expiresAt: mutation.expiresAt } : {}),
       ...(payload.allowReply !== undefined ? { allowReply: mutation.allowReply } : {}),

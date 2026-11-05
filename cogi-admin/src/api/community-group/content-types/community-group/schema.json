@@ -1,0 +1,100 @@
+{
+  "kind": "collectionType",
+  "collectionName": "community_groups",
+  "info": {
+    "singularName": "community-group",
+    "pluralName": "community-groups",
+    "displayName": "CommunityGroup",
+    "description": "Tenant-scoped social groups for Community feed."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "communityGroups",
+      "required": true
+    },
+    "name": {
+      "type": "string",
+      "required": true
+    },
+    "slug": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "text"
+    },
+    "avatar": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "coverImage": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
+    "visibility": {
+      "type": "enumeration",
+      "enum": [
+        "public",
+        "members"
+      ],
+      "required": true,
+      "default": "members"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "archived"
+      ],
+      "required": true,
+      "default": "active"
+    },
+    "linkedType": {
+      "type": "enumeration",
+      "enum": [
+        "none",
+        "club"
+      ],
+      "required": true,
+      "default": "none"
+    },
+    "linkedClub": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::sports-club.sports-club"
+    },
+    "members": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::community-group-member.community-group-member",
+      "mappedBy": "group"
+    },
+    "posts": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::community-post.community-post",
+      "mappedBy": "group"
+    },
+    "allowMemberPost": {
+      "type": "boolean",
+      "default": true
+    },
+    "memberPostRequiresApproval": {
+      "type": "boolean",
+      "default": true
+    }
+  }
+}

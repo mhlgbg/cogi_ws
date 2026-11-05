@@ -1,0 +1,64 @@
+{
+  "kind": "collectionType",
+  "collectionName": "subject_curriculum_versions",
+  "info": {
+    "singularName": "subject-curriculum-version",
+    "pluralName": "subject-curriculum-versions",
+    "displayName": "Subject Curriculum Version",
+    "description": "Digitized curriculum version for a standard subject."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "curriculum": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::curriculum.curriculum",
+      "required": true
+    },
+    "subject": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::curriculum-subject.curriculum-subject",
+      "required": true
+    },
+    "versionCode": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "versionLabel": {
+      "type": "string"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "review",
+        "published",
+        "superseded"
+      ],
+      "default": "draft",
+      "required": true
+    },
+    "publishedAt": {
+      "type": "datetime"
+    },
+    "publishedBy": {
+      "type": "string"
+    },
+    "contentHash": {
+      "type": "string"
+    },
+    "supersedesVersion": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::subject-curriculum-version.subject-curriculum-version"
+    },
+    "description": {
+      "type": "text"
+    }
+  }
+}

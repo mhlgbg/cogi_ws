@@ -2,13 +2,16 @@ import { factories } from '@strapi/strapi';
 import { resolveCurrentTenantId } from '../../../utils/tenant-scope';
 import {
 	activateTenantSportsProfile,
+	confirmSportsProfileImport,
 	createTenantSportsProfile,
 	deactivateTenantSportsProfile,
+	getSportsProfileImportTemplate,
 	getTenantSportsProfile,
 	handleSportsProfileError,
 	linkTenantSportsProfileUser,
 	listLinkableTenantUsersForSportsProfile,
 	listTenantSportsProfiles,
+	previewSportsProfileImport,
 	unlinkTenantSportsProfileUser,
 	updateTenantSportsProfile,
 } from '../services/sports-profile';
@@ -75,6 +78,29 @@ function extractPayload(ctx: any): Record<string, unknown> {
 	return {};
 }
 
+function flattenUploadedFiles(value: unknown): any[] {
+	if (!value) return [];
+	if (Array.isArray(value)) {
+		return value.flatMap((entry) => flattenUploadedFiles(entry));
+	}
+	if (typeof value === 'object' && value && ('filepath' in (value as Record<string, unknown>) || 'path' in (value as Record<string, unknown>) || 'tempFilePath' in (value as Record<string, unknown>))) {
+		return [value];
+	}
+	if (typeof value === 'object') {
+		return Object.values(value as Record<string, unknown>).flatMap((entry) => flattenUploadedFiles(entry));
+	}
+	return [];
+}
+
+function extractFirstUploadedFile(ctx: any) {
+	return flattenUploadedFiles(ctx.request?.files)[0] || null;
+}
+
+function resolveActorUserId(ctx: any): number | null {
+	const userId = Number(ctx.state?.user?.id || 0);
+	return Number.isInteger(userId) && userId > 0 ? userId : null;
+}
+
 export default factories.createCoreController(SPORTS_PROFILE_UID, () => ({
 	async list(ctx: any) {
 		const authUser = await requireAuthenticatedUser(ctx);
@@ -84,6 +110,56 @@ export default factories.createCoreController(SPORTS_PROFILE_UID, () => ({
 			const tenantId = resolveCurrentTenantId(ctx);
 			const data = await listTenantSportsProfiles(ctx.query || {}, tenantId);
 			ctx.body = { data: data.rows, meta: { pagination: data.pagination } };
+		} catch (error) {
+			return handleSportsProfileError(ctx, error);
+		}
+	},
+
+	async importTemplate(ctx: any) {
+		const authUser = await requireAuthenticatedUser(ctx);
+		if (!authUser?.id) return;
+
+		try {
+			const template = await getSportsProfileImportTemplate();
+			ctx.set('Content-Type', template.contentType);
+			ctx.set('Content-Disposition', `attachment; filename="${template.fileName}"`);
+			ctx.body = template.buffer;
+		} catch (error) {
+			return handleSportsProfileError(ctx, error);
+		}
+	},
+
+	async importPreview(ctx: any) {
+		const authUser = await requireAuthenticatedUser(ctx);
+		if (!authUser?.id) return;
+
+		try {
+			const tenantId = resolveCurrentTenantId(ctx);
+			const file = extractFirstUploadedFile(ctx);
+			if (!file) {
+				ctx.badRequest('File Excel is required');
+				return;
+			}
+			const data = await previewSportsProfileImport(file, tenantId);
+			ctx.body = { success: true, data };
+		} catch (error) {
+			return handleSportsProfileError(ctx, error);
+		}
+	},
+
+	async importConfirm(ctx: any) {
+		const authUser = await requireAuthenticatedUser(ctx);
+		if (!authUser?.id) return;
+
+		try {
+			const tenantId = resolveCurrentTenantId(ctx);
+			const file = extractFirstUploadedFile(ctx);
+			if (!file) {
+				ctx.badRequest('File Excel is required');
+				return;
+			}
+			const data = await confirmSportsProfileImport(file, tenantId, resolveActorUserId(ctx));
+			ctx.body = { success: true, data };
 		} catch (error) {
 			return handleSportsProfileError(ctx, error);
 		}

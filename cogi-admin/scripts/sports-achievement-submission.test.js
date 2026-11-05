@@ -5,6 +5,7 @@ const path = require('node:path')
 let app
 let service
 let achievementService
+let sportsMeService
 let authenticatedRoleId = 0
 
 function uniqueKey(prefix) {
@@ -19,6 +20,12 @@ function loadSubmissionService() {
 
 function loadAchievementService() {
   const modulePath = path.join(__dirname, '..', 'dist', 'src', 'api', 'sports-achievement', 'services', 'sports-achievement.js')
+  delete require.cache[require.resolve(modulePath)]
+  return require(modulePath)
+}
+
+function loadSportsMeService() {
+  const modulePath = path.join(__dirname, '..', 'dist', 'src', 'api', 'sports-me', 'services', 'sports-me.js')
   delete require.cache[require.resolve(modulePath)]
   return require(modulePath)
 }
@@ -80,10 +87,11 @@ async function createTenant(label) {
   })
 }
 
-async function createSportsProfile(tenantId, label) {
+async function createSportsProfile(tenantId, label, userId = null) {
   return app.db.query('api::sports-profile.sports-profile').create({
     data: {
       tenant: tenantId,
+      user: userId || null,
       code: `${label}`.toUpperCase(),
       fullName: `Profile ${label}`,
       displayName: `Display ${label}`,
@@ -93,6 +101,22 @@ async function createSportsProfile(tenantId, label) {
       contactEmail: `${label}@profile.example.com`,
     },
     select: ['id', 'code', 'fullName', 'displayName'],
+  })
+}
+
+async function createMembership(tenantId, profileId, clubId, memberCode, status = 'active') {
+  return app.db.query('api::club-membership.club-membership').create({
+    data: {
+      tenant: tenantId,
+      sportsProfile: profileId,
+      club: clubId,
+      memberCode,
+      status,
+      role: 'member',
+      joinedAt: '2025-01-01',
+      source: 'admin_created',
+    },
+    select: ['id', 'memberCode', 'status'],
   })
 }
 
@@ -127,7 +151,7 @@ async function createFixture() {
   const outsiderUser = await createUser(`${key}-other-user`)
   cleanup.push(() => destroyEntity('plugin::users-permissions.user', outsiderUser.id))
 
-  const profile = await createSportsProfile(tenant.id, `${key}-profile`)
+  const profile = await createSportsProfile(tenant.id, `${key}-profile`, user.id)
   cleanup.push(() => destroyEntity('api::sports-profile.sports-profile', profile.id))
 
   const outsiderProfile = await createSportsProfile(outsiderTenant.id, `${key}-outsider-profile`)
@@ -138,6 +162,15 @@ async function createFixture() {
 
   const outsiderClub = await createSportsClub(outsiderTenant.id, `${key}-outsider-club`)
   cleanup.push(() => destroyEntity('api::sports-club.sports-club', outsiderClub.id))
+
+  const membership = await createMembership(tenant.id, profile.id, club.id, 'SELF001', 'active')
+  cleanup.push(() => destroyEntity('api::club-membership.club-membership', membership.id))
+
+  const inactiveClub = await createSportsClub(tenant.id, `${key}-inactive-club`)
+  cleanup.push(() => destroyEntity('api::sports-club.sports-club', inactiveClub.id))
+
+  const inactiveMembership = await createMembership(tenant.id, profile.id, inactiveClub.id, 'SELF002', 'inactive')
+  cleanup.push(() => destroyEntity('api::club-membership.club-membership', inactiveMembership.id))
 
   const evidence = await createUploadFile(`${key}-evidence`)
   cleanup.push(() => destroyEntity('plugin::upload.file', evidence.id))
@@ -152,6 +185,9 @@ async function createFixture() {
     outsiderProfile,
     club,
     outsiderClub,
+    membership,
+    inactiveClub,
+    inactiveMembership,
     evidence,
   }
 }
@@ -175,6 +211,7 @@ before(async () => {
   if (!authenticatedRoleId) throw new Error('Authenticated role not found for test setup')
   service = loadSubmissionService()
   achievementService = loadAchievementService()
+  sportsMeService = loadSportsMeService()
 })
 
 after(async () => {
@@ -190,13 +227,20 @@ test('sports achievement submission: create draft then submit sets submittedAt',
       achievementType: 'race_result',
       sportType: 'running',
       title: 'Da Nang Marathon 10K',
-      resultText: '45:20',
+      achievedAt: '2026-01-01',
+      distanceKm: 10,
+      durationSeconds: 2720,
       source: 'club_manager',
       status: 'draft',
       evidence: [fixture.evidence.id],
     }, fixture.tenant.id, fixture.user)
     assert.equal(created.status, 'draft')
     assert.equal(created.submittedAt, null)
+    assert.equal(created.distanceKm, 10)
+    assert.equal(created.durationSeconds, 2720)
+    assert.equal(created.resultValue, 2720)
+    assert.equal(created.resultUnit, 'seconds')
+    assert.equal(created.resultText, '00:45:20')
 
     const submitted = await service.submitAchievementSubmission(created.id, fixture.tenant.id, fixture.user)
     assert.equal(submitted.status, 'submitted')
@@ -216,7 +260,9 @@ test('sports achievement submission: verify creates one active achievement and i
       achievementType: 'personal_best',
       sportType: 'running',
       title: '5K PB',
-      resultText: '20:15',
+      achievedAt: '2026-01-02',
+      distanceKm: 5,
+      durationSeconds: 1215,
       source: 'club_manager',
       status: 'submitted',
       evidence: [fixture.evidence.id],
@@ -233,6 +279,9 @@ test('sports achievement submission: verify creates one active achievement and i
     assert.equal(achievement.verifiedBy.id, fixture.user.id)
     assert.ok(achievement.verifiedAt)
     assert.equal(achievement.evidence.length, 1)
+    assert.equal(achievement.distanceKm, 5)
+    assert.equal(achievement.durationSeconds, 1215)
+    assert.equal(achievement.resultText, '00:20:15')
 
     const beforeCount = await countAchievementsForProfile(fixture.tenant.id, fixture.profile.id)
     const verifiedAgain = await service.verifyAchievementSubmission(created.id, fixture.tenant.id, { reviewNote: 'Retry' }, fixture.user)
@@ -296,6 +345,95 @@ test('sports achievement submission: tenant isolation blocks cross-tenant profil
         status: 'draft',
       }, fixture.tenant.id, fixture.user),
       (error) => error && error.status === 404,
+    )
+  } finally {
+    await cleanupFixture(fixture)
+  }
+})
+
+test('sports me: self submit uses current profile and requires active membership', async () => {
+  const fixture = await createFixture()
+  try {
+    const created = await sportsMeService.createMyAchievementSubmission(fixture.tenant.id, fixture.user.id, {
+      club: fixture.club.id,
+      achievementType: 'race_result',
+      title: 'Member self submit',
+      achievedAt: '2026-01-03',
+      distanceKm: 42.195,
+      durationSeconds: 3010,
+      evidence: [fixture.evidence.id],
+    }, fixture.user)
+
+    assert.equal(created.status, 'submitted')
+    assert.equal(created.source, 'member')
+    assert.equal(created.sportsProfile.id, fixture.profile.id)
+    assert.equal(created.club.id, fixture.club.id)
+    assert.equal(created.sportType, 'running')
+    assert.equal(created.distanceKm, 42.195)
+    assert.equal(created.durationSeconds, 3010)
+    assert.equal(created.resultText, '00:50:10')
+
+    await assert.rejects(
+      () => sportsMeService.createMyAchievementSubmission(fixture.tenant.id, fixture.user.id, {
+        club: fixture.club.id,
+        achievementType: 'club_award',
+        title: 'Not allowed',
+        achievedAt: '2026-01-03',
+        distanceKm: 5,
+        durationSeconds: 1200,
+      }, fixture.user),
+      (error) => error && error.code === 'SELF_ACHIEVEMENT_TYPE_NOT_ALLOWED',
+    )
+
+    await assert.rejects(
+      () => sportsMeService.createMyAchievementSubmission(fixture.tenant.id, fixture.user.id, {
+        club: fixture.inactiveClub.id,
+        achievementType: 'race_result',
+        title: 'Inactive membership submit',
+      }, fixture.user),
+      (error) => error && error.code === 'ACTIVE_CLUB_MEMBERSHIP_REQUIRED',
+    )
+
+    await assert.rejects(
+      () => sportsMeService.createMyAchievementSubmission(fixture.tenant.id, fixture.user.id, {
+        club: fixture.club.id,
+        sportsProfile: fixture.outsiderProfile.id,
+        achievementType: 'race_result',
+        title: 'Spoof profile',
+      }, fixture.user),
+      (error) => error && error.code === 'UNKNOWN_FIELDS',
+    )
+  } finally {
+    await cleanupFixture(fixture)
+  }
+})
+
+test('sports achievement: client cannot write workflow fields directly', async () => {
+  const fixture = await createFixture()
+  try {
+    await assert.rejects(
+      () => achievementService.createTenantSportsAchievement({
+        sportsProfile: fixture.profile.id,
+        club: fixture.club.id,
+        achievementType: 'other',
+        title: 'Blocked workflow create',
+        status: 'revoked',
+      }, fixture.tenant.id, fixture.user),
+      (error) => error && error.code === 'WORKFLOW_FIELDS_READONLY',
+    )
+
+    const created = await achievementService.createTenantSportsAchievement({
+      sportsProfile: fixture.profile.id,
+      club: fixture.club.id,
+      achievementType: 'other',
+      title: 'Allowed create',
+    }, fixture.tenant.id, fixture.user)
+
+    await assert.rejects(
+      () => achievementService.updateTenantSportsAchievement(created.id, {
+        status: 'revoked',
+      }, fixture.tenant.id, fixture.user),
+      (error) => error && error.code === 'WORKFLOW_FIELDS_READONLY',
     )
   } finally {
     await cleanupFixture(fixture)

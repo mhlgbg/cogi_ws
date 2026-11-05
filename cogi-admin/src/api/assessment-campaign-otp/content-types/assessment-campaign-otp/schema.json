@@ -1,0 +1,60 @@
+{
+  "kind": "collectionType",
+  "collectionName": "assessment_campaign_otps",
+  "info": {
+    "singularName": "assessment-campaign-otp",
+    "pluralName": "assessment-campaign-otps",
+    "displayName": "Assessment Campaign OTP"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "assessmentCampaign": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assessment-campaign.assessment-campaign",
+      "required": true
+    },
+    "email": {
+      "type": "string",
+      "required": true
+    },
+    "otpHash": {
+      "type": "string",
+      "required": true
+    },
+    "expiresAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "sentAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "verifiedAt": {
+      "type": "datetime"
+    },
+    "failedAttempts": {
+      "type": "integer",
+      "default": 0,
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["active", "verified", "expired", "failed", "cancelled"],
+      "default": "active",
+      "required": true
+    },
+    "metadata": {
+      "type": "json"
+    }
+  }
+}

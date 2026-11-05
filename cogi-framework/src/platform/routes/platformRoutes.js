@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import TenantManager from '../pages/TenantManager.jsx'
 import PlatformFeatureManager from '../pages/PlatformFeatureManager.jsx'
 import PlatformGameTypeManager from '../pages/PlatformGameTypeManager.jsx'
+import PlatformCurriculumManager from '../pages/PlatformCurriculumManager.jsx'
 import PlatformSettingsPage from '../pages/PlatformSettingsPage.jsx'
 import PermissionDebugger from '../pages/PermissionDebugger.jsx'
 import StravaOperationsPage from '../pages/StravaOperationsPage.jsx'
@@ -41,24 +42,31 @@ export const platformNavGroups = [
       },
       {
         type: 'item',
+        name: 'Curriculum Manager',
+        key: 'platform.curriculums',
+        path: '/platform/curriculums',
+        order: 4,
+      },
+      {
+        type: 'item',
         name: 'Platform Settings',
         key: 'platform.settings',
         path: '/platform/settings',
-        order: 4,
+        order: 5,
       },
       {
         type: 'item',
         name: 'Strava Operations',
         key: 'platform.integrations.strava',
         path: '/platform/integrations/strava',
-        order: 5,
+        order: 6,
       },
       {
         type: 'item',
         name: 'Permission Debugger',
         key: 'platform.permission-debug',
         path: '/platform/permission-debug',
-        order: 6,
+        order: 7,
       },
     ],
   },
@@ -90,6 +98,10 @@ const platformRoutes = [
   {
     path: 'game-types',
     element: createElement(PlatformGameTypeManager),
+  },
+  {
+    path: 'curriculums',
+    element: createElement(PlatformCurriculumManager),
   },
   {
     path: 'settings',

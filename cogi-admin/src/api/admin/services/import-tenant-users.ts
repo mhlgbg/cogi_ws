@@ -4,9 +4,9 @@ import { ensureUserHasAuthenticatedRole } from '../../auth-extended/services/ens
 import {
   checkUserTenantExists,
   createUserTenant,
-  createUserTenantRole,
   validateTenantRole,
 } from './invite-user';
+import { updateTenantUserRoles } from './manage-tenant-users';
 
 const USER_UID = 'plugin::users-permissions.user';
 
@@ -26,6 +26,29 @@ type ParsedRow = {
   email: string;
   fullName: string | null;
   password: string;
+  phone?: string | null;
+};
+
+export type CreateTenantUserInput = {
+  tenantId: number;
+  roleIds: number[];
+  username: string;
+  email: string;
+  fullName?: string | null;
+  phone?: string | null;
+  password: string;
+};
+
+export type CreateTenantUserResult = {
+  caseType: 'NEW_USER' | 'EXISTING_USER';
+  userId: number;
+  userTenantId: number;
+  username: string;
+  email: string;
+  fullName: string | null;
+  phone: string | null;
+  roleIds: number[];
+  membershipCreated: boolean;
 };
 
 export type ImportRowResult = {
@@ -65,6 +88,10 @@ function normalizeEmail(value: unknown) {
   return normalizeText(value).toLowerCase();
 }
 
+function uniquePositiveInts(values: unknown[]) {
+  return Array.from(new Set((values || []).map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0)));
+}
+
 function getFilePath(file: UploadedFileLike) {
   return file.filepath || file.path || file.tempFilePath || '';
 }
@@ -84,12 +111,14 @@ function normalizeRow(row: Record<string, unknown>): ParsedRow {
   const username = normalizeText(findColumnValue(row, ['username', 'user_name', 'user name']));
   const email = normalizeEmail(findColumnValue(row, ['email', 'e-mail', 'mail']));
   const fullNameRaw = normalizeText(findColumnValue(row, ['fullname', 'full_name', 'full name']));
+  const phone = normalizeText(findColumnValue(row, ['phone', 'mobile', 'so dien thoai', 'sdt']));
   const password = normalizeText(findColumnValue(row, ['password', 'pass', 'matkhau', 'mat_khau']));
 
   return {
     username,
     email,
     fullName: fullNameRaw || null,
+    phone: phone || null,
     password,
   };
 }
@@ -145,6 +174,43 @@ function validateParsedRow(row: ParsedRow) {
   return null;
 }
 
+function validateSharedIdentityFields(row: Pick<ParsedRow, 'username' | 'email' | 'fullName'>) {
+  if (!row.username) {
+    return 'username is required';
+  }
+
+  if (row.username.length < 3) {
+    return 'username must be at least 3 characters';
+  }
+
+  if (!row.email) {
+    return 'email is required';
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(row.email)) {
+    return 'email is invalid';
+  }
+
+  if (row.fullName && row.fullName.length > 150) {
+    return 'fullName max length is 150';
+  }
+
+  return null;
+}
+
+function validatePasswordForNewUser(password: string) {
+  if (!password) {
+    return 'password is required for a new user';
+  }
+
+  if (password.length < 6) {
+    return 'password must be at least 6 characters';
+  }
+
+  return null;
+}
+
 async function validateImportOptions(tenantId: number, roleId: number) {
   if (!Number.isInteger(tenantId) || tenantId <= 0) {
     throw new Error('Invalid tenantId');
@@ -157,6 +223,180 @@ async function validateImportOptions(tenantId: number, roleId: number) {
   const roleValidation = await validateTenantRole(tenantId, roleId);
   if (!roleValidation.valid) {
     throw new Error(roleValidation.error || 'Role is not enabled for this tenant');
+  }
+}
+
+async function validateCreateOptions(tenantId: number, roleIds: number[]) {
+  if (!Number.isInteger(tenantId) || tenantId <= 0) {
+    throw new Error('Invalid tenantId');
+  }
+
+  const normalizedRoleIds = uniquePositiveInts(roleIds);
+  if (normalizedRoleIds.length === 0) {
+    throw new Error('At least one role is required');
+  }
+
+  for (const roleId of normalizedRoleIds) {
+    const roleValidation = await validateTenantRole(tenantId, roleId);
+    if (!roleValidation.valid) {
+      throw new Error(roleValidation.error || 'Role is not enabled for this tenant');
+    }
+  }
+
+  return normalizedRoleIds;
+}
+
+function validateCreateInput(input: ParsedRow) {
+  return validateParsedRow(input);
+}
+
+async function findExistingUsersByIdentity(username: string, email: string) {
+  const users = await strapi.db.query(USER_UID).findMany({
+    where: {
+      $or: [
+        { username: { $eqi: username } },
+        { email: { $eqi: email } },
+      ],
+    },
+    select: ['id', 'username', 'email', 'fullName', 'phone'],
+  });
+
+  const normalizedUsername = normalizeText(username).toLowerCase();
+  const normalizedEmail = normalizeEmail(email);
+  const usernameMatches = (users || []).filter((item: any) => normalizeText(item?.username).toLowerCase() === normalizedUsername);
+  const emailMatches = (users || []).filter((item: any) => normalizeEmail(item?.email) === normalizedEmail);
+
+  const usernameUser = usernameMatches[0] || null;
+  const emailUser = emailMatches[0] || null;
+
+  if (usernameUser?.id && emailUser?.id && Number(usernameUser.id) !== Number(emailUser.id)) {
+    throw new Error('username and email already belong to different existing users');
+  }
+
+  return usernameUser || emailUser || null;
+}
+
+export async function createOrAttachTenantUser(input: CreateTenantUserInput): Promise<CreateTenantUserResult> {
+  const tenantId = Number(input.tenantId);
+  const roleIds = await validateCreateOptions(tenantId, input.roleIds || []);
+  const parsedRow: ParsedRow = {
+    username: normalizeText(input.username),
+    email: normalizeEmail(input.email),
+    fullName: normalizeText(input.fullName) || null,
+    phone: normalizeText(input.phone) || null,
+    password: normalizeText(input.password),
+  };
+
+  const invalidMessage = validateSharedIdentityFields(parsedRow);
+  if (invalidMessage) {
+    throw new Error(invalidMessage);
+  }
+
+  const existingUser = await findExistingUsersByIdentity(parsedRow.username, parsedRow.email);
+  if (existingUser?.id) {
+    const existingMembership = await checkUserTenantExists(Number(existingUser.id), tenantId);
+    if (existingMembership.exists) {
+      throw new Error('user already exists in this tenant');
+    }
+
+    const userTenant = await createUserTenant(Number(existingUser.id), tenantId, 'active');
+    const userTenantId = Number(userTenant?.id || 0);
+    if (!userTenantId) {
+      throw new Error('Failed to create tenant membership');
+    }
+
+    try {
+      await ensureUserHasAuthenticatedRole(strapi, Number(existingUser.id));
+      const updatedRoles = await updateTenantUserRoles({ tenantId, userTenantId, roleIds });
+      if (!updatedRoles.ok) {
+        throw new Error(updatedRoles.error || 'Failed to assign tenant roles');
+      }
+
+      return {
+        caseType: 'EXISTING_USER',
+        userId: Number(existingUser.id),
+        userTenantId,
+        username: existingUser.username || parsedRow.username,
+        email: existingUser.email || parsedRow.email,
+        fullName: existingUser.fullName || parsedRow.fullName,
+        phone: existingUser.phone || parsedRow.phone || null,
+        roleIds,
+        membershipCreated: true,
+      };
+    } catch (error) {
+      try {
+        await strapi.db.query('api::user-tenant.user-tenant').delete({ where: { id: userTenantId } });
+      } catch {
+        // ignore cleanup failure
+      }
+      throw error;
+    }
+  }
+
+  let createdUserId: number | null = null;
+  let createdUserTenantId: number | null = null;
+  try {
+    const passwordError = validatePasswordForNewUser(parsedRow.password);
+    if (passwordError) {
+      throw new Error(passwordError);
+    }
+
+    const usersPermissionsUserService = strapi.plugin('users-permissions').service('user');
+    const createdUser = await usersPermissionsUserService.add({
+      username: parsedRow.username,
+      email: parsedRow.email,
+      password: parsedRow.password,
+      provider: 'local',
+      fullName: parsedRow.fullName || undefined,
+      phone: parsedRow.phone || undefined,
+      confirmed: true,
+      blocked: false,
+    });
+
+    createdUserId = Number(createdUser?.id || 0) || null;
+    if (!createdUserId) {
+      throw new Error('Failed to create user');
+    }
+
+    await ensureUserHasAuthenticatedRole(strapi, createdUserId);
+    const userTenant = await createUserTenant(createdUserId, tenantId, 'active');
+    createdUserTenantId = Number(userTenant?.id || 0) || null;
+    if (!createdUserTenantId) {
+      throw new Error('Failed to create tenant membership');
+    }
+
+    const updatedRoles = await updateTenantUserRoles({ tenantId, userTenantId: createdUserTenantId, roleIds });
+    if (!updatedRoles.ok) {
+      throw new Error(updatedRoles.error || 'Failed to assign tenant roles');
+    }
+
+    return {
+      caseType: 'NEW_USER',
+      userId: createdUserId,
+      userTenantId: createdUserTenantId,
+      username: parsedRow.username,
+      email: parsedRow.email,
+      fullName: parsedRow.fullName,
+      phone: parsedRow.phone || null,
+      roleIds,
+      membershipCreated: true,
+    };
+  } catch (error) {
+    if (createdUserTenantId) {
+      try {
+        await strapi.db.query('api::user-tenant.user-tenant').delete({ where: { id: createdUserTenantId } });
+      } catch {
+        // ignore cleanup failure
+      }
+    }
+    if (createdUserId) {
+      try {
+        await strapi.db.query(USER_UID).delete({ where: { id: createdUserId } });
+      } catch {
+        // ignore cleanup failure
+      }
+    }
+    throw error;
   }
 }
 
@@ -263,141 +503,36 @@ async function importTenantUsersFromWorkbook(options: {
     seenUsernames.add(rowKeyUsername);
     seenEmails.add(rowKeyEmail);
 
-    const existingUser = await strapi.db.query(USER_UID).findOne({
-      where: {
-        $or: [
-          {
-            username: {
-              $eqi: parsedRow.username,
-            },
-          },
-          {
-            email: {
-              $eqi: parsedRow.email,
-            },
-          },
-        ],
-      },
-      select: ['id', 'username', 'email'],
-    });
-
-    if (existingUser?.id) {
-      const existingMembership = await checkUserTenantExists(Number(existingUser.id), tenantId);
-
-      if (existingMembership.exists) {
-        skipped.push({
-          rowNumber,
-          username: parsedRow.username,
-          email: parsedRow.email,
-          fullName: parsedRow.fullName,
-          message: 'user already exists in this tenant',
-        });
-      } else {
-        let createdUserTenantId: number | null = null;
-
-        try {
-          await ensureUserHasAuthenticatedRole(strapi, Number(existingUser.id));
-
-          const userTenant = await createUserTenant(Number(existingUser.id), tenantId, 'active');
-          createdUserTenantId = Number(userTenant?.id || 0) || null;
-          if (!createdUserTenantId) {
-            throw new Error('Failed to create tenant membership');
-          }
-
-          await createUserTenantRole(createdUserTenantId, roleId);
-
-          created.push({
-            rowNumber,
-            username: parsedRow.username,
-            email: parsedRow.email,
-            fullName: parsedRow.fullName,
-            message: 'Existing framework user added to tenant successfully',
-          });
-        } catch (error: any) {
-          if (createdUserTenantId) {
-            try {
-              await strapi.db.query('api::user-tenant.user-tenant').delete({ where: { id: createdUserTenantId } });
-            } catch {
-              // Ignore cleanup error.
-            }
-          }
-
-          errors.push({
-            rowNumber,
-            username: parsedRow.username,
-            email: parsedRow.email,
-            fullName: parsedRow.fullName,
-            message: error?.message || 'Unexpected tenant assignment error',
-          });
-        }
-      }
-
-      if ((index + 1) % 100 === 0 || index === rows.length - 1) {
-        await emitProgress(index + 1);
-      }
-      continue;
-    }
-
-    let createdUserId: number | null = null;
-    let createdUserTenantId: number | null = null;
-
     try {
-      const usersPermissionsUserService = strapi.plugin('users-permissions').service('user');
-      const createdUser = await usersPermissionsUserService.add({
+      const result = await createOrAttachTenantUser({
+        tenantId,
+        roleIds: [roleId],
         username: parsedRow.username,
         email: parsedRow.email,
+        fullName: parsedRow.fullName,
+        phone: parsedRow.phone || null,
         password: parsedRow.password,
-        provider: 'local',
-        fullName: parsedRow.fullName || undefined,
-        confirmed: true,
-        blocked: false,
       });
-
-      createdUserId = Number(createdUser?.id || 0) || null;
-      if (!createdUserId) {
-        throw new Error('Failed to create user');
-      }
-
-      await ensureUserHasAuthenticatedRole(strapi, createdUserId);
-
-      const userTenant = await createUserTenant(createdUserId, tenantId, 'active');
-      createdUserTenantId = Number(userTenant?.id || 0) || null;
-      if (!createdUserTenantId) {
-        throw new Error('Failed to create tenant membership');
-      }
-
-      await createUserTenantRole(createdUserTenantId, roleId);
 
       created.push({
         rowNumber,
         username: parsedRow.username,
         email: parsedRow.email,
         fullName: parsedRow.fullName,
-        message: 'Created successfully',
+        message: result.caseType === 'EXISTING_USER'
+          ? 'Existing framework user added to tenant successfully'
+          : 'Created successfully',
       });
     } catch (error: any) {
-      if (createdUserTenantId) {
-        try {
-          await strapi.db.query('api::user-tenant.user-tenant').delete({ where: { id: createdUserTenantId } });
-        } catch {
-          // Ignore cleanup error.
-        }
-      }
-
-      if (createdUserId) {
-        try {
-          await strapi.db.query(USER_UID).delete({ where: { id: createdUserId } });
-        } catch {
-          // Ignore cleanup error.
-        }
-      }
-
-      errors.push({
+      const message = error?.message || 'Unexpected import error';
+      const isSkip = message === 'user already exists in this tenant';
+      const target = isSkip ? skipped : errors;
+      target.push({
         rowNumber,
         username: parsedRow.username,
         email: parsedRow.email,
         fullName: parsedRow.fullName,
-        message: error?.message || 'Unexpected import error',
+        message,
       });
     }
 

@@ -113,12 +113,13 @@ export default [
       textLimit: '25mb',
       formidable: {
         maxFileSize: 20 * 1024 * 1024,
-        multiples: false,
+        multiples: true,
       },
     },
   },
   'strapi::session',
   'strapi::favicon',
   'global::storage-static',
+  'global::frontend-app-shell',
   'strapi::public',
 ];

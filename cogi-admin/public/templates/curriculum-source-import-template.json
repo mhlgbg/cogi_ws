@@ -1,0 +1,46 @@
+﻿{
+  "manifest": {
+    "schemaVersion": "1.0",
+    "packageCode": "CURRICULUM_IMPORT",
+    "sourceDocumentCode": "DOC-001",
+    "subjectVersionCode": "SUBJ-001",
+    "description": "Sample curriculum source import package. sectionImportKey is optional for document-scoped page preview rows."
+  },
+  "sections": [
+    {
+      "importKey": "SEC-ROOT",
+      "parentImportKey": "",
+      "sectionType": "chapter",
+      "title": "Unit 1: Foundations",
+      "body": "Sample section body.",
+      "sortOrder": 1
+    },
+    {
+      "importKey": "SEC-LS-001",
+      "parentImportKey": "SEC-ROOT",
+      "sectionType": "lesson",
+      "title": "Lesson 1",
+      "body": "Sample lesson text.",
+      "sortOrder": 1
+    }
+  ],
+  "sourceLocations": [
+    {
+      "importKey": "LOC-001",
+      "sectionImportKey": "SEC-LS-001",
+      "startPage": 1,
+      "endPage": 2,
+      "locator": "Trang 1-2",
+      "excerpt": "This is a section-scoped source location extracted from the document."
+    },
+    {
+      "importKey": "LOC-PAGE-001",
+      "sectionImportKey": null,
+      "startPage": 1,
+      "endPage": 1,
+      "locator": "PDF_PAGE:1",
+      "excerpt": "This is a document-scoped page preview. No section is required for this kind of location.",
+      "locationType": "page_preview"
+    }
+  ]
+}

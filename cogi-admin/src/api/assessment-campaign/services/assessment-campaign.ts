@@ -1,8 +1,10 @@
 import { createHash, randomBytes } from 'crypto';
+import { enqueueMail } from '../../../services/mail-queue';
 import { extractRelationRef, findEntityByRef, mergeTenantWhere, normalizeSortInput, resolveCurrentTenantId, toText, whereByParam } from '../../../utils/tenant-scope';
 import { finalizeExpiredAssessmentAttempt, getCandidateAssessmentResultPayloadByAttempt, startAssessmentAttempt } from '../../assessment-runtime/services/assessment-runtime';
 
 const ASSESSMENT_CAMPAIGN_UID = 'api::assessment-campaign.assessment-campaign';
+const ASSESSMENT_CAMPAIGN_OTP_UID = 'api::assessment-campaign-otp.assessment-campaign-otp';
 const ASSESSMENT_CAMPAIGN_FIELD_UID = 'api::assessment-campaign-field.assessment-campaign-field';
 const ASSESSMENT_CAMPAIGN_RULE_UID = 'api::assessment-campaign-rule.assessment-campaign-rule';
 const ASSESSMENT_CAMPAIGN_PARTICIPATION_UID = 'api::assessment-campaign-participation.assessment-campaign-participation';
@@ -19,7 +21,10 @@ const PUBLIC_FIELD_TYPES = new Set(['text', 'email', 'phone', 'number', 'date', 
 const OPTION_FIELD_TYPES = new Set(['select', 'radio', 'checkbox']);
 const PUBLIC_FIELD_STAGES = new Set(['before_start', 'before_result', 'optional']);
 const PUBLIC_ACCESS_TTL_MS = 24 * 60 * 60 * 1000;
-const OTP_DEMO_CODE = '123456';
+const OTP_FIXED_CODE = '123456';
+const OTP_CHALLENGE_TTL_MS = 10 * 60 * 1000;
+const OTP_RESEND_COOLDOWN_SECONDS = 60;
+const OTP_MAX_FAILED_ATTEMPTS = 5;
 const RETAKE_REASON_CODES = new Set(['wrong_assessment', 'technical_issue', 'test_data', 'candidate_mistake', 'admin_decision', 'other']);
 const LEAD_FIELD_MAP: Record<string, string> = {
   fullName: 'fullName',
@@ -105,6 +110,64 @@ function parseBoolean(value: unknown, fallback = false): boolean {
   const text = toText(value).toLowerCase();
   if (!text) return fallback;
   return ['true', '1', 'yes', 'on'].includes(text);
+}
+
+function getAssessmentOtpMode() {
+  return toText(process.env.ASSESSMENT_OTP_MODE).toLowerCase() === 'fixed' ? 'fixed' : 'random';
+}
+
+function generateAssessmentOtpCode() {
+  if (getAssessmentOtpMode() === 'fixed') return toText(process.env.ASSESSMENT_OTP_FIXED_CODE) || OTP_FIXED_CODE;
+  const value = randomBytes(4).readUInt32BE(0) % 1000000;
+  return String(value).padStart(6, '0');
+}
+
+function hashAssessmentOtp(email: string, otp: string) {
+  return createHash('sha256').update(`${normalizeEmail(email)}:${String(otp || '').trim()}`).digest('hex');
+}
+
+function buildAssessmentOtpChallengeCode() {
+  return randomBytes(18).toString('hex');
+}
+
+function getOtpEmailConfig(settings: any = {}) {
+  const nextSettings = settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {};
+  const otpEmail = nextSettings.otpEmail && typeof nextSettings.otpEmail === 'object' && !Array.isArray(nextSettings.otpEmail) ? nextSettings.otpEmail : {};
+  return {
+    subject: toText(otpEmail.subject),
+    heading: toText(otpEmail.heading),
+    intro: toText(otpEmail.intro),
+    footer: toText(otpEmail.footer),
+  };
+}
+
+function buildDefaultOtpEmailTemplate(campaign: any) {
+  const campaignName = toText(campaign?.publicTitle || campaign?.name || campaign?.code || 'bài đánh giá');
+  return {
+    subject: `Mã xác thực ${campaignName}`,
+    heading: 'Mã xác thực của bạn',
+    intro: `Bạn đang xác thực để tiếp tục bài đánh giá ${campaignName}.`,
+    footer: 'Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email.',
+  };
+}
+
+function buildOtpEmailTemplate(campaign: any) {
+  const fallback = buildDefaultOtpEmailTemplate(campaign);
+  const configured = getOtpEmailConfig(campaign?.settings);
+  return {
+    subject: configured.subject || fallback.subject,
+    heading: configured.heading || fallback.heading,
+    intro: configured.intro || fallback.intro,
+    footer: configured.footer || fallback.footer,
+  };
+}
+
+function maskEmailAddress(email: string) {
+  const normalized = normalizeEmail(email);
+  const [localPart = '', domain = ''] = normalized.split('@');
+  if (!localPart || !domain) return normalized;
+  const visible = localPart.slice(0, Math.min(3, localPart.length));
+  return `${visible}***@${domain}`;
 }
 
 function buildPagination(query: any) {
@@ -481,6 +544,7 @@ function mapUserSummary(row: any) {
 }
 
 function mapCampaign(row: any, options: { includeChildren?: boolean } = {}) {
+  const otpEmail = getOtpEmailConfig(row?.settings);
   return {
     id: normalizeId(row),
     documentId: row?.documentId || null,
@@ -493,10 +557,12 @@ function mapCampaign(row: any, options: { includeChildren?: boolean } = {}) {
     endAt: row?.endAt || null,
     publicTitle: row?.publicTitle || '',
     publicDescription: row?.publicDescription || '',
+    landingHtml: row?.landingHtml || row?.publicContent || '',
     publicContent: row?.publicContent || '',
     successMessage: row?.successMessage || '',
     resultIntro: row?.resultIntro || '',
     settings: row?.settings ?? null,
+    otpEmail,
     publicUrl: row?.slug ? `/campaign/${row.slug}` : null,
     fields: options.includeChildren && Array.isArray(row?.fields) ? row.fields.map(mapCampaignField) : undefined,
     rules: options.includeChildren && Array.isArray(row?.rules) ? row.rules.map(mapCampaignRule) : undefined,
@@ -510,7 +576,9 @@ function mapPublicCampaign(row: any) {
     slug: row?.slug || '',
     publicTitle: row?.publicTitle || row?.name || '',
     publicDescription: row?.publicDescription || row?.description || '',
+    landingHtml: row?.landingHtml || row?.publicContent || '',
     publicContent: row?.publicContent || '',
+    otpEmail: getOtpEmailConfig(row?.settings),
     status: row?.status || 'draft',
     startAt: row?.startAt || null,
     endAt: row?.endAt || null,
@@ -647,7 +715,8 @@ async function sanitizeCampaignPayload(body: any, tenantId: number | string, exi
     endAt: toNullableText(payload.endAt ?? existing?.endAt),
     publicTitle: toNullableText(payload.publicTitle ?? existing?.publicTitle),
     publicDescription: toNullableText(payload.publicDescription ?? existing?.publicDescription),
-    publicContent: toNullableText(payload.publicContent ?? existing?.publicContent),
+    landingHtml: toNullableText(payload.landingHtml ?? payload.publicContent ?? existing?.landingHtml ?? existing?.publicContent),
+    publicContent: toNullableText(payload.publicContent ?? payload.landingHtml ?? existing?.publicContent ?? existing?.landingHtml),
     successMessage: toNullableText(payload.successMessage ?? existing?.successMessage),
     resultIntro: toNullableText(payload.resultIntro ?? existing?.resultIntro),
     settings: parseOptionalJson(payload.settings ?? existing?.settings, 'settings'),
@@ -984,8 +1053,168 @@ function buildPublicAccessMetadata(participation: any, attempt: any, previous: a
   };
 }
 
-function validateRecoveryOtp(otp: unknown) {
-  if (toText(otp) !== OTP_DEMO_CODE) throw new AssessmentCampaignError(400, 'INVALID_OTP');
+async function findActiveOtpChallengeByEmail(campaignId: number, email: string, tenantId: number | string) {
+  return strapi.db.query(ASSESSMENT_CAMPAIGN_OTP_UID).findOne({
+    where: mergeTenantWhere({
+      assessmentCampaign: { id: { $eq: Number(campaignId) } },
+      email: { $eq: normalizeEmail(email) },
+      status: { $eq: 'active' },
+    }, tenantId),
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+  });
+}
+
+async function invalidateActiveOtpChallenges(campaignId: number, email: string, tenantId: number | string) {
+  const rows = await strapi.db.query(ASSESSMENT_CAMPAIGN_OTP_UID).findMany({
+    where: mergeTenantWhere({
+      assessmentCampaign: { id: { $eq: Number(campaignId) } },
+      email: { $eq: normalizeEmail(email) },
+      status: { $eq: 'active' },
+    }, tenantId),
+    select: ['id'],
+  });
+  for (const row of rows || []) {
+    await strapi.db.query(ASSESSMENT_CAMPAIGN_OTP_UID).update({ where: { id: Number(row.id) }, data: { status: 'cancelled' } });
+  }
+}
+
+function buildOtpChallengeMetadata(campaign: any, challengeCode: string) {
+  return {
+    challengeCode,
+    resendAfter: OTP_RESEND_COOLDOWN_SECONDS,
+  };
+}
+
+async function sendAssessmentCampaignOtpEmail(campaign: any, email: string, otpCode: string, tenantId: number | string) {
+  const template = buildOtpEmailTemplate(campaign);
+  const campaignName = toText(campaign?.publicTitle || campaign?.name || campaign?.code || 'bài đánh giá');
+  const tenantName = toText(campaign?.tenant?.tenantShortName || campaign?.tenant?.tenantName || campaign?.tenant?.name || campaign?.tenant?.code || '');
+  const html = `
+    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#162033;">
+      <h2 style="margin:0 0 12px;">${template.heading}</h2>
+      <p>${template.intro}</p>
+      <p><strong>${campaignName}</strong></p>
+      <div style="font-size:30px;font-weight:700;letter-spacing:4px;margin:20px 0;">${otpCode}</div>
+      <p>Mã có hiệu lực trong 10 phút.</p>
+      <p>${template.footer}</p>
+      ${tenantName ? `<p style="margin-top:24px;color:#5a6477;">${tenantName}</p>` : ''}
+    </div>
+  `;
+  const text = `${template.heading}\n\n${template.intro}\n${campaignName}\n\n${otpCode}\n\nMã có hiệu lực trong 10 phút.\n\n${template.footer}${tenantName ? `\n\n${tenantName}` : ''}`;
+  return enqueueMail({
+    tenantId,
+    mailType: 'assessment_campaign_otp',
+    to: email,
+    subject: template.subject,
+    html,
+    text,
+    metadata: {
+      source: 'assessment-campaign-otp',
+      campaignCode: campaign?.code || null,
+      recipientMasked: maskEmailAddress(email),
+      otpRedacted: true,
+    },
+  });
+}
+
+export async function requestAssessmentCampaignOtp(slug: string, body: any, tenantId: number | string) {
+  const campaign = await findCampaignBySlugOrThrow(slug, tenantId, { includeChildren: true });
+  const availability = isAssessmentCampaignOpen(campaign);
+  if (!availability.ok) throw new AssessmentCampaignError(409, availability.code);
+
+  const payload = extractBody(body);
+  const email = normalizeEmail(payload?.email);
+  if (!validateEmail(email)) throw new AssessmentCampaignError(400, 'INVALID_EMAIL');
+
+  const existing = await findActiveOtpChallengeByEmail(Number(campaign.id), email, tenantId);
+  if (existing?.sentAt) {
+    const sentAtMs = new Date(existing.sentAt).getTime();
+    const resendAfter = Math.max(0, OTP_RESEND_COOLDOWN_SECONDS - Math.floor((Date.now() - sentAtMs) / 1000));
+    if (resendAfter > 0) throw new AssessmentCampaignError(429, 'OTP_RESEND_COOLDOWN', { resendAfter });
+  }
+
+  await invalidateActiveOtpChallenges(Number(campaign.id), email, tenantId);
+
+  const otpCode = generateAssessmentOtpCode();
+  const expiresAt = new Date(Date.now() + OTP_CHALLENGE_TTL_MS).toISOString();
+  const challengeCode = buildAssessmentOtpChallengeCode();
+  const created = await strapi.db.query(ASSESSMENT_CAMPAIGN_OTP_UID).create({
+    data: {
+      tenant: tenantId,
+      assessmentCampaign: Number(campaign.id),
+      email,
+      otpHash: hashAssessmentOtp(email, otpCode),
+      expiresAt,
+      sentAt: new Date().toISOString(),
+      failedAttempts: 0,
+      status: 'active',
+      metadata: buildOtpChallengeMetadata(campaign, challengeCode),
+    },
+  });
+
+  try {
+    await sendAssessmentCampaignOtpEmail(campaign, email, otpCode, tenantId);
+  } catch {
+    await strapi.db.query(ASSESSMENT_CAMPAIGN_OTP_UID).update({ where: { id: Number(created.id) }, data: { status: 'failed' } });
+    throw new AssessmentCampaignError(503, 'OTP_SEND_FAILED');
+  }
+
+  return {
+    challengeId: challengeCode,
+    expiresIn: Math.floor(OTP_CHALLENGE_TTL_MS / 1000),
+    resendAfter: OTP_RESEND_COOLDOWN_SECONDS,
+    maskedEmail: maskEmailAddress(email),
+    mode: getAssessmentOtpMode(),
+  };
+}
+
+async function findOtpChallengeOrThrow(challengeId: unknown, slug: string, tenantId: number | string) {
+  const normalizedChallengeId = toText(challengeId);
+  if (!normalizedChallengeId) throw new AssessmentCampaignError(400, 'OTP_CHALLENGE_REQUIRED');
+  const campaign = await findCampaignBySlugOrThrow(slug, tenantId, { includeChildren: true });
+  const rows = await strapi.db.query(ASSESSMENT_CAMPAIGN_OTP_UID).findMany({
+    where: mergeTenantWhere({ assessmentCampaign: { id: { $eq: Number(campaign.id) } } }, tenantId),
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+  });
+  const challenge = (rows || []).find((row: any) => {
+    const metadata = row?.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata) ? row.metadata : {};
+    return toText((metadata as any).challengeCode) === normalizedChallengeId;
+  }) || null;
+  if (!challenge?.id) throw new AssessmentCampaignError(400, 'OTP_CHALLENGE_INVALID');
+  return { campaign, challenge };
+}
+
+export async function verifyAssessmentCampaignOtp(slug: string, body: any, tenantId: number | string) {
+  const payload = extractBody(body);
+  const { campaign, challenge } = await findOtpChallengeOrThrow(payload?.challengeId, slug, tenantId);
+  if (toText(challenge?.status) !== 'active') throw new AssessmentCampaignError(400, 'OTP_CHALLENGE_INVALID');
+  const expiresAtMs = new Date(challenge.expiresAt).getTime();
+  if (!expiresAtMs || expiresAtMs <= Date.now()) {
+    await strapi.db.query(ASSESSMENT_CAMPAIGN_OTP_UID).update({ where: { id: Number(challenge.id) }, data: { status: 'expired' } });
+    throw new AssessmentCampaignError(400, 'OTP_EXPIRED');
+  }
+
+  const otp = toText(payload?.otp);
+  if (otp.length !== 6) throw new AssessmentCampaignError(400, 'INVALID_OTP');
+  const failedAttempts = Number(challenge?.failedAttempts || 0);
+  if (failedAttempts >= OTP_MAX_FAILED_ATTEMPTS) {
+    await strapi.db.query(ASSESSMENT_CAMPAIGN_OTP_UID).update({ where: { id: Number(challenge.id) }, data: { status: 'failed' } });
+    throw new AssessmentCampaignError(400, 'OTP_TOO_MANY_ATTEMPTS');
+  }
+
+  if (hashAssessmentOtp(challenge.email, otp) !== toText(challenge.otpHash)) {
+    const nextAttempts = failedAttempts + 1;
+    await strapi.db.query(ASSESSMENT_CAMPAIGN_OTP_UID).update({ where: { id: Number(challenge.id) }, data: { failedAttempts: nextAttempts, ...(nextAttempts >= OTP_MAX_FAILED_ATTEMPTS ? { status: 'failed' } : {}) } });
+    throw new AssessmentCampaignError(400, nextAttempts >= OTP_MAX_FAILED_ATTEMPTS ? 'OTP_TOO_MANY_ATTEMPTS' : 'INVALID_OTP');
+  }
+
+  await strapi.db.query(ASSESSMENT_CAMPAIGN_OTP_UID).update({ where: { id: Number(challenge.id) }, data: { status: 'verified', verifiedAt: new Date().toISOString() } });
+  return {
+    verified: true,
+    email: challenge.email,
+    campaign: mapPublicCampaign(campaign),
+    verifiedAt: new Date().toISOString(),
+  };
 }
 
 function parseRetakeReason(value: unknown, fieldName: string) {
@@ -2122,15 +2351,14 @@ export async function getAssessmentCampaignResultGate(attemptRef: unknown, tenan
 
 export async function restorePublicAssessmentAttemptAccess(attemptRef: unknown, body: any, tenantId: number | string) {
   const payload = extractBody(body);
-  const email = normalizeEmail(payload?.email);
-  if (!validateEmail(email)) throw new AssessmentCampaignError(400, 'INVALID_EMAIL');
-  validateRecoveryOtp(payload?.otp);
-
   const attempt = await ensureEntityInTenant(ASSESSMENT_ATTEMPT_UID, attemptRef, tenantId, 'assessmentAttempt');
   if (!attempt?.id) throw new AssessmentCampaignError(404, 'ATTEMPT_NOT_FOUND');
   if (toText(attempt?.sourceType) !== 'campaign') throw new AssessmentCampaignError(400, 'ATTEMPT_IS_NOT_CAMPAIGN');
 
   const participation = await findParticipationByAttemptOrThrow(attempt, tenantId, { includeCampaignFields: true });
+  const verified = await verifyAssessmentCampaignOtp(participation?.assessmentCampaign?.slug || '', { challengeId: payload?.challengeId, otp: payload?.otp }, tenantId);
+  const email = normalizeEmail(payload?.email || verified?.email);
+  if (!validateEmail(email)) throw new AssessmentCampaignError(400, 'INVALID_EMAIL');
   if (!doesParticipationBelongToEmail(participation, email)) {
     throw new AssessmentCampaignError(403, 'ATTEMPT_NOT_OWNED');
   }
@@ -2156,9 +2384,9 @@ export async function restorePublicAssessmentAttemptAccess(attemptRef: unknown, 
 
 export async function recoverPublicAssessmentCampaignParticipations(slug: string, body: any, tenantId: number | string) {
   const payload = extractBody(body);
-  const email = normalizeEmail(payload?.email);
+  const verified = await verifyAssessmentCampaignOtp(slug, { challengeId: payload?.challengeId, otp: payload?.otp }, tenantId);
+  const email = normalizeEmail(payload?.email || verified?.email);
   if (!validateEmail(email)) throw new AssessmentCampaignError(400, 'INVALID_EMAIL');
-  validateRecoveryOtp(payload?.otp);
 
   const campaign = await findCampaignBySlugOrThrow(slug, tenantId, { includeChildren: true });
   const rows = await strapi.db.query(ASSESSMENT_CAMPAIGN_PARTICIPATION_UID).findMany({
@@ -2409,6 +2637,8 @@ export default {
   listAssessmentCampaignLeads,
   listAssessmentCampaignResults,
   getPublicAssessmentCampaignBySlug,
+  requestAssessmentCampaignOtp,
+  verifyAssessmentCampaignOtp,
   resolvePublicAssessmentCampaign,
   startPublicAssessmentCampaign,
   resolvePublicAssessmentAttemptAccess,

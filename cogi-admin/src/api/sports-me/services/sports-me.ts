@@ -1,5 +1,7 @@
 import { mergeTenantWhere, toText, whereByParam } from '../../../utils/tenant-scope';
 import { updateTenantSportsProfile } from '../../sports-profile/services/sports-profile';
+import { createTenantSportsAchievementSubmission } from '../../sports-achievement-submission/services/sports-achievement-submission';
+import { resolveAchievementTemplateForEntity } from '../../sports-achievement-template/services/sports-achievement-template';
 
 const SPORTS_PROFILE_UID = 'api::sports-profile.sports-profile' as any;
 const CLUB_MEMBERSHIP_UID = 'api::club-membership.club-membership' as any;
@@ -12,10 +14,12 @@ const AVATAR_MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 type HttpErrorDetails = Record<string, unknown> | Array<Record<string, unknown>> | null;
 type GenericRecord = Record<string, unknown>;
+type AuthUser = { id: number; blocked?: boolean | null } | null;
 
 const CLUB_MEMBERSHIP_STATUS_VALUES = new Set(['pending', 'active', 'inactive', 'left', 'suspended', 'rejected']);
 const ACHIEVEMENT_STATUS_VALUES = new Set(['active', 'revoked']);
 const SUBMISSION_STATUS_VALUES = new Set(['draft', 'submitted', 'verified', 'rejected', 'cancelled']);
+const SELF_RUNNING_ACHIEVEMENT_TYPES = new Set(['race_result', 'personal_best']);
 
 export class SportsMeError extends Error {
 	status: number;
@@ -47,11 +51,40 @@ function normalizeOptionalText(value: unknown): string | null {
 	return text || null;
 }
 
+function normalizeSelfSubmissionCreatePayload(payload: GenericRecord) {
+	ensureNoUnknownFields(payload || {}, [
+		'club',
+		'achievementType',
+		'sportType',
+		'title',
+		'eventCode',
+		'raceType',
+		'bib',
+		'distancePending',
+		'description',
+		'achievedAt',
+		'resultValue',
+		'distanceKm',
+		'durationSeconds',
+		'resultUnit',
+		'resultText',
+		'sourceReference',
+		'evidence',
+		'note',
+	]);
+	return payload || {};
+}
+
 function normalizeMedia(media: any) {
 	if (!media?.id) return null;
+	const providerMetadata = media.provider_metadata && typeof media.provider_metadata === 'object'
+		? media.provider_metadata
+		: (media.providerMetadata && typeof media.providerMetadata === 'object' ? media.providerMetadata : null);
 	return {
 		id: Number(media.id),
+		fileAssetId: Number(providerMetadata?.bridgedFromFileAssetId || 0) || null,
 		name: toText(media.name) || null,
+		provider: toText(media.provider) || null,
 		url: toText(media.url) || null,
 		mime: toText(media.mime) || null,
 	};
@@ -187,6 +220,21 @@ function mapMyMembershipHistory(row: any) {
 	};
 }
 
+function mapClubMembershipSummary(row: any) {
+	if (!row?.id) return null;
+	return {
+		id: Number(row.id),
+		documentId: toText(row.documentId) || null,
+		memberCode: toText(row.memberCode) || null,
+		oldMemberCode: toText(row.oldMemberCode) || null,
+		status: toText(row.status).toLowerCase() || null,
+		role: toText(row.role).toLowerCase() || null,
+		positionTitle: normalizeOptionalText(row.positionTitle),
+		joinedAt: row.joinedAt || null,
+		leftAt: row.leftAt || null,
+	};
+}
+
 function mapMyAchievement(row: any) {
 	if (!row?.id) return null;
 	return {
@@ -200,9 +248,28 @@ function mapMyAchievement(row: any) {
 		resultValue: row.resultValue === null || row.resultValue === undefined || row.resultValue === '' ? null : Number(row.resultValue),
 		resultUnit: normalizeOptionalText(row.resultUnit),
 		resultText: normalizeOptionalText(row.resultText),
+		eventCode: toText(row.eventCode) || null,
+		raceType: toText(row.raceType) || null,
+		bib: toText(row.bib) || null,
+		distancePending: Boolean(row.distancePending),
 		status: toText(row.status).toLowerCase() || 'active',
 		source: toText(row.source).toLowerCase() || 'manual',
 		sourceReference: normalizeOptionalText(row.sourceReference),
+		shareTemplateSource: toText(row.shareTemplateSource).toLowerCase() || 'none',
+		shareTemplate: row.shareTemplate?.id
+			? {
+				id: Number(row.shareTemplate.id),
+				documentId: toText(row.shareTemplate.documentId) || null,
+				name: toText(row.shareTemplate.name) || null,
+				code: toText(row.shareTemplate.code) || null,
+				layoutKey: toText(row.shareTemplate.layoutKey) || null,
+				layoutConfig: row.shareTemplate.layoutConfig ?? null,
+				backgroundAsset: normalizeMedia(row.shareTemplate.backgroundAsset),
+				previewAsset: normalizeMedia(row.shareTemplate.previewAsset),
+			}
+			: null,
+		distanceKm: row.distanceKm === null || row.distanceKm === undefined || row.distanceKm === '' ? null : Number(row.distanceKm),
+		durationSeconds: row.durationSeconds === null || row.durationSeconds === undefined || row.durationSeconds === '' ? null : Number(row.durationSeconds),
 		evidence: Array.isArray(row.evidence) ? row.evidence.map((item: any) => normalizeMedia(item)).filter(Boolean) : [],
 		verifiedAt: row.verifiedAt || null,
 		revokedAt: row.revokedAt || null,
@@ -233,8 +300,14 @@ function mapMySubmission(row: any) {
 		resultValue: row.resultValue === null || row.resultValue === undefined || row.resultValue === '' ? null : Number(row.resultValue),
 		resultUnit: normalizeOptionalText(row.resultUnit),
 		resultText: normalizeOptionalText(row.resultText),
+		eventCode: toText(row.eventCode) || null,
+		raceType: toText(row.raceType) || null,
+		bib: toText(row.bib) || null,
+		distancePending: Boolean(row.distancePending),
 		source: toText(row.source).toLowerCase() || 'other',
 		sourceReference: normalizeOptionalText(row.sourceReference),
+		distanceKm: row.distanceKm === null || row.distanceKm === undefined || row.distanceKm === '' ? null : Number(row.distanceKm),
+		durationSeconds: row.durationSeconds === null || row.durationSeconds === undefined || row.durationSeconds === '' ? null : Number(row.durationSeconds),
 		status: toText(row.status).toLowerCase() || 'draft',
 		submittedAt: row.submittedAt || null,
 		reviewedAt: row.reviewedAt || null,
@@ -364,7 +437,7 @@ async function findOwnedMembership(membershipRef: unknown, tenantId: number | st
 			sportsProfile: { id: { $eq: Number(sportsProfileId) } },
 		}, tenantId),
 		populate: {
-			club: { select: ['id', 'documentId', 'code', 'name', 'shortName'], populate: { logo: { select: ['id', 'name', 'url', 'mime'] } } },
+			club: { select: ['id', 'documentId', 'code', 'name', 'shortName'], populate: { logo: { select: ['id', 'name', 'url', 'mime', 'provider', 'provider_metadata'] } } },
 		},
 	} as any);
 	if (!row?.id) {
@@ -384,8 +457,16 @@ async function findOwnedAchievement(achievementRef: unknown, tenantId: number | 
 			sportsProfile: { id: { $eq: Number(sportsProfileId) } },
 		}, tenantId),
 		populate: {
-			club: { select: ['id', 'documentId', 'code', 'name', 'shortName'], populate: { logo: { select: ['id', 'name', 'url', 'mime'] } } },
+			sportsProfile: { select: ['id'] },
+			club: { select: ['id', 'documentId', 'code', 'name', 'shortName'], populate: { logo: { select: ['id', 'name', 'url', 'mime', 'provider', 'provider_metadata'] } } },
 			evidence: { select: ['id', 'name', 'url', 'mime'] },
+			shareTemplate: {
+				select: ['id', 'documentId', 'name', 'code', 'layoutKey', 'layoutConfig'],
+				populate: {
+					backgroundAsset: { select: ['id', 'name', 'url', 'mime', 'provider', 'provider_metadata'] },
+					previewAsset: { select: ['id', 'name', 'url', 'mime', 'provider', 'provider_metadata'] },
+				},
+			},
 		},
 	} as any);
 	if (!row?.id) {
@@ -405,7 +486,7 @@ async function findOwnedSubmission(submissionRef: unknown, tenantId: number | st
 			sportsProfile: { id: { $eq: Number(sportsProfileId) } },
 		}, tenantId),
 		populate: {
-			club: { select: ['id', 'documentId', 'code', 'name', 'shortName'], populate: { logo: { select: ['id', 'name', 'url', 'mime'] } } },
+			club: { select: ['id', 'documentId', 'code', 'name', 'shortName'], populate: { logo: { select: ['id', 'name', 'url', 'mime', 'provider', 'provider_metadata'] } } },
 			achievement: { select: ['id', 'documentId', 'title', 'status', 'verifiedAt'] },
 			evidence: { select: ['id', 'name', 'url', 'mime'] },
 		},
@@ -416,12 +497,47 @@ async function findOwnedSubmission(submissionRef: unknown, tenantId: number | st
 	return row;
 }
 
+async function findClubMembershipSummaryForAchievement(tenantId: number | string, achievement: any) {
+	const clubId = Number(achievement?.club?.id || 0);
+	const profileId = Number(achievement?.sportsProfile?.id || 0);
+	if (!clubId || !profileId) return null;
+	const row = await strapi.db.query(CLUB_MEMBERSHIP_UID).findOne({
+		where: mergeTenantWhere({
+			club: { id: { $eq: clubId } },
+			sportsProfile: { id: { $eq: profileId } },
+		}, tenantId),
+		select: ['id', 'documentId', 'memberCode', 'oldMemberCode', 'status', 'role', 'positionTitle', 'joinedAt', 'leftAt', 'updatedAt', 'createdAt'],
+		orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+	} as any);
+	return mapClubMembershipSummary(row);
+}
+
 export async function getMySportsProfile(tenantId: number | string, userId: number | string) {
 	const profile = await resolveCurrentSportsProfile(tenantId, userId);
 	return {
 		profile: mapMySportsProfile(profile),
 		summary: await countOverviewSummary(tenantId, Number(profile.id)),
 	};
+}
+
+export async function createMySportsProfile(tenantId: number | string, userId: number | string, payload: GenericRecord) {
+	void tenantId;
+	void userId;
+	void payload;
+	httpError(403, 'Người dùng không được tự tạo hồ sơ thể thao. Vui lòng liên hệ quản trị viên.', 'SPORTS_PROFILE_SELF_CREATE_DISABLED');
+}
+
+export async function claimMyExistingSportsProfile(
+	tenantId: number | string,
+	userId: number | string,
+	payload: GenericRecord,
+	authUser: AuthUser = null,
+) {
+	void tenantId;
+	void userId;
+	void payload;
+	void authUser;
+	httpError(403, 'Người dùng không được tự liên kết hồ sơ thể thao. Vui lòng liên hệ quản trị viên.', 'SPORTS_PROFILE_SELF_CLAIM_DISABLED');
 }
 
 export async function updateMySportsProfile(tenantId: number | string, userId: number | string, payload: GenericRecord) {
@@ -465,7 +581,7 @@ export async function listMyClubMemberships(tenantId: number | string, userId: n
 			...(status ? { status: { $eq: status } } : {}),
 		}, tenantId),
 		populate: {
-			club: { select: ['id', 'documentId', 'code', 'name', 'shortName'], populate: { logo: { select: ['id', 'name', 'url', 'mime'] } } },
+			club: { select: ['id', 'documentId', 'code', 'name', 'shortName'], populate: { logo: { select: ['id', 'name', 'url', 'mime', 'provider', 'provider_metadata'] } } },
 		},
 	} as any);
 
@@ -505,8 +621,15 @@ export async function listMyAchievements(tenantId: number | string, userId: numb
 			...(status && status !== 'all' ? { status: { $eq: status } } : !status ? { status: { $eq: 'active' } } : {}),
 		}, tenantId),
 		populate: {
-			club: { select: ['id', 'documentId', 'code', 'name', 'shortName'], populate: { logo: { select: ['id', 'name', 'url', 'mime'] } } },
+			club: { select: ['id', 'documentId', 'code', 'name', 'shortName'], populate: { logo: { select: ['id', 'name', 'url', 'mime', 'provider', 'provider_metadata'] } } },
 			evidence: { select: ['id', 'name', 'url', 'mime'] },
+			shareTemplate: {
+				select: ['id', 'documentId', 'name', 'code', 'layoutKey', 'layoutConfig'],
+				populate: {
+					backgroundAsset: { select: ['id', 'name', 'url', 'mime', 'provider', 'provider_metadata'] },
+					previewAsset: { select: ['id', 'name', 'url', 'mime', 'provider', 'provider_metadata'] },
+				},
+			},
 		},
 	} as any);
 
@@ -517,7 +640,20 @@ export async function listMyAchievements(tenantId: number | string, userId: numb
 
 export async function getMyAchievement(tenantId: number | string, userId: number | string, achievementRef: unknown) {
 	const profile = await resolveCurrentSportsProfile(tenantId, userId);
-	return mapMyAchievement(await findOwnedAchievement(achievementRef, tenantId, Number(profile.id)));
+	const achievementRow = await findOwnedAchievement(achievementRef, tenantId, Number(profile.id));
+	const mappedAchievement = mapMyAchievement(achievementRow);
+	const clubMembership = await findClubMembershipSummaryForAchievement(tenantId, {
+		club: achievementRow?.club,
+		sportsProfile: achievementRow?.sportsProfile,
+	});
+	const templateResolution = await resolveAchievementTemplateForEntity(mappedAchievement, tenantId);
+	return {
+		...mappedAchievement,
+		clubMembership,
+		templateResolution,
+		effectiveTemplate: templateResolution?.template || null,
+		athleteProfile: mapMySportsProfile(profile),
+	};
 }
 
 export async function listMyAchievementSubmissions(tenantId: number | string, userId: number | string, query: Record<string, unknown> = {}) {
@@ -533,7 +669,7 @@ export async function listMyAchievementSubmissions(tenantId: number | string, us
 			...(status && status !== 'all' ? { status: { $eq: status } } : {}),
 		}, tenantId),
 		populate: {
-			club: { select: ['id', 'documentId', 'code', 'name', 'shortName'], populate: { logo: { select: ['id', 'name', 'url', 'mime'] } } },
+			club: { select: ['id', 'documentId', 'code', 'name', 'shortName'], populate: { logo: { select: ['id', 'name', 'url', 'mime', 'provider', 'provider_metadata'] } } },
 			achievement: { select: ['id', 'documentId', 'title', 'status', 'verifiedAt'] },
 			evidence: { select: ['id', 'name', 'url', 'mime'] },
 		},
@@ -547,6 +683,44 @@ export async function listMyAchievementSubmissions(tenantId: number | string, us
 export async function getMyAchievementSubmission(tenantId: number | string, userId: number | string, submissionRef: unknown) {
 	const profile = await resolveCurrentSportsProfile(tenantId, userId);
 	return mapMySubmission(await findOwnedSubmission(submissionRef, tenantId, Number(profile.id)));
+}
+
+export async function createMyAchievementSubmission(
+	tenantId: number | string,
+	userId: number | string,
+	payload: GenericRecord,
+	authUser: AuthUser = null,
+) {
+	const profile = await resolveCurrentSportsProfile(tenantId, userId);
+	const sanitized = normalizeSelfSubmissionCreatePayload(payload || {});
+	const achievementType = toText(sanitized.achievementType).toLowerCase();
+	if (!SELF_RUNNING_ACHIEVEMENT_TYPES.has(achievementType)) {
+		httpError(403, 'Thành viên chỉ được gửi Race Result hoặc Personal Best trong V1.', 'SELF_ACHIEVEMENT_TYPE_NOT_ALLOWED', { field: 'achievementType' });
+	}
+	const created = await createTenantSportsAchievementSubmission({
+		sportsProfile: Number(profile.id),
+		club: sanitized.club,
+		achievementType,
+		sportType: 'running',
+		title: sanitized.title,
+		eventCode: sanitized.eventCode,
+		raceType: sanitized.raceType,
+		bib: sanitized.bib,
+		distancePending: sanitized.distancePending,
+		description: sanitized.description,
+		achievedAt: sanitized.achievedAt,
+		resultValue: sanitized.resultValue,
+		distanceKm: sanitized.distanceKm,
+		durationSeconds: sanitized.durationSeconds,
+		resultUnit: sanitized.resultUnit,
+		resultText: sanitized.resultText,
+		source: 'member',
+		sourceReference: sanitized.sourceReference,
+		evidence: sanitized.evidence,
+		note: sanitized.note,
+		status: 'submitted',
+	}, tenantId, authUser);
+	return mapMySubmission(await findOwnedSubmission(created?.id, tenantId, Number(profile.id)));
 }
 
 export function handleSportsMeError(ctx: any, error: any) {
@@ -576,6 +750,7 @@ export function handleSportsMeError(ctx: any, error: any) {
 
 export default {
 	getMySportsProfile,
+	createMySportsProfile,
 	updateMySportsProfile,
 	uploadMySportsProfileAvatar,
 	listMyClubMemberships,
@@ -584,6 +759,8 @@ export default {
 	listMyAchievements,
 	getMyAchievement,
 	listMyAchievementSubmissions,
+	createMyAchievementSubmission,
+	claimMyExistingSportsProfile,
 	getMyAchievementSubmission,
 	handleSportsMeError,
 };

@@ -49,6 +49,22 @@ export default {
       },
     },
     {
+      method: 'POST',
+      path: '/admin/tenant-users',
+      handler: 'admin.createTenantUser',
+      config: {
+        auth: false,
+        policies: [
+          {
+            name: 'global::has-tenant-permission',
+            config: {
+              key: 'user.manage',
+            },
+          },
+        ],
+      },
+    },
+    {
       method: 'PATCH',
       path: '/admin/tenant-users/:userTenantId/roles',
       handler: 'admin.updateTenantUserRoles',

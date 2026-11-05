@@ -1,0 +1,111 @@
+{
+  "kind": "collectionType",
+  "collectionName": "game_events",
+  "info": {
+    "singularName": "game-event",
+    "pluralName": "game-events",
+    "displayName": "Game Event",
+    "description": "Normalized activity event queued for validation and XP processing."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "game": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::game.game",
+      "required": true
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "activityCode": {
+      "type": "string",
+      "required": true,
+      "maxLength": 120
+    },
+    "runVersion": {
+      "type": "integer",
+      "default": 1,
+      "min": 1,
+      "required": true
+    },
+    "phase": {
+      "type": "enumeration",
+      "enum": [
+        "trial",
+        "official"
+      ],
+      "default": "official",
+      "required": true
+    },
+    "sourceType": {
+      "type": "string",
+      "required": true,
+      "maxLength": 80
+    },
+    "sourceId": {
+      "type": "string",
+      "required": true,
+      "maxLength": 255
+    },
+    "eventHash": {
+      "type": "string",
+      "required": true,
+      "maxLength": 255
+    },
+    "localDateKey": {
+      "type": "string",
+      "maxLength": 20
+    },
+    "occurredAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "queued",
+        "accepted",
+        "processed",
+        "rejected",
+        "failed"
+      ],
+      "default": "queued",
+      "required": true
+    },
+    "attemptCount": {
+      "type": "integer",
+      "default": 0,
+      "min": 0,
+      "required": true
+    },
+    "nextAttemptAt": {
+      "type": "datetime"
+    },
+    "lastErrorCode": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "processedAt": {
+      "type": "datetime"
+    },
+    "payload": {
+      "type": "json"
+    },
+    "errorMessage": {
+      "type": "text"
+    }
+  }
+}

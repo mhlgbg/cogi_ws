@@ -87,6 +87,28 @@ async function createSkill(tenantId, subjectId, code, title) {
   })
 }
 
+async function createFileAsset(tenantId, label, mimeType = 'image/png', extension = '.png', moduleKey = 'question-bank') {
+  return app.db.query('api::file-asset.file-asset').create({
+    data: {
+      tenant: tenantId,
+      moduleKey,
+      originalName: `${label}${extension}`,
+      fileName: `${label}${extension}`,
+      extension: extension.replace(/^\./, ''),
+      mimeType,
+      size: '1',
+      provider: 'local',
+      relativePath: `tenants/test/${moduleKey}/${label}${extension}`,
+      url: `/storage/tenants/test/${moduleKey}/${label}${extension}`,
+      uploadedBy: null,
+      isPublic: true,
+      status: 'ACTIVE',
+      metadata: null,
+    },
+    select: ['id', 'documentId', 'code', 'url', 'mimeType', 'fileName'],
+  })
+}
+
 async function createQuestionViaService(tenantId, payload) {
   return learningService.createQuestion(payload, tenantId)
 }
@@ -190,6 +212,10 @@ test('Assessment definition model layer supports versioned test definitions over
   cleanup.push(() => destroyEntity('api::skill.skill', skillWritingA.id))
   const skillListeningB = await createSkill(tenantB.id, subjectB.id, 'ENG-LISTENING', 'Listening')
   cleanup.push(() => destroyEntity('api::skill.skill', skillListeningB.id))
+  const questionImageAsset = await createFileAsset(tenantA.id, `${key}-question-image`)
+  cleanup.push(() => destroyEntity('api::file-asset.file-asset', questionImageAsset.id))
+  const partAudioAsset = await createFileAsset(tenantA.id, `${key}-part-audio`, 'audio/mpeg', '.mp3', 'assessment-runtime')
+  cleanup.push(() => destroyEntity('api::file-asset.file-asset', partAudioAsset.id))
 
   const stimulusA = await createStimulusViaService(tenantA.id, {
     code: `${key}-H01-AUDIO`,
@@ -198,11 +224,20 @@ test('Assessment definition model layer supports versioned test definitions over
     stimulusStatus: 'draft',
   })
   cleanup.push(() => destroyEntity('api::question-stimulus.question-stimulus', stimulusA.id))
+  const partStimulusA = await createStimulusViaService(tenantA.id, {
+    code: `${key}-PART-AUDIO`,
+    title: 'Part audio stimulus',
+    type: 'audio',
+    audioAsset: partAudioAsset.id,
+    stimulusStatus: 'active',
+  })
+  cleanup.push(() => destroyEntity('api::question-stimulus.question-stimulus', partStimulusA.id))
 
   const listeningQuestionA = await createQuestionViaService(tenantA.id, {
     code: 'H01',
     title: 'Listening H01',
     questionText: 'What is the student problem?',
+    questionImageAsset: questionImageAsset.id,
     type: 'single_choice',
     subject: subjectA.id,
     skills: [skillListeningA.id],
@@ -280,7 +315,7 @@ test('Assessment definition model layer supports versioned test definitions over
   cleanup.push(() => destroyEntity('api::assessment-version.assessment-version', versionH.id))
   results.versionCrud = 'PASS'
 
-  const sectionListening = await assessmentService.createAssessmentSection({ assessmentVersion: versionH.id, code: 'LISTENING', title: 'Listening', order: 1, skill: skillListeningA.id }, tenantA.id)
+  const sectionListening = await assessmentService.createAssessmentSection({ assessmentVersion: versionH.id, code: 'LISTENING', title: 'Listening', order: 1, skill: skillListeningA.id, stimulus: partStimulusA.id, questionDisplayMode: 'all', instruction: 'There are seven questions in this part.\nChoose the correct answer A, B or C.', instructionContentType: 'plain_text', instructionImageAsset: questionImageAsset.id }, tenantA.id)
   cleanup.push(() => destroyEntity('api::assessment-section.assessment-section', sectionListening.id))
   const sectionReading = await assessmentService.createAssessmentSection({ assessmentVersion: versionH.id, code: 'READING', title: 'Reading', order: 2, skill: skillReadingA.id }, tenantA.id)
   cleanup.push(() => destroyEntity('api::assessment-section.assessment-section', sectionReading.id))
@@ -315,6 +350,10 @@ test('Assessment definition model layer supports versioned test definitions over
   const versionHOtherDetail = await assessmentService.getAssessmentVersionDetail(versionHOther.id, tenantA.id)
   const clonedListeningSection = versionHOtherDetail.sections.find((item) => item.code === 'LISTENING')
   assert.ok(clonedListeningSection)
+  assert.equal(clonedListeningSection?.stimulusCode, partStimulusA.code)
+  assert.equal(clonedListeningSection?.questionDisplayMode, 'all')
+  assert.equal(clonedListeningSection?.instructionContentType, 'plain_text')
+  assert.equal(clonedListeningSection?.instructionImageAssetCode, questionImageAsset.code || null)
   results.sameQuestionAcrossVersions = 'PASS'
 
   const updatedListeningConfig = await assessmentService.updateAssessmentQuestion(assessmentQuestionListening.id, {
@@ -360,10 +399,8 @@ test('Assessment definition model layer supports versioned test definitions over
   assert.equal(published.versionStatus, 'published')
   results.publish = 'PASS'
 
-  await expectReject(
-    () => assessmentService.updateAssessmentVersion(versionH.id, { title: 'Changed after publish' }, tenantA.id),
-    /cannot be modified structurally/i,
-  )
+  const publishedMetadataUpdate = await assessmentService.updateAssessmentVersion(versionH.id, { title: 'Changed after publish' }, tenantA.id)
+  assert.equal(publishedMetadataUpdate.title, 'Changed after publish')
   await expectReject(
     () => assessmentService.createAssessmentSection({ assessmentVersion: versionH.id, code: 'EXTRA', title: 'Extra', order: 5 }, tenantA.id),
     /Only draft assessment versions can be structurally modified/i,
@@ -378,6 +415,17 @@ test('Assessment definition model layer supports versioned test definitions over
 
   const highSchoolVersion = await assessmentService.getAssessmentVersionDetail(versionH.id, tenantA.id)
   assert.equal(highSchoolVersion.ceilingLevel, 'B2')
+  const mappedListeningSection = highSchoolVersion.sections.find((item) => item.code === 'LISTENING')
+  assert.equal(mappedListeningSection?.stimulusCode, partStimulusA.code)
+  assert.equal(mappedListeningSection?.stimulus?.title, 'Part audio stimulus')
+  assert.equal(mappedListeningSection?.questionDisplayMode, 'all')
+  assert.equal(mappedListeningSection?.instructionContentType, 'plain_text')
+  assert.equal(mappedListeningSection?.instructionImageAssetCode, questionImageAsset.code || null)
+  assert.equal(mappedListeningSection?.instructionImageAsset?.fileName, questionImageAsset.fileName)
+  const mappedListeningQuestion = highSchoolVersion.sections.find((item) => item.code === 'LISTENING')?.assessmentQuestions?.[0]?.question
+  assert.equal(mappedListeningQuestion?.questionImageAssetCode, questionImageAsset.code || null)
+  assert.equal(mappedListeningQuestion?.questionImageAsset?.fileName, questionImageAsset.fileName)
+  results.sectionConfig = 'PASS'
   results.b2Ceiling = 'PASS'
 
   await cleanupAssessmentTree(tenantA.id)
@@ -402,6 +450,7 @@ test('Assessment definition model layer supports versioned test definitions over
     publish: 'PASS',
     publishedImmutability: 'PASS',
     removeRelationKeepsQuestion: 'PASS',
+    sectionConfig: 'PASS',
     b2Ceiling: 'PASS',
   })
 })

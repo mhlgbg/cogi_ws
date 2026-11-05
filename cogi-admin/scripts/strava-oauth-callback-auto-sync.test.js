@@ -162,7 +162,7 @@ async function createSyncJob(tenantId, userId, connectionId, overrides = {}) {
 async function loadConnection(id) {
   return app.db.query(STRAVA_CONNECTION_UID).findOne({
     where: { id },
-    select: ['id', 'status', 'cleanupStatus', 'cleanupRequestedAt', 'cleanupCompletedAt', 'cleanupError', 'disconnectedAt', 'accessToken', 'refreshToken', 'lastSyncStatus', 'activityDeleteMarkers'],
+    select: ['id', 'status', 'cleanupStatus', 'cleanupRequestedAt', 'cleanupCompletedAt', 'cleanupError', 'disconnectedAt', 'accessToken', 'refreshToken', 'lastSyncStatus', 'activityDeleteMarkers', 'rawAthlete'],
   })
 }
 
@@ -374,6 +374,7 @@ test('oauth callback reconnect after completed cleanup reuses connection and cre
     assert.equal(updatedConnection.cleanupRequestedAt, null)
     assert.equal(updatedConnection.cleanupCompletedAt, null)
     assert.equal(updatedConnection.disconnectedAt, null)
+    assert.equal(updatedConnection.rawAthlete, null)
     assert.deepEqual(updatedConnection.activityDeleteMarkers || [], [])
 
     const afterCount = await countJobsForConnection(connection.id)

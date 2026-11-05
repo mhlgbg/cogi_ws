@@ -33,6 +33,125 @@ function getActivityLabel(activityCode) {
   return normalized || '-'
 }
 
+function detectGhostRaceClientPlatform() {
+  if (typeof navigator === 'undefined') return null
+  const userAgent = String(navigator.userAgent || '').toLowerCase()
+  if (/android|iphone|ipad|ipod|mobile/i.test(userAgent)) return 'mobile'
+  if (/windows nt|macintosh|x11|linux x86_64|cros/i.test(userAgent)) return 'desktop'
+  return null
+}
+
+function getGhostRaceDeviceCompatibility(game) {
+  const expectedPlatform = String(game?.settings?.playPlatform || game?.settings?.play_platform || 'desktop').toLowerCase()
+  const detectedPlatform = detectGhostRaceClientPlatform()
+
+  if (!expectedPlatform || expectedPlatform === 'web' || !detectedPlatform) return true
+  if (expectedPlatform === 'desktop') return detectedPlatform === 'desktop'
+  if (expectedPlatform === 'mobile') return detectedPlatform === 'mobile'
+  return true
+}
+
+function getGhostRaceActionConfig(game, isRegistered) {
+  const phaseCode = String(game?.effectivePhase?.code || '')
+  const effectiveStatus = String(game?.effectiveStatus || '').toLowerCase()
+  const registrationState = String(game?.registration?.state || '').toLowerCase()
+  const isTrialOpen = phaseCode === 'trial_running'
+  const isOfficialOpen = phaseCode === 'official_running'
+  const isBeforeOpen = ['trial_upcoming', 'official_pending', 'waiting_official', 'registration', 'draft'].includes(phaseCode)
+    || effectiveStatus === 'trial_upcoming'
+    || effectiveStatus === 'official_pending'
+  const isEnded = effectiveStatus === 'ended' || effectiveStatus === 'finalized'
+  const isDeviceCompatible = getGhostRaceDeviceCompatibility(game)
+
+  if (!isRegistered) {
+    const canRegister = game?.registration?.canRegister === true
+    return {
+      kind: canRegister ? 'register' : 'register-disabled',
+      label: 'ĐĂNG KÝ THAM GIA',
+      disabled: !canRegister,
+      reason: game?.registration?.reason || 'Bạn chưa thể đăng ký game ở thời điểm hiện tại.',
+      secondaryLabel: null,
+      secondaryAction: null,
+    }
+  }
+
+  if (!isDeviceCompatible) {
+    const expectedLabel = String(game?.settings?.playPlatform || game?.settings?.play_platform || 'desktop').toLowerCase() === 'mobile' ? 'mobile' : 'desktop'
+    return {
+      kind: 'device-mismatch',
+      label: 'THIẾT BỊ KHÔNG PHÙ HỢP',
+      disabled: true,
+      reason: `Game Ghost Race yêu cầu thiết bị ${expectedLabel}. Hãy chuyển sang thiết bị phù hợp để vào đường đua.`,
+      secondaryLabel: 'XEM KẾT QUẢ',
+      secondaryAction: `/game-center/ghost-race?gameId=${game.id}`,
+    }
+  }
+
+  if (isTrialOpen) {
+    return {
+      kind: 'trial',
+      label: 'VÀO CHẠY THỬ',
+      disabled: false,
+      reason: 'Trial đang mở. Hãy bắt đầu lượt thử của bạn.',
+      secondaryLabel: 'XEM KẾT QUẢ',
+      secondaryAction: `/game-center/ghost-race?gameId=${game.id}`,
+    }
+  }
+
+  if (isOfficialOpen) {
+    return {
+      kind: 'official',
+      label: 'THI CHÍNH THỨC',
+      disabled: false,
+      reason: 'Official đang mở. Hãy tham gia đua chính thức.',
+      secondaryLabel: 'XEM KẾT QUẢ',
+      secondaryAction: `/game-center/ghost-race?gameId=${game.id}`,
+    }
+  }
+
+  if (isBeforeOpen) {
+    return {
+      kind: 'upcoming',
+      label: 'SẮP MỞ ĐƯỜNG ĐUA',
+      disabled: true,
+      reason: game?.effectivePhase?.notice || 'Giai đoạn đua chưa mở. Hãy chờ theo thời gian do backend quy định.',
+      secondaryLabel: 'XEM KẾT QUẢ',
+      secondaryAction: `/game-center/ghost-race?gameId=${game.id}`,
+    }
+  }
+
+  if (isEnded) {
+    return {
+      kind: 'ended',
+      label: 'XEM KẾT QUẢ',
+      disabled: false,
+      reason: 'Đã kết thúc. Không bắt đầu lượt mới, ưu tiên xem kết quả.',
+      secondaryLabel: null,
+      secondaryAction: null,
+    }
+  }
+
+  if (registrationState === 'closed' || registrationState === 'unavailable') {
+    return {
+      kind: 'closed',
+      label: 'KHÔNG THỂ THAM GIA',
+      disabled: true,
+      reason: game?.registration?.reason || 'Không thể tham gia ở thời điểm hiện tại.',
+      secondaryLabel: 'XEM KẾT QUẢ',
+      secondaryAction: `/game-center/ghost-race?gameId=${game.id}`,
+    }
+  }
+
+  return {
+    kind: 'default',
+    label: 'SẮP MỞ ĐƯỜNG ĐUA',
+    disabled: true,
+    reason: game?.effectivePhase?.notice || 'Game chưa mở thời gian chơi.',
+    secondaryLabel: 'XEM KẾT QUẢ',
+    secondaryAction: `/game-center/ghost-race?gameId=${game.id}`,
+  }
+}
+
 export default function GameCenterDetailPage() {
   const navigate = useNavigate()
   const { id } = useParams()
@@ -81,8 +200,7 @@ export default function GameCenterDetailPage() {
   })
   const progressByCode = new Map(progress.map((item) => [String(item?.activityCode || ''), item]))
   const isGhostRaceGame = String(game?.gameType?.code || '').toLowerCase() === 'ghost_race'
-  const canPlayTrial = isGhostRaceGame && Boolean(game?.myParticipation?.id) && game?.effectivePhase?.isTrial
-  const canPlayOfficial = isGhostRaceGame && Boolean(game?.myParticipation?.id) && game?.effectivePhase?.isOfficial
+  const ghostRaceAction = isGhostRaceGame ? getGhostRaceActionConfig(game, Boolean(game?.myParticipation?.id)) : null
 
   async function handleRegister() {
     setSubmitting(true)
@@ -127,30 +245,73 @@ export default function GameCenterDetailPage() {
                   {game.myParticipation?.id ? <CBadge color='success'>Đã tham gia</CBadge> : <CBadge color='secondary'>Chưa tham gia</CBadge>}
                 </div>
               </div>
-              <div className='d-flex flex-column align-items-lg-end gap-2'>
-                <CButton color='primary' disabled={!game.registration?.canRegister || submitting} onClick={handleRegister}>
-                  {submitting ? 'Đang xử lý...' : game.myParticipation?.id ? 'Đã đăng ký' : 'Đăng ký tham gia'}
-                </CButton>
-                {isGhostRaceGame ? (
+              <div className='d-flex flex-column align-items-stretch gap-2 w-100 w-lg-auto' style={{ minWidth: 260, maxWidth: 360 }}>
+                {isGhostRaceGame && ghostRaceAction ? (
                   <>
                     <CButton
-                      color='warning'
-                      variant='outline'
-                      disabled={!canPlayTrial}
-                      onClick={() => navigate(`/game-center/ghost-race?gameId=${game.id}`)}
+                      type='button'
+                      size='lg'
+                      disabled={ghostRaceAction.disabled || submitting}
+                      onClick={() => {
+                        if (ghostRaceAction.kind === 'register' && !ghostRaceAction.disabled) {
+                          handleRegister()
+                          return
+                        }
+                        if (ghostRaceAction.secondaryAction && ghostRaceAction.kind !== 'register') {
+                          navigate(ghostRaceAction.secondaryAction)
+                        }
+                      }}
+                      style={{
+                        backgroundColor: ghostRaceAction.disabled ? '#e9e7df' : '#A71919',
+                        borderColor: ghostRaceAction.disabled ? '#d0d5dd' : '#FACC15',
+                        color: ghostRaceAction.disabled ? '#6b7280' : '#FACC15',
+                        fontWeight: 700,
+                        fontSize: '1rem',
+                        borderWidth: '2px',
+                        boxShadow: ghostRaceAction.disabled ? 'none' : '0 8px 18px rgba(167, 25, 25, 0.18)',
+                        transition: 'all 0.2s ease',
+                        opacity: ghostRaceAction.disabled ? 0.8 : 1,
+                        letterSpacing: '0.02em',
+                      }}
+                      onMouseEnter={(event) => {
+                        if (!ghostRaceAction.disabled) {
+                          event.currentTarget.style.filter = 'brightness(1.04)'
+                          event.currentTarget.style.transform = 'translateY(-1px)'
+                        }
+                      }}
+                      onMouseLeave={(event) => {
+                        event.currentTarget.style.filter = 'none'
+                        event.currentTarget.style.transform = 'none'
+                      }}
                     >
-                      Vào đường đua Trial
+                      <span className='me-2' aria-hidden='true'>{ghostRaceAction.kind === 'trial' || ghostRaceAction.kind === 'official' ? '▶' : ghostRaceAction.kind === 'register' ? '⚑' : '⏱'}</span>
+                      {submitting && ghostRaceAction.kind === 'register' ? 'Đang xử lý...' : ghostRaceAction.label}
                     </CButton>
-                    <CButton
-                      color='warning'
-                      disabled={!canPlayOfficial}
-                      onClick={() => navigate(`/game-center/ghost-race?gameId=${game.id}`)}
-                    >
-                      Vào đường đua Official
-                    </CButton>
+                    {ghostRaceAction.reason ? (
+                      <div className='small text-body-secondary text-lg-end' style={{ lineHeight: 1.5 }}>
+                        {ghostRaceAction.reason}
+                      </div>
+                    ) : null}
+                    {ghostRaceAction.secondaryLabel && ghostRaceAction.secondaryAction ? (
+                      <CButton
+                        variant='outline'
+                        color='warning'
+                        className='w-100'
+                        onClick={() => navigate(ghostRaceAction.secondaryAction)}
+                      >
+                        {ghostRaceAction.secondaryLabel}
+                      </CButton>
+                    ) : null}
                   </>
-                ) : null}
-                <div className='small text-body-secondary text-lg-end'>Run version hiện tại: {game.currentRunVersion || 1}</div>
+                ) : (
+                  <>
+                    <CButton color='primary' disabled={!game.registration?.canRegister || submitting} onClick={handleRegister}>
+                      {submitting ? 'Đang xử lý...' : game.myParticipation?.id ? 'Đã đăng ký' : 'Đăng ký tham gia'}
+                    </CButton>
+                    <div className='small text-body-secondary text-lg-end'>Run version hiện tại: {game.currentRunVersion || 1}</div>
+                  </>
+                )}
+                {!isGhostRaceGame ? <div className='small text-body-secondary text-lg-end'>Run version hiện tại: {game.currentRunVersion || 1}</div> : null}
               </div>
             </CCardBody>
           </CCard>

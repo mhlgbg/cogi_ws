@@ -1,0 +1,75 @@
+{
+  "kind": "collectionType",
+  "collectionName": "generated_photos",
+  "info": {
+    "singularName": "generated-photo",
+    "pluralName": "generated-photos",
+    "displayName": "Generated Photo",
+    "description": "Prepared storage model for generated frame results. Public upload/gallery flows are intentionally not enabled yet."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "generatedPhotos",
+      "required": true
+    },
+    "campaign": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::photo-frame-campaign.photo-frame-campaign",
+      "inversedBy": "generatedPhotos",
+      "required": true
+    },
+    "image": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::file-asset.file-asset",
+      "required": true
+    },
+    "sessionId": {
+      "type": "string",
+      "maxLength": 160
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "consentPublicGallery": {
+      "type": "boolean",
+      "default": false,
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "hidden"
+      ],
+      "default": "active",
+      "required": true
+    },
+    "originalFilename": {
+      "type": "string"
+    },
+    "mimeType": {
+      "type": "string"
+    },
+    "fileSize": {
+      "type": "biginteger",
+      "default": "0"
+    },
+    "width": {
+      "type": "integer"
+    },
+    "height": {
+      "type": "integer"
+    }
+  }
+}

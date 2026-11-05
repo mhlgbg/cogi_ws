@@ -7,6 +7,7 @@ process.env.STRAVA_WEBHOOK_RUNNER_ENABLED = 'false'
 
 let app
 let learningService
+let assessmentService
 let authenticatedRoleId = 0
 
 function uniqueKey(prefix) {
@@ -15,6 +16,12 @@ function uniqueKey(prefix) {
 
 function loadLearningService() {
   const modulePath = path.join(__dirname, '..', 'dist', 'src', 'api', 'learning-management', 'services', 'learning-management.js')
+  delete require.cache[require.resolve(modulePath)]
+  return require(modulePath)
+}
+
+function loadAssessmentService() {
+  const modulePath = path.join(__dirname, '..', 'dist', 'src', 'api', 'assessment-management', 'services', 'assessment-management.js')
   delete require.cache[require.resolve(modulePath)]
   return require(modulePath)
 }
@@ -105,11 +112,26 @@ async function createGrade(tenantId, code) {
   })
 }
 
+async function createSkill(tenantId, subjectId, code, title) {
+  return app.db.query('api::skill.skill').create({
+    data: {
+      code,
+      title,
+      level: 'understand',
+      skillStatus: 'active',
+      subject: subjectId,
+      tenant: tenantId,
+    },
+    select: ['id', 'code', 'title'],
+  })
+}
+
 before(async () => {
   const { createStrapi, compileStrapi } = require('@strapi/strapi')
   const appContext = await compileStrapi()
   app = await createStrapi(appContext).load()
   learningService = loadLearningService()
+  assessmentService = loadAssessmentService()
   const authenticatedRole = await app.db.query('plugin::users-permissions.role').findOne({ where: { type: 'authenticated' }, select: ['id'] })
   authenticatedRoleId = Number(authenticatedRole?.id || 0)
   assert.ok(authenticatedRoleId > 0, 'authenticated role must exist')
@@ -134,6 +156,8 @@ test('Case 1, 3, 4, 5, 6, 7: question stimulus foundation works with tenant isol
   cleanup.push(() => destroyEntity('api::subject.subject', subjectA.id))
   const gradeA = await createGrade(tenantA.id, `${key}-g35`)
   cleanup.push(() => destroyEntity('api::grade.grade', gradeA.id))
+  const listeningSkill = await createSkill(tenantA.id, subjectA.id, `${key}-listening`, 'Listening')
+  cleanup.push(() => destroyEntity('api::skill.skill', listeningSkill.id))
 
   const audioFile = await createFileAsset(tenantA.id, `${key}-audio`, 'audio/mpeg', '.mp3')
   cleanup.push(() => destroyEntity('api::file-asset.file-asset', audioFile.id))
@@ -175,6 +199,16 @@ test('Case 1, 3, 4, 5, 6, 7: question stimulus foundation works with tenant isol
   }, tenantA.id)
   cleanup.push(() => destroyEntity('api::question-stimulus.question-stimulus', readingStimulus.id))
 
+  const htmlStimulus = await learningService.createQuestionStimulus({
+    code: `${key}-html-stimulus`,
+    title: 'Baking',
+    type: 'text',
+    contentType: 'html',
+    content: '<h2 style="text-align:center;">Baking</h2><script>alert(1)</script><p>My grandmother loves making bread and cakes...</p>',
+    stimulusStatus: 'active',
+  }, tenantA.id)
+  cleanup.push(() => destroyEntity('api::question-stimulus.question-stimulus', htmlStimulus.id))
+
   const mixedStimulus = await learningService.createQuestionStimulus({
     code: `${key}-mixed-stimulus`,
     title: 'Mixed passage',
@@ -189,6 +223,7 @@ test('Case 1, 3, 4, 5, 6, 7: question stimulus foundation works with tenant isol
     code: `${key}-q-audio`,
     title: 'Audio question',
     questionText: 'What do you hear?',
+    questionTextType: 'plain_text',
     type: 'single_choice',
     stimulus: audioStimulus.id,
     subject: subjectA.id,
@@ -206,6 +241,7 @@ test('Case 1, 3, 4, 5, 6, 7: question stimulus foundation works with tenant isol
     code: `${key}-q-image-option`,
     title: 'Image options question',
     questionText: 'Pick the correct picture.',
+    questionTextType: 'plain_text',
     type: 'single_choice',
     stimulus: audioStimulus.id,
     subject: subjectA.id,
@@ -233,6 +269,11 @@ test('Case 1, 3, 4, 5, 6, 7: question stimulus foundation works with tenant isol
     ],
   }, tenantA.id)
   cleanup.push(() => destroyEntity('api::question.question', sharedQ1.id))
+
+  assert.equal(readingStimulus.contentType, 'plain_text')
+  assert.equal(htmlStimulus.contentType, 'html')
+  assert.match(htmlStimulus.content, /<h2 style="text-align:center">Baking<\/h2>/)
+  assert.doesNotMatch(htmlStimulus.content, /<script/i)
 
   const sharedQ2 = await learningService.createQuestion({
     code: `${key}-q-read-2`,
@@ -266,7 +307,8 @@ test('Case 1, 3, 4, 5, 6, 7: question stimulus foundation works with tenant isol
 
   const standaloneQuestion = await learningService.createQuestion({
     code: `${key}-q-standalone`,
-    questionText: 'Standalone question',
+    questionText: '<p>Suzie needs to get some fairly cheap sports clothes for wearing at the gym.</p><script>alert(1)</script><p>She\'s in a hurry, so doesn\'t want to spend too long shopping.</p>',
+    questionTextType: 'html',
     type: 'single_choice',
     subject: subjectA.id,
     grade: gradeA.id,
@@ -290,6 +332,19 @@ test('Case 1, 3, 4, 5, 6, 7: question stimulus foundation works with tenant isol
   assert.equal(readingDetail.questions.length, 3)
   assert.deepEqual(readingDetail.questions.map((item) => item.code).sort(), [sharedQ1.code, sharedQ2.code, sharedQ3.code].sort())
 
+  const assessment = await assessmentService.createAssessment({ code: `${key}-assessment`, name: 'Stimulus usage assessment', subject: subjectA.id, assessmentType: 'practice', status: 'draft' }, tenantA.id)
+  cleanup.push(() => destroyEntity('api::assessment.assessment', assessment.id))
+  const version = await assessmentService.createAssessmentVersion({ code: `${key}-assessment-v1`, version: 1, title: 'Stimulus usage version', assessment: assessment.id, versionStatus: 'draft', durationMinutes: 15 }, tenantA.id)
+  cleanup.push(() => destroyEntity('api::assessment-version.assessment-version', version.id))
+  const section = await assessmentService.createAssessmentSection({ assessmentVersion: version.id, code: 'P1', title: 'Part 1', order: 1, skill: listeningSkill.id, stimulus: audioStimulus.id, questionDisplayMode: 'all' }, tenantA.id)
+  cleanup.push(() => destroyEntity('api::assessment-section.assessment-section', section.id))
+
+  const linkedUsage = await learningService.getQuestionStimulusUsage(audioStimulus.id, tenantA.id)
+  assert.equal(linkedUsage.questionCount, 2)
+  assert.equal(linkedUsage.partCount, 1)
+  assert.equal(linkedUsage.totalLiveReferences, 3)
+  assert.equal(linkedUsage.parts[0]?.code, 'P1')
+
   const mixedDetail = await learningService.getQuestionStimulusDetail(mixedStimulus.id, tenantA.id)
   assert.equal(mixedDetail.type, 'mixed')
   assert.ok(mixedDetail.imageAsset)
@@ -297,6 +352,10 @@ test('Case 1, 3, 4, 5, 6, 7: question stimulus foundation works with tenant isol
 
   const standaloneLoaded = listRows.find((item) => item.code === standaloneQuestion.code)
   assert.equal(standaloneLoaded?.stimulus || null, null)
+  assert.equal(audioQuestion.questionTextType, 'plain_text')
+  assert.equal(standaloneLoaded?.questionTextType, 'html')
+  assert.match(standaloneLoaded?.questionText || '', /<p>Suzie needs to get some fairly cheap sports clothes for wearing at the gym\.<\/p>/)
+  assert.doesNotMatch(standaloneLoaded?.questionText || '', /<script/i)
 
   const outsiderStimulus = await learningService.createQuestionStimulus({
     code: `${key}-outsider`,
@@ -347,8 +406,28 @@ test('Case 1, 3, 4, 5, 6, 7: question stimulus foundation works with tenant isol
 
   await assert.rejects(
     () => learningService.deleteQuestionStimulus(audioStimulus.id, tenantA.id),
-    /currently used by one or more questions/i,
+    /still used by 2 question\(s\) and 1 part\(s\)/i,
   )
+
+  await learningService.updateQuestion(audioQuestion.id, { stimulus: null }, tenantA.id)
+  await learningService.updateQuestion(imageOptionQuestion.id, { stimulus: null }, tenantA.id)
+  const partOnlyUsage = await learningService.getQuestionStimulusUsage(audioStimulus.id, tenantA.id)
+  assert.equal(partOnlyUsage.questionCount, 0)
+  assert.equal(partOnlyUsage.partCount, 1)
+  assert.equal(partOnlyUsage.totalLiveReferences, 1)
+
+  await assessmentService.updateAssessmentSection(section.id, { assessmentVersion: version.id, code: 'P1', title: 'Part 1', order: 1, skill: listeningSkill.id, stimulus: null, questionDisplayMode: 'all' }, tenantA.id)
+  const orphanUsage = await learningService.getQuestionStimulusUsage(audioStimulus.id, tenantA.id)
+  assert.equal(orphanUsage.questionCount, 0)
+  assert.equal(orphanUsage.partCount, 0)
+  assert.equal(orphanUsage.totalLiveReferences, 0)
+  assert.equal(orphanUsage.media.audioAsset.canDelete, true)
+
+  const deletedStimulus = await learningService.deleteQuestionStimulus(audioStimulus.id, tenantA.id, { deleteUnusedMedia: true })
+  assert.equal(Array.isArray(deletedStimulus.deletedMediaAssetIds), true)
+  const softDeletedAudioFile = await app.db.query('api::file-asset.file-asset').findOne({ where: { id: audioFile.id }, select: ['id', 'status', 'isDeleted'] })
+  assert.equal(softDeletedAudioFile?.status, 'DELETED')
+  assert.equal(softDeletedAudioFile?.isDeleted, true)
 
   await assert.rejects(
     () => learningService.createQuestionStimulus({

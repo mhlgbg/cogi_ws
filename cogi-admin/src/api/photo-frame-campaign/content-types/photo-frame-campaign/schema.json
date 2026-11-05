@@ -1,0 +1,189 @@
+{
+  "kind": "collectionType",
+  "collectionName": "photo_frame_campaigns",
+  "info": {
+    "singularName": "photo-frame-campaign",
+    "pluralName": "photo-frame-campaigns",
+    "displayName": "Photo Frame Campaign",
+    "description": "Tenant-scoped photo frame campaigns managed from admin before the public frame editor is released."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "inversedBy": "photoFrameCampaigns",
+      "required": true
+    },
+    "ownerUser": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "name": {
+      "type": "string",
+      "required": true,
+      "maxLength": 200
+    },
+    "slug": {
+      "type": "string",
+      "required": true,
+      "maxLength": 160
+    },
+    "description": {
+      "type": "richtext"
+    },
+    "frameImage": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ],
+      "required": true
+    },
+    "width": {
+      "type": "integer",
+      "required": true,
+      "default": 1080,
+      "min": 1
+    },
+    "height": {
+      "type": "integer",
+      "required": true,
+      "default": 1080,
+      "min": 1
+    },
+    "photoShape": {
+      "type": "enumeration",
+      "enum": [
+        "circle",
+        "rect",
+        "rounded_rect",
+        "ellipse"
+      ],
+      "default": "rect",
+      "required": true
+    },
+    "photoAreaX": {
+      "type": "float",
+      "default": 0
+    },
+    "photoAreaY": {
+      "type": "float",
+      "default": 0
+    },
+    "photoAreaWidth": {
+      "type": "float",
+      "default": 1080
+    },
+    "photoAreaHeight": {
+      "type": "float",
+      "default": 1080
+    },
+    "photoFitMode": {
+      "type": "enumeration",
+      "enum": [
+        "cover",
+        "contain"
+      ],
+      "default": "cover",
+      "required": true
+    },
+    "minZoom": {
+      "type": "float",
+      "default": 0.5,
+      "required": true
+    },
+    "maxZoom": {
+      "type": "float",
+      "default": 4,
+      "required": true
+    },
+    "defaultZoom": {
+      "type": "float",
+      "default": 1,
+      "required": true
+    },
+    "defaultOffsetX": {
+      "type": "float",
+      "default": 0,
+      "required": true
+    },
+    "defaultOffsetY": {
+      "type": "float",
+      "default": 0,
+      "required": true
+    },
+    "allowRotate": {
+      "type": "boolean",
+      "default": true,
+      "required": true
+    },
+    "showOutsidePhotoAreaInPreview": {
+      "type": "enumeration",
+      "enum": [
+        "dim",
+        "hide",
+        "show"
+      ],
+      "default": "dim",
+      "required": true
+    },
+    "outsideOverlayOpacity": {
+      "type": "float",
+      "default": 0.45,
+      "required": true
+    },
+    "outputFormat": {
+      "type": "enumeration",
+      "enum": [
+        "png",
+        "jpeg"
+      ],
+      "default": "png",
+      "required": true
+    },
+    "outputQuality": {
+      "type": "float",
+      "default": 0.92,
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "active",
+        "inactive"
+      ],
+      "default": "draft",
+      "required": true
+    },
+    "generatedImageStorageMode": {
+      "type": "enumeration",
+      "enum": [
+        "none",
+        "private",
+        "public_gallery"
+      ],
+      "default": "none",
+      "required": true
+    },
+    "startAt": {
+      "type": "datetime"
+    },
+    "endAt": {
+      "type": "datetime"
+    },
+    "generatedPhotos": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::generated-photo.generated-photo",
+      "mappedBy": "campaign"
+    }
+  }
+}

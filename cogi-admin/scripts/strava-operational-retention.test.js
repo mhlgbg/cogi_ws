@@ -302,7 +302,7 @@ test('activity.create keeps StravaActivity intact and scrubs terminal webhook pa
     assert.equal(activity.name, 'Created by webhook')
     assert.equal(Number(activity.distance || 0), 25000)
     assert.equal(Number(activity.movingTime || 0), 4321)
-    assert.equal(activity.rawActivity.name, 'Created by webhook')
+    assert.equal(activity.rawActivity, null)
     extraCleanup.push(() => destroyEntity(STRAVA_ACTIVITY_UID, activity.id))
 
     const event = await getWebhookEventBySubscriptionId(subscriptionId)
@@ -442,6 +442,41 @@ test('retryable failure retains payload until retry succeeds, then scrubs termin
   } finally {
     global.fetch = originalFetch
     await cleanupFixture({ cleanup: [...extraCleanup, ...fixture.cleanup] })
+  }
+})
+
+test('dead_letter scrubs raw webhook payload after retries are exhausted', async () => {
+  const fixture = await createFixture(uniqueKey('patch5-dead-letter'))
+  const subscriptionId = 5110
+  process.env.STRAVA_WEBHOOK_MAX_RETRY = '1'
+  installActivityDetailFetchMock('dead-letter-activity', buildActivityPayload('dead-letter-activity'), { failStatus: 503 })
+
+  try {
+    const received = await service.receiveStravaWebhookEvent({
+      object_type: 'activity',
+      object_id: 'dead-letter-activity',
+      owner_id: fixture.connection.stravaAthleteId,
+      aspect_type: 'create',
+      event_time: Math.floor(Date.now() / 1000),
+      subscription_id: subscriptionId,
+      updates: { phase: 'dead-letter' },
+    })
+    assert.equal(received.duplicate, false)
+
+    await webhookRunner.runStravaWebhookRunnerTick(app)
+
+    const event = await getWebhookEventBySubscriptionId(subscriptionId)
+    assert.equal(event.status, 'dead_letter')
+    assert.equal(Number(event.attempts || 0), 1)
+    assert.ok(event.lastError)
+    assert.equal(event.rawPayload, null)
+    assert.equal(event.updates, null)
+    assert.equal(event.objectId, 'dead-letter-activity')
+    assert.equal(event.ownerId, fixture.connection.stravaAthleteId)
+  } finally {
+    delete process.env.STRAVA_WEBHOOK_MAX_RETRY
+    global.fetch = originalFetch
+    await cleanupFixture(fixture)
   }
 })
 

@@ -1,6 +1,8 @@
 import { extractRelationRef, hasOwn, mergeTenantWhere, normalizeSortInput, toPositiveInt, toText, whereByParam } from '../../../utils/tenant-scope';
 
 const SPORTS_CLUB_UID = 'api::sports-club.sports-club' as any;
+const FILE_ASSET_UID = 'api::file-asset.file-asset' as any;
+const UPLOAD_FILE_UID = 'plugin::upload.file' as any;
 
 type HttpErrorDetails = Record<string, unknown> | Array<Record<string, unknown>> | null;
 type GenericRecord = Record<string, unknown>;
@@ -9,6 +11,8 @@ const STATUS_VALUES = new Set(['active', 'inactive', 'archived']);
 const CLUB_TYPE_VALUES = new Set(['community', 'club', 'team', 'chapter', 'training_group', 'other']);
 const SPORT_TYPE_VALUES = new Set(['running', 'cycling', 'badminton', 'football', 'swimming', 'multisport', 'other']);
 const JOIN_POLICY_VALUES = new Set(['open', 'approval', 'invite_only', 'closed']);
+const IMAGE_MIME_PREFIX = 'image/';
+const IMAGE_EXTENSION_VALUES = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.avif']);
 
 export class SportsClubError extends Error {
 	status: number;
@@ -165,9 +169,14 @@ function normalizeBooleanFilter(value: unknown): boolean | null {
 
 function mapMedia(media: any) {
 	if (!media?.id) return null;
+	const providerMetadata = media.provider_metadata && typeof media.provider_metadata === 'object'
+		? media.provider_metadata
+		: (media.providerMetadata && typeof media.providerMetadata === 'object' ? media.providerMetadata : null);
 	return {
 		id: Number(media.id),
+		fileAssetId: Number(providerMetadata?.bridgedFromFileAssetId || 0) || null,
 		name: toText(media.name) || null,
+		provider: toText(media.provider) || null,
 		url: toText(media.url) || null,
 		mime: toText(media.mime) || null,
 	};
@@ -271,12 +280,75 @@ function resolveOrderBy(query: Record<string, unknown>) {
 
 async function ensureMediaExists(mediaId: number | null, fieldName: string) {
 	if (!mediaId) return null;
-	const media = await strapi.db.query('plugin::upload.file').findOne({
+	const media = await strapi.db.query(UPLOAD_FILE_UID).findOne({
 		where: { id: mediaId },
 		select: ['id'],
 	});
 	if (!media?.id) {
-		httpError(400, `${fieldName} is invalid`, 'INVALID_MEDIA', { field: fieldName });
+		const fileAsset = await strapi.db.query(FILE_ASSET_UID).findOne({
+			where: { id: mediaId },
+			select: ['id', 'originalName', 'fileName', 'extension', 'mimeType', 'size', 'provider', 'url', 'relativePath'],
+		});
+		if (!fileAsset?.id) {
+			httpError(400, `${fieldName} is invalid`, 'INVALID_MEDIA', { field: fieldName });
+		}
+
+		const mime = toText(fileAsset.mimeType).toLowerCase();
+		const ext = (() => {
+			const raw = toText(fileAsset.extension).toLowerCase();
+			if (!raw) return '';
+			return raw.startsWith('.') ? raw : `.${raw}`;
+		})();
+		const isImageMime = mime.startsWith(IMAGE_MIME_PREFIX);
+		const isSupportedExt = IMAGE_EXTENSION_VALUES.has(ext);
+		if (!isImageMime || !isSupportedExt) {
+			httpError(400, `${fieldName} is invalid`, 'INVALID_MEDIA', { field: fieldName });
+		}
+
+		const existingUploadMedia = await strapi.db.query(UPLOAD_FILE_UID).findOne({
+			where: {
+				url: toText(fileAsset.url),
+				provider: toText(fileAsset.provider) || 'local',
+			},
+			select: ['id'],
+		});
+		if (existingUploadMedia?.id) {
+			return Number(existingUploadMedia.id);
+		}
+
+		const originalName = toText(fileAsset.originalName) || toText(fileAsset.fileName) || `sports-club-${fieldName}-${fileAsset.id}${ext}`;
+		const baseHash = toText(fileAsset.fileName || fileAsset.originalName || `sports-club-${fieldName}-${fileAsset.id}`)
+			.replace(/\.[^.]+$/, '')
+			.replace(/[^A-Za-z0-9._-]+/g, '-')
+			.replace(/-+/g, '-')
+			.replace(/^-+|-+$/g, '')
+			.toLowerCase() || `sports-club-${fieldName}-${fileAsset.id}`;
+		const createdUploadMedia = await strapi.db.query(UPLOAD_FILE_UID).create({
+			data: {
+				name: originalName,
+				alternativeText: null,
+				caption: null,
+				ext,
+				folderPath: '/',
+				formats: null,
+				hash: `${baseHash}-file-asset-${fileAsset.id}`,
+				height: null,
+				mime,
+				previewUrl: null,
+				provider: toText(fileAsset.provider) || 'local',
+				provider_metadata: {
+					bridgedFromFileAssetId: Number(fileAsset.id),
+					relativePath: toText(fileAsset.relativePath) || null,
+				},
+				size: Math.max(0.001, Number((Number(fileAsset.size || 0) / 1024).toFixed(3))),
+				url: toText(fileAsset.url),
+				width: null,
+			},
+		});
+		if (!createdUploadMedia?.id) {
+			httpError(500, `Không thể đồng bộ ${fieldName}`, 'MEDIA_BRIDGE_FAILED', { field: fieldName });
+		}
+		return Number(createdUploadMedia.id);
 	}
 	return mediaId;
 }
@@ -292,8 +364,8 @@ async function findSportsClubInTenant(clubRef: unknown, tenantId: number | strin
 		populate: {
 			parentClub: { select: ['id', 'documentId', 'code', 'name', 'slug', 'clubType', 'status'] },
 			childClubs: { select: ['id', 'documentId', 'code', 'name', 'slug', 'clubType', 'status'] },
-			logo: { select: ['id', 'name', 'url', 'mime'] },
-			coverImage: { select: ['id', 'name', 'url', 'mime'] },
+			logo: { select: ['id', 'name', 'url', 'mime', 'provider', 'provider_metadata'] },
+			coverImage: { select: ['id', 'name', 'url', 'mime', 'provider', 'provider_metadata'] },
 		},
 		...(transacting ? { transacting } : {}),
 	} as any);
@@ -458,8 +530,8 @@ export async function listTenantSportsClubs(query: Record<string, unknown>, tena
 			limit: pageSize,
 			populate: {
 				parentClub: { select: ['id', 'documentId', 'code', 'name', 'slug', 'clubType', 'status'] },
-				logo: { select: ['id', 'name', 'url', 'mime'] },
-				coverImage: { select: ['id', 'name', 'url', 'mime'] },
+				logo: { select: ['id', 'name', 'url', 'mime', 'provider', 'provider_metadata'] },
+				coverImage: { select: ['id', 'name', 'url', 'mime', 'provider', 'provider_metadata'] },
 			},
 		} as any),
 		strapi.db.query(SPORTS_CLUB_UID).count({ where } as any),

@@ -12,10 +12,21 @@ const FITNESS_CHALLENGE_UID = 'api::fitness-challenge.fitness-challenge';
 
 type GenericRecord = Record<string, unknown>;
 
+const ALLOWED_CHALLENGE_POPULATE = new Set(['tenant', 'createdBy']);
+
+function normalizeChallengeActivityAcceptMode(value: unknown): 'MANUAL_SUBMIT' {
+  return 'MANUAL_SUBMIT';
+}
+
 function resolveRequestData(ctx: any): GenericRecord {
   const body = (ctx.request.body ??= {});
   if (!body.data || typeof body.data !== 'object' || Array.isArray(body.data)) {
     body.data = {};
+  }
+
+  body.data.activityAcceptMode = normalizeChallengeActivityAcceptMode((body.data as GenericRecord).activityAcceptMode);
+  if ('allowReuseActivity' in (body.data as GenericRecord)) {
+    (body.data as GenericRecord).allowReuseActivity = false;
   }
 
   return body.data as GenericRecord;
@@ -24,10 +35,11 @@ function resolveRequestData(ctx: any): GenericRecord {
 function resolveFitnessChallengePopulate(ctx: any) {
   const requestedPopulate = normalizePopulateInput(ctx.query?.populate);
 
-  if (requestedPopulate === true) return true;
+  if (requestedPopulate === true) return ['tenant', 'createdBy'];
   if (Array.isArray(requestedPopulate) && requestedPopulate.length > 0) {
+    const allowedRequested = requestedPopulate.filter((item) => ALLOWED_CHALLENGE_POPULATE.has(String(item || '')));
     const required = ['tenant', 'createdBy'];
-    return Array.from(new Set([...required, ...requestedPopulate]));
+    return Array.from(new Set([...required, ...allowedRequested]));
   }
 
   return ['tenant', 'createdBy'];

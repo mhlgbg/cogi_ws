@@ -31,6 +31,8 @@ const registrationCampaign = require('./registration-campaign');
 const assessmentCampaign = require('./assessment-campaign');
 const exam = require('./exam');
 const sports = require('./sports');
+const community = require('./community');
+const game = require('./game');
 // const inventory = require('./inventory');
 
 module.exports = [
@@ -57,5 +59,7 @@ module.exports = [
   assessmentCampaign,
   exam,
   sports,
+  community,
+  game,
   // inventory,
 ];

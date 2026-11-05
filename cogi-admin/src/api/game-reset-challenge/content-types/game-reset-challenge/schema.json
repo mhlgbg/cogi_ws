@@ -1,0 +1,102 @@
+{
+  "kind": "collectionType",
+  "collectionName": "game_reset_challenges",
+  "info": {
+    "singularName": "game-reset-challenge",
+    "pluralName": "game-reset-challenges",
+    "displayName": "Game Reset Challenge",
+    "description": "One-time confirmation challenge for destructive game reset operations."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "game": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::game.game",
+      "required": true
+    },
+    "actor": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": true
+    },
+    "purpose": {
+      "type": "enumeration",
+      "enum": [
+        "reset"
+      ],
+      "default": "reset",
+      "required": true
+    },
+    "nonce": {
+      "type": "string",
+      "required": true,
+      "maxLength": 100
+    },
+    "leftOperand": {
+      "type": "integer",
+      "required": true,
+      "min": 10,
+      "max": 99
+    },
+    "rightOperand": {
+      "type": "integer",
+      "required": true,
+      "min": 10,
+      "max": 99
+    },
+    "expectedProduct": {
+      "type": "integer",
+      "required": true,
+      "private": true
+    },
+    "gameRunVersion": {
+      "type": "integer",
+      "required": true,
+      "min": 1
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "used",
+        "expired",
+        "failed"
+      ],
+      "default": "active",
+      "required": true
+    },
+    "attemptCount": {
+      "type": "integer",
+      "default": 0,
+      "min": 0,
+      "required": true
+    },
+    "maxAttempts": {
+      "type": "integer",
+      "default": 5,
+      "min": 1,
+      "required": true
+    },
+    "expiresAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "usedAt": {
+      "type": "datetime"
+    },
+    "lastAttemptAt": {
+      "type": "datetime"
+    }
+  }
+}

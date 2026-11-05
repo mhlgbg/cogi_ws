@@ -1,5 +1,8 @@
 import { resolveCurrentTenantId } from '../../../utils/tenant-scope';
 import {
+	claimMyExistingSportsProfile,
+	createMySportsProfile,
+	createMyAchievementSubmission,
 	getMyAchievement,
 	getMyAchievementSubmission,
 	getMyClubMembership,
@@ -82,12 +85,34 @@ export default {
 		}
 	},
 
+	async createProfile(ctx: any) {
+		const authUser = await requireAuthenticatedUser(ctx);
+		if (!authUser?.id) return;
+		try {
+			const tenantId = resolveCurrentTenantId(ctx);
+			ctx.body = { success: true, data: await createMySportsProfile(tenantId, authUser.id, extractPayload(ctx)) };
+		} catch (error) {
+			return handleSportsMeError(ctx, error);
+		}
+	},
+
 	async updateProfile(ctx: any) {
 		const authUser = await requireAuthenticatedUser(ctx);
 		if (!authUser?.id) return;
 		try {
 			const tenantId = resolveCurrentTenantId(ctx);
 			ctx.body = { success: true, data: await updateMySportsProfile(tenantId, authUser.id, extractPayload(ctx)) };
+		} catch (error) {
+			return handleSportsMeError(ctx, error);
+		}
+	},
+
+	async linkExistingProfile(ctx: any) {
+		const authUser = await requireAuthenticatedUser(ctx);
+		if (!authUser?.id) return;
+		try {
+			const tenantId = resolveCurrentTenantId(ctx);
+			ctx.body = { success: true, data: await claimMyExistingSportsProfile(tenantId, authUser.id, extractPayload(ctx), authUser) };
 		} catch (error) {
 			return handleSportsMeError(ctx, error);
 		}
@@ -169,6 +194,17 @@ export default {
 			const tenantId = resolveCurrentTenantId(ctx);
 			const data = await listMyAchievementSubmissions(tenantId, authUser.id, ctx.query || {});
 			ctx.body = { data: data.rows };
+		} catch (error) {
+			return handleSportsMeError(ctx, error);
+		}
+	},
+
+	async createAchievementSubmission(ctx: any) {
+		const authUser = await requireAuthenticatedUser(ctx);
+		if (!authUser?.id) return;
+		try {
+			const tenantId = resolveCurrentTenantId(ctx);
+			ctx.body = { success: true, data: await createMyAchievementSubmission(tenantId, authUser.id, extractPayload(ctx), authUser) };
 		} catch (error) {
 			return handleSportsMeError(ctx, error);
 		}

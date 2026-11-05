@@ -1,0 +1,42 @@
+{
+  "kind": "collectionType",
+  "collectionName": "curriculum_sections",
+  "info": {
+    "singularName": "curriculum-section",
+    "pluralName": "curriculum-sections",
+    "displayName": "Curriculum Section",
+    "description": "Structured section and subsection organization for a source document."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "sourceDocument": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::curriculum-source-document.curriculum-source-document",
+      "required": true
+    },
+    "parent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::curriculum-section.curriculum-section"
+    },
+    "sectionType": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "body": {
+      "type": "richtext"
+    },
+    "sortOrder": {
+      "type": "integer",
+      "default": 0,
+      "required": true
+    }
+  }
+}

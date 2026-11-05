@@ -4,6 +4,7 @@ import { errors } from '@strapi/utils';
 
 import { enqueueMail } from '../../../services/mail-queue';
 import { getBaseUrl } from '../../../utils/tenant-base-url';
+import { isMainDomainHost } from '../../../utils/main-domain';
 import { toText, whereByParam } from '../../../utils/tenant-scope';
 import {
   buildActivationLink,
@@ -27,6 +28,7 @@ const ACTIVATION_TOKEN_UID = 'api::activation-token.activation-token';
 const NOTIFICATION_SERVICE_UID = 'api::notification.notification';
 const NOTIFICATION_TEMPLATE_SERVICE_UID = 'api::notification-template.notification-template';
 const MAIL_LOG_UID = 'api::mail-log.mail-log';
+const TENANT_DOMAIN_UID = 'api::tenant-domain.tenant-domain';
 
 const REGISTRATION_VERIFICATION_TEMPLATE_CODE = 'registration_campaign_verification';
 const REGISTRATION_COMPLETION_TEMPLATE_CODE = 'campaign_registration_completed';
@@ -206,6 +208,201 @@ function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
+function normalizeHost(value: unknown): string {
+  const text = normalizeText(value).toLowerCase();
+  if (!text) return '';
+
+  const withoutProtocol = text.replace(/^https?:\/\//, '');
+  const firstHost = withoutProtocol.split('/')[0]?.split(',')[0]?.trim() || '';
+  if (!firstHost) return '';
+
+  if (firstHost.startsWith('[')) {
+    const endBracketIndex = firstHost.indexOf(']');
+    return endBracketIndex > 0 ? firstHost.slice(1, endBracketIndex) : firstHost;
+  }
+
+  const colonIndex = firstHost.indexOf(':');
+  return colonIndex > -1 ? firstHost.slice(0, colonIndex) : firstHost;
+}
+
+function normalizeAbsoluteOrigin(value: unknown): string | null {
+  const text = normalizeText(value);
+  if (!text) return null;
+
+  try {
+    const parsed = new URL(text);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return trimTrailingSlash(`${parsed.protocol}//${parsed.host}`).toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function readRequestOrigin(ctx: any): string {
+  return normalizeText(ctx?.request?.header?.origin || ctx?.request?.headers?.origin || '');
+}
+
+function readRequestReferer(ctx: any): string {
+  const referer = normalizeText(ctx?.request?.header?.referer || ctx?.request?.headers?.referer || '');
+  if (!referer) return '';
+
+  try {
+    const parsed = new URL(referer);
+    return trimTrailingSlash(`${parsed.protocol}//${parsed.host}`);
+  } catch {
+    return '';
+  }
+}
+
+function readExplicitFrontendOrigin(ctx: any): string {
+  return normalizeText(ctx?.request?.header?.['x-frontend-origin'] || ctx?.request?.headers?.['x-frontend-origin'] || '');
+}
+
+function readForwardedOrigin(ctx: any): string {
+  const forwardedHost = ctx?.request?.headers?.['x-forwarded-host'];
+  const forwardedProto = ctx?.request?.headers?.['x-forwarded-proto'];
+  const host = Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost;
+  const proto = Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto;
+  const normalizedHost = normalizeText(host);
+  const normalizedProto = normalizeText(proto).toLowerCase();
+  if (!normalizedHost) return '';
+
+  const protocol = normalizedProto === 'http' || normalizedProto === 'https'
+    ? normalizedProto
+    : normalizeHost(normalizedHost).startsWith('localhost') || normalizeHost(normalizedHost).startsWith('127.0.0.1')
+      ? 'http'
+      : 'https';
+
+  return `${protocol}://${normalizedHost}`;
+}
+
+function getRegistrationMetadata(registration: any): Record<string, unknown> {
+  return registration?.metadata && typeof registration.metadata === 'object' && !Array.isArray(registration.metadata)
+    ? registration.metadata as Record<string, unknown>
+    : {};
+}
+
+async function listActiveTenantDomains(tenantId: number | string): Promise<Array<{ domain: string; isPrimary: boolean }>> {
+  const normalizedTenantId = Number(tenantId || 0);
+  if (!Number.isInteger(normalizedTenantId) || normalizedTenantId <= 0) return [];
+
+  const rows = await strapi.db.query(TENANT_DOMAIN_UID).findMany({
+    where: {
+      tenant: normalizedTenantId,
+      tenantDomainStatus: 'active',
+    },
+    select: ['domain', 'isPrimary'],
+    orderBy: [{ isPrimary: 'desc' }, { id: 'asc' }],
+  });
+
+  return Array.isArray(rows)
+    ? rows
+        .map((row: any) => ({
+          domain: normalizeHost(row?.domain),
+          isPrimary: row?.isPrimary === true,
+        }))
+        .filter((row) => Boolean(row.domain))
+    : [];
+}
+
+async function isTrustedTenantFrontendOrigin(frontendOrigin: unknown, tenantId: number | string): Promise<boolean> {
+  const normalizedOrigin = normalizeAbsoluteOrigin(frontendOrigin);
+  if (!normalizedOrigin) return false;
+
+  const host = normalizeHost(normalizedOrigin);
+  if (!host) return false;
+
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return process.env.NODE_ENV !== 'production';
+  }
+
+  if (isMainDomainHost(host)) {
+    return true;
+  }
+
+  const domains = await listActiveTenantDomains(tenantId);
+  return domains.some((item) => item.domain === host);
+}
+
+async function resolveCanonicalTenantFrontendOrigin(tenantId: number | string): Promise<string | null> {
+  const domains = await listActiveTenantDomains(tenantId);
+  const primaryDomain = domains.find((item) => item.isPrimary)?.domain || domains[0]?.domain || '';
+  if (primaryDomain) {
+    return `https://${primaryDomain}`;
+  }
+
+  return null;
+}
+
+async function resolveTrustedFrontendOriginFromRequest(ctx: any, tenantId: number | string): Promise<string | null> {
+  const candidates = [
+    readExplicitFrontendOrigin(ctx),
+    ctx?.state?.requestOrigin,
+    readRequestOrigin(ctx),
+    readRequestReferer(ctx),
+    readForwardedOrigin(ctx),
+  ];
+
+  for (const candidate of candidates) {
+    const normalizedOrigin = normalizeAbsoluteOrigin(candidate);
+    if (!normalizedOrigin) continue;
+    if (await isTrustedTenantFrontendOrigin(normalizedOrigin, tenantId)) {
+      return normalizedOrigin;
+    }
+  }
+
+  return null;
+}
+
+async function resolveRegistrationFrontendOrigin(
+  ctx: any,
+  tenantId: number | string,
+  registration?: any,
+): Promise<string> {
+  const metadata = getRegistrationMetadata(registration);
+  const storedOrigin = normalizeAbsoluteOrigin(metadata.registrationOrigin || '');
+  if (storedOrigin && await isTrustedTenantFrontendOrigin(storedOrigin, tenantId)) {
+    return storedOrigin;
+  }
+
+  const requestOrigin = await resolveTrustedFrontendOriginFromRequest(ctx, tenantId);
+  if (requestOrigin) {
+    return requestOrigin;
+  }
+
+  const canonicalOrigin = await resolveCanonicalTenantFrontendOrigin(tenantId);
+  if (canonicalOrigin) {
+    return canonicalOrigin;
+  }
+
+  return trimTrailingSlash(await getBaseUrl(ctx, { tenantId }));
+}
+
+async function persistRegistrationOriginSnapshot(registrationId: number, registration: any, tenantId: number | string, ctx: any) {
+  const frontendOrigin = await resolveRegistrationFrontendOrigin(ctx, tenantId, registration);
+  const metadata = getRegistrationMetadata(registration);
+  if (normalizeAbsoluteOrigin(metadata.registrationOrigin || '') === frontendOrigin) {
+    return frontendOrigin;
+  }
+
+  await strapi.db.query(CAMPAIGN_REGISTRATION_UID).update({
+    where: { id: registrationId },
+    data: {
+      metadata: buildSafeMetadata(metadata, {
+        registrationOrigin: frontendOrigin,
+      }),
+    },
+  });
+
+  if (registration && typeof registration === 'object') {
+    registration.metadata = buildSafeMetadata(metadata, {
+      registrationOrigin: frontendOrigin,
+    });
+  }
+
+  return frontendOrigin;
+}
+
 function getSigningSecret(): string {
   const appKeys = normalizeText(process.env.APP_KEYS);
   if (appKeys) {
@@ -263,9 +460,20 @@ function buildTenantPath(tenantCode: string, path: string) {
   return `/t/${encodeURIComponent(normalizedTenantCode)}${normalizedPath}`;
 }
 
-async function buildFrontendPublicUrl(ctx: any, tenantId: number | string, tenantCode: string, path: string) {
-  const baseUrl = trimTrailingSlash(await getBaseUrl(ctx, { tenantId }));
-  return `${baseUrl}${buildTenantPath(tenantCode, path)}`;
+function shouldPrefixTenantPath(frontendOrigin: string, tenantCode: string): boolean {
+  const host = normalizeHost(frontendOrigin);
+  if (!tenantCode) return false;
+  if (!host) return true;
+  if (host === 'localhost' || host === '127.0.0.1') return true;
+  return isMainDomainHost(host);
+}
+
+async function buildFrontendPublicUrl(ctx: any, tenantId: number | string, tenantCode: string, path: string, registration?: any) {
+  const baseUrl = trimTrailingSlash(await resolveRegistrationFrontendOrigin(ctx, tenantId, registration));
+  const normalizedPath = shouldPrefixTenantPath(baseUrl, tenantCode)
+    ? buildTenantPath(tenantCode, path)
+    : (path.startsWith('/') ? path : `/${path}`);
+  return `${baseUrl}${normalizedPath}`;
 }
 
 function buildPublicAccessToken(registration: any, campaign: any) {
@@ -295,12 +503,13 @@ function buildCompletionToken(registration: any, campaign: any) {
   });
 }
 
-async function buildVerificationLink(ctx: any, token: string, campaign: any): Promise<string> {
+async function buildVerificationLink(ctx: any, token: string, campaign: any, registration?: any): Promise<string> {
   return buildFrontendPublicUrl(
     ctx,
     Number(campaign?.tenant?.id || campaign?.tenant || 0),
     normalizeText(campaign?.tenant?.code),
     `/join/verify?token=${encodeURIComponent(token)}`,
+    registration,
   );
 }
 
@@ -1030,17 +1239,17 @@ function buildCampaignSupportEmail(campaign: any) {
     || 'support@example.com';
 }
 
-async function buildFeatureUrl(ctx: any, campaign: any) {
+async function buildFeatureUrl(ctx: any, campaign: any, registration?: any) {
   const tenantId = Number(campaign?.tenant?.id || campaign?.tenant || 0);
   const tenantCode = normalizeText(campaign?.tenant?.code);
   const redirectPath = assertInternalRedirectPath(buildRedirectPathForTargetFeature(campaign));
-  return buildFrontendPublicUrl(ctx, tenantId, tenantCode, redirectPath);
+  return buildFrontendPublicUrl(ctx, tenantId, tenantCode, redirectPath, registration);
 }
 
-async function buildLoginUrl(ctx: any, campaign: any) {
+async function buildLoginUrl(ctx: any, campaign: any, registration?: any) {
   const tenantId = Number(campaign?.tenant?.id || campaign?.tenant || 0);
   const tenantCode = normalizeText(campaign?.tenant?.code);
-  const baseUrl = await buildFrontendPublicUrl(ctx, tenantId, tenantCode, '/login');
+  const baseUrl = await buildFrontendPublicUrl(ctx, tenantId, tenantCode, '/login', registration);
   const redirectPath = assertInternalRedirectPath(buildRedirectPathForTargetFeature(campaign));
   const searchParams = new URLSearchParams();
   searchParams.set('redirect', buildTenantPath(tenantCode, redirectPath));
@@ -1499,8 +1708,8 @@ async function buildCompletionEmailPayload(ctx: any, campaign: any, registration
     campaignName: normalizeText(campaign?.name) || 'campaign',
     tenantName: normalizeText(campaign?.tenant?.name) || normalizeText(campaign?.tenant?.shortName) || 'COGI',
     featureName: normalizeText(campaign?.targetFeature) || 'feature',
-    featureUrl: await buildFeatureUrl(ctx, campaign),
-    loginUrl: await buildLoginUrl(ctx, campaign),
+    featureUrl: await buildFeatureUrl(ctx, campaign, registration),
+    loginUrl: await buildLoginUrl(ctx, campaign, registration),
     supportEmail: buildCampaignSupportEmail(campaign),
   };
 }
@@ -1527,7 +1736,7 @@ async function sendRejectionEmail(ctx: any, campaign: any, registration: any, re
 }
 
 async function sendVerificationEmail(ctx: any, campaign: any, registration: any, rawToken: string) {
-  const verificationLink = await buildVerificationLink(ctx, rawToken, campaign);
+  const verificationLink = await buildVerificationLink(ctx, rawToken, campaign, registration);
   const verificationExpiresAt = formatNotificationDateTime(registration?.verificationExpiresAt);
   return sendCampaignRegistrationNotification({
     type: 'verification',
@@ -1571,6 +1780,8 @@ async function refreshVerificationState(ctx: any, campaign: any, registration: a
   const now = new Date();
   const verificationExpiresAt = new Date(now.getTime() + verificationExpireMinutes * 60 * 1000);
   const sendCount = Number(registration?.verificationSendCount || 0) + 1;
+  const tenantId = Number(campaign?.tenant?.id || campaign?.tenant || 0);
+  const registrationOrigin = await persistRegistrationOriginSnapshot(Number(registration.id), registration, tenantId, ctx);
 
   await strapi.db.query(CAMPAIGN_REGISTRATION_UID).update({
     where: { id: registration.id },
@@ -1582,6 +1793,9 @@ async function refreshVerificationState(ctx: any, campaign: any, registration: a
       verificationSendCount: sendCount,
       status: 'pending_verification',
       emailChangedAt: null,
+      metadata: buildSafeMetadata(getRegistrationMetadata(registration), {
+        registrationOrigin,
+      }),
     },
   });
 
@@ -2144,6 +2358,8 @@ export async function registerToCampaign(ctx: any, tenantId: number | string, ca
   }
 
   const now = new Date();
+  const resolvedTenantId = Number(campaign?.tenant?.id || campaign?.tenant || 0);
+  const requestedRegistrationOrigin = await resolveTrustedFrontendOriginFromRequest(ctx, resolvedTenantId);
   const baseData: Record<string, unknown> = {
     tenant: Number(campaign.tenant?.id || campaign.tenant || 0),
     campaign: Number(campaign.id),
@@ -2158,6 +2374,7 @@ export async function registerToCampaign(ctx: any, tenantId: number | string, ca
     metadata: buildSafeMetadata(latestRegistration?.metadata, {
       targetFeature: normalizeText(campaign.targetFeature),
       campaignCode: normalizeCode(campaign.code),
+      ...(requestedRegistrationOrigin ? { registrationOrigin: requestedRegistrationOrigin } : {}),
     }),
   };
 
@@ -2536,7 +2753,8 @@ export async function verifyRegistrationEmail(ctx: any, token: string) {
       ctx,
       verifiedRegistration?.campaign || campaign,
       'success',
-      'Email verified successfully. Your registration is waiting for approval.'
+      'Email verified successfully. Your registration is waiting for approval.',
+      verifiedRegistration,
     );
 
     return {
@@ -2561,7 +2779,13 @@ export async function verifyRegistrationEmail(ctx: any, token: string) {
         message: 'Bạn đã tham gia chiến dịch thành công.',
         registration: buildRegistrationSummary(result.registration),
         redirectPath: result.redirectPath,
-        redirectUrl: await buildVerificationRedirectUrl(ctx, verifiedRegistration?.campaign || campaign, 'success', campaign.successMessage || 'Bạn đã tham gia chiến dịch thành công.'),
+        redirectUrl: await buildVerificationRedirectUrl(
+          ctx,
+          verifiedRegistration?.campaign || campaign,
+          'success',
+          campaign.successMessage || 'Bạn đã tham gia chiến dịch thành công.',
+          verifiedRegistration,
+        ),
       };
     } catch (error) {
       const latestRegistration = await findRegistrationById(Number(verifiedRegistration.id), Number(campaign?.tenant?.id || campaign?.tenant || 0));
@@ -3077,11 +3301,18 @@ export function handleRegistrationCampaignError(ctx: any, error: unknown) {
   return ctx.internalServerError('Failed to process registration campaign request');
 }
 
-export async function buildVerificationRedirectUrl(ctx: any, campaign: any, status: 'success' | 'error', message: string) {
+export async function buildVerificationRedirectUrl(
+  ctx: any,
+  campaign: any,
+  status: 'success' | 'error',
+  message: string,
+  registration?: any,
+) {
   const redirectPath = normalizePath(campaign?.redirectPath);
   if (!redirectPath) return null;
 
-  const baseUrl = await getBaseUrl(ctx, { tenantId: Number(campaign?.tenant?.id || campaign?.tenant || 0) || null });
+  const tenantId = Number(campaign?.tenant?.id || campaign?.tenant || 0) || null;
+  const baseUrl = await resolveRegistrationFrontendOrigin(ctx, tenantId, registration);
   const url = new URL(redirectPath, `${baseUrl}/`);
   url.searchParams.set('verificationStatus', status);
   url.searchParams.set('message', message);

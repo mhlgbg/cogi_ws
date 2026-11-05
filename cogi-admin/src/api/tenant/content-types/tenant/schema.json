@@ -223,6 +223,42 @@
       "target": "api::public-page.public-page",
       "mappedBy": "tenant"
     },
+    "communityConfigs": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::community-config.community-config",
+      "mappedBy": "tenant"
+    },
+    "communityGroups": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::community-group.community-group",
+      "mappedBy": "tenant"
+    },
+    "communityGroupMembers": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::community-group-member.community-group-member",
+      "mappedBy": "tenant"
+    },
+    "communityPosts": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::community-post.community-post",
+      "mappedBy": "tenant"
+    },
+    "communityComments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::community-comment.community-comment",
+      "mappedBy": "tenant"
+    },
+    "communityReactions": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::community-reaction.community-reaction",
+      "mappedBy": "tenant"
+    },
     "chatSessions": {
       "type": "relation",
       "relation": "oneToMany",
@@ -548,6 +584,13 @@
       "mappedBy": "tenant"
     }
     ,
+    "sportsAchievementTemplates": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::sports-achievement-template.sports-achievement-template",
+      "mappedBy": "tenant"
+    }
+    ,
     "sportsClubUserAssignments": {
       "type": "relation",
       "relation": "oneToMany",
@@ -585,10 +628,34 @@
       "target": "api::registration-campaign.registration-campaign",
       "mappedBy": "tenant"
     },
+    "photoFrameCampaigns": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::photo-frame-campaign.photo-frame-campaign",
+      "mappedBy": "tenant"
+    },
+    "generatedPhotos": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::generated-photo.generated-photo",
+      "mappedBy": "tenant"
+    },
     "campaignRegistrations": {
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::campaign-registration.campaign-registration",
+      "mappedBy": "tenant"
+    },
+    "events": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::event.event",
+      "mappedBy": "tenant"
+    },
+    "eventRegistrations": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::event-registration.event-registration",
       "mappedBy": "tenant"
     },
     "quickMessages": {

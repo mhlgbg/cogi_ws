@@ -396,6 +396,275 @@ export async function getPlatformGameTypes() {
   return Array.isArray(response?.data?.data) ? response.data.data : []
 }
 
+export async function getPlatformCurriculumCatalog() {
+  const response = await platformApi.get('/platform/curriculums/catalog')
+  return response?.data?.data || {
+    curricula: [],
+    subjects: [],
+    educationLevels: [],
+    grades: [],
+    versions: [],
+    scopes: [],
+    documents: [],
+    sections: [],
+    locations: [],
+  }
+}
+
+export async function previewCurriculumSourceImport(formData) {
+  const response = await platformApi.post('/platform/curriculum-source-import/preview', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return response?.data?.data || {
+    valid: false,
+    errors: [],
+    warnings: [],
+    sections: [],
+    sourceLocations: [],
+    summary: {
+      totalRecords: 0,
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      conflicts: 0,
+      failed: 0,
+    },
+    previewToken: '',
+  }
+}
+
+export async function confirmCurriculumSourceImport(previewToken) {
+  const response = await platformApi.post('/platform/curriculum-source-import/confirm', { previewToken })
+  return response?.data?.data || null
+}
+
+export async function getCurriculumImportBatches() {
+  const response = await platformApi.get('/platform/curriculum-source-import/batches')
+  return Array.isArray(response?.data?.data) ? response.data.data : []
+}
+
+export async function getPlatformCurriculumSubjects(params = {}) {
+  const response = await platformApi.get('/platform/curriculums/subjects', {
+    params: {
+      ...(params?.page ? { page: params.page } : {}),
+      ...(params?.pageSize ? { pageSize: params.pageSize } : {}),
+    },
+  })
+  return response?.data?.data || { data: [], meta: { pagination: { page: 1, pageSize: 50, pageCount: 1, total: 0 } } }
+}
+
+export async function createPlatformCurriculumSubject(payload) {
+  const response = await platformApi.post('/platform/curriculums/subjects', payload)
+  return response?.data?.data || null
+}
+
+export async function updatePlatformCurriculumSubject(id, payload) {
+  const response = await platformApi.put(`/platform/curriculums/subjects/${id}`, payload)
+  return response?.data?.data || null
+}
+
+export async function deletePlatformCurriculumSubject(id) {
+  const response = await platformApi.delete(`/platform/curriculums/subjects/${id}`)
+  return response?.data?.data || null
+}
+
+export async function getPlatformCurriculumEducationLevels(params = {}) {
+  const response = await platformApi.get('/platform/curriculums/education-levels', {
+    params: {
+      ...(params?.page ? { page: params.page } : {}),
+      ...(params?.pageSize ? { pageSize: params.pageSize } : {}),
+    },
+  })
+  return response?.data?.data || { data: [], meta: { pagination: { page: 1, pageSize: 50, pageCount: 1, total: 0 } } }
+}
+
+export async function createPlatformCurriculumEducationLevel(payload) {
+  const response = await platformApi.post('/platform/curriculums/education-levels', payload)
+  return response?.data?.data || null
+}
+
+export async function updatePlatformCurriculumEducationLevel(id, payload) {
+  const response = await platformApi.put(`/platform/curriculums/education-levels/${id}`, payload)
+  return response?.data?.data || null
+}
+
+export async function deletePlatformCurriculumEducationLevel(id) {
+  const response = await platformApi.delete(`/platform/curriculums/education-levels/${id}`)
+  return response?.data?.data || null
+}
+
+export async function getPlatformCurriculumGrades(params = {}) {
+  const response = await platformApi.get('/platform/curriculums/grades', {
+    params: {
+      ...(params?.page ? { page: params.page } : {}),
+      ...(params?.pageSize ? { pageSize: params.pageSize } : {}),
+    },
+  })
+  return response?.data?.data || { data: [], meta: { pagination: { page: 1, pageSize: 50, pageCount: 1, total: 0 } } }
+}
+
+export async function createPlatformCurriculumGrade(payload) {
+  const response = await platformApi.post('/platform/curriculums/grades', payload)
+  return response?.data?.data || null
+}
+
+export async function updatePlatformCurriculumGrade(id, payload) {
+  const response = await platformApi.put(`/platform/curriculums/grades/${id}`, payload)
+  return response?.data?.data || null
+}
+
+export async function deletePlatformCurriculumGrade(id) {
+  const response = await platformApi.delete(`/platform/curriculums/grades/${id}`)
+  return response?.data?.data || null
+}
+
+export async function getPlatformCurricula(params = {}) {
+  const response = await platformApi.get('/platform/curriculums', {
+    params: {
+      ...(params?.page ? { page: params.page } : {}),
+      ...(params?.pageSize ? { pageSize: params.pageSize } : {}),
+    },
+  })
+  return response?.data?.data || { data: [], meta: { pagination: { page: 1, pageSize: 50, pageCount: 1, total: 0 } } }
+}
+
+export async function createPlatformCurriculum(payload) {
+  const response = await platformApi.post('/platform/curriculums', payload)
+  return response?.data?.data || null
+}
+
+export async function updatePlatformCurriculum(id, payload) {
+  const response = await platformApi.put(`/platform/curriculums/${id}`, payload)
+  return response?.data?.data || null
+}
+
+export async function deletePlatformCurriculum(id) {
+  const response = await platformApi.delete(`/platform/curriculums/${id}`)
+  return response?.data?.data || null
+}
+
+export async function getPlatformCurriculumVersions(params = {}) {
+  const response = await platformApi.get('/platform/curriculums/versions', {
+    params: {
+      ...(params?.page ? { page: params.page } : {}),
+      ...(params?.pageSize ? { pageSize: params.pageSize } : {}),
+    },
+  })
+  return response?.data?.data || { data: [], meta: { pagination: { page: 1, pageSize: 50, pageCount: 1, total: 0 } } }
+}
+
+export async function createPlatformCurriculumVersion(payload) {
+  const response = await platformApi.post('/platform/curriculums/versions', payload)
+  return response?.data?.data || null
+}
+
+export async function updatePlatformCurriculumVersion(id, payload) {
+  const response = await platformApi.put(`/platform/curriculums/versions/${id}`, payload)
+  return response?.data?.data || null
+}
+
+export async function deletePlatformCurriculumVersion(id) {
+  const response = await platformApi.delete(`/platform/curriculums/versions/${id}`)
+  return response?.data?.data || null
+}
+
+export async function getPlatformCurriculumScopes() {
+  const response = await platformApi.get('/platform/curriculums/scopes')
+  return response?.data?.data || { data: [], meta: { pagination: { page: 1, pageSize: 50, pageCount: 1, total: 0 } } }
+}
+
+export async function createPlatformCurriculumScope(payload) {
+  const response = await platformApi.post('/platform/curriculums/scopes', payload)
+  return response?.data?.data || null
+}
+
+export async function updatePlatformCurriculumScope(id, payload) {
+  const response = await platformApi.put(`/platform/curriculums/scopes/${id}`, payload)
+  return response?.data?.data || null
+}
+
+export async function deletePlatformCurriculumScope(id) {
+  const response = await platformApi.delete(`/platform/curriculums/scopes/${id}`)
+  return response?.data?.data || null
+}
+
+export async function getPlatformCurriculumDocuments(params = {}) {
+  const response = await platformApi.get('/platform/curriculums/documents', {
+    params: {
+      ...(params?.page ? { page: params.page } : {}),
+      ...(params?.pageSize ? { pageSize: params.pageSize } : {}),
+    },
+  })
+  return response?.data?.data || { data: [], meta: { pagination: { page: 1, pageSize: 50, pageCount: 1, total: 0 } } }
+}
+
+export async function createPlatformCurriculumDocument(payload) {
+  const response = await platformApi.post('/platform/curriculums/documents', payload)
+  return response?.data?.data || null
+}
+
+export async function updatePlatformCurriculumDocument(id, payload) {
+  const response = await platformApi.put(`/platform/curriculums/documents/${id}`, payload)
+  return response?.data?.data || null
+}
+
+export async function deletePlatformCurriculumDocument(id) {
+  const response = await platformApi.delete(`/platform/curriculums/documents/${id}`)
+  return response?.data?.data || null
+}
+
+export async function getPlatformCurriculumSections(params = {}) {
+  const response = await platformApi.get('/platform/curriculums/sections', {
+    params: {
+      ...(params?.page ? { page: params.page } : {}),
+      ...(params?.pageSize ? { pageSize: params.pageSize } : {}),
+    },
+  })
+  return response?.data?.data || { data: [], meta: { pagination: { page: 1, pageSize: 50, pageCount: 1, total: 0 } } }
+}
+
+export async function createPlatformCurriculumSection(payload) {
+  const response = await platformApi.post('/platform/curriculums/sections', payload)
+  return response?.data?.data || null
+}
+
+export async function updatePlatformCurriculumSection(id, payload) {
+  const response = await platformApi.put(`/platform/curriculums/sections/${id}`, payload)
+  return response?.data?.data || null
+}
+
+export async function deletePlatformCurriculumSection(id) {
+  const response = await platformApi.delete(`/platform/curriculums/sections/${id}`)
+  return response?.data?.data || null
+}
+
+export async function getPlatformCurriculumLocations(params = {}) {
+  const response = await platformApi.get('/platform/curriculums/locations', {
+    params: {
+      ...(params?.page ? { page: params.page } : {}),
+      ...(params?.pageSize ? { pageSize: params.pageSize } : {}),
+    },
+  })
+  return response?.data?.data || { data: [], meta: { pagination: { page: 1, pageSize: 50, pageCount: 1, total: 0 } } }
+}
+
+export async function createPlatformCurriculumLocation(payload) {
+  const response = await platformApi.post('/platform/curriculums/locations', payload)
+  return response?.data?.data || null
+}
+
+export async function updatePlatformCurriculumLocation(id, payload) {
+  const response = await platformApi.put(`/platform/curriculums/locations/${id}`, payload)
+  return response?.data?.data || null
+}
+
+export async function deletePlatformCurriculumLocation(id) {
+  const response = await platformApi.delete(`/platform/curriculums/locations/${id}`)
+  return response?.data?.data || null
+}
+
 export async function getPlatformTenantGameTypes(tenantId) {
   const response = await platformApi.get(`/platform/tenants/${tenantId}/game-types`)
   return response?.data?.data || {

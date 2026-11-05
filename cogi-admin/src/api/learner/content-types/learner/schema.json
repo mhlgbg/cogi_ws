@@ -23,6 +23,12 @@
       "type": "string",
       "required": true
     },
+    "email": {
+      "type": "email"
+    },
+    "phone": {
+      "type": "string"
+    },
     "dateOfBirth": {
       "type": "date"
     },
@@ -55,6 +61,12 @@
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::enrollment.enrollment",
+      "mappedBy": "learner"
+    },
+    "classSessionAttendances": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::class-session-attendance.class-session-attendance",
       "mappedBy": "learner"
     },
     "feeItems": {

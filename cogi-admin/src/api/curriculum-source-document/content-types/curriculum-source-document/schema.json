@@ -1,0 +1,50 @@
+{
+  "kind": "collectionType",
+  "collectionName": "curriculum_source_documents",
+  "info": {
+    "singularName": "curriculum-source-document",
+    "pluralName": "curriculum-source-documents",
+    "displayName": "Curriculum Source Document",
+    "description": "Source text or policy document used for curriculum mapping."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "code": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "documentNumber": {
+      "type": "string"
+    },
+    "issuedDate": {
+      "type": "date"
+    },
+    "description": {
+      "type": "text"
+    },
+    "fileRef": {
+      "type": "string"
+    },
+    "checksum": {
+      "type": "string"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "active",
+        "archived"
+      ],
+      "default": "draft",
+      "required": true
+    }
+  }
+}

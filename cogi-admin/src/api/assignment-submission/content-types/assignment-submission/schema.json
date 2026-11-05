@@ -1,0 +1,63 @@
+{
+  "kind": "collectionType",
+  "collectionName": "assignment_submissions",
+  "info": {
+    "singularName": "assignment-submission",
+    "pluralName": "assignment-submissions",
+    "displayName": "Assignment Submission",
+    "description": "Learner submission versions for one assignment task."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "assignmentTask": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::assignment-task.assignment-task",
+      "inversedBy": "submissions",
+      "required": true
+    },
+    "learner": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::learner.learner",
+      "required": true
+    },
+    "version": {
+      "type": "integer",
+      "required": true,
+      "default": 1
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["draft", "submitted", "returned", "accepted"],
+      "default": "draft",
+      "required": true
+    },
+    "comment": {
+      "type": "text"
+    },
+    "submittedAt": {
+      "type": "datetime"
+    },
+    "createdBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    },
+    "items": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::assignment-submission-item.assignment-submission-item",
+      "mappedBy": "assignmentSubmission"
+    }
+  }
+}

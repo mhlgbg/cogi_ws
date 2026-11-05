@@ -27,6 +27,15 @@
     "content": {
       "type": "text"
     },
+    "contentType": {
+      "type": "enumeration",
+      "enum": [
+        "text",
+        "html"
+      ],
+      "default": "text",
+      "required": true
+    },
     "links": {
       "type": "json"
     },
