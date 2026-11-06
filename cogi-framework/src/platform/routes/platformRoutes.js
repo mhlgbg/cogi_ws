@@ -6,6 +6,7 @@ import TenantManager from '../pages/TenantManager.jsx'
 import PlatformFeatureManager from '../pages/PlatformFeatureManager.jsx'
 import PlatformGameTypeManager from '../pages/PlatformGameTypeManager.jsx'
 import PlatformCurriculumManager from '../pages/PlatformCurriculumManager.jsx'
+import PlatformStructuredTreeManager from '../pages/PlatformStructuredTreeManager.jsx'
 import PlatformSettingsPage from '../pages/PlatformSettingsPage.jsx'
 import PermissionDebugger from '../pages/PermissionDebugger.jsx'
 import StravaOperationsPage from '../pages/StravaOperationsPage.jsx'
@@ -49,10 +50,17 @@ export const platformNavGroups = [
       },
       {
         type: 'item',
+        name: 'Structured Tree Manager',
+        key: 'platform.structured-trees',
+        path: '/platform/structured-trees',
+        order: 5,
+      },
+      {
+        type: 'item',
         name: 'Platform Settings',
         key: 'platform.settings',
         path: '/platform/settings',
-        order: 5,
+        order: 6,
       },
       {
         type: 'item',
@@ -102,6 +110,10 @@ const platformRoutes = [
   {
     path: 'curriculums',
     element: createElement(PlatformCurriculumManager),
+  },
+  {
+    path: 'structured-trees',
+    element: createElement(PlatformStructuredTreeManager),
   },
   {
     path: 'settings',

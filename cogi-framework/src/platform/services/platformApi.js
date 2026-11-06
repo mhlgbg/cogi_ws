@@ -396,6 +396,140 @@ export async function getPlatformGameTypes() {
   return Array.isArray(response?.data?.data) ? response.data.data : []
 }
 
+export async function getStructuredTrees(params = {}) {
+  const response = await platformApi.get('/platform/structured-tree', {
+    params: {
+      ...(params?.status ? { status: params.status } : {}),
+      ...(params?.limit ? { limit: params.limit } : {}),
+      ...(params?.offset ? { offset: params.offset } : {}),
+    },
+  })
+
+  return response?.data || { data: [], pagination: { total: 0, limit: 25, offset: 0 } }
+}
+
+export async function getStructuredTreeById(treeId) {
+  const response = await platformApi.get(`/platform/structured-tree/${treeId}`)
+  return response?.data || null
+}
+
+export async function createStructuredTree(payload) {
+  const response = await platformApi.post('/platform/structured-tree', payload)
+  return response?.data?.data || null
+}
+
+export async function updateStructuredTree(treeId, payload) {
+  const response = await platformApi.put(`/platform/structured-tree/${treeId}`, payload)
+  return response?.data?.data || null
+}
+
+export async function deleteStructuredTree(treeId) {
+  const response = await platformApi.delete(`/platform/structured-tree/${treeId}`)
+  return response?.data?.data || null
+}
+
+export async function getStructuredNodeTypes(params = {}) {
+  const response = await platformApi.get('/platform/structured-node-type', {
+    params: {
+      ...(params?.status ? { status: params.status } : {}),
+      ...(params?.limit ? { limit: params.limit } : {}),
+      ...(params?.offset ? { offset: params.offset } : {}),
+    },
+  })
+
+  return response?.data || { data: [], pagination: { total: 0, limit: 25, offset: 0 } }
+}
+
+export async function getStructuredNodeTypeById(id) {
+  const response = await platformApi.get(`/platform/structured-node-type/${id}`)
+  return response?.data || null
+}
+
+export async function createStructuredNodeType(payload) {
+  const response = await platformApi.post('/platform/structured-node-type', payload)
+  return response?.data?.data || null
+}
+
+export async function updateStructuredNodeType(id, payload) {
+  const response = await platformApi.put(`/platform/structured-node-type/${id}`, payload)
+  return response?.data?.data || null
+}
+
+export async function deleteStructuredNodeType(id) {
+  const response = await platformApi.delete(`/platform/structured-node-type/${id}`)
+  return response?.data?.data || null
+}
+
+export async function getStructuredTreeNodes(treeId, params = {}) {
+  const response = await platformApi.get(`/platform/structured-tree/${treeId}/nodes`, {
+    params: {
+      ...(params?.status ? { status: params.status } : {}),
+      ...(params?.limit ? { limit: params.limit } : {}),
+      ...(params?.offset ? { offset: params.offset } : {}),
+      ...(params?.nodeTypeId ? { nodeTypeId: params.nodeTypeId } : {}),
+      ...(params?.parentId ? { parentId: params.parentId } : {}),
+    },
+  })
+
+  return response?.data || { data: [], pagination: { total: 0, limit: 50, offset: 0 } }
+}
+
+export async function getStructuredTreeHierarchy(treeId) {
+  const response = await platformApi.get(`/platform/structured-tree/${treeId}/tree-hierarchy`)
+  const payload = response?.data || {}
+  return {
+    hierarchy: Array.isArray(payload?.hierarchy) ? payload.hierarchy : [],
+    meta: payload?.meta || null,
+    orphanNodes: Array.isArray(payload?.orphanNodes) ? payload.orphanNodes : [],
+  }
+}
+
+export async function createStructuredNode(treeId, payload) {
+  const response = await platformApi.post(`/platform/structured-tree/${treeId}/node`, payload)
+  return response?.data?.data || null
+}
+
+export async function updateStructuredNode(treeId, nodeId, payload) {
+  const response = await platformApi.put(`/platform/structured-tree/${treeId}/nodes/${nodeId}`, payload)
+  return response?.data?.data || null
+}
+
+export async function deleteStructuredNode(treeId, nodeId) {
+  const response = await platformApi.delete(`/platform/structured-tree/${treeId}/nodes/${nodeId}`)
+  return response?.data?.data || null
+}
+
+export async function previewStructuredImport({ treeId, nodes }) {
+  const response = await platformApi.post('/platform/structured-import/preview', {
+    treeId,
+    nodes,
+  })
+  return response?.data || {
+    previewId: '',
+    totalNodes: 0,
+    summary: { new: 0, updated: 0, unchanged: 0, conflicts: 0, errors: [] },
+    validationErrors: [],
+  }
+}
+
+export async function confirmStructuredImport({ previewId, batchCode }) {
+  const response = await platformApi.post('/platform/structured-import/confirm', {
+    previewId,
+    batchCode,
+  })
+  return response?.data || null
+}
+
+export async function getStructuredImportBatches(params = {}) {
+  const response = await platformApi.get('/platform/structured-import/batches', {
+    params: {
+      ...(params?.limit ? { limit: params.limit } : {}),
+      ...(params?.offset ? { offset: params.offset } : {}),
+    },
+  })
+  return response?.data || { data: [], pagination: { total: 0, limit: 25, offset: 0 } }
+}
+
 export async function getPlatformCurriculumCatalog() {
   const response = await platformApi.get('/platform/curriculums/catalog')
   return response?.data?.data || {
