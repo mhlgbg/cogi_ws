@@ -1,0 +1,66 @@
+{
+  "kind": "collectionType",
+  "collectionName": "structured_import_batches",
+  "info": {
+    "singularName": "structured-import-batch",
+    "pluralName": "structured-import-batches",
+    "displayName": "Structured Import Batch",
+    "description": "Audit history for structured-tree JSON import batches."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "batchCode": {
+      "type": "string",
+      "required": true,
+      "unique": true,
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "tree": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::structured-tree.structured-tree",
+      "required": true
+    },
+    "fileHash": {
+      "type": "string"
+    },
+    "fileSize": {
+      "type": "integer"
+    },
+    "fileName": {
+      "type": "string"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "preview",
+        "confirmed",
+        "completed",
+        "failed"
+      ],
+      "default": "preview",
+      "required": true
+    },
+    "summary": {
+      "type": "text"
+    },
+    "errorLog": {
+      "type": "json"
+    },
+    "executedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "startedAt": {
+      "type": "datetime"
+    },
+    "completedAt": {
+      "type": "datetime"
+    }
+  }
+}

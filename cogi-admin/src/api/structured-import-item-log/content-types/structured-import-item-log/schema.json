@@ -1,0 +1,50 @@
+{
+  "kind": "collectionType",
+  "collectionName": "structured_import_item_logs",
+  "info": {
+    "singularName": "structured-import-item-log",
+    "pluralName": "structured-import-item-logs",
+    "displayName": "Structured Import Item Log",
+    "description": "Detailed per-node audit trail for import operations."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "batch": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::structured-import-batch.structured-import-batch",
+      "required": true
+    },
+    "node": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::structured-node.structured-node",
+      "required": true
+    },
+    "operation": {
+      "type": "enumeration",
+      "enum": [
+        "created",
+        "updated",
+        "unchanged",
+        "conflict"
+      ],
+      "required": true
+    },
+    "previousData": {
+      "type": "json"
+    },
+    "newData": {
+      "type": "json"
+    },
+    "hash": {
+      "type": "string"
+    },
+    "errorMessage": {
+      "type": "text"
+    }
+  }
+}

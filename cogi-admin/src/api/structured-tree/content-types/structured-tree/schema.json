@@ -1,0 +1,66 @@
+{
+  "kind": "collectionType",
+  "collectionName": "structured_trees",
+  "info": {
+    "singularName": "structured-tree",
+    "pluralName": "structured-trees",
+    "displayName": "Structured Tree",
+    "description": "Hierarchical content tree for flexible organizational structures."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "treeCode": {
+      "type": "string",
+      "required": true,
+      "unique": true,
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "title": {
+      "type": "string",
+      "required": true,
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "description": {
+      "type": "text"
+    },
+    "body": {
+      "type": "richtext"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "active",
+        "archived"
+      ],
+      "default": "draft",
+      "required": true
+    },
+    "nodes": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::structured-node.structured-node",
+      "mappedBy": "tree"
+    },
+    "nodeTypes": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::structured-node-type.structured-node-type"
+    },
+    "createdBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    },
+    "updatedBy": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}

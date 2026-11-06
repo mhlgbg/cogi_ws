@@ -1,0 +1,570 @@
+[
+  {
+    "keyCode": "ROOT-1",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 1,
+    "title": "Root section",
+    "body": "<p>Body</p>"
+  },
+  {
+    "keyCode": "ROOT-2",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 2,
+    "title": "Root section 2",
+    "body": "<p>Body</p>"
+  },
+  {
+    "keyCode": "ROOT",
+    "parentKeyCode": "I",
+    "nodeTypeCode": "section",
+    "sortOrder": 1,
+    "title": "CHƯƠNG TRÌNH GIÁO DỤC PHỔ THÔNG – MÔN TOÁN (2018)",
+    "body": ""
+  },
+  {
+    "keyCode": "ROOT",
+    "parentKeyCode": "II",
+    "nodeTypeCode": "section",
+    "sortOrder": 1,
+    "title": "CHƯƠNG TRÌNH GIÁO DỤC PHỔ THÔNG – MÔN TOÁN (2018)",
+    "body": ""
+  },
+  {
+    "keyCode": "ROOT",
+    "parentKeyCode": "III",
+    "nodeTypeCode": "section",
+    "sortOrder": 1,
+    "title": "CHƯƠNG TRÌNH GIÁO DỤC PHỔ THÔNG – MÔN TOÁN (2018)",
+    "body": ""
+  },
+  {
+    "keyCode": "ROOT",
+    "parentKeyCode": "IV",
+    "nodeTypeCode": "section",
+    "sortOrder": 1,
+    "title": "CHƯƠNG TRÌNH GIÁO DỤC PHỔ THÔNG – MÔN TOÁN (2018)",
+    "body": ""
+  },
+  {
+    "keyCode": "ROOT",
+    "parentKeyCode": "V",
+    "nodeTypeCode": "section",
+    "sortOrder": 1,
+    "title": "CHƯƠNG TRÌNH GIÁO DỤC PHỔ THÔNG – MÔN TOÁN (2018)",
+    "body": ""
+  },
+  {
+    "keyCode": "ROOT",
+    "parentKeyCode": "VI",
+    "nodeTypeCode": "section",
+    "sortOrder": 1,
+    "title": "CHƯƠNG TRÌNH GIÁO DỤC PHỔ THÔNG – MÔN TOÁN (2018)",
+    "body": ""
+  },
+  {
+    "keyCode": "ROOT",
+    "parentKeyCode": "VII",
+    "nodeTypeCode": "section",
+    "sortOrder": 1,
+    "title": "CHƯƠNG TRÌNH GIÁO DỤC PHỔ THÔNG – MÔN TOÁN (2018)",
+    "body": ""
+  },
+  {
+    "keyCode": "ROOT",
+    "parentKeyCode": "VIII",
+    "nodeTypeCode": "section",
+    "sortOrder": 1,
+    "title": "CHƯƠNG TRÌNH GIÁO DỤC PHỔ THÔNG – MÔN TOÁN (2018)",
+    "body": ""
+  },
+  {
+    "keyCode": "I",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 1,
+    "title": "I. ĐẶC ĐIỂM MÔN HỌC",
+    "body": ""
+  },
+  {
+    "keyCode": "II",
+    "parentKeyCode": "II-1",
+    "nodeTypeCode": "section",
+    "sortOrder": 2,
+    "title": "II. QUAN ĐIỂM XÂY DỰNG CHƯƠNG TRÌNH",
+    "body": ""
+  },
+  {
+    "keyCode": "II",
+    "parentKeyCode": "II-2",
+    "nodeTypeCode": "section",
+    "sortOrder": 2,
+    "title": "II. QUAN ĐIỂM XÂY DỰNG CHƯƠNG TRÌNH",
+    "body": ""
+  },
+  {
+    "keyCode": "II",
+    "parentKeyCode": "II-3",
+    "nodeTypeCode": "section",
+    "sortOrder": 2,
+    "title": "II. QUAN ĐIỂM XÂY DỰNG CHƯƠNG TRÌNH",
+    "body": ""
+  },
+  {
+    "keyCode": "II",
+    "parentKeyCode": "II-4",
+    "nodeTypeCode": "section",
+    "sortOrder": 2,
+    "title": "II. QUAN ĐIỂM XÂY DỰNG CHƯƠNG TRÌNH",
+    "body": ""
+  },
+  {
+    "keyCode": "III",
+    "parentKeyCode": "III-1",
+    "nodeTypeCode": "section",
+    "sortOrder": 3,
+    "title": "III. MỤC TIÊU CHƯƠNG TRÌNH",
+    "body": ""
+  },
+  {
+    "keyCode": "III",
+    "parentKeyCode": "III-2",
+    "nodeTypeCode": "section",
+    "sortOrder": 3,
+    "title": "III. MỤC TIÊU CHƯƠNG TRÌNH",
+    "body": ""
+  },
+  {
+    "keyCode": "III",
+    "parentKeyCode": "III-3",
+    "nodeTypeCode": "section",
+    "sortOrder": 3,
+    "title": "III. MỤC TIÊU CHƯƠNG TRÌNH",
+    "body": ""
+  },
+  {
+    "keyCode": "III",
+    "parentKeyCode": "III-4",
+    "nodeTypeCode": "section",
+    "sortOrder": 3,
+    "title": "III. MỤC TIÊU CHƯƠNG TRÌNH",
+    "body": ""
+  },
+  {
+    "keyCode": "IV",
+    "parentKeyCode": "IV-1",
+    "nodeTypeCode": "section",
+    "sortOrder": 4,
+    "title": "IV. YÊU CẦU CẦN ĐẠT",
+    "body": ""
+  },
+  {
+    "keyCode": "IV",
+    "parentKeyCode": "IV-2",
+    "nodeTypeCode": "section",
+    "sortOrder": 4,
+    "title": "IV. YÊU CẦU CẦN ĐẠT",
+    "body": ""
+  },
+  {
+    "keyCode": "V",
+    "parentKeyCode": "V-1",
+    "nodeTypeCode": "section",
+    "sortOrder": 5,
+    "title": "V. NỘI DUNG GIÁO DỤC",
+    "body": ""
+  },
+  {
+    "keyCode": "V",
+    "parentKeyCode": "V-2",
+    "nodeTypeCode": "section",
+    "sortOrder": 5,
+    "title": "V. NỘI DUNG GIÁO DỤC",
+    "body": ""
+  },
+  {
+    "keyCode": "V",
+    "parentKeyCode": "V-3",
+    "nodeTypeCode": "section",
+    "sortOrder": 5,
+    "title": "V. NỘI DUNG GIÁO DỤC",
+    "body": ""
+  },
+  {
+    "keyCode": "VI",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 6,
+    "title": "VI. PHƯƠNG PHÁP GIÁO DỤC",
+    "body": ""
+  },
+  {
+    "keyCode": "VII",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 7,
+    "title": "VII. ĐÁNH GIÁ KẾT QUẢ GIÁO DỤC",
+    "body": ""
+  },
+  {
+    "keyCode": "VIII",
+    "parentKeyCode": "VIII-1",
+    "nodeTypeCode": "section",
+    "sortOrder": 8,
+    "title": "VIII. GIẢI THÍCH VÀ HƯỚNG DẪN THỰC HIỆN CHƯƠNG TRÌNH",
+    "body": ""
+  },
+  {
+    "keyCode": "VIII",
+    "parentKeyCode": "VIII-2",
+    "nodeTypeCode": "section",
+    "sortOrder": 8,
+    "title": "VIII. GIẢI THÍCH VÀ HƯỚNG DẪN THỰC HIỆN CHƯƠNG TRÌNH",
+    "body": ""
+  },
+  {
+    "keyCode": "VIII",
+    "parentKeyCode": "VIII-3",
+    "nodeTypeCode": "section",
+    "sortOrder": 8,
+    "title": "VIII. GIẢI THÍCH VÀ HƯỚNG DẪN THỰC HIỆN CHƯƠNG TRÌNH",
+    "body": ""
+  },
+  {
+    "keyCode": "II-1",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 1,
+    "title": "1. Bảo đảm tính tinh giản, thiết thực, hiện đại",
+    "body": ""
+  },
+  {
+    "keyCode": "II-2",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 2,
+    "title": "2. Bảo đảm tính thống nhất, sự nhất quán và phát triển liên tục",
+    "body": ""
+  },
+  {
+    "keyCode": "II-3",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 3,
+    "title": "3. Bảo đảm tính tích hợp và phân hoá",
+    "body": ""
+  },
+  {
+    "keyCode": "II-4",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 4,
+    "title": "4. Bảo đảm tính mở",
+    "body": ""
+  },
+  {
+    "keyCode": "III-1",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 1,
+    "title": "1. Mục tiêu chung",
+    "body": ""
+  },
+  {
+    "keyCode": "III-2",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 2,
+    "title": "2. Mục tiêu cấp tiểu học",
+    "body": ""
+  },
+  {
+    "keyCode": "III-3",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 3,
+    "title": "3. Mục tiêu cấp trung học cơ sở",
+    "body": ""
+  },
+  {
+    "keyCode": "III-4",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 4,
+    "title": "4. Mục tiêu cấp trung học phổ thông",
+    "body": ""
+  },
+  {
+    "keyCode": "IV-1",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 1,
+    "title": "1. Yêu cầu cần đạt về phẩm chất chủ yếu và năng lực chung",
+    "body": ""
+  },
+  {
+    "keyCode": "IV-2",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 2,
+    "title": "2. Yêu cầu cần đạt về năng lực đặc thù",
+    "body": ""
+  },
+  {
+    "keyCode": "V-1",
+    "parentKeyCode": "V-1-A",
+    "nodeTypeCode": "section",
+    "sortOrder": 1,
+    "title": "1. Nội dung khái quát",
+    "body": ""
+  },
+  {
+    "keyCode": "V-1",
+    "parentKeyCode": "V-1-B",
+    "nodeTypeCode": "section",
+    "sortOrder": 1,
+    "title": "1. Nội dung khái quát",
+    "body": ""
+  },
+  {
+    "keyCode": "V-2",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 2,
+    "title": "2. Phân bố các mạch nội dung ở các lớp",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3",
+    "parentKeyCode": "V-3-G01",
+    "nodeTypeCode": "section",
+    "sortOrder": 3,
+    "title": "3. Nội dung cụ thể và yêu cầu cần đạt ở các lớp",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3",
+    "parentKeyCode": "V-3-G02",
+    "nodeTypeCode": "section",
+    "sortOrder": 3,
+    "title": "3. Nội dung cụ thể và yêu cầu cần đạt ở các lớp",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3",
+    "parentKeyCode": "V-3-G03",
+    "nodeTypeCode": "section",
+    "sortOrder": 3,
+    "title": "3. Nội dung cụ thể và yêu cầu cần đạt ở các lớp",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3",
+    "parentKeyCode": "V-3-G04",
+    "nodeTypeCode": "section",
+    "sortOrder": 3,
+    "title": "3. Nội dung cụ thể và yêu cầu cần đạt ở các lớp",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3",
+    "parentKeyCode": "V-3-G05",
+    "nodeTypeCode": "section",
+    "sortOrder": 3,
+    "title": "3. Nội dung cụ thể và yêu cầu cần đạt ở các lớp",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3",
+    "parentKeyCode": "V-3-G06",
+    "nodeTypeCode": "section",
+    "sortOrder": 3,
+    "title": "3. Nội dung cụ thể và yêu cầu cần đạt ở các lớp",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3",
+    "parentKeyCode": "V-3-G07",
+    "nodeTypeCode": "section",
+    "sortOrder": 3,
+    "title": "3. Nội dung cụ thể và yêu cầu cần đạt ở các lớp",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3",
+    "parentKeyCode": "V-3-G08",
+    "nodeTypeCode": "section",
+    "sortOrder": 3,
+    "title": "3. Nội dung cụ thể và yêu cầu cần đạt ở các lớp",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3",
+    "parentKeyCode": "V-3-G09",
+    "nodeTypeCode": "section",
+    "sortOrder": 3,
+    "title": "3. Nội dung cụ thể và yêu cầu cần đạt ở các lớp",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3",
+    "parentKeyCode": "V-3-G10",
+    "nodeTypeCode": "section",
+    "sortOrder": 3,
+    "title": "3. Nội dung cụ thể và yêu cầu cần đạt ở các lớp",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3",
+    "parentKeyCode": "V-3-G11",
+    "nodeTypeCode": "section",
+    "sortOrder": 3,
+    "title": "3. Nội dung cụ thể và yêu cầu cần đạt ở các lớp",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3",
+    "parentKeyCode": "V-3-G12",
+    "nodeTypeCode": "section",
+    "sortOrder": 3,
+    "title": "3. Nội dung cụ thể và yêu cầu cần đạt ở các lớp",
+    "body": ""
+  },
+  {
+    "keyCode": "VIII-1",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 1,
+    "title": "1. Giải thích thuật ngữ",
+    "body": ""
+  },
+  {
+    "keyCode": "VIII-2",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 2,
+    "title": "2. Thời lượng thực hiện chương trình",
+    "body": ""
+  },
+  {
+    "keyCode": "VIII-3",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 3,
+    "title": "3. Thiết bị dạy học",
+    "body": ""
+  },
+  {
+    "keyCode": "V-1-A",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 1,
+    "title": "a) Nội dung cốt lõi",
+    "body": ""
+  },
+  {
+    "keyCode": "V-1-B",
+    "parentKeyCode": "",
+    "nodeTypeCode": "section",
+    "sortOrder": 2,
+    "title": "b) Chuyên đề học tập",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3-G01",
+    "parentKeyCode": "",
+    "nodeTypeCode": "grade",
+    "sortOrder": 1,
+    "title": "LỚP 1",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3-G02",
+    "parentKeyCode": "",
+    "nodeTypeCode": "grade",
+    "sortOrder": 2,
+    "title": "LỚP 2",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3-G03",
+    "parentKeyCode": "",
+    "nodeTypeCode": "grade",
+    "sortOrder": 3,
+    "title": "LỚP 3",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3-G04",
+    "parentKeyCode": "",
+    "nodeTypeCode": "grade",
+    "sortOrder": 4,
+    "title": "LỚP 4",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3-G05",
+    "parentKeyCode": "",
+    "nodeTypeCode": "grade",
+    "sortOrder": 5,
+    "title": "LỚP 5",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3-G06",
+    "parentKeyCode": "",
+    "nodeTypeCode": "grade",
+    "sortOrder": 6,
+    "title": "LỚP 6",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3-G07",
+    "parentKeyCode": "",
+    "nodeTypeCode": "grade",
+    "sortOrder": 7,
+    "title": "LỚP 7",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3-G08",
+    "parentKeyCode": "",
+    "nodeTypeCode": "grade",
+    "sortOrder": 8,
+    "title": "LỚP 8",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3-G09",
+    "parentKeyCode": "",
+    "nodeTypeCode": "grade",
+    "sortOrder": 9,
+    "title": "LỚP 9",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3-G10",
+    "parentKeyCode": "",
+    "nodeTypeCode": "grade",
+    "sortOrder": 10,
+    "title": "LỚP 10",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3-G11",
+    "parentKeyCode": "",
+    "nodeTypeCode": "grade",
+    "sortOrder": 11,
+    "title": "LỚP 11",
+    "body": ""
+  },
+  {
+    "keyCode": "V-3-G12",
+    "parentKeyCode": "",
+    "nodeTypeCode": "grade",
+    "sortOrder": 12,
+    "title": "LỚP 12",
+    "body": ""
+  }
+]

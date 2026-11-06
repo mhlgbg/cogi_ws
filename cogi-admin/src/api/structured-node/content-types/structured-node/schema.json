@@ -1,0 +1,78 @@
+{
+  "kind": "collectionType",
+  "collectionName": "structured_nodes",
+  "info": {
+    "singularName": "structured-node",
+    "pluralName": "structured-nodes",
+    "displayName": "Structured Node",
+    "description": "Node within a hierarchical structured tree."
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "tree": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::structured-tree.structured-tree",
+      "required": true,
+      "inversedBy": "nodes"
+    },
+    "keyCode": {
+      "type": "string",
+      "required": true,
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "nodeType": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::structured-node-type.structured-node-type",
+      "required": true,
+      "inversedBy": "nodes"
+    },
+    "parent": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::structured-node.structured-node"
+    },
+    "children": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::structured-node.structured-node",
+      "mappedBy": "parent"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 0,
+      "maxLength": 500
+    },
+    "body": {
+      "type": "richtext"
+    },
+    "requirement": {
+      "type": "json"
+    },
+    "criterion": {
+      "type": "json"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "draft",
+        "active",
+        "archived"
+      ],
+      "default": "draft",
+      "required": true
+    },
+    "sortOrder": {
+      "type": "integer",
+      "default": 0
+    },
+    "metadata": {
+      "type": "json"
+    }
+  }
+}
