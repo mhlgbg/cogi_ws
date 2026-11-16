@@ -15,15 +15,36 @@ export function getStimulusContentTypeLabel(value) {
 
 export function getRenderedStimulusHtml(value, contentType) {
   if (normalizeStimulusContentType(contentType) !== 'html') return ''
-  return sanitizeQuickMessageHtml(value)
+  return wrapTablesForResponsiveScroll(sanitizeQuickMessageHtml(value))
 }
 
 export function getRenderedStimulusInstructionHtml(value) {
-  return sanitizeQuickMessageHtml(value)
+  return wrapTablesForResponsiveScroll(sanitizeQuickMessageHtml(value))
 }
 
 function joinClassNames(...values) {
   return values.filter(Boolean).join(' ')
+}
+
+function wrapTablesForResponsiveScroll(html) {
+  const source = String(html || '').trim()
+  if (!source || typeof DOMParser === 'undefined') return source
+
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(source, 'text/html')
+  const tables = Array.from(doc.body.querySelectorAll('table'))
+  if (tables.length === 0) return source
+
+  tables.forEach((table) => {
+    const parent = table.parentElement
+    if (parent?.classList?.contains('cogi-question-table-scroll')) return
+    const wrapper = doc.createElement('div')
+    wrapper.className = 'cogi-question-table-scroll'
+    parent?.insertBefore(wrapper, table)
+    wrapper.appendChild(table)
+  })
+
+  return doc.body.innerHTML
 }
 
 export function StimulusInstruction({ value, className = '' }) {
@@ -32,7 +53,7 @@ export function StimulusInstruction({ value, className = '' }) {
 
   return (
     <div
-      className={joinClassNames(className, 'quick-message-html-content')}
+      className={joinClassNames(className, 'quick-message-html-content', 'cogi-question-content')}
       dangerouslySetInnerHTML={{ __html: renderedHtml }}
     />
   )
@@ -47,7 +68,7 @@ export default function StimulusContent({ value, contentType, className = '' }) 
 
     return (
       <div
-        className={joinClassNames(className, 'quick-message-html-content')}
+        className={joinClassNames(className, 'quick-message-html-content', 'cogi-question-content')}
         dangerouslySetInnerHTML={{ __html: renderedHtml }}
       />
     )
@@ -56,5 +77,5 @@ export default function StimulusContent({ value, contentType, className = '' }) 
   const text = String(value || '').trim()
   if (!text) return null
 
-  return <div className={joinClassNames(className, 'quick-message-text-content')} style={{ whiteSpace: 'pre-wrap' }}>{text}</div>
+  return <div className={joinClassNames(className, 'quick-message-text-content', 'cogi-question-content')} style={{ whiteSpace: 'pre-wrap' }}>{text}</div>
 }

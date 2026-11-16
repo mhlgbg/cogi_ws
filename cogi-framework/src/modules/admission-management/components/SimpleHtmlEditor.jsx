@@ -80,6 +80,7 @@ export default function SimpleHtmlEditor({
   showLinkControls = true,
   showImageControls = true,
   showColorControls = true,
+  showTableControls = false,
   allowHtmlMode = true,
 }) {
   const editorRef = useRef(null)
@@ -187,6 +188,101 @@ export default function SimpleHtmlEditor({
     emitChange(fromEditorHtml(editorRef.current?.innerHTML || '<p></p>'))
   }
 
+  function getSelectedTableCell() {
+    if (!editorRef.current) return null
+    const selection = window.getSelection?.()
+    if (!selection?.anchorNode) return null
+    let current = selection.anchorNode.nodeType === Node.ELEMENT_NODE
+      ? selection.anchorNode
+      : selection.anchorNode.parentNode
+
+    while (current && current !== editorRef.current) {
+      if (current.nodeType === Node.ELEMENT_NODE && ['TD', 'TH'].includes(current.tagName)) {
+        return current
+      }
+      current = current.parentNode
+    }
+    return null
+  }
+
+  function handleInsertTable() {
+    if (disabled || mode !== 'visual') return
+    const rows = Math.max(1, Number(window.prompt('Số hàng của bảng', '2')) || 2)
+    const cols = Math.max(1, Number(window.prompt('Số cột của bảng', '2')) || 2)
+    const headCells = Array.from({ length: cols }).map((_, index) => `<th>Tiêu đề ${index + 1}</th>`).join('')
+    const bodyRows = Array.from({ length: rows }).map(() => (
+      `<tr>${Array.from({ length: cols }).map(() => '<td>...</td>').join('')}</tr>`
+    )).join('')
+    const html = `<table style="width:100%;border-collapse:collapse;"><thead><tr>${headCells}</tr></thead><tbody>${bodyRows}</tbody></table><p></p>`
+    focusEditor()
+    document.execCommand('insertHTML', false, html)
+    emitChange(fromEditorHtml(editorRef.current?.innerHTML || '<p></p>'))
+  }
+
+  function updateTableWithMutation(mutate) {
+    if (disabled || mode !== 'visual') return
+    const cell = getSelectedTableCell()
+    if (!cell) return
+    const row = cell.closest('tr')
+    const table = cell.closest('table')
+    if (!row || !table) return
+    mutate({ cell, row, table })
+    emitChange(fromEditorHtml(editorRef.current?.innerHTML || '<p></p>'))
+  }
+
+  function handleAddRowAfter() {
+    updateTableWithMutation(({ row }) => {
+      const newRow = row.cloneNode(true)
+      for (const cellNode of Array.from(newRow.cells)) {
+        cellNode.textContent = '...'
+      }
+      row.parentNode?.insertBefore(newRow, row.nextSibling)
+    })
+  }
+
+  function handleDeleteRow() {
+    updateTableWithMutation(({ row, table }) => {
+      const bodyRows = table.querySelectorAll('tbody tr, tr')
+      if (bodyRows.length <= 1) return
+      row.remove()
+    })
+  }
+
+  function handleAddColumnAfter() {
+    updateTableWithMutation(({ cell, table }) => {
+      const cellIndex = cell.cellIndex
+      for (const row of Array.from(table.rows)) {
+        const tagName = row.parentElement?.tagName === 'THEAD' ? 'th' : 'td'
+        const nextCell = document.createElement(tagName)
+        nextCell.textContent = '...'
+        if (cellIndex >= row.cells.length - 1) row.appendChild(nextCell)
+        else row.insertBefore(nextCell, row.cells[cellIndex + 1])
+      }
+    })
+  }
+
+  function handleDeleteColumn() {
+    updateTableWithMutation(({ cell, table }) => {
+      const cellIndex = cell.cellIndex
+      if (table.rows.length > 0 && table.rows[0].cells.length <= 1) return
+      for (const row of Array.from(table.rows)) {
+        if (row.cells[cellIndex]) row.cells[cellIndex].remove()
+      }
+    })
+  }
+
+  function switchToVisualMode() {
+    if (mode === 'visual') return
+    const probe = document.createElement('div')
+    probe.innerHTML = toEditorHtml(htmlValue)
+    const roundTripped = fromEditorHtml(probe.innerHTML)
+    if (roundTripped !== htmlValue) {
+      const ok = window.confirm('Một số cấu trúc HTML có thể không được trình soạn thảo trực quan hỗ trợ đầy đủ. Bạn có muốn tiếp tục chuyển sang chế độ Soạn thảo không?')
+      if (!ok) return
+    }
+    setMode('visual')
+  }
+
   return (
     <div>
       {label ? <CFormLabel>{label}</CFormLabel> : null}
@@ -291,7 +387,7 @@ export default function SimpleHtmlEditor({
               type='button'
               color={mode === 'visual' ? 'primary' : 'secondary'}
               variant={mode === 'visual' ? undefined : 'outline'}
-              onClick={() => setMode('visual')}
+              onClick={switchToVisualMode}
             >
               Soạn thảo
             </CButton>
@@ -303,6 +399,16 @@ export default function SimpleHtmlEditor({
             >
               HTML
             </CButton>
+          </CButtonGroup>
+        ) : null}
+
+        {showTableControls ? (
+          <CButtonGroup size='sm' role='group'>
+            <CButton type='button' color='secondary' variant='outline' onClick={handleInsertTable} disabled={disabled || mode !== 'visual'}>Bảng</CButton>
+            <CButton type='button' color='secondary' variant='outline' onClick={handleAddRowAfter} disabled={disabled || mode !== 'visual'}>+ Hàng</CButton>
+            <CButton type='button' color='secondary' variant='outline' onClick={handleDeleteRow} disabled={disabled || mode !== 'visual'}>- Hàng</CButton>
+            <CButton type='button' color='secondary' variant='outline' onClick={handleAddColumnAfter} disabled={disabled || mode !== 'visual'}>+ Cột</CButton>
+            <CButton type='button' color='secondary' variant='outline' onClick={handleDeleteColumn} disabled={disabled || mode !== 'visual'}>- Cột</CButton>
           </CButtonGroup>
         ) : null}
       </div>

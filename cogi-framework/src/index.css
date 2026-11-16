@@ -109,6 +109,66 @@ body {
   background: #eef4ff;
 }
 
+.cogi-question-content {
+  max-width: 100%;
+  min-width: 0;
+  line-height: 1.6;
+}
+
+.cogi-question-content .cogi-question-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 0 1rem;
+}
+
+.cogi-question-content .cogi-question-table-scroll > :last-child {
+  margin-bottom: 0;
+}
+
+.cogi-question-content table {
+  border-collapse: collapse;
+  border-spacing: 0;
+  width: max-content !important;
+  min-width: 100% !important;
+  max-width: none;
+  table-layout: auto !important;
+  background: #fff;
+}
+
+.cogi-question-content th,
+.cogi-question-content td {
+  border: 1px solid #cbd5e1;
+  padding: 0.5rem 0.65rem;
+  vertical-align: middle;
+  text-align: left;
+  word-break: normal;
+  overflow-wrap: normal;
+  white-space: normal;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.cogi-question-content thead th,
+.cogi-question-content thead td {
+  background: #eef4ff;
+  font-weight: 600;
+}
+
+.cogi-question-content td p,
+.cogi-question-content th p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.cogi-question-content td span,
+.cogi-question-content th span {
+  line-height: inherit !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+}
+
 .notranslate {
   translate: no;
 }

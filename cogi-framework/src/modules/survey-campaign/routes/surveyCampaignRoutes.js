@@ -1,6 +1,8 @@
 import CampaignDetail from '../pages/CampaignDetail'
 import CampaignForm from '../pages/CampaignForm'
 import CampaignList from '../pages/CampaignList'
+import MyManagedCampaignDetail from '../pages/MyManagedCampaignDetail'
+import MyManagedCampaignList from '../pages/MyManagedCampaignList'
 
 const surveyCampaignRoutes = [
   {
@@ -20,6 +22,18 @@ const surveyCampaignRoutes = [
     title: 'Chi tiết chiến dịch khảo sát',
     featureKey: 'survey.campaign.manage',
     component: CampaignDetail,
+  },
+  {
+    path: '/survey/my-campaigns',
+    title: 'Chiến dịch khảo sát tôi quản lý',
+    featureKey: 'survey.campaign.management',
+    component: MyManagedCampaignList,
+  },
+  {
+    path: '/survey/my-campaigns/:id',
+    title: 'Chi tiết chiến dịch khảo sát tôi quản lý',
+    featureKey: 'survey.campaign.management',
+    component: MyManagedCampaignDetail,
   },
 ]
 

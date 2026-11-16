@@ -8,6 +8,10 @@ import {
   CCardBody,
   CCardHeader,
   CCol,
+  CDropdown,
+  CDropdownItem,
+  CDropdownMenu,
+  CDropdownToggle,
   CFormInput,
   CFormLabel,
   CFormSelect,
@@ -24,6 +28,7 @@ import AssessmentPlacementRulesTab from '../components/AssessmentPlacementRulesT
 import AssessmentSpeakingCriteriaTab from '../components/AssessmentSpeakingCriteriaTab'
 import AssessmentQuestionEditorModal from '../components/AssessmentQuestionEditorModal'
 import AssessmentQuestionPickerModal from '../components/AssessmentQuestionPickerModal'
+import AssessmentRandomQuestionModal from '../components/AssessmentRandomQuestionModal'
 import AssessmentSectionEditorModal from '../components/AssessmentSectionEditorModal'
 import AssessmentValidationSummary from '../components/AssessmentValidationSummary'
 import AssessmentVersionEditorModal from '../components/AssessmentVersionEditorModal'
@@ -34,9 +39,11 @@ import {
   createAssessmentVersion,
   deleteAssessmentSection,
   deleteAssessmentVersion,
+  executeRandomQuestions,
   getApiMessage,
   getAssessment,
   getAssessmentVersion,
+  previewRandomQuestions,
   publishAssessmentVersion,
   removeAssessmentQuestion,
   reorderAssessmentQuestions,
@@ -152,7 +159,7 @@ function VersionSummaryCard({ version, isSelected, onSelect }) {
   )
 }
 
-function SectionCard({ section, currentVersionIsDraft, savingSection = false, onEdit, onDelete, onMoveUp, onMoveDown, onSaveQuestionOrders, onAddQuestions, onEditQuestion, onRemoveQuestion, onMoveQuestionUp, onMoveQuestionDown }) {
+function SectionCard({ section, currentVersionIsDraft, savingSection = false, onEdit, onDelete, onMoveUp, onMoveDown, onSaveQuestionOrders, onAddQuestions, onAddRandomQuestions, onEditQuestion, onRemoveQuestion, onMoveQuestionUp, onMoveQuestionDown }) {
   const sourceQuestions = useMemo(() => sortByOrder(section?.assessmentQuestions), [section])
   const [orderDrafts, setOrderDrafts] = useState({})
 
@@ -197,6 +204,7 @@ function SectionCard({ section, currentVersionIsDraft, savingSection = false, on
           <CButton size='sm' color='secondary' variant='outline' onClick={onMoveDown} disabled={!currentVersionIsDraft || savingSection}>Xuống</CButton>
           <CButton size='sm' color='primary' variant='outline' onClick={() => onSaveQuestionOrders(buildOrderItems())} disabled={!currentVersionIsDraft || !hasOrderChanges || savingSection}>Lưu thứ tự</CButton>
           <CButton size='sm' color='info' variant='outline' onClick={onAddQuestions} disabled={!currentVersionIsDraft || savingSection}>+ Câu hỏi</CButton>
+          <CButton size='sm' color='warning' variant='outline' onClick={onAddRandomQuestions} disabled={!currentVersionIsDraft || savingSection}>+ Câu hỏi ngẫu nhiên</CButton>
           <CButton size='sm' color='secondary' variant='outline' onClick={onEdit} disabled={!currentVersionIsDraft || savingSection}>Sửa phần</CButton>
           <CButton size='sm' color='danger' variant='outline' onClick={onDelete} disabled={!currentVersionIsDraft || savingSection}>Xóa phần</CButton>
         </div>
@@ -254,6 +262,7 @@ export default function AssessmentDetailPage() {
   const [validationLoading, setValidationLoading] = useState(false)
   const [savingAssessment, setSavingAssessment] = useState(false)
   const [savingVersion, setSavingVersion] = useState(false)
+  const [versionCloneMode, setVersionCloneMode] = useState('full')
   const [savingSection, setSavingSection] = useState(false)
   const [savingQuestion, setSavingQuestion] = useState(false)
   const [error, setError] = useState('')
@@ -267,6 +276,8 @@ export default function AssessmentDetailPage() {
   const [editingSection, setEditingSection] = useState(null)
   const [showQuestionPicker, setShowQuestionPicker] = useState(false)
   const [pickerSection, setPickerSection] = useState(null)
+  const [showRandomQuestionPicker, setShowRandomQuestionPicker] = useState(false)
+  const [randomPickerSection, setRandomPickerSection] = useState(null)
   const [showQuestionEditor, setShowQuestionEditor] = useState(false)
   const [editingAssessmentQuestion, setEditingAssessmentQuestion] = useState(null)
   const [sectionStimuli, setSectionStimuli] = useState([])
@@ -406,7 +417,7 @@ export default function AssessmentDetailPage() {
       if (versionEditorMode === 'edit' && versionEditorValue) {
         savedVersion = await updateAssessmentVersion(getEntityId(versionEditorValue), payload)
       } else if (versionEditorMode === 'clone' && versionDetail) {
-        savedVersion = await cloneAssessmentVersion(getEntityId(versionDetail), payload)
+        savedVersion = await cloneAssessmentVersion(getEntityId(versionDetail), { ...payload, mode: versionCloneMode })
       } else {
         savedVersion = await createAssessmentVersion({ ...payload, assessment: getEntityId(assessment) })
       }
@@ -414,7 +425,13 @@ export default function AssessmentDetailPage() {
       await refreshVersion(savedVersionId)
       setShowVersionEditor(false)
       setVersionEditorValue(null)
-      setSuccess(versionEditorMode === 'edit' ? 'Đã cập nhật phiên bản' : versionEditorMode === 'clone' ? 'Đã nhân bản phiên bản' : 'Đã tạo phiên bản mới')
+      setSuccess(
+        versionEditorMode === 'edit'
+          ? 'Đã cập nhật phiên bản'
+          : versionEditorMode === 'clone'
+            ? (versionCloneMode === 'structure_only' ? 'Đã nhân bản cấu trúc phiên bản' : 'Đã nhân bản đầy đủ phiên bản')
+            : 'Đã tạo phiên bản mới',
+      )
     } catch (requestError) {
       setError(getVersionSaveErrorMessage(requestError))
       throw requestError
@@ -566,6 +583,30 @@ export default function AssessmentDetailPage() {
     }
   }
 
+  async function handleAddRandomQuestions(payload) {
+    if (!randomPickerSection) return
+    setSavingQuestion(true)
+    setError('')
+    setSuccess('')
+    try {
+      const sectionId = getEntityId(randomPickerSection)
+      const result = await executeRandomQuestions(sectionId, payload)
+      await refreshVersion(getEntityId(versionDetail))
+      setShowRandomQuestionPicker(false)
+      setRandomPickerSection(null)
+      setSuccess(`Đã thêm ${result?.totalAdded || 0} câu hỏi ngẫu nhiên vào phần thi`)
+    } catch (requestError) {
+      setError(getApiMessage(requestError, 'Không thêm được câu hỏi ngẫu nhiên vào phần thi'))
+      throw requestError
+    } finally {
+      setSavingQuestion(false)
+    }
+  }
+
+  async function handlePreviewRandomQuestions(sectionId, payload) {
+    return previewRandomQuestions(sectionId, payload)
+  }
+
   async function handleQuestionSubmit(payload) {
     if (!editingAssessmentQuestion) return
     setSavingQuestion(true)
@@ -630,6 +671,13 @@ export default function AssessmentDetailPage() {
     } finally {
       setSavingQuestion(false)
     }
+
+    function openCloneVersionEditor(mode) {
+      setVersionCloneMode(mode)
+      setVersionEditorMode('clone')
+      setVersionEditorValue(buildCloneDraft(versionDetail || currentVersionSummary))
+      setShowVersionEditor(true)
+    }
   }
 
   if (loading) {
@@ -683,7 +731,19 @@ export default function AssessmentDetailPage() {
               <CCol lg={8} md={6}>
                 <div className='d-flex gap-2 flex-wrap justify-content-md-end'>
                   <CButton color='secondary' variant='outline' onClick={() => { setVersionEditorMode('edit'); setVersionEditorValue(versionDetail || currentVersionSummary); setShowVersionEditor(true) }} disabled={!currentVersionSummary}>Sửa phiên bản</CButton>
-                  <CButton color='secondary' variant='outline' onClick={() => { setVersionEditorMode('clone'); setVersionEditorValue(buildCloneDraft(versionDetail || currentVersionSummary)); setShowVersionEditor(true) }} disabled={!currentVersionSummary}>Nhân bản</CButton>
+                  <CDropdown>
+                    <CDropdownToggle color='secondary' variant='outline' disabled={!currentVersionSummary || savingVersion}>Nhân bản</CDropdownToggle>
+                    <CDropdownMenu>
+                      <CDropdownItem onClick={() => openCloneVersionEditor('structure_only')}>
+                        Nhân bản cấu trúc
+                        <div className='small text-body-secondary'>Sao chép các phần thi và cấu hình, không sao chép câu hỏi.</div>
+                      </CDropdownItem>
+                      <CDropdownItem onClick={() => openCloneVersionEditor('full')}>
+                        Nhân bản đầy đủ
+                        <div className='small text-body-secondary'>Sao chép toàn bộ cấu trúc, câu hỏi, điểm số và cấu hình.</div>
+                      </CDropdownItem>
+                    </CDropdownMenu>
+                  </CDropdown>
                   <CButton color='info' variant='outline' onClick={() => navigate(`/assessment-runner/start/${getEntityId(currentVersionSummary)}`)} disabled={!currentVersionCanTest} title={currentVersionCanTest ? 'Chạy thử phiên bản hiện tại bằng Assessment Runner. Dữ liệu thử không tính vào kết quả thật.' : 'Chưa có phiên bản hợp lệ để làm thử.'}>Làm thử</CButton>
                   <CButton color='success' variant='outline' onClick={handlePublishVersion} disabled={!currentVersionIsDraft || savingVersion || !versionDetail}>Publish</CButton>
                   <CButton color='warning' variant='outline' onClick={handleRetireVersion} disabled={savingVersion || !versionDetail}>Retire</CButton>
@@ -788,6 +848,7 @@ export default function AssessmentDetailPage() {
                       onMoveDown={() => handleMoveSection(section, 'down')}
                       onSaveQuestionOrders={(items) => handleSaveQuestionOrders(section, items)}
                       onAddQuestions={() => { setPickerSection(section); setShowQuestionPicker(true) }}
+                      onAddRandomQuestions={() => { setRandomPickerSection(section); setShowRandomQuestionPicker(true) }}
                       onEditQuestion={(item) => () => { setEditingAssessmentQuestion({ ...item, section }); setShowQuestionEditor(true) }}
                       onRemoveQuestion={(item) => () => handleRemoveQuestion(item)}
                       onMoveQuestionUp={(item) => () => handleMoveQuestion(section, item, 'up')}
@@ -814,9 +875,10 @@ export default function AssessmentDetailPage() {
       ) : null}
 
       <AssessmentEditorModal visible={showAssessmentEditor} saving={savingAssessment} assessment={assessment} subjects={subjects} onClose={() => { if (!savingAssessment) setShowAssessmentEditor(false) }} onSubmit={handleAssessmentSubmit} />
-      <AssessmentVersionEditorModal visible={showVersionEditor} saving={savingVersion} mode={versionEditorMode} assessment={assessment} version={versionEditorValue} onClose={() => { if (!savingVersion) { setShowVersionEditor(false); setVersionEditorValue(null) } }} onSubmit={handleVersionSubmit} />
+      <AssessmentVersionEditorModal visible={showVersionEditor} saving={savingVersion} mode={versionEditorMode} cloneMode={versionCloneMode} assessment={assessment} version={versionEditorValue} onClose={() => { if (!savingVersion) { setShowVersionEditor(false); setVersionEditorValue(null) } }} onSubmit={handleVersionSubmit} />
       <AssessmentSectionEditorModal visible={showSectionEditor} saving={savingSection} section={editingSection} versionId={getEntityId(versionDetail || currentVersionSummary)} skills={skills} stimuli={sectionStimuli} assessmentQuestions={editingSection?.assessmentQuestions || []} onClose={() => { if (!savingSection) { setShowSectionEditor(false); setEditingSection(null) } }} onSubmit={handleSectionSubmit} />
       <AssessmentQuestionPickerModal visible={showQuestionPicker} section={pickerSection} bootstrap={bootstrap} saving={savingQuestion} onClose={() => { if (!savingQuestion) { setShowQuestionPicker(false); setPickerSection(null) } }} onAdd={handleAddQuestions} />
+      <AssessmentRandomQuestionModal visible={showRandomQuestionPicker} section={randomPickerSection} bootstrap={bootstrap} saving={savingQuestion} onClose={() => { if (!savingQuestion) { setShowRandomQuestionPicker(false); setRandomPickerSection(null) } }} onAdd={handleAddRandomQuestions} onPreview={handlePreviewRandomQuestions} />
       <AssessmentQuestionEditorModal visible={showQuestionEditor} saving={savingQuestion} item={editingAssessmentQuestion} onClose={() => { if (!savingQuestion) { setShowQuestionEditor(false); setEditingAssessmentQuestion(null) } }} onSubmit={handleQuestionSubmit} />
     </>
   )

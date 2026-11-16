@@ -38,7 +38,7 @@ export default function QuestionPreview({ question }) {
                 <div className='d-flex gap-3 align-items-start flex-wrap'>
                   <div className='fw-semibold' style={{ minWidth: 32 }}>{option.label || String.fromCharCode(65 + index)}</div>
                   <div className='flex-grow-1'>
-                    {option.content ? <div className='mb-2' dangerouslySetInnerHTML={{ __html: option.content }} /> : null}
+                    {option.content ? <div className='mb-2 quick-message-html-content cogi-question-content' dangerouslySetInnerHTML={{ __html: option.content }} /> : null}
                     {imageUrl ? <img src={imageUrl} alt={option.label || `option-${index + 1}`} style={{ maxWidth: 180, maxHeight: 140, objectFit: 'contain', borderRadius: 10 }} /> : null}
                   </div>
                 </div>

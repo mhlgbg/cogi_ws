@@ -51,6 +51,7 @@ export default function ImportAssignmentModal({
   visible,
   campaignId,
   campaignName,
+  importAssignmentsFn = importSurveyAssignments,
   onClose,
   onSuccess,
 }) {
@@ -87,7 +88,7 @@ export default function ImportAssignmentModal({
       formData.append('contextType', contextType)
       formData.append('file', file)
 
-      const response = await importSurveyAssignments(formData)
+      const response = await importAssignmentsFn(formData)
       setResult(response)
       onSuccess?.(response)
     } catch (requestError) {

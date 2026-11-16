@@ -65,7 +65,7 @@ function normalizeForm(version) {
   }
 }
 
-export default function AssessmentVersionEditorModal({ visible, saving, mode = 'create', assessment, version, onClose, onSubmit }) {
+export default function AssessmentVersionEditorModal({ visible, saving, mode = 'create', cloneMode = 'full', assessment, version, onClose, onSubmit }) {
   const [form, setForm] = useState(emptyForm())
   const [error, setError] = useState('')
   const versionStatus = String(version?.versionStatus || 'draft').trim()
@@ -138,6 +138,13 @@ export default function AssessmentVersionEditorModal({ visible, saving, mode = '
         {error ? <CAlert color='danger'>{error}</CAlert> : null}
         {metadataOnlyMode ? <CAlert color='info'>Phiên bản đã phát hành. Bạn có thể chỉnh sửa tiêu đề, mô tả và hướng dẫn. Các cấu hình ảnh hưởng đến bài thi đã được khóa.</CAlert> : null}
         {retiredReadOnlyMode ? <CAlert color='warning'>Phiên bản đã ngừng sử dụng và hiện không cho phép chỉnh sửa. Hãy nhân bản để tạo phiên bản mới nếu cần cập nhật.</CAlert> : null}
+        {mode === 'clone' ? (
+          <CAlert color='secondary'>
+            {cloneMode === 'structure_only'
+              ? 'Nhân bản cấu trúc: Sao chép các phần thi và cấu hình, không sao chép câu hỏi.'
+              : 'Nhân bản đầy đủ: Sao chép toàn bộ cấu trúc, câu hỏi, điểm số và cấu hình.'}
+          </CAlert>
+        ) : null}
         {metadataOnlyMode ? <div className='small text-body-secondary mb-3'>Cần thay đổi thời lượng, đối tượng, cấu trúc hoặc quy tắc? Hãy nhân bản để tạo phiên bản mới.</div> : null}
         <CRow className='g-3'>
           <CCol md={4}><CFormLabel>Mã phiên bản</CFormLabel><CFormInput value={form.code} onChange={(event) => setForm((prev) => ({ ...prev, code: event.target.value }))} disabled={structuralFieldsDisabled} /></CCol>

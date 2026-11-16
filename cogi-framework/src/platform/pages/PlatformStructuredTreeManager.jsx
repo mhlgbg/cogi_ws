@@ -25,6 +25,7 @@ import {
   CTableHeaderCell,
   CTableRow,
 } from '@coreui/react'
+import SimpleHtmlEditor from '../../modules/admission-management/components/SimpleHtmlEditor'
 import {
   confirmStructuredImport,
   createStructuredNode,
@@ -45,6 +46,8 @@ import {
   updateStructuredNodeType,
   updateStructuredTree,
 } from '../services/platformApi'
+import { sanitizeStructuredNodeHtmlClient, structuredNodeHtmlToPlainText } from '../components/structuredNodeHtml'
+import MathContentRenderer from '../../components/math/MathContentRenderer'
 
 const tabs = [
   { id: 'overview', label: 'Tổng quan' },
@@ -72,16 +75,88 @@ const emptyNodeForm = {
   keyCode: '',
   title: '',
   body: '',
+  bodyFormat: 'text',
   nodeTypeId: '',
   parentId: '',
   sortOrder: '0',
   sourceReference: '',
 }
 
+const HTML_CAPABLE_NODE_TYPES = new Set(['section', 'paragraph', 'group', 'content'])
+const TEXT_ONLY_NODE_TYPES = new Set(['requirement', 'criterion'])
+
 function getSourceReferenceValue(node) {
   const metadata = node?.metadata || {}
   if (typeof metadata === 'string') return metadata
   return String(metadata?.sourceReference || '').trim()
+}
+
+function stripHtml(value) {
+  return structuredNodeHtmlToPlainText(value)
+}
+
+function getNodeDisplayLabel(node) {
+  const title = String(node?.title || '').trim()
+  const keyCode = String(node?.keyCode || '').trim()
+  const normalizedType = String(node?.nodeType?.typeCode || node?.nodeTypeCode || '').trim().toLowerCase()
+  const bodyText = stripHtml(node?.body || '')
+
+  if (['requirement', 'criterion', 'paragraph'].includes(normalizedType)) {
+    if (bodyText) return bodyText.slice(0, 120)
+    if (title) return title
+    if (keyCode) return keyCode
+    return 'Node'
+  }
+
+  if (title) return title
+  if (bodyText) return bodyText.slice(0, 120)
+  if (keyCode) return keyCode
+  return 'Node'
+}
+
+function normalizeBodyFormat(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  return normalized === 'html' ? 'html' : 'text'
+}
+
+function getNodeTypeCodeById(nodeTypeId, nodeTypes) {
+  const found = (nodeTypes || []).find((item) => String(item.id) === String(nodeTypeId))
+  return String(found?.typeCode || '').trim().toLowerCase()
+}
+
+function isHtmlAllowedForNodeTypeCode(typeCode) {
+  const normalized = String(typeCode || '').trim().toLowerCase()
+  if (!normalized) return true
+  if (TEXT_ONLY_NODE_TYPES.has(normalized)) return false
+  return HTML_CAPABLE_NODE_TYPES.has(normalized)
+}
+
+function getMeaningfulNodeEntries(node) {
+  const entries = []
+  const keyCode = String(node?.keyCode || '').trim()
+  const title = String(node?.title || '').trim()
+  const body = String(node?.body || '').trim()
+  const nodeType = String(node?.nodeType?.typeCode || node?.nodeTypeCode || '').trim()
+  const bodyFormat = normalizeBodyFormat(node?.bodyFormat)
+  const parentKeyCode = String(node?.parent?.keyCode || node?.parentKeyCode || '').trim()
+  const sortOrder = node?.sortOrder ?? node?.sortOrderValue
+  const sourceReference = String(getSourceReferenceValue(node) || '').trim()
+
+  if (title) entries.push(['Title', title])
+  if (body) entries.push(['Body', body])
+  if (body) entries.push(['Body Format', bodyFormat])
+  if (keyCode) entries.push(['KeyCode', keyCode])
+  if (nodeType) entries.push(['Node Type', nodeType])
+  if (parentKeyCode) entries.push(['Parent', parentKeyCode])
+  if (sortOrder !== undefined && sortOrder !== null && sortOrder !== '') entries.push(['Sort Order', sortOrder])
+  if (sourceReference) entries.push(['Source Reference', sourceReference])
+
+  const requirement = node?.requirement
+  const criterion = node?.criterion
+  if (requirement && typeof requirement === 'object' && Object.keys(requirement).length > 0) entries.push(['Requirement', requirement])
+  if (criterion && typeof criterion === 'object' && Object.keys(criterion).length > 0) entries.push(['Criterion', criterion])
+
+  return entries
 }
 
 function downloadStructuredTreeTemplate() {
@@ -93,6 +168,7 @@ function downloadStructuredTreeTemplate() {
         keyCode: 'ROOT-01',
         title: 'Root Node',
         body: '<p>Root content</p>',
+        bodyFormat: 'html',
         nodeTypeCode: 'section',
         parentKeyCode: null,
         sortOrder: 1,
@@ -102,6 +178,7 @@ function downloadStructuredTreeTemplate() {
         keyCode: 'CHILD-01',
         title: 'Child Node',
         body: '<p>Nested content</p>',
+        bodyFormat: 'html',
         nodeTypeCode: 'content',
         parentKeyCode: 'ROOT-01',
         sortOrder: 1,
@@ -140,6 +217,10 @@ export default function PlatformStructuredTreeManager() {
   const [searchTerm, setSearchTerm] = useState('')
   const [expandedIds, setExpandedIds] = useState([])
   const [selectedNode, setSelectedNode] = useState(null)
+  const [nodeDetailModalOpen, setNodeDetailModalOpen] = useState(false)
+  const [nodeDetailLoading, setNodeDetailLoading] = useState(false)
+  const [nodeDetailError, setNodeDetailError] = useState('')
+  const [selectedNodeDetail, setSelectedNodeDetail] = useState(null)
   const [treeModalOpen, setTreeModalOpen] = useState(false)
   const [treeForm, setTreeForm] = useState(emptyTreeForm)
   const [editingTreeId, setEditingTreeId] = useState(null)
@@ -183,6 +264,28 @@ export default function PlatformStructuredTreeManager() {
     }
   }
 
+  async function fetchAllStructuredTreeNodes(treeId) {
+    const allNodes = []
+    let offset = 0
+    const pageLimit = 100
+
+    while (true) {
+      const pageResult = await getStructuredTreeNodes(treeId, { limit: pageLimit, offset })
+      const pageNodes = Array.isArray(pageResult?.data) ? pageResult.data : []
+
+      if (!pageNodes.length) break
+
+      allNodes.push(...pageNodes)
+
+      const total = Number(pageResult?.pagination?.total || 0)
+      if (allNodes.length >= total || pageNodes.length < pageLimit) break
+
+      offset += pageNodes.length
+    }
+
+    return allNodes
+  }
+
   async function loadTreeData(treeId = selectedTreeId) {
     if (!treeId) {
       setSelectedTree(null)
@@ -198,14 +301,14 @@ export default function PlatformStructuredTreeManager() {
     setTreeDataError('')
 
     try {
-      const [treeResult, nodesResult, hierarchyResult] = await Promise.all([
+      const [treeResult, allNodes, hierarchyResult] = await Promise.all([
         getStructuredTreeById(treeId),
-        getStructuredTreeNodes(treeId, { limit: 500 }),
+        fetchAllStructuredTreeNodes(treeId),
         getStructuredTreeHierarchy(treeId),
       ])
 
       setSelectedTree(treeResult || null)
-      setNodes(Array.isArray(nodesResult?.data) ? nodesResult.data : [])
+      setNodes(allNodes)
       const nextHierarchy = Array.isArray(hierarchyResult?.hierarchy) ? hierarchyResult.hierarchy : []
       setTreeHierarchy(nextHierarchy)
       setTreeHierarchyMeta(hierarchyResult?.meta || null)
@@ -269,13 +372,88 @@ export default function PlatformStructuredTreeManager() {
 
   const hasSearchTerm = searchTerm.trim().length > 0
 
+  function getSiblingsForNode(node) {
+    if (!node || !selectedTreeId) return []
+
+    const parentId = node?.parent?.id ?? node?.parentId ?? null
+
+    return nodes
+      .filter((candidate) => {
+        const candidateParentId = candidate?.parent?.id ?? candidate?.parentId ?? null
+        if (parentId === null || parentId === undefined) {
+          return candidateParentId === null || candidateParentId === undefined || candidateParentId === ''
+        }
+        return Number(candidateParentId) === Number(parentId)
+      })
+      .sort((left, right) => {
+        const leftOrder = Number(left?.sortOrder ?? 0)
+        const rightOrder = Number(right?.sortOrder ?? 0)
+        if (leftOrder !== rightOrder) return leftOrder - rightOrder
+        return String(left?.keyCode || '').localeCompare(String(right?.keyCode || ''))
+      })
+  }
+
+  async function openNodeDetail(nodeId) {
+    if (!selectedTreeId || nodeId === null || nodeId === undefined || nodeId === '') {
+      return
+    }
+
+    const numericNodeId = Number(nodeId)
+    setSelectedNode(numericNodeId)
+    setNodeDetailError('')
+    setNodeDetailLoading(true)
+
+    try {
+      let nextNode = nodes.find((candidate) => Number(candidate.id) === numericNodeId)
+
+      if (!nextNode) {
+        const refreshedNodes = await fetchAllStructuredTreeNodes(selectedTreeId)
+        setNodes(refreshedNodes)
+        nextNode = refreshedNodes.find((candidate) => Number(candidate.id) === numericNodeId)
+      }
+
+      if (!nextNode) {
+        throw new Error(`Node ${nodeId} không tồn tại trong cây hiện tại.`)
+      }
+
+      setSelectedNodeDetail(nextNode)
+      setNodeDetailModalOpen(true)
+    } catch (requestError) {
+      setSelectedNodeDetail(null)
+      setNodeDetailError(getApiMessage(requestError, 'Không tải được chi tiết Node'))
+      setNodeDetailModalOpen(true)
+    } finally {
+      setNodeDetailLoading(false)
+    }
+  }
+
+  function closeNodeDetailModal() {
+    setNodeDetailModalOpen(false)
+    setNodeDetailError('')
+    setSelectedNodeDetail(null)
+  }
+
   const renderTreeNode = (node, depth = 0) => {
     const hasChildren = Array.isArray(node.children) && node.children.length > 0
     const isExpanded = expandedIds.includes(Number(node.id))
+    const displayLabel = getNodeDisplayLabel(node)
+    const sortOrder = node?.sortOrder ?? node?.sortOrderValue
+    const normalizedType = String(node?.nodeType?.typeCode || node?.nodeTypeCode || '').trim().toLowerCase()
+    const isRequirementLike = ['requirement', 'criterion'].includes(normalizedType)
+    const clampTextStyle = {
+      display: '-webkit-box',
+      WebkitLineClamp: 2,
+      WebkitBoxOrient: 'vertical',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'normal',
+      lineHeight: 1.4,
+      maxWidth: '100%',
+    }
 
     return (
       <div key={node.id} style={{ marginLeft: depth > 0 ? 18 : 0 }}>
-        <div className='d-flex align-items-center gap-2 py-1'>
+        <div className='d-flex align-items-center gap-2 py-1' style={{ minWidth: 0 }}>
           {hasChildren ? (
             <CButton size='sm' variant='outline' color='secondary' onClick={() => {
               setExpandedIds((prev) => {
@@ -290,11 +468,41 @@ export default function PlatformStructuredTreeManager() {
           ) : (<span style={{ width: 31, display: 'inline-block' }} />)}
           <button
             type='button'
-            className='btn btn-link text-start p-0'
-            onClick={() => setSelectedNode(Number(node.id))}
-            style={{ fontWeight: selectedNode === Number(node.id) ? 700 : 400 }}
+            className='structured-tree-node-btn'
+            onClick={() => openNodeDetail(node.id)}
+            title={node?.keyCode || undefined}
+            aria-label={node?.keyCode || displayLabel}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              width: '100%',
+              fontWeight: selectedNode === Number(node.id) ? 700 : 400,
+              fontSize: isRequirementLike ? '0.96rem' : '0.95rem',
+              color: '#1f2937',
+              textDecoration: 'none',
+              textAlign: 'left',
+              background: 'transparent',
+              border: 'none',
+              padding: '2px 4px',
+              borderRadius: 6,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 8,
+              maxWidth: '100%',
+            }}
           >
-            {node.title || node.keyCode}
+            {isRequirementLike && (
+              <span style={{ flexShrink: 0, paddingTop: 1, lineHeight: 1.4, color: '#4b5563' }}>–</span>
+            )}
+            <span style={{ ...clampTextStyle, flex: 1, minWidth: 0 }}>
+              <MathContentRenderer value={displayLabel} contentType='plain_text' wrapperTag='span' emptyFallback='Node' />
+            </span>
+            {!isRequirementLike && sortOrder !== undefined && sortOrder !== null && sortOrder !== '' && (
+              <span className='badge rounded-pill text-bg-light border' style={{ fontSize: '0.7rem', flexShrink: 0, marginTop: 2 }}>
+                {sortOrder}
+              </span>
+            )}
           </button>
         </div>
         {isExpanded && hasChildren && (
@@ -403,10 +611,17 @@ export default function PlatformStructuredTreeManager() {
       return
     }
 
+    const selectedNodeTypeCode = getNodeTypeCodeById(nodeForm.nodeTypeId, nodeTypes)
+    if (normalizeBodyFormat(nodeForm.bodyFormat) === 'html' && !isHtmlAllowedForNodeTypeCode(selectedNodeTypeCode)) {
+      setError(`Node type "${selectedNodeTypeCode || 'unknown'}" chỉ hỗ trợ bodyFormat=text trong V1`)
+      return
+    }
+
     const payload = {
       keyCode: nodeForm.keyCode,
       title: nodeForm.title,
       body: nodeForm.body,
+      bodyFormat: normalizeBodyFormat(nodeForm.bodyFormat),
       nodeTypeId: nodeForm.nodeTypeId,
       parentId: nodeForm.parentId || null,
       sortOrder: Number(nodeForm.sortOrder || 0),
@@ -503,8 +718,70 @@ export default function PlatformStructuredTreeManager() {
     }
   }
 
+  const detailNodeSiblings = selectedNodeDetail ? getSiblingsForNode(selectedNodeDetail) : []
+  const detailNodeIndex = selectedNodeDetail ? detailNodeSiblings.findIndex((item) => Number(item.id) === Number(selectedNodeDetail.id)) : -1
+  const detailPrevNode = detailNodeIndex > 0 ? detailNodeSiblings[detailNodeIndex - 1] : null
+  const detailNextNode = detailNodeIndex >= 0 && detailNodeIndex < detailNodeSiblings.length - 1 ? detailNodeSiblings[detailNodeIndex + 1] : null
+  const detailBodyFormat = normalizeBodyFormat(selectedNodeDetail?.bodyFormat)
+  const nodeFormTypeCode = getNodeTypeCodeById(nodeForm.nodeTypeId, nodeTypes)
+  const nodeFormHtmlAllowed = isHtmlAllowedForNodeTypeCode(nodeFormTypeCode)
+  const nodeFormBodyFormat = normalizeBodyFormat(nodeForm.bodyFormat)
+
+  function renderNodeDetailValue(label, value) {
+    if (label === 'Body') {
+      return (
+        <MathContentRenderer
+          className='structured-node-html-content'
+          value={value}
+          contentType={detailBodyFormat === 'html' ? 'html' : 'plain_text'}
+          sanitizeHtml={detailBodyFormat === 'html' ? sanitizeStructuredNodeHtmlClient : undefined}
+          emptyFallback={<span>...</span>}
+        />
+      )
+    }
+
+    if (label === 'Title') {
+      return <MathContentRenderer value={value} contentType='plain_text' wrapperTag='span' emptyFallback={<span />}/>
+    }
+
+    return String(value)
+  }
+
   return (
-    <div className='container-fluid py-4'>
+    <>
+      <style>{`
+        .structured-tree-node-btn {
+          transition: color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .structured-tree-node-btn:hover {
+          color: #0f172a;
+          background: rgba(15, 23, 42, 0.04);
+        }
+        .structured-tree-node-btn:focus {
+          outline: 2px solid rgba(37, 99, 235, 0.5);
+          outline-offset: 2px;
+          background: rgba(59, 130, 246, 0.06);
+        }
+        .structured-node-html-content {
+          overflow-x: auto;
+        }
+        .structured-node-html-content table {
+          width: 100%;
+          border-collapse: collapse;
+          min-width: 520px;
+        }
+        .structured-node-html-content th,
+        .structured-node-html-content td {
+          border: 1px solid #d1d5db;
+          padding: 8px 10px;
+          vertical-align: top;
+        }
+        .structured-node-html-content thead th {
+          background: #f3f4f6;
+          font-weight: 600;
+        }
+      `}</style>
+      <div className='container-fluid py-4'>
       <CRow className='mb-3 align-items-center'>
         <CCol>
           <h3>Structured Tree Manager</h3>
@@ -674,7 +951,7 @@ export default function PlatformStructuredTreeManager() {
               <CCardHeader className='d-flex justify-content-between align-items-center'>
                 <strong>Cây nội dung</strong>
                 <CButton color='primary' onClick={() => {
-                  setNodeForm({ ...emptyNodeForm, nodeTypeId: nodeTypes[0]?.id || '' })
+                  setNodeForm({ ...emptyNodeForm, nodeTypeId: nodeTypes[0]?.id || '', bodyFormat: 'text' })
                   setEditingNodeId(null)
                   setNodeModalOpen(true)
                 }} disabled={!selectedTreeId}>+ Node</CButton>
@@ -696,7 +973,7 @@ export default function PlatformStructuredTreeManager() {
 
                 {selectedTreeId ? (
                   <CRow className='g-3'>
-                    <CCol lg={6}>
+                    <CCol xs={12}>
                       <div className='border rounded p-3' style={{ minHeight: 420 }}>
                         {treeDataLoading ? (
                           <div className='text-center py-5'><CSpinner /></div>
@@ -731,43 +1008,6 @@ export default function PlatformStructuredTreeManager() {
                         </div>
                       )}
                     </CCol>
-                    <CCol lg={6}>
-                      <div className='border rounded p-3' style={{ minHeight: 420 }}>
-                        {selectedNodeRecord ? (
-                          <>
-                            <div className='d-flex justify-content-between align-items-center mb-3'>
-                              <h6 className='mb-0'>{selectedNodeRecord.title || selectedNodeRecord.keyCode}</h6>
-                              <div className='d-flex gap-2'>
-                                <CButton size='sm' onClick={() => {
-                                  setNodeForm({
-                                    keyCode: selectedNodeRecord.keyCode || '',
-                                    title: selectedNodeRecord.title || '',
-                                    body: selectedNodeRecord.body || '',
-                                    nodeTypeId: selectedNodeRecord.nodeType?.id || '',
-                                    parentId: selectedNodeRecord.parent?.id || '',
-                                    sortOrder: String(selectedNodeRecord.sortOrder || 0),
-                                    sourceReference: getSourceReferenceValue(selectedNodeRecord),
-                                  })
-                                  setEditingNodeId(selectedNodeRecord.id)
-                                  setNodeModalOpen(true)
-                                }}>Edit</CButton>
-                                <CButton size='sm' color='danger' variant='outline' onClick={() => handleDeleteNode(selectedNodeRecord)}>Delete</CButton>
-                              </div>
-                            </div>
-                            <div className='mb-2'><strong>KeyCode:</strong> {selectedNodeRecord.keyCode}</div>
-                            <div className='mb-2'><strong>Node Type:</strong> {selectedNodeRecord.nodeType?.typeCode || '-'}</div>
-                            <div className='mb-2'><strong>Parent:</strong> {selectedNodeRecord.parent?.keyCode || '-'}</div>
-                            <div className='mb-2'><strong>Sort Order:</strong> {selectedNodeRecord.sortOrder || 0}</div>
-                            <div className='mb-2'><strong>Source Reference:</strong> {getSourceReferenceValue(selectedNodeRecord) || '-'}</div>
-                            <div className='mb-3'><strong>Body:</strong><div dangerouslySetInnerHTML={{ __html: selectedNodeRecord.body || '<p>...</p>' }} /></div>
-                            <div className='mb-2'><strong>Requirement:</strong><pre className='mb-0'>{JSON.stringify(selectedNodeRecord.requirement || {}, null, 2)}</pre></div>
-                            <div className='mb-2'><strong>Criterion:</strong><pre className='mb-0'>{JSON.stringify(selectedNodeRecord.criterion || {}, null, 2)}</pre></div>
-                          </>
-                        ) : (
-                          <div className='text-muted'>Chọn 1 Node để xem chi tiết</div>
-                        )}
-                      </div>
-                    </CCol>
                   </CRow>
                 ) : (
                   <div className='text-muted'>Chưa chọn Tree để xem cây</div>
@@ -775,6 +1015,83 @@ export default function PlatformStructuredTreeManager() {
               </CCardBody>
             </CCard>
           )}
+
+          <CModal
+            visible={nodeDetailModalOpen}
+            onClose={closeNodeDetailModal}
+            size='lg'
+            scrollable
+          >
+            <CModalHeader>
+              <CModalTitle>
+                {selectedNodeDetail ? (
+                  <MathContentRenderer
+                    value={getNodeDisplayLabel(selectedNodeDetail)}
+                    contentType='plain_text'
+                    wrapperTag='span'
+                    emptyFallback='Chi tiết Node'
+                  />
+                ) : 'Chi tiết Node'}
+              </CModalTitle>
+            </CModalHeader>
+            <CModalBody style={{ maxHeight: '75vh', overflowY: 'auto' }}>
+              {nodeDetailLoading ? (
+                <div className='text-center py-4'><CSpinner /></div>
+              ) : nodeDetailError ? (
+                <CAlert color='danger' className='mb-0'>{nodeDetailError}</CAlert>
+              ) : selectedNodeDetail ? (
+                <>
+                  <div className='d-flex justify-content-between align-items-center gap-2 mb-3'>
+                    <h6 className='mb-0'>
+                      <MathContentRenderer
+                        value={getNodeDisplayLabel(selectedNodeDetail)}
+                        contentType='plain_text'
+                        wrapperTag='span'
+                        emptyFallback='Node'
+                      />
+                    </h6>
+                    <div className='d-flex gap-2'>
+                      <CButton size='sm' onClick={() => detailPrevNode && openNodeDetail(detailPrevNode.id)} disabled={!detailPrevNode}>Trước</CButton>
+                      <CButton size='sm' onClick={() => detailNextNode && openNodeDetail(detailNextNode.id)} disabled={!detailNextNode}>Tiếp</CButton>
+                      <CButton size='sm' onClick={() => {
+                        setNodeForm({
+                          keyCode: selectedNodeDetail.keyCode || '',
+                          title: selectedNodeDetail.title || '',
+                          body: selectedNodeDetail.body || '',
+                          bodyFormat: normalizeBodyFormat(selectedNodeDetail.bodyFormat),
+                          nodeTypeId: selectedNodeDetail.nodeType?.id || '',
+                          parentId: selectedNodeDetail.parent?.id || '',
+                          sortOrder: String(selectedNodeDetail.sortOrder || 0),
+                          sourceReference: getSourceReferenceValue(selectedNodeDetail),
+                        })
+                        setEditingNodeId(selectedNodeDetail.id)
+                        setNodeDetailModalOpen(false)
+                        setNodeModalOpen(true)
+                      }}>Sửa</CButton>
+                    </div>
+                  </div>
+
+                  {getMeaningfulNodeEntries(selectedNodeDetail).map(([label, value]) => (
+                    <div key={label} className='mb-3'>
+                      <div className='fw-semibold mb-1'>{label}</div>
+                      {typeof value === 'object' ? (
+                        <pre className='mb-0 bg-light p-2 rounded' style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{JSON.stringify(value, null, 2)}</pre>
+                      ) : (
+                        <div className='bg-light p-2 rounded' style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                          {renderNodeDetailValue(label, value)}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div className='text-muted'>Không có dữ liệu Node để hiển thị.</div>
+              )}
+            </CModalBody>
+            <CModalFooter>
+              <CButton color='secondary' variant='outline' onClick={closeNodeDetailModal}>Đóng</CButton>
+            </CModalFooter>
+          </CModal>
 
           {activeTab === 'import-json' && (
             <CCard>
@@ -946,7 +1263,16 @@ export default function PlatformStructuredTreeManager() {
             </CCol>
             <CCol md={6}>
               <CFormLabel>Node Type</CFormLabel>
-              <CFormSelect value={nodeForm.nodeTypeId} onChange={(event) => setNodeForm((prev) => ({ ...prev, nodeTypeId: event.target.value }))}>
+              <CFormSelect value={nodeForm.nodeTypeId} onChange={(event) => {
+                const nextTypeId = event.target.value
+                const nextTypeCode = getNodeTypeCodeById(nextTypeId, nodeTypes)
+                const htmlAllowed = isHtmlAllowedForNodeTypeCode(nextTypeCode)
+                setNodeForm((prev) => ({
+                  ...prev,
+                  nodeTypeId: nextTypeId,
+                  bodyFormat: htmlAllowed ? prev.bodyFormat : 'text',
+                }))
+              }}>
                 <option value=''>Chọn loại</option>
                 {nodeTypes.map((type) => (
                   <option key={type.id} value={type.id}>{type.title || type.typeCode}</option>
@@ -970,9 +1296,53 @@ export default function PlatformStructuredTreeManager() {
               <CFormLabel>Title</CFormLabel>
               <CFormInput value={nodeForm.title} onChange={(event) => setNodeForm((prev) => ({ ...prev, title: event.target.value }))} />
             </CCol>
+            <CCol md={6}>
+              <CFormLabel>Body Format</CFormLabel>
+              <CFormSelect
+                value={nodeFormBodyFormat}
+                onChange={(event) => setNodeForm((prev) => ({ ...prev, bodyFormat: event.target.value }))}
+                disabled={!nodeFormHtmlAllowed}
+              >
+                <option value='text'>Text</option>
+                {nodeFormHtmlAllowed ? <option value='html'>HTML</option> : null}
+              </CFormSelect>
+              {!nodeFormHtmlAllowed ? (
+                <div className='small text-muted mt-1'>
+                  Node type {nodeFormTypeCode || '(chưa xác định)'} chỉ hỗ trợ Text trong V1.
+                </div>
+              ) : null}
+            </CCol>
             <CCol md={12}>
               <CFormLabel>Body</CFormLabel>
-              <CFormTextarea rows={5} value={nodeForm.body} onChange={(event) => setNodeForm((prev) => ({ ...prev, body: event.target.value }))} />
+              {nodeFormBodyFormat === 'html' ? (
+                <>
+                  <SimpleHtmlEditor
+                    label=''
+                    value={nodeForm.body}
+                    onChange={(value) => setNodeForm((prev) => ({ ...prev, body: value }))}
+                    rows={10}
+                    showImageControls={false}
+                    showTableControls
+                    allowHtmlMode
+                    helperText='Dùng trình soạn thảo trực quan để tạo bảng/định dạng. Có thể chuyển sang HTML source khi cần.'
+                    placeholder='<p>Nhập nội dung HTML...</p>'
+                  />
+                  <div className='mt-3'>
+                    <div className='fw-semibold mb-1'>Preview trước khi lưu</div>
+                    <div className='border rounded p-2 structured-node-html-content' style={{ maxHeight: 260, overflow: 'auto' }}>
+                      <MathContentRenderer
+                        className='structured-node-html-content'
+                        value={nodeForm.body || ''}
+                        contentType='html'
+                        sanitizeHtml={sanitizeStructuredNodeHtmlClient}
+                        emptyFallback={<div className='text-muted'>Chưa có nội dung</div>}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <CFormTextarea rows={6} value={nodeForm.body} onChange={(event) => setNodeForm((prev) => ({ ...prev, body: event.target.value }))} />
+              )}
             </CCol>
             <CCol md={12}>
               <CFormLabel>Source Reference</CFormLabel>
@@ -985,6 +1355,7 @@ export default function PlatformStructuredTreeManager() {
           <CButton color='primary' onClick={handleNodeSubmit}>{editingNodeId ? 'Save Node' : 'Create Node'}</CButton>
         </CModalFooter>
       </CModal>
-    </div>
+      </div>
+    </>
   )
 }

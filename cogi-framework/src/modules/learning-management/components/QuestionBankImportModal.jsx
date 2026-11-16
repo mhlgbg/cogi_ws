@@ -3,6 +3,7 @@ import {
   CAlert,
   CButton,
   CCol,
+  CFormCheck,
   CFormInput,
   CFormLabel,
   CModal,
@@ -39,6 +40,11 @@ import {
   updateSubject,
 } from '../services/learningObjectApi'
 import { getApiMessage, getEntityId } from '../utils/questionBankUi'
+
+const IMPORT_MODES = {
+  UPSERT: 'upsert',
+  CREATE_ONLY: 'create_only',
+}
 
 function normalizeArray(value) {
   return Array.isArray(value) ? value : []
@@ -139,9 +145,23 @@ function buildStimulusImportPayload(item, existingStimulus = null) {
 
 async function findByCode(loadFn, code) {
   if (!code) return null
-  const payload = await loadFn({ q: code, page: 1, pageSize: 50 })
+  const payload = await loadFn({ code, q: code, page: 1, pageSize: 1 })
   const rows = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : []
   return rows.find((item) => normalizeText(item?.code) === code) || null
+}
+
+function isDuplicateCodeError(error) {
+  const status = Number(error?.response?.status || error?.status || 0)
+  if (status !== 409) return false
+  const message = normalizeText(error?.response?.data?.error?.message || error?.response?.data?.message || error?.message).toLowerCase()
+  return message.includes('code already exists in this tenant')
+}
+
+function registerEntityByCode(map, fallbackCode, entity) {
+  if (!map) return
+  const key = normalizeText(entity?.code || fallbackCode)
+  if (!key) return
+  map.set(key, entity)
 }
 
 function validateImportPackage(pkg) {
@@ -196,6 +216,8 @@ export default function QuestionBankImportModal({ visible, onClose, onImported }
   const [parsing, setParsing] = useState(false)
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState('')
+  const [importIssues, setImportIssues] = useState([])
+  const [importMode, setImportMode] = useState(IMPORT_MODES.UPSERT)
   const [preview, setPreview] = useState(null)
   const [packageData, setPackageData] = useState(null)
 
@@ -204,6 +226,8 @@ export default function QuestionBankImportModal({ visible, onClose, onImported }
     setParsing(false)
     setImporting(false)
     setError('')
+    setImportIssues([])
+    setImportMode(IMPORT_MODES.UPSERT)
     setPreview(null)
     setPackageData(null)
   }
@@ -221,6 +245,7 @@ export default function QuestionBankImportModal({ visible, onClose, onImported }
     }
     setParsing(true)
     setError('')
+    setImportIssues([])
     try {
       const text = await file.text()
       const parsed = JSON.parse(text)
@@ -238,31 +263,32 @@ export default function QuestionBankImportModal({ visible, onClose, onImported }
       const stimuli = normalizeArray(readBucket(parsed, 'stimuli'))
       const questions = normalizeArray(readBucket(parsed, 'questions'))
 
-      const counts = { subjects: { create: 0, update: 0 }, grades: { create: 0, update: 0 }, skills: { create: 0, update: 0 }, knowledgeNodes: { create: 0, update: 0 }, stimuli: { create: 0, update: 0 }, questions: { create: 0, update: 0 } }
+      const counts = { subjects: { create: 0, update: 0, skip: 0 }, grades: { create: 0, update: 0, skip: 0 }, skills: { create: 0, update: 0, skip: 0 }, knowledgeNodes: { create: 0, update: 0, skip: 0 }, stimuli: { create: 0, update: 0, skip: 0 }, questions: { create: 0, update: 0, skip: 0 } }
+      const countKeyForExisting = importMode === IMPORT_MODES.CREATE_ONLY ? 'skip' : 'update'
 
       for (const item of subjects) {
         const existing = await findByCode(getSubjects, normalizeText(item.code))
-        counts.subjects[existing ? 'update' : 'create'] += 1
+        counts.subjects[existing ? countKeyForExisting : 'create'] += 1
       }
       for (const item of grades) {
         const existing = await findByCode(getGrades, normalizeText(item.code))
-        counts.grades[existing ? 'update' : 'create'] += 1
+        counts.grades[existing ? countKeyForExisting : 'create'] += 1
       }
       for (const item of skills) {
         const existing = await findByCode(getSkills, normalizeText(item.code))
-        counts.skills[existing ? 'update' : 'create'] += 1
+        counts.skills[existing ? countKeyForExisting : 'create'] += 1
       }
       for (const item of knowledgeNodes) {
         const existing = await findByCode(getKnowledgeNodes, normalizeText(item.code))
-        counts.knowledgeNodes[existing ? 'update' : 'create'] += 1
+        counts.knowledgeNodes[existing ? countKeyForExisting : 'create'] += 1
       }
       for (const item of stimuli) {
         const existing = await findByCode(getQuestionStimuli, normalizeText(item.code))
-        counts.stimuli[existing ? 'update' : 'create'] += 1
+        counts.stimuli[existing ? countKeyForExisting : 'create'] += 1
       }
       for (const item of questions) {
         const existing = await findByCode(getQuestions, normalizeText(item.code))
-        counts.questions[existing ? 'update' : 'create'] += 1
+        counts.questions[existing ? countKeyForExisting : 'create'] += 1
       }
 
       setPackageData(parsed)
@@ -278,33 +304,85 @@ export default function QuestionBankImportModal({ visible, onClose, onImported }
     if (!packageData || !preview || preview.errors?.length > 0) return
     setImporting(true)
     setError('')
+    setImportIssues([])
     try {
       const subjectsByCode = new Map()
       const gradesByCode = new Map()
       const skillsByCode = new Map()
       const knowledgeNodesByCode = new Map()
       const stimuliByCode = new Map()
-      const summary = { created: 0, updated: 0, skipped: 0, warnings: preview?.warnings?.length || 0, errors: 0 }
+      const summary = { created: 0, updated: 0, skipped: 0, failed: 0, warnings: preview?.warnings?.length || 0, errors: 0 }
+      const issues = []
 
-      for (const item of normalizeArray(readBucket(packageData, 'subjects'))) {
-        const existing = await findByCode(getSubjects, normalizeText(item.code))
-        const payload = { code: item.code, title: item.title || item.code, description: item.description || '', subjectStatus: item.subjectStatus || 'active' }
-        const saved = existing ? await updateSubject(getEntityId(existing), payload) : await createSubject(payload)
-        summary[existing ? 'updated' : 'created'] += 1
-        subjectsByCode.set(normalizeText(saved?.code || item.code), saved)
+      const processImportItems = async ({
+        bucketName,
+        items,
+        loadFn,
+        createFn,
+        updateFn,
+        buildPayload,
+        registerMap,
+      }) => {
+        for (const item of items) {
+          const code = normalizeText(item?.code)
+          try {
+            const existing = await findByCode(loadFn, code)
+            if (existing && importMode === IMPORT_MODES.CREATE_ONLY) {
+              summary.skipped += 1
+              registerEntityByCode(registerMap, code, existing)
+              continue
+            }
+
+            const payload = await buildPayload(item, existing)
+            const saved = existing
+              ? await updateFn(getEntityId(existing), payload)
+              : await createFn(payload)
+            summary[existing ? 'updated' : 'created'] += 1
+            registerEntityByCode(registerMap, code, saved || existing || item)
+          } catch (requestError) {
+            if (isDuplicateCodeError(requestError)) {
+              const existing = await findByCode(loadFn, code)
+              if (existing) {
+                summary.skipped += 1
+                registerEntityByCode(registerMap, code, existing)
+                continue
+              }
+            }
+            summary.failed += 1
+            summary.errors += 1
+            issues.push(`${bucketName}[${code || '?'}]: ${getApiMessage(requestError, 'Lỗi import')}`)
+          }
+        }
       }
 
-      for (const item of normalizeArray(readBucket(packageData, 'grades'))) {
-        const existing = await findByCode(getGrades, normalizeText(item.code))
-        const payload = { code: item.code, title: item.title || item.code, description: item.description || '', order: Number(item.order || 0), gradeStatus: item.gradeStatus || 'active' }
-        const saved = existing ? await updateGrade(getEntityId(existing), payload) : await createGrade(payload)
-        summary[existing ? 'updated' : 'created'] += 1
-        gradesByCode.set(normalizeText(saved?.code || item.code), saved)
-      }
+      await processImportItems({
+        bucketName: 'subjects',
+        items: normalizeArray(readBucket(packageData, 'subjects')),
+        loadFn: getSubjects,
+        createFn: createSubject,
+        updateFn: updateSubject,
+        registerMap: subjectsByCode,
+        buildPayload: async (item) => ({ code: item.code, title: item.title || item.code, description: item.description || '', subjectStatus: item.subjectStatus || 'active' }),
+      })
 
-      for (const item of normalizeArray(readBucket(packageData, 'knowledgeNodes'))) {
-        const existing = await findByCode(getKnowledgeNodes, normalizeText(item.code))
-        const payload = {
+      await processImportItems({
+        bucketName: 'grades',
+        items: normalizeArray(readBucket(packageData, 'grades')),
+        loadFn: getGrades,
+        createFn: createGrade,
+        updateFn: updateGrade,
+        registerMap: gradesByCode,
+        buildPayload: async (item) => ({ code: item.code, title: item.title || item.code, description: item.description || '', order: Number(item.order || 0), gradeStatus: item.gradeStatus || 'active' }),
+      })
+
+      await processImportItems({
+        bucketName: 'knowledgeNodes',
+        items: normalizeArray(readBucket(packageData, 'knowledgeNodes')),
+        loadFn: getKnowledgeNodes,
+        createFn: createKnowledgeNode,
+        updateFn: updateKnowledgeNode,
+        registerMap: knowledgeNodesByCode,
+        buildPayload: async (item) => ({
           code: item.code,
           title: item.title || item.code,
           description: item.description || '',
@@ -314,15 +392,17 @@ export default function QuestionBankImportModal({ visible, onClose, onImported }
           knowledgeNodeStatus: item.knowledgeNodeStatus || 'active',
           order: Number(item.order || 0),
           level: Number(item.level || 0),
-        }
-        const saved = existing ? await updateKnowledgeNode(getEntityId(existing), payload) : await createKnowledgeNode(payload)
-        summary[existing ? 'updated' : 'created'] += 1
-        knowledgeNodesByCode.set(normalizeText(saved?.code || item.code), saved)
-      }
+        }),
+      })
 
-      for (const item of normalizeArray(readBucket(packageData, 'skills'))) {
-        const existing = await findByCode(getSkills, normalizeText(item.code))
-        const payload = {
+      await processImportItems({
+        bucketName: 'skills',
+        items: normalizeArray(readBucket(packageData, 'skills')),
+        loadFn: getSkills,
+        createFn: createSkill,
+        updateFn: updateSkill,
+        registerMap: skillsByCode,
+        buildPayload: async (item) => ({
           code: item.code,
           title: item.title || item.code,
           description: item.description || '',
@@ -332,41 +412,46 @@ export default function QuestionBankImportModal({ visible, onClose, onImported }
           parentSkill: getEntityId(skillsByCode.get(normalizeText(item.parentSkillCode))) || null,
           level: item.level || 'understand',
           skillStatus: item.skillStatus || 'active',
-        }
-        const saved = existing ? await updateSkill(getEntityId(existing), payload) : await createSkill(payload)
-        summary[existing ? 'updated' : 'created'] += 1
-        skillsByCode.set(normalizeText(saved?.code || item.code), saved)
-      }
+        }),
+      })
 
-      for (const item of normalizeArray(readBucket(packageData, 'stimuli'))) {
-        const existing = await findByCode(getQuestionStimuli, normalizeText(item.code))
-        const payload = buildStimulusImportPayload(item, existing)
-        const saved = existing ? await updateQuestionStimulus(getEntityId(existing), payload) : await createQuestionStimulus(payload)
-        summary[existing ? 'updated' : 'created'] += 1
-        stimuliByCode.set(normalizeText(saved?.code || item.code), saved)
-      }
+      await processImportItems({
+        bucketName: 'stimuli',
+        items: normalizeArray(readBucket(packageData, 'stimuli')),
+        loadFn: getQuestionStimuli,
+        createFn: createQuestionStimulus,
+        updateFn: updateQuestionStimulus,
+        registerMap: stimuliByCode,
+        buildPayload: async (item, existing) => buildStimulusImportPayload(item, existing),
+      })
 
-      for (const item of normalizeArray(readBucket(packageData, 'questions'))) {
-        const existing = await findByCode(getQuestions, normalizeText(item.code))
-        const payload = normalizeImportedQuestionPayload(item, {
+      await processImportItems({
+        bucketName: 'questions',
+        items: normalizeArray(readBucket(packageData, 'questions')),
+        loadFn: getQuestions,
+        createFn: createQuestion,
+        updateFn: updateQuestion,
+        registerMap: null,
+        buildPayload: async (item, existing) => normalizeImportedQuestionPayload(item, {
           subjectsByCode,
           gradesByCode,
           knowledgeNodesByCode,
           skillsByCode,
           stimuliByCode,
           existingQuestion: existing,
-        })
-        if (existing) {
-          await updateQuestion(getEntityId(existing), payload)
-          summary.updated += 1
-        } else {
-          await createQuestion(payload)
-          summary.created += 1
-        }
+        }),
+      })
+
+      summary.errors = summary.failed
+      setImportIssues(issues)
+      if (summary.failed > 0) {
+        setError(`Import hoàn tất với ${summary.failed} lỗi. Dữ liệu tạo/cập nhật trước đó đã được giữ lại.`)
       }
 
       onImported?.(summary)
-      handleClose()
+      if (summary.failed === 0) {
+        handleClose()
+      }
     } catch (requestError) {
       setError(getApiMessage(requestError, 'Không import được question bank JSON'))
     } finally {
@@ -390,6 +475,39 @@ export default function QuestionBankImportModal({ visible, onClose, onImported }
             <CButton color='primary' onClick={handleParse} disabled={parsing}>{parsing ? 'Đang parse...' : 'Parse & Preview'}</CButton>
           </CCol>
         </CRow>
+        <CRow className='g-3 mt-1'>
+          <CCol md={12}>
+            <CFormLabel>Chế độ nhập dữ liệu</CFormLabel>
+            <div className='d-flex flex-column gap-1'>
+              <CFormCheck
+                type='radio'
+                name='import-mode'
+                id='import-mode-upsert'
+                label='upsert — Tạo mới hoặc cập nhật bản ghi đã tồn tại.'
+                checked={importMode === IMPORT_MODES.UPSERT}
+                onChange={() => {
+                  setImportMode(IMPORT_MODES.UPSERT)
+                  setPreview(null)
+                  setPackageData(null)
+                }}
+                disabled={parsing || importing}
+              />
+              <CFormCheck
+                type='radio'
+                name='import-mode'
+                id='import-mode-create-only'
+                label='create_only — Chỉ tạo mới, bản ghi đã tồn tại sẽ được bỏ qua (không chỉnh sửa dữ liệu hiện có).'
+                checked={importMode === IMPORT_MODES.CREATE_ONLY}
+                onChange={() => {
+                  setImportMode(IMPORT_MODES.CREATE_ONLY)
+                  setPreview(null)
+                  setPackageData(null)
+                }}
+                disabled={parsing || importing}
+              />
+            </div>
+          </CCol>
+        </CRow>
 
         {preview ? (
           <div className='mt-4'>
@@ -402,6 +520,7 @@ export default function QuestionBankImportModal({ visible, onClose, onImported }
                     <CTableHeaderCell>Nhóm dữ liệu</CTableHeaderCell>
                     <CTableHeaderCell>New</CTableHeaderCell>
                     <CTableHeaderCell>Update</CTableHeaderCell>
+                    <CTableHeaderCell>Skip</CTableHeaderCell>
                   </CTableRow>
                 </CTableHead>
                 <CTableBody>
@@ -410,12 +529,25 @@ export default function QuestionBankImportModal({ visible, onClose, onImported }
                       <CTableDataCell>{key}</CTableDataCell>
                       <CTableDataCell>{value.create}</CTableDataCell>
                       <CTableDataCell>{value.update}</CTableDataCell>
+                      <CTableDataCell>{value.skip}</CTableDataCell>
                     </CTableRow>
                   ))}
                 </CTableBody>
               </CTable>
             ) : null}
+            {importMode === IMPORT_MODES.CREATE_ONLY ? (
+              <div className='small text-body-secondary'>Lưu ý: create_only sẽ không cập nhật bản ghi đã tồn tại, kể cả Question và Question Options.</div>
+            ) : null}
           </div>
+        ) : null}
+        {importIssues.length > 0 ? (
+          <CAlert color='danger' className='mt-3'>
+            <div className='fw-semibold'>Chi tiết lỗi import (tối đa 20 dòng đầu):</div>
+            {importIssues.slice(0, 20).map((item, index) => (
+              <div key={`${item}-${index}`}>{item}</div>
+            ))}
+            {importIssues.length > 20 ? <div>... và {importIssues.length - 20} lỗi khác.</div> : null}
+          </CAlert>
         ) : null}
       </CModalBody>
       <CModalFooter>

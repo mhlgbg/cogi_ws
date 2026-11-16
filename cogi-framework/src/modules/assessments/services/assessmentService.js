@@ -74,8 +74,8 @@ export async function retireAssessmentVersion(id) {
   return unwrapSuccess(res.data)
 }
 
-export async function cloneAssessmentVersion(id, data) {
-  const res = await api.post(`/assessment-management/assessment-versions/${id}/clone`, data)
+export async function cloneAssessmentVersion(id, data = {}) {
+  const res = await api.post(`/assessment-management/assessment-versions/${id}/clone`, data || {})
   return unwrapSuccess(res.data)
 }
 
@@ -101,6 +101,16 @@ export async function deleteAssessmentSection(id) {
 
 export async function reorderAssessmentSections(versionId, items) {
   const res = await api.post(`/assessment-management/assessment-versions/${versionId}/sections/reorder`, { items })
+  return unwrapSuccess(res.data)
+}
+
+export async function previewRandomQuestions(sectionId, data) {
+  const res = await api.post(`/assessment-management/assessment-sections/${sectionId}/random-questions/preview`, data)
+  return unwrapSuccess(res.data)
+}
+
+export async function executeRandomQuestions(sectionId, data) {
+  const res = await api.post(`/assessment-management/assessment-sections/${sectionId}/random-questions/execute`, data)
   return unwrapSuccess(res.data)
 }
 

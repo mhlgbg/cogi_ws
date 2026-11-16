@@ -246,9 +246,8 @@
   }
 }
 
-.assessment-runner-stimulus .quick-message-html-content table {
-  display: block;
-  overflow-x: auto;
+.assessment-runner-stimulus .cogi-question-table-scroll {
+  margin-bottom: 0.75rem;
 }
 
 .assessment-runner-option-image {

@@ -25,15 +25,28 @@ import {
   CTabContent,
   CTabPane,
 } from '@coreui/react'
+import CampaignManagerAssignmentModal from '../components/CampaignManagerAssignmentModal'
 import CampaignReport from '../components/CampaignReport'
 import CreateAssignmentModal from '../components/CreateAssignmentModal'
 import ImportAssignmentModal from '../components/ImportAssignmentModal'
+import { useFeature } from '../../../contexts/FeatureContext'
 import {
+  createMyManagedSurveyAssignment,
+  createSurveyAssignment,
+  deleteMyManagedSurveyAssignmentsByFilter,
   deleteSurveyAssignmentsByFilter,
+  exportMyManagedSurveyCampaignProgressReport,
   exportSurveyCampaignProgressReport,
+  getMyManagedSurveyAssignments,
+  getMyManagedSurveyCampaignDetail,
   getSurveyAssignments,
   getSurveyCampaignDetail,
+  getSurveyCampaignUserAssignments,
+  importMyManagedSurveyAssignments,
+  resetMyManagedSurveyCampaignResponses,
   resetSurveyCampaignResponses,
+  restoreMyManagedSurveyAssignment,
+  restoreMyManagedSurveyAssignmentsByFilter,
   restoreSurveyAssignment,
   restoreSurveyAssignmentsByFilter,
 } from '../services/surveyCampaignService'
@@ -103,9 +116,24 @@ function buildPaginationItems(currentPage, currentPageCount) {
     }, [])
 }
 
-export default function CampaignDetail() {
+export default function CampaignDetail({ workspaceMode = 'admin' }) {
   const navigate = useNavigate()
   const { id } = useParams()
+  const feature = useFeature()
+  const isManagedWorkspace = workspaceMode === 'managed'
+  const canManageCampaignAssignments = !isManagedWorkspace
+    && feature?.hasFeature?.('survey.campaign.manage')
+  const assignmentListApi = isManagedWorkspace ? getMyManagedSurveyAssignments : getSurveyAssignments
+  const campaignDetailApi = isManagedWorkspace ? getMyManagedSurveyCampaignDetail : getSurveyCampaignDetail
+  const deleteAssignmentsByFilterApi = isManagedWorkspace ? deleteMyManagedSurveyAssignmentsByFilter : deleteSurveyAssignmentsByFilter
+  const restoreAssignmentsByFilterApi = isManagedWorkspace ? restoreMyManagedSurveyAssignmentsByFilter : restoreSurveyAssignmentsByFilter
+  const restoreAssignmentApi = isManagedWorkspace ? restoreMyManagedSurveyAssignment : restoreSurveyAssignment
+  const resetResponsesApi = isManagedWorkspace ? resetMyManagedSurveyCampaignResponses : resetSurveyCampaignResponses
+  const exportProgressApi = isManagedWorkspace ? exportMyManagedSurveyCampaignProgressReport : exportSurveyCampaignProgressReport
+  const importAssignmentsApi = isManagedWorkspace ? importMyManagedSurveyAssignments : undefined
+  const createAssignmentApi = isManagedWorkspace
+    ? (payload) => createMyManagedSurveyAssignment(id, payload)
+    : createSurveyAssignment
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -123,6 +151,7 @@ export default function CampaignDetail() {
   const [trashLoaded, setTrashLoaded] = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
   const [showImportModal, setShowImportModal] = useState(false)
+  const [showManagerModal, setShowManagerModal] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [showDeleteAssignmentsConfirm, setShowDeleteAssignmentsConfirm] = useState(false)
@@ -136,19 +165,28 @@ export default function CampaignDetail() {
   const [appliedFilters, setAppliedFilters] = useState(createEmptyAssignmentFilters)
   const [trashFilters, setTrashFilters] = useState(createEmptyAssignmentFilters)
   const [appliedTrashFilters, setAppliedTrashFilters] = useState(createEmptyAssignmentFilters)
+  const [managerAssignments, setManagerAssignments] = useState([])
+  const [managerLoading, setManagerLoading] = useState(false)
+  const [managerError, setManagerError] = useState('')
 
   async function loadDetail() {
-    const data = await getSurveyCampaignDetail(id)
+    const data = await campaignDetailApi(id)
     setDetail(data)
   }
 
   async function loadAssignments(nextPage = page, nextPageSize = pageSize, nextFilters = appliedFilters) {
-    const response = await getSurveyAssignments({
-      campaignId: id,
-      page: nextPage,
-      pageSize: nextPageSize,
-      ...nextFilters,
-    })
+    const response = isManagedWorkspace
+      ? await assignmentListApi(id, {
+        page: nextPage,
+        pageSize: nextPageSize,
+        ...nextFilters,
+      })
+      : await assignmentListApi({
+        campaignId: id,
+        page: nextPage,
+        pageSize: nextPageSize,
+        ...nextFilters,
+      })
     setAssignments(Array.isArray(response?.data) ? response.data : [])
     setPage(Number(response?.meta?.page || nextPage) || 1)
     setPageSize(Number(response?.meta?.pageSize || nextPageSize) || 10)
@@ -157,19 +195,43 @@ export default function CampaignDetail() {
   }
 
   async function loadDeletedAssignments(nextPage = trashPage, nextPageSize = trashPageSize, nextFilters = appliedTrashFilters) {
-    const response = await getSurveyAssignments({
-      campaignId: id,
-      page: nextPage,
-      pageSize: nextPageSize,
-      deletedOnly: true,
-      ...nextFilters,
-    })
+    const response = isManagedWorkspace
+      ? await assignmentListApi(id, {
+        page: nextPage,
+        pageSize: nextPageSize,
+        deletedOnly: true,
+        ...nextFilters,
+      })
+      : await assignmentListApi({
+        campaignId: id,
+        page: nextPage,
+        pageSize: nextPageSize,
+        deletedOnly: true,
+        ...nextFilters,
+      })
     setTrashAssignments(Array.isArray(response?.data) ? response.data : [])
     setTrashPage(Number(response?.meta?.page || nextPage) || 1)
     setTrashPageSize(Number(response?.meta?.pageSize || nextPageSize) || 10)
     setTrashPageCount(Number(response?.meta?.pageCount || 1) || 1)
     setTrashTotal(Number(response?.meta?.total || 0) || 0)
     setTrashLoaded(true)
+  }
+
+  async function loadManagerAssignments() {
+    if (!canManageCampaignAssignments || !id) return
+    setManagerLoading(true)
+    setManagerError('')
+    try {
+      const response = await getSurveyCampaignUserAssignments({
+        campaign: id,
+      })
+      setManagerAssignments(Array.isArray(response?.data) ? response.data : [])
+    } catch (requestError) {
+      setManagerAssignments([])
+      setManagerError(getApiMessage(requestError, 'Không thể tải danh sách phân công quản lý campaign'))
+    } finally {
+      setManagerLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -180,7 +242,11 @@ export default function CampaignDetail() {
       setError('')
 
       try {
-        await Promise.all([loadDetail(), loadAssignments()])
+        const tasks = [loadDetail(), loadAssignments()]
+        if (canManageCampaignAssignments) {
+          tasks.push(loadManagerAssignments())
+        }
+        await Promise.all(tasks)
       } catch (requestError) {
         if (!mounted) return
         setError(getApiMessage(requestError, 'Không thể tải campaign detail'))
@@ -193,7 +259,7 @@ export default function CampaignDetail() {
     return () => {
       mounted = false
     }
-  }, [id])
+  }, [id, canManageCampaignAssignments])
 
   useEffect(() => {
     if (!success) return undefined
@@ -348,6 +414,16 @@ export default function CampaignDetail() {
     await Promise.all([loadDetail(), loadAssignments(1, pageSize, appliedFilters)])
   }
 
+  async function handleManagerSaved() {
+    if (!canManageCampaignAssignments) return
+    try {
+      await loadManagerAssignments()
+      setSuccess('Đã cập nhật phân công quản lý campaign')
+    } catch (requestError) {
+      setManagerError(getApiMessage(requestError, 'Không thể cập nhật danh sách phân công quản lý campaign'))
+    }
+  }
+
   async function handleResetResponses() {
     if (!id || resettingResponses) return
 
@@ -356,7 +432,7 @@ export default function CampaignDetail() {
     setSuccess('')
 
     try {
-      const result = await resetSurveyCampaignResponses(id)
+      const result = await resetResponsesApi(id)
       await Promise.all([loadDetail(), loadAssignments(page, pageSize, appliedFilters)])
       setReportReloadKey((current) => current + 1)
       setShowResetConfirm(false)
@@ -378,10 +454,14 @@ export default function CampaignDetail() {
     setSuccess('')
 
     try {
-      const result = await deleteSurveyAssignmentsByFilter({
-        campaignId: id,
-        ...appliedFilters,
-      })
+      const result = isManagedWorkspace
+        ? await deleteAssignmentsByFilterApi(id, {
+          ...appliedFilters,
+        })
+        : await deleteAssignmentsByFilterApi({
+          campaignId: id,
+          ...appliedFilters,
+        })
       await Promise.all([
         loadDetail(),
         loadAssignments(1, pageSize, appliedFilters),
@@ -406,11 +486,16 @@ export default function CampaignDetail() {
     setSuccess('')
 
     try {
-      const result = await restoreSurveyAssignmentsByFilter({
-        campaignId: id,
-        deletedOnly: true,
-        ...appliedTrashFilters,
-      })
+      const result = isManagedWorkspace
+        ? await restoreAssignmentsByFilterApi(id, {
+          deletedOnly: true,
+          ...appliedTrashFilters,
+        })
+        : await restoreAssignmentsByFilterApi({
+          campaignId: id,
+          deletedOnly: true,
+          ...appliedTrashFilters,
+        })
       await Promise.all([
         loadDetail(),
         loadAssignments(1, pageSize, appliedFilters),
@@ -432,7 +517,7 @@ export default function CampaignDetail() {
     setSuccess('')
 
     try {
-      const restored = await restoreSurveyAssignment(assignmentId)
+      const restored = await restoreAssignmentApi(assignmentId)
       await Promise.all([
         loadDetail(),
         loadAssignments(1, pageSize, appliedFilters),
@@ -453,7 +538,7 @@ export default function CampaignDetail() {
     setError('')
 
     try {
-      const result = await exportSurveyCampaignProgressReport(id)
+      const result = await exportProgressApi(id)
       const blob = result?.blob instanceof Blob
         ? result.blob
         : new Blob([result?.blob], {
@@ -495,8 +580,9 @@ export default function CampaignDetail() {
           </div>
         </div>
         <div className='d-flex gap-2'>
-          <CButton color='light' onClick={() => navigate('/survey/campaigns')}>Quay lại</CButton>
-          <CButton color='warning' variant='outline' onClick={() => navigate(`/survey/campaigns/create?id=${id}`)}>Edit</CButton>
+          <CButton color='light' onClick={() => navigate(isManagedWorkspace ? '/survey/my-campaigns' : '/survey/campaigns')}>Quay lại</CButton>
+          {!isManagedWorkspace ? <CButton color='warning' variant='outline' onClick={() => navigate(`/survey/campaigns/create?id=${id}`)}>Edit</CButton> : null}
+          {canManageCampaignAssignments ? <CButton color='dark' variant='outline' onClick={() => setShowManagerModal(true)}>Phân công quản lý</CButton> : null}
           <CButton color='success' variant='outline' onClick={handleExportProgress} disabled={loading || exportingProgress}>
             {exportingProgress ? 'Đang xuất...' : 'Xuất tiến độ khảo sát'}
           </CButton>
@@ -564,6 +650,49 @@ export default function CampaignDetail() {
                   </CCard>
                 </CCol>
               </CRow>
+
+              {canManageCampaignAssignments ? (
+                <CCard className='border-0 shadow-sm mt-4'>
+                  <CCardHeader className='bg-white d-flex justify-content-between align-items-center gap-2 flex-wrap'>
+                    <strong>Phân công quản lý campaign</strong>
+                    <CButton size='sm' color='dark' variant='outline' onClick={() => setShowManagerModal(true)}>
+                      Phân công quản lý
+                    </CButton>
+                  </CCardHeader>
+                  <CCardBody>
+                    {managerError ? <div className='alert alert-danger mt-3 mb-0'>{managerError}</div> : null}
+
+                    {managerLoading ? (
+                      <div className='d-flex align-items-center gap-2'><CSpinner size='sm' />Đang tải danh sách phân công...</div>
+                    ) : managerAssignments.filter((item) => item?.assignmentStatus === 'active').length === 0 ? (
+                      <div className='text-body-secondary'>Chưa phân công</div>
+                    ) : (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', minWidth: 640, borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr>
+                              <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #ddd' }}>Nhân sự</th>
+                              <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #ddd' }}>Email</th>
+                              <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #ddd' }}>Ngày phân công</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {managerAssignments
+                              .filter((item) => item?.assignmentStatus === 'active')
+                              .map((item) => (
+                                <tr key={item.id}>
+                                  <td style={{ padding: '10px 8px', borderBottom: '1px solid #eee' }}>{item?.user?.fullName || item?.user?.username || '-'}</td>
+                                  <td style={{ padding: '10px 8px', borderBottom: '1px solid #eee' }}>{item?.user?.email || '-'}</td>
+                                  <td style={{ padding: '10px 8px', borderBottom: '1px solid #eee' }}>{item?.assignedAt || '-'}</td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </CCardBody>
+                </CCard>
+              ) : null}
             </CTabPane>
 
             <CTabPane visible={activeTab === 'assignments'}>
@@ -610,14 +739,7 @@ export default function CampaignDetail() {
                 <CCardHeader className='bg-white d-flex justify-content-between align-items-center gap-2 flex-wrap'>
                   <strong>Assignments</strong>
                   <div className='d-flex gap-2 flex-wrap'>
-                    <CButton
-                      color='primary'
-                      variant='outline'
-                      onClick={() => setShowCreateModal(true)}
-                      disabled={loading}
-                    >
-                      Thêm mới
-                    </CButton>
+                    <CButton color='primary' variant='outline' onClick={() => setShowCreateModal(true)} disabled={loading}>Thêm mới</CButton>
                     <CButton
                       color='danger'
                       variant='outline'
@@ -716,7 +838,7 @@ export default function CampaignDetail() {
             </CTabPane>
 
             <CTabPane visible={activeTab === 'report'}>
-              <CampaignReport campaignId={id} active={activeTab === 'report'} reloadKey={reportReloadKey} />
+              <CampaignReport campaignId={id} active={activeTab === 'report'} reloadKey={reportReloadKey} workspaceMode={workspaceMode} />
             </CTabPane>
 
             <CTabPane visible={activeTab === 'trash'}>
@@ -871,16 +993,26 @@ export default function CampaignDetail() {
         visible={showImportModal}
         campaignId={detail?.id}
         campaignName={detail?.name}
+        importAssignmentsFn={importAssignmentsApi}
         onClose={() => setShowImportModal(false)}
         onSuccess={async () => {
           await Promise.all([loadDetail(), loadAssignments(page, pageSize, appliedFilters)])
         }}
       />
 
+      <CampaignManagerAssignmentModal
+        visible={showManagerModal}
+        campaignId={detail?.id}
+        campaignName={detail?.name}
+        onClose={() => setShowManagerModal(false)}
+        onSaved={handleManagerSaved}
+      />
+
       <CreateAssignmentModal
         visible={showCreateModal}
         campaignId={detail?.id}
         campaignName={detail?.name}
+        createAssignmentFn={createAssignmentApi}
         onClose={() => setShowCreateModal(false)}
         onSuccess={handleCreateAssignmentSuccess}
       />

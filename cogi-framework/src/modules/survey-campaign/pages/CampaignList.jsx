@@ -8,8 +8,14 @@ import {
   CCardHeader,
   CSpinner,
 } from '@coreui/react'
+import { useFeature } from '../../../contexts/FeatureContext'
+import CampaignManagerAssignmentModal from '../components/CampaignManagerAssignmentModal'
 import ImportAssignmentModal from '../components/ImportAssignmentModal'
 import { getSurveyCampaigns, updateSurveyCampaign } from '../services/surveyCampaignService'
+import {
+  getMyManagedSurveyCampaigns,
+  importMyManagedSurveyAssignments,
+} from '../services/surveyCampaignService'
 
 function getApiMessage(error, fallback) {
   return error?.response?.data?.error?.message || error?.response?.data?.message || error?.message || fallback
@@ -21,21 +27,28 @@ function statusColor(status) {
   return 'warning'
 }
 
-export default function CampaignList() {
+export default function CampaignList({ workspaceMode = 'admin' }) {
   const navigate = useNavigate()
+  const feature = useFeature()
+  const isManagedWorkspace = workspaceMode === 'managed'
+  const canManageCampaignAssignments = !isManagedWorkspace
+    && feature?.hasFeature?.('survey.campaign.manage')
+  const basePath = isManagedWorkspace ? '/survey/my-campaigns' : '/survey/campaigns'
+  const loadCampaignsApi = isManagedWorkspace ? getMyManagedSurveyCampaigns : getSurveyCampaigns
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [campaigns, setCampaigns] = useState([])
   const [busyById, setBusyById] = useState({})
   const [importTarget, setImportTarget] = useState(null)
+  const [managerTarget, setManagerTarget] = useState(null)
 
   async function loadCampaigns() {
     setLoading(true)
     setError('')
 
     try {
-      const response = await getSurveyCampaigns()
+      const response = await loadCampaignsApi()
       setCampaigns(Array.isArray(response?.data) ? response.data : [])
     } catch (requestError) {
       setError(getApiMessage(requestError, 'Không thể tải danh sách campaign'))
@@ -57,6 +70,7 @@ export default function CampaignList() {
   const rows = useMemo(() => campaigns, [campaigns])
 
   async function handleToggleStatus(item) {
+    if (isManagedWorkspace) return
     const nextStatus = item?.campaignStatus === 'OPEN' ? 'CLOSED' : 'OPEN'
     setBusyById((prev) => ({ ...prev, [item.id]: true }))
     setError('')
@@ -87,7 +101,7 @@ export default function CampaignList() {
           </div>
           <div className='d-flex gap-2'>
             <CButton color='secondary' variant='outline' onClick={loadCampaigns} disabled={loading}>Tải lại</CButton>
-            <CButton color='primary' onClick={() => navigate('/survey/campaigns/create')}>Create</CButton>
+            {!isManagedWorkspace ? <CButton color='primary' onClick={() => navigate('/survey/campaigns/create')}>Create</CButton> : null}
           </div>
         </CCardHeader>
         <CCardBody>
@@ -135,12 +149,17 @@ export default function CampaignList() {
                         <td style={{ padding: '10px 8px', borderBottom: '1px solid #eee', textAlign: 'right' }}>{item.progressPercent || 0}%</td>
                         <td style={{ padding: '10px 8px', borderBottom: '1px solid #eee' }}>
                           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            <CButton size='sm' color='info' variant='outline' onClick={() => navigate(`/survey/campaigns/${item.id}`)}>View Detail</CButton>
-                            <CButton size='sm' color='warning' variant='outline' onClick={() => navigate(`/survey/campaigns/create?id=${item.id}`)}>Edit</CButton>
+                            <CButton size='sm' color='info' variant='outline' onClick={() => navigate(`${basePath}/${item.id}`)}>View Detail</CButton>
+                            {!isManagedWorkspace ? <CButton size='sm' color='warning' variant='outline' onClick={() => navigate(`/survey/campaigns/create?id=${item.id}`)}>Edit</CButton> : null}
                             <CButton size='sm' color='primary' variant='outline' onClick={() => setImportTarget(item)}>Import Assignment</CButton>
-                            <CButton size='sm' color='secondary' variant='outline' disabled={busy} onClick={() => handleToggleStatus(item)}>
-                              {busy ? 'Đang cập nhật...' : item.campaignStatus === 'OPEN' ? 'Close' : 'Open'}
-                            </CButton>
+                            {canManageCampaignAssignments ? (
+                              <CButton size='sm' color='dark' variant='outline' onClick={() => setManagerTarget(item)}>Phân công quản lý</CButton>
+                            ) : null}
+                            {!isManagedWorkspace ? (
+                              <CButton size='sm' color='secondary' variant='outline' disabled={busy} onClick={() => handleToggleStatus(item)}>
+                                {busy ? 'Đang cập nhật...' : item.campaignStatus === 'OPEN' ? 'Close' : 'Open'}
+                              </CButton>
+                            ) : null}
                           </div>
                         </td>
                       </tr>
@@ -157,8 +176,17 @@ export default function CampaignList() {
         visible={Boolean(importTarget)}
         campaignId={importTarget?.id}
         campaignName={importTarget?.name}
+        importAssignmentsFn={isManagedWorkspace ? importMyManagedSurveyAssignments : undefined}
         onClose={() => setImportTarget(null)}
         onSuccess={loadCampaigns}
+      />
+
+      <CampaignManagerAssignmentModal
+        visible={Boolean(managerTarget)}
+        campaignId={managerTarget?.id}
+        campaignName={managerTarget?.name}
+        onClose={() => setManagerTarget(null)}
+        onSaved={loadCampaigns}
       />
     </div>
   )

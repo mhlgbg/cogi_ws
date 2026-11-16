@@ -24,7 +24,7 @@ export default function AnswerOptionRenderer({ option, selected, onSelect, disab
     >
       <span className='assessment-runner-option-marker'>{option?.label || ''}</span>
       <span className='flex-grow-1 text-start'>
-        {option?.content ? <span className='d-block mb-2' dangerouslySetInnerHTML={{ __html: option.content }} /> : null}
+        {option?.content ? <span className='d-block mb-2 quick-message-html-content cogi-question-content' dangerouslySetInnerHTML={{ __html: option.content }} /> : null}
         {!option?.content && option?.value ? <span>{option.value}</span> : null}
         {imageUrl ? <img className='assessment-runner-option-image mt-2' src={imageUrl} alt={option?.label || 'option-image'} /> : null}
         {multiSelect ? <span className='d-block small text-body-secondary mt-2'>Có thể chọn nhiều đáp án</span> : null}

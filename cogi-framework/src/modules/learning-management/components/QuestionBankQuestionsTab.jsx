@@ -36,6 +36,8 @@ import {
   updateQuestionStimulus,
 } from '../services/learningObjectApi'
 import QuestionBankImportModal from './QuestionBankImportModal'
+import QuestionBulkDeleteImportedModal from './QuestionBulkDeleteImportedModal'
+import QuestionBulkPrefixCleanupModal from './QuestionBulkPrefixCleanupModal'
 import QuestionEditorModal from './QuestionEditorModal'
 import QuestionStimulusEditorModal from './QuestionStimulusEditorModal'
 import StimulusPreview from './StimulusPreview'
@@ -91,9 +93,12 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
   const [showStimulusPreview, setShowStimulusPreview] = useState(false)
   const [previewingStimulus, setPreviewingStimulus] = useState(null)
   const [showImport, setShowImport] = useState(false)
+  const [showBulkDeleteImported, setShowBulkDeleteImported] = useState(false)
+  const [showBulkPrefixCleanup, setShowBulkPrefixCleanup] = useState(false)
   const [reloadTick, setReloadTick] = useState(0)
 
   const subjects = bootstrap?.subjects || []
+  const knowledgeNodes = bootstrap?.knowledgeNodes || []
   const grades = bootstrap?.grades || []
   const skills = bootstrap?.skills || []
   const questionTypes = bootstrap?.questionTypes || []
@@ -101,16 +106,19 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
   const difficulties = bootstrap?.difficulties || []
   const pagination = normalizePagination(meta?.pagination)
   const pages = useMemo(() => buildPages(page, pagination.pageCount), [page, pagination.pageCount])
+  const canManageQuestions = feature?.hasFeature?.('learning.question.manage') || feature?.hasFeature?.('learning.learning-object.manage')
 
   useEffect(() => {
     setWorkspaceActions?.(
       <div className='d-flex gap-2'>
         <CButton color='secondary' variant='outline' onClick={() => setShowImport(true)}>Import JSON</CButton>
+        {canManageQuestions ? <CButton color='danger' variant='outline' onClick={() => setShowBulkDeleteImported(true)}>Xóa câu hỏi đã import</CButton> : null}
+        {canManageQuestions ? <CButton color='warning' variant='outline' onClick={() => setShowBulkPrefixCleanup(true)}>Làm sạch nội dung</CButton> : null}
         <CButton color='primary' onClick={() => { setEditingQuestion(null); setShowEditor(true) }}>+ Tạo câu hỏi</CButton>
       </div>,
     )
     return () => setWorkspaceActions?.(null)
-  }, [setWorkspaceActions])
+  }, [canManageQuestions, setWorkspaceActions])
 
   useEffect(() => {
     let active = true
@@ -400,9 +408,53 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
       />
 
       <QuestionBankImportModal visible={showImport} onClose={() => setShowImport(false)} onImported={async (summary) => {
-        setSuccess(`Import question bank thành công. Tạo mới: ${summary?.created || 0}, Cập nhật: ${summary?.updated || 0}, Cảnh báo: ${summary?.warnings || 0}`)
+        const created = summary?.created || 0
+        const updated = summary?.updated || 0
+        const skipped = summary?.skipped || 0
+        const failed = summary?.failed || 0
+        const warnings = summary?.warnings || 0
+        if (failed > 0) {
+          setError(`Import hoàn tất với lỗi. Tạo mới: ${created}, Cập nhật: ${updated}, Bỏ qua: ${skipped}, Lỗi: ${failed}, Cảnh báo: ${warnings}`)
+        } else {
+          setSuccess(`Import question bank thành công. Tạo mới: ${created}, Cập nhật: ${updated}, Bỏ qua: ${skipped}, Cảnh báo: ${warnings}`)
+        }
         await Promise.all([loadQuestions(), loadStimuli(), onRefreshBootstrap?.()])
       }} />
+
+      <QuestionBulkDeleteImportedModal
+        visible={showBulkDeleteImported}
+        subjects={subjects}
+        onClose={() => setShowBulkDeleteImported(false)}
+        onDeleted={async (result) => {
+          const deletedCount = Number(result?.result?.deletedCount || 0)
+          const blockedCount = Number(result?.result?.blockedCount || 0)
+          const failedCount = Number(result?.result?.failedCount || 0)
+          if (failedCount > 0) {
+            setError(`Xóa hoàn tất với lỗi. Deleted: ${deletedCount}, Blocked: ${blockedCount}, Failed: ${failedCount}`)
+          } else {
+            setSuccess(`Xóa hoàn tất. Deleted: ${deletedCount}, Blocked: ${blockedCount}, Failed: ${failedCount}`)
+          }
+          await Promise.all([loadQuestions(), onRefreshBootstrap?.()])
+        }}
+      />
+
+      <QuestionBulkPrefixCleanupModal
+        visible={showBulkPrefixCleanup}
+        subjects={subjects}
+        knowledgeNodes={knowledgeNodes}
+        onClose={() => setShowBulkPrefixCleanup(false)}
+        onUpdated={async (result) => {
+          const updatedCount = Number(result?.result?.updatedCount || 0)
+          const blockedCount = Number(result?.result?.blockedCount || 0)
+          const failedCount = Number(result?.result?.failedCount || 0)
+          if (failedCount > 0) {
+            setError(`Làm sạch hoàn tất với lỗi. Updated: ${updatedCount}, Blocked: ${blockedCount}, Failed: ${failedCount}`)
+          } else {
+            setSuccess(`Làm sạch nội dung thành công. Updated: ${updatedCount}, Blocked: ${blockedCount}, Failed: ${failedCount}`)
+          }
+          await Promise.all([loadQuestions(), onRefreshBootstrap?.()])
+        }}
+      />
     </>
   )
 }

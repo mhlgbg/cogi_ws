@@ -188,6 +188,26 @@ export async function createQuestion(data) {
   return unwrapSuccess(res.data)
 }
 
+export async function previewBulkDeleteImportedQuestions(data) {
+  const res = await api.post('/learning-management/questions/bulk-delete-imported/preview', data)
+  return unwrapSuccess(res.data)
+}
+
+export async function executeBulkDeleteImportedQuestions(data) {
+  const res = await api.post('/learning-management/questions/bulk-delete-imported/execute', data)
+  return unwrapSuccess(res.data)
+}
+
+export async function previewBulkPrefixCleanupQuestions(data) {
+  const res = await api.post('/learning-management/questions/bulk-prefix-cleanup/preview', data)
+  return unwrapSuccess(res.data)
+}
+
+export async function executeBulkPrefixCleanupQuestions(data) {
+  const res = await api.post('/learning-management/questions/bulk-prefix-cleanup/execute', data)
+  return unwrapSuccess(res.data)
+}
+
 export async function updateQuestion(id, data) {
   const res = await api.put(`/learning-management/questions/${id}`, data)
   return unwrapSuccess(res.data)

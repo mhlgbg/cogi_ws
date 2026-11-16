@@ -34,6 +34,7 @@ export default function CreateAssignmentModal({
   visible,
   campaignId,
   campaignName,
+  createAssignmentFn = createSurveyAssignment,
   onClose,
   onSuccess,
 }) {
@@ -80,7 +81,7 @@ export default function CreateAssignmentModal({
         lecturerName: isCourseLecturer ? String(form.lecturerName || '').trim() : '',
       }
 
-      const response = await createSurveyAssignment(payload)
+      const response = await createAssignmentFn(payload)
       onSuccess?.(response)
     } catch (requestError) {
       setError(getApiMessage(requestError, 'Không thể thêm assignment'))

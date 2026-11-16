@@ -28,6 +28,14 @@ import {
   getSurveyCampaignReportCourses,
   getSurveyCampaignReportLecturers,
   getSurveyCampaignReportSummary,
+  downloadMyManagedSurveyCampaignAnswersReportLatestFile,
+  exportMyManagedSurveyCampaignCourseReport,
+  exportMyManagedSurveyCampaignLecturerReport,
+  generateMyManagedSurveyCampaignAnswersReportFile,
+  getMyManagedSurveyCampaignAnswersReportLatestFile,
+  getMyManagedSurveyCampaignReportCourses,
+  getMyManagedSurveyCampaignReportLecturers,
+  getMyManagedSurveyCampaignReportSummary,
 } from '../services/surveyCampaignService'
 
 function getApiMessage(error, fallback) {
@@ -43,7 +51,16 @@ function EmptyState({ text }) {
   return <div className='text-body-secondary text-center py-4'>{text}</div>
 }
 
-export default function CampaignReport({ campaignId, active, reloadKey = 0 }) {
+export default function CampaignReport({ campaignId, active, reloadKey = 0, workspaceMode = 'admin' }) {
+  const isManagedWorkspace = workspaceMode === 'managed'
+  const reportSummaryApi = isManagedWorkspace ? getMyManagedSurveyCampaignReportSummary : getSurveyCampaignReportSummary
+  const reportLecturersApi = isManagedWorkspace ? getMyManagedSurveyCampaignReportLecturers : getSurveyCampaignReportLecturers
+  const reportCoursesApi = isManagedWorkspace ? getMyManagedSurveyCampaignReportCourses : getSurveyCampaignReportCourses
+  const exportLecturerApi = isManagedWorkspace ? exportMyManagedSurveyCampaignLecturerReport : exportSurveyCampaignLecturerReport
+  const exportCourseApi = isManagedWorkspace ? exportMyManagedSurveyCampaignCourseReport : exportSurveyCampaignCourseReport
+  const generateAnswersApi = isManagedWorkspace ? generateMyManagedSurveyCampaignAnswersReportFile : generateSurveyCampaignAnswersReportFile
+  const latestAnswersApi = isManagedWorkspace ? getMyManagedSurveyCampaignAnswersReportLatestFile : getSurveyCampaignAnswersReportLatestFile
+  const downloadAnswersApi = isManagedWorkspace ? downloadMyManagedSurveyCampaignAnswersReportLatestFile : downloadSurveyCampaignAnswersReportLatestFile
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [summary, setSummary] = useState(null)
@@ -90,7 +107,7 @@ export default function CampaignReport({ campaignId, active, reloadKey = 0 }) {
     setError('')
 
     try {
-      const result = await exportSurveyCampaignLecturerReport(campaignId, lecturerKey)
+      const result = await exportLecturerApi(campaignId, lecturerKey)
       downloadBlob(result?.blob, result?.fileName || `survey-report-${campaignId}-${lecturerKey}.xlsx`)
     } catch (requestError) {
       setError(getApiMessage(requestError, 'Không thể export báo cáo giảng viên'))
@@ -107,7 +124,7 @@ export default function CampaignReport({ campaignId, active, reloadKey = 0 }) {
     setError('')
 
     try {
-      const result = await exportSurveyCampaignCourseReport(campaignId, courseKey)
+      const result = await exportCourseApi(campaignId, courseKey)
       downloadBlob(result?.blob, result?.fileName || `survey-report-${campaignId}-${courseKey}.xlsx`)
     } catch (requestError) {
       setError(getApiMessage(requestError, 'Không thể export báo cáo môn học'))
@@ -123,7 +140,7 @@ export default function CampaignReport({ campaignId, active, reloadKey = 0 }) {
     }
 
     try {
-      const info = await getSurveyCampaignAnswersReportLatestFile(campaignId)
+      const info = await latestAnswersApi(campaignId)
       setAnswersReportInfo(info || null)
     } catch {
       setAnswersReportInfo(null)
@@ -137,7 +154,7 @@ export default function CampaignReport({ campaignId, active, reloadKey = 0 }) {
     setError('')
 
     try {
-      const info = await generateSurveyCampaignAnswersReportFile(campaignId)
+      const info = await generateAnswersApi(campaignId)
       setAnswersReportInfo((current) => ({
         ...(current || {}),
         ...(info || {}),
@@ -162,7 +179,7 @@ export default function CampaignReport({ campaignId, active, reloadKey = 0 }) {
     setError('')
 
     try {
-      const result = await downloadSurveyCampaignAnswersReportLatestFile(campaignId)
+      const result = await downloadAnswersApi(campaignId)
       downloadBlob(result?.blob, result?.fileName || `survey-answers-${campaignId}.xlsx`)
       await loadLatestAnswersReportInfo()
     } catch (requestError) {
@@ -207,14 +224,14 @@ export default function CampaignReport({ campaignId, active, reloadKey = 0 }) {
 
       try {
         const [summaryData, lecturerData, courseData] = await Promise.all([
-          getSurveyCampaignReportSummary(campaignId),
-          getSurveyCampaignReportLecturers(campaignId),
-          getSurveyCampaignReportCourses(campaignId),
+          reportSummaryApi(campaignId),
+          reportLecturersApi(campaignId),
+          reportCoursesApi(campaignId),
         ])
 
         let answersReportInfoData = null
         try {
-          answersReportInfoData = await getSurveyCampaignAnswersReportLatestFile(campaignId)
+          answersReportInfoData = await latestAnswersApi(campaignId)
         } catch {
           answersReportInfoData = null
         }
