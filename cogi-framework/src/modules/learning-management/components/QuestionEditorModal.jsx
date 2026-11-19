@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   CAccordion,
   CAccordionBody,
@@ -164,6 +164,11 @@ export default function QuestionEditorModal({
   onRefreshStimuli,
   onRefreshSupportData,
   feature,
+  title,
+  notice,
+  onDirtyChange,
+  confirmCloseOnDirty = true,
+  disableSave = false,
 }) {
   const [form, setForm] = useState(emptyQuestionForm())
   const [error, setError] = useState('')
@@ -177,6 +182,7 @@ export default function QuestionEditorModal({
   const [stimulusModalSeed, setStimulusModalSeed] = useState(null)
   const [stimulusModalNotice, setStimulusModalNotice] = useState('')
   const [stimulusModalVersion, setStimulusModalVersion] = useState(0)
+  const initialSnapshotRef = useRef('')
 
   const subjects = bootstrap?.subjects || []
   const grades = bootstrap?.grades || []
@@ -190,9 +196,17 @@ export default function QuestionEditorModal({
 
   useEffect(() => {
     if (!visible) return
-    setForm(editingQuestion ? normalizeQuestionForm(editingQuestion) : emptyQuestionForm())
+    const initialForm = editingQuestion ? normalizeQuestionForm(editingQuestion) : emptyQuestionForm()
+    setForm(initialForm)
+    initialSnapshotRef.current = JSON.stringify(initialForm)
     setError('')
   }, [editingQuestion, visible])
+
+  const isDirty = useMemo(() => JSON.stringify(form) !== initialSnapshotRef.current, [form])
+
+  useEffect(() => {
+    onDirtyChange?.(Boolean(visible && isDirty))
+  }, [isDirty, onDirtyChange, visible])
 
   const selectedStimulus = useMemo(() => {
     if (form.stimulusEntity) return form.stimulusEntity
@@ -208,6 +222,7 @@ export default function QuestionEditorModal({
 
   function handleClose() {
     if (saving) return
+    if (confirmCloseOnDirty && visible && isDirty && !window.confirm('Bạn có thay đổi chưa lưu. Đóng mà không lưu?')) return
     setError('')
     setPickerIndex(-1)
     setShowQuestionImagePicker(false)
@@ -378,9 +393,10 @@ export default function QuestionEditorModal({
     <>
       <CModal visible={visible} backdrop='static' size='xl' fullscreen='md-down' onClose={handleClose}>
         <CModalHeader>
-          <CModalTitle>{editingQuestion ? 'Sửa câu hỏi' : 'Tạo câu hỏi'}</CModalTitle>
+          <CModalTitle>{title || (editingQuestion ? 'Sửa câu hỏi' : 'Tạo câu hỏi')}</CModalTitle>
         </CModalHeader>
         <CModalBody>
+          {notice ? <CAlert color='warning'>{notice}</CAlert> : null}
           {error ? <CAlert color='danger'>{error}</CAlert> : null}
           <CRow className='g-4'>
             <CCol lg={8}>
@@ -559,7 +575,7 @@ export default function QuestionEditorModal({
         </CModalBody>
         <CModalFooter>
           <CButton color='secondary' variant='outline' onClick={handleClose} disabled={saving}>Đóng</CButton>
-          <CButton color='primary' onClick={handleSave} disabled={saving}>{saving ? 'Đang lưu...' : 'Lưu câu hỏi'}</CButton>
+          <CButton color='primary' onClick={handleSave} disabled={saving || disableSave}>{saving ? 'Đang lưu...' : 'Lưu câu hỏi'}</CButton>
         </CModalFooter>
       </CModal>
 

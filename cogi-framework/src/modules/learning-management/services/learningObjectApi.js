@@ -183,6 +183,17 @@ export async function getQuestions(params = {}) {
   return unwrapSuccess(res.data)
 }
 
+export async function getQuestionById(id) {
+  const payload = await getQuestions({ id, page: 1, pageSize: 1 })
+  const rows = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : []
+  return rows[0] || null
+}
+
+export async function getQuestionUsageProtection(id) {
+  const res = await api.get(`/learning-management/questions/${id}/usage-protection`)
+  return unwrapSuccess(res.data)
+}
+
 export async function createQuestion(data) {
   const res = await api.post('/learning-management/questions', data)
   return unwrapSuccess(res.data)

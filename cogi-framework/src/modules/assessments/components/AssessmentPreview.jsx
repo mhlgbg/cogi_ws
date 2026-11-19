@@ -1,4 +1,4 @@
-import { CBadge, CCard, CCardBody, CCardHeader } from '@coreui/react'
+import { CBadge, CButton, CCard, CCardBody, CCardHeader } from '@coreui/react'
 import QuestionPreview from '../../learning-management/components/QuestionPreview'
 import StimulusPreview from '../../learning-management/components/StimulusPreview'
 import StimulusContent from '../../learning-management/components/StimulusContent'
@@ -6,7 +6,7 @@ import InlineFillQuestionLayout from './InlineFillQuestionLayout'
 import { getInlineFillQuestionCode } from './inlineFillLayoutUtils'
 import { computeSectionStats, computeVersionStats, formatCandidateRange, formatGradeRange, getResultModeLabel, getRuntimeConfigSummary, getVersionStatusLabel } from './assessmentUi'
 
-export default function AssessmentPreview({ assessment, version, showAdminAnswers = false }) {
+export default function AssessmentPreview({ assessment, version, showAdminAnswers = false, onEditQuestion, buildQuestionAnchorId, disableEditQuestion = false }) {
   if (!assessment || !version) {
     return <div className='text-body-secondary'>Chưa có phiên bản để xem trước.</div>
   }
@@ -68,17 +68,80 @@ export default function AssessmentPreview({ assessment, version, showAdminAnswer
                     )}
                     renderUnknownPlaceholder={({ code }) => <span className='assessment-inline-fill-preview-token is-invalid'>{`[${code}]`}</span>}
                   />
+                  {onEditQuestion && Array.isArray(section.assessmentQuestions) && section.assessmentQuestions.length > 0 ? (
+                    <div className='d-grid gap-2 mt-2'>
+                      {section.assessmentQuestions.map((item, index) => {
+                        const anchorId = buildQuestionAnchorId?.({
+                          assessment,
+                          version,
+                          section,
+                          item,
+                          question: item?.question || null,
+                        }) || null
+                        return (
+                          <div key={item.id || item.documentId || index} id={anchorId || undefined} data-preview-question-anchor={anchorId || undefined} className='d-flex justify-content-between align-items-center gap-2 border rounded-3 p-2'>
+                            <div className='small'>{`${index + 1}. ${item?.question?.code || 'N/A'}`}</div>
+                            <CButton
+                              size='sm'
+                              color='secondary'
+                              variant='outline'
+                              disabled={disableEditQuestion}
+                              onClick={() => onEditQuestion({
+                                assessment,
+                                version,
+                                section,
+                                item,
+                                question: item?.question || null,
+                                index,
+                                anchorId,
+                              })}
+                            >
+                              ✎ Sửa câu hỏi
+                            </CButton>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : null}
                 </>
               ) : (section.assessmentQuestions || []).map((item, index) => {
                 const stimulus = item?.question?.stimulus || null
                 const stimulusId = stimulus?.documentId || stimulus?.id || ''
                 const shouldRenderStimulus = Boolean(stimulusId) && stimulusId !== previousStimulusId
                 previousStimulusId = stimulusId || previousStimulusId
+                const anchorId = buildQuestionAnchorId?.({
+                  assessment,
+                  version,
+                  section,
+                  item,
+                  question: item?.question || null,
+                }) || null
                 return (
-                  <div key={item.id || item.documentId || index} className='border rounded-3 p-3'>
+                  <div key={item.id || item.documentId || index} id={anchorId || undefined} data-preview-question-anchor={anchorId || undefined} className='border rounded-3 p-3'>
                     <div className='d-flex justify-content-between align-items-start gap-2 mb-2 flex-wrap'>
                       <div className='fw-semibold'>{`${index + 1}. ${item.question?.code || ''}`}</div>
-                      <div className='small text-body-secondary'>{`${item.points || 1} điểm · ${item.required ? 'Bắt buộc' : 'Tùy chọn'} · ${getRuntimeConfigSummary(item)}`}</div>
+                      <div className='d-flex align-items-center gap-2 flex-wrap justify-content-end'>
+                        <div className='small text-body-secondary'>{`${item.points || 1} điểm · ${item.required ? 'Bắt buộc' : 'Tùy chọn'} · ${getRuntimeConfigSummary(item)}`}</div>
+                        {onEditQuestion ? (
+                          <CButton
+                            size='sm'
+                            color='secondary'
+                            variant='outline'
+                            disabled={disableEditQuestion}
+                            onClick={() => onEditQuestion({
+                              assessment,
+                              version,
+                              section,
+                              item,
+                              question: item?.question || null,
+                              index,
+                              anchorId,
+                            })}
+                          >
+                            ✎ Sửa câu hỏi
+                          </CButton>
+                        ) : null}
+                      </div>
                     </div>
                     {shouldRenderStimulus && stimulus ? <div className='mb-3'><StimulusPreview stimulus={stimulus} compact /></div> : null}
                     <QuestionPreview question={item.question} />

@@ -34,7 +34,7 @@ function parsePercentToRatio(value) {
   return { ratio: percent === 0 ? 0 : percent / 100, error: '' }
 }
 
-export default function AssessmentQuestionPickerModal({ visible, section, bootstrap, saving, onClose, onAdd }) {
+export default function AssessmentQuestionPickerModal({ visible, section, assessmentSubject, bootstrap, saving, onClose, onAdd }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [rows, setRows] = useState([])
@@ -42,19 +42,31 @@ export default function AssessmentQuestionPickerModal({ visible, section, bootst
   const [selectedIds, setSelectedIds] = useState([])
   const [defaults, setDefaults] = useState({ points: '1', required: true, audioPlayLimit: '', allowSeek: true, minListenRatioBeforeAnswerPercent: '', minWords: '', maxWords: '' })
 
-  const subjects = bootstrap?.subjects || []
   const grades = bootstrap?.grades || []
   const skills = bootstrap?.skills || []
   const questionTypes = bootstrap?.questionTypes || []
   const difficulties = bootstrap?.difficulties || []
   const sectionSkillId = getEntityId(section?.skill)
+  const assessmentSubjectId = String(getEntityId(assessmentSubject) || assessmentSubject?.id || '').trim()
+  const assessmentSubjectName = assessmentSubject?.title || assessmentSubject?.code || ''
 
   useEffect(() => {
     if (!visible) return
     setSelectedIds([])
     setError('')
-    setFilters((prev) => ({ ...prev, skillId: sectionSkillId || prev.skillId }))
-  }, [sectionSkillId, visible])
+    setRows([])
+    setFilters({
+      q: '',
+      qDraft: '',
+      subjectId: assessmentSubjectId || '',
+      gradeId: '',
+      skillId: sectionSkillId || '',
+      type: '',
+      difficulty: '',
+      questionStatus: 'active',
+      hasStimulus: '',
+    })
+  }, [assessmentSubjectId, sectionSkillId, visible])
 
   useEffect(() => {
     if (!visible) return
@@ -62,6 +74,11 @@ export default function AssessmentQuestionPickerModal({ visible, section, bootst
   }, [visible, filters.q, filters.subjectId, filters.gradeId, filters.skillId, filters.type, filters.difficulty, filters.questionStatus, filters.hasStimulus])
 
   async function loadQuestions() {
+    if (!assessmentSubjectId) {
+      setRows([])
+      return
+    }
+
     setLoading(true)
     setError('')
     try {
@@ -70,7 +87,7 @@ export default function AssessmentQuestionPickerModal({ visible, section, bootst
         pageSize: 100,
         sort: ['code:asc', 'id:asc'],
         q: filters.q || undefined,
-        subjectId: filters.subjectId || undefined,
+        subjectId: assessmentSubjectId,
         gradeId: filters.gradeId || undefined,
         skillId: filters.skillId || undefined,
         type: filters.type || undefined,
@@ -92,6 +109,10 @@ export default function AssessmentQuestionPickerModal({ visible, section, bootst
   }
 
   async function handleConfirm() {
+    if (!assessmentSubjectId) {
+      setError('Assessment chưa được gán Subject hợp lệ')
+      return
+    }
     if (selectedIds.length === 0) {
       setError('Vui lòng chọn ít nhất một câu hỏi')
       return
@@ -121,16 +142,17 @@ export default function AssessmentQuestionPickerModal({ visible, section, bootst
       </CModalHeader>
       <CModalBody>
         {error ? <CAlert color='danger'>{error}</CAlert> : null}
+        {!assessmentSubjectId ? <CAlert color='warning'>Assessment chưa được gán Subject hợp lệ. Không thể thêm câu hỏi thủ công.</CAlert> : null}
         <CRow className='g-3 align-items-end mb-4'>
           <CCol md={4}><CFormInput label='Từ khóa' value={filters.qDraft} onChange={(event) => setFilters((prev) => ({ ...prev, qDraft: event.target.value }))} onKeyDown={(event) => { if (event.key === 'Enter') setFilters((prev) => ({ ...prev, q: String(prev.qDraft || '').trim() })) }} placeholder='Tìm theo mã hoặc nội dung...' /></CCol>
-          <CCol md={2}><CFormLabel>Môn học</CFormLabel><CFormSelect value={filters.subjectId} onChange={(event) => setFilters((prev) => ({ ...prev, subjectId: event.target.value }))}><option value=''>Tất cả</option>{subjects.map((item) => <option key={getEntityId(item)} value={getEntityId(item)}>{item.title || item.code}</option>)}</CFormSelect></CCol>
+          <CCol md={2}><CFormLabel>Môn học</CFormLabel><CFormInput value={assessmentSubjectName} readOnly placeholder='Assessment chưa gắn môn học' /></CCol>
           <CCol md={2}><CFormLabel>Khối</CFormLabel><CFormSelect value={filters.gradeId} onChange={(event) => setFilters((prev) => ({ ...prev, gradeId: event.target.value }))}><option value=''>Tất cả</option>{grades.map((item) => <option key={getEntityId(item)} value={getEntityId(item)}>{item.title || item.code}</option>)}</CFormSelect></CCol>
           <CCol md={2}><CFormLabel>Kỹ năng</CFormLabel><CFormSelect value={filters.skillId} onChange={(event) => setFilters((prev) => ({ ...prev, skillId: event.target.value }))}><option value=''>Tất cả</option>{skills.map((item) => <option key={getEntityId(item)} value={getEntityId(item)}>{item.title || item.code}</option>)}</CFormSelect></CCol>
           <CCol md={2}><CFormLabel>Loại</CFormLabel><CFormSelect value={filters.type} onChange={(event) => setFilters((prev) => ({ ...prev, type: event.target.value }))}><option value=''>Tất cả</option>{questionTypes.map((item) => <option key={item} value={item}>{getQuestionTypeLabel(item)}</option>)}</CFormSelect></CCol>
           <CCol md={2}><CFormLabel>Độ khó</CFormLabel><CFormSelect value={filters.difficulty} onChange={(event) => setFilters((prev) => ({ ...prev, difficulty: event.target.value }))}><option value=''>Tất cả</option>{difficulties.map((item) => <option key={item} value={item}>{item}</option>)}</CFormSelect></CCol>
           <CCol md={2}><CFormLabel>Trạng thái</CFormLabel><CFormSelect value={filters.questionStatus} onChange={(event) => setFilters((prev) => ({ ...prev, questionStatus: event.target.value }))}><option value=''>Tất cả</option><option value='active'>active</option><option value='draft'>draft</option></CFormSelect></CCol>
           <CCol md={2}><CFormLabel>Có stimulus</CFormLabel><CFormSelect value={filters.hasStimulus} onChange={(event) => setFilters((prev) => ({ ...prev, hasStimulus: event.target.value }))}><option value=''>Tất cả</option><option value='true'>Có</option><option value='false'>Không</option></CFormSelect></CCol>
-          <CCol md={2} className='d-flex gap-2'><CButton color='primary' onClick={() => setFilters((prev) => ({ ...prev, q: String(prev.qDraft || '').trim() }))}>Search</CButton><CButton color='secondary' variant='outline' onClick={() => setFilters({ q: '', qDraft: '', subjectId: '', gradeId: '', skillId: sectionSkillId || '', type: '', difficulty: '', questionStatus: 'active', hasStimulus: '' })}>Đặt lại</CButton></CCol>
+          <CCol md={2} className='d-flex gap-2'><CButton color='primary' onClick={() => setFilters((prev) => ({ ...prev, q: String(prev.qDraft || '').trim() }))}>Search</CButton><CButton color='secondary' variant='outline' onClick={() => setFilters({ q: '', qDraft: '', subjectId: assessmentSubjectId || '', gradeId: '', skillId: sectionSkillId || '', type: '', difficulty: '', questionStatus: 'active', hasStimulus: '' })}>Đặt lại</CButton></CCol>
         </CRow>
 
         <CRow className='g-3 mb-4'>
@@ -183,7 +205,7 @@ export default function AssessmentQuestionPickerModal({ visible, section, bootst
       </CModalBody>
       <CModalFooter>
         <CButton color='secondary' variant='outline' onClick={handleClose} disabled={saving || loading}>Đóng</CButton>
-        <CButton color='primary' onClick={handleConfirm} disabled={saving || loading}>{saving ? 'Đang thêm...' : `Thêm ${selectedIds.length} câu vào phần`}</CButton>
+        <CButton color='primary' onClick={handleConfirm} disabled={saving || loading || !assessmentSubjectId}>{saving ? 'Đang thêm...' : `Thêm ${selectedIds.length} câu vào phần`}</CButton>
       </CModalFooter>
     </CModal>
   )

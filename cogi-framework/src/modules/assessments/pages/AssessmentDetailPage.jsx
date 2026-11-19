@@ -20,8 +20,15 @@ import {
   CNavLink,
   CRow,
   CSpinner,
+  CTable,
+  CTableBody,
+  CTableDataCell,
+  CTableHead,
+  CTableHeaderCell,
+  CTableRow,
 } from '@coreui/react'
-import { getLearningManagementBootstrap, getQuestionStimuli } from '../../learning-management/services/learningObjectApi'
+import { getLearningManagementBootstrap, getQuestionById, getQuestionStimuli, getQuestionUsageProtection, updateQuestion } from '../../learning-management/services/learningObjectApi'
+import QuestionEditorModal from '../../learning-management/components/QuestionEditorModal'
 import AssessmentEditorModal from '../components/AssessmentEditorModal'
 import AssessmentPreview from '../components/AssessmentPreview'
 import AssessmentPlacementRulesTab from '../components/AssessmentPlacementRulesTab'
@@ -56,6 +63,7 @@ import {
   validateAssessmentVersion,
 } from '../services/assessmentService'
 import {
+  computeSectionKnowledgeDifficultyStats,
   computeSectionStats,
   computeVersionStats,
   formatCandidateRange,
@@ -65,6 +73,7 @@ import {
   getAssessmentTypeLabel,
   getEntityId,
   getQuestionDisplayModeLabel,
+  getQuestionDifficultyLabel,
   getQuestionTypeLabel,
   getRuntimeConfigSummary,
   getStatusBadgeColor,
@@ -177,7 +186,38 @@ function SectionCard({ section, currentVersionIsDraft, savingSection = false, on
     return String(getEntityId(left) || '').localeCompare(String(getEntityId(right) || ''))
   })
   const stats = computeSectionStats({ assessmentQuestions: questions })
+  const knowledgeDifficultyStats = useMemo(
+    () => computeSectionKnowledgeDifficultyStats({ assessmentQuestions: questions }),
+    [questions],
+  )
+  const sortedKnowledgeDifficultyStats = useMemo(() => {
+    const difficultyRank = { easy: 1, medium: 2, hard: 3, unclassified: 4 }
+    return [...knowledgeDifficultyStats].sort((left, right) => {
+      const leftKnowledge = String(left?.knowledgeNodeTitle || '')
+      const rightKnowledge = String(right?.knowledgeNodeTitle || '')
+      const knowledgeCompare = leftKnowledge.localeCompare(rightKnowledge, 'vi')
+      if (knowledgeCompare !== 0) return knowledgeCompare
+      const leftRank = difficultyRank[String(left?.difficulty || '').toLowerCase()] || 99
+      const rightRank = difficultyRank[String(right?.difficulty || '').toLowerCase()] || 99
+      if (leftRank !== rightRank) return leftRank - rightRank
+      return String(left?.difficulty || '').localeCompare(String(right?.difficulty || ''), 'vi')
+    })
+  }, [knowledgeDifficultyStats])
+  const knowledgeDifficultyTotals = useMemo(
+    () => sortedKnowledgeDifficultyStats.reduce((acc, item) => ({
+      questionCount: acc.questionCount + Number(item?.questionCount || 0),
+      totalScore: acc.totalScore + Number(item?.totalScore || 0),
+    }), { questionCount: 0, totalScore: 0 }),
+    [sortedKnowledgeDifficultyStats],
+  )
   const hasOrderChanges = questions.some((item) => String(orderDrafts[String(getEntityId(item))] ?? '') !== String(item?.order ?? ''))
+
+  function formatCompactNumber(value) {
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed)) return '0'
+    if (Number.isInteger(parsed)) return String(parsed)
+    return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 4 }).format(parsed)
+  }
 
   function buildOrderItems() {
     return questions.map((item) => ({
@@ -211,6 +251,42 @@ function SectionCard({ section, currentVersionIsDraft, savingSection = false, on
       </CCardHeader>
       <CCardBody>
         {section.description ? <div className='small mb-2'>{truncateText(section.description, 180)}</div> : null}
+        {questions.length > 0 && sortedKnowledgeDifficultyStats.length > 0 ? (
+          <div className='mb-3'>
+            <div className='fw-semibold small mb-2'>Phân bố kiến thức và độ khó</div>
+            <div style={{ overflowX: 'auto' }}>
+              <CTable bordered hover responsive small className='mb-0 align-middle'>
+                <CTableHead>
+                  <CTableRow>
+                    <CTableHeaderCell style={{ width: 64 }}>STT</CTableHeaderCell>
+                    <CTableHeaderCell>Khối kiến thức</CTableHeaderCell>
+                    <CTableHeaderCell style={{ minWidth: 140 }}>Độ khó</CTableHeaderCell>
+                    <CTableHeaderCell className='text-end' style={{ width: 120 }}>Số câu</CTableHeaderCell>
+                    <CTableHeaderCell className='text-end' style={{ width: 140 }}>Tổng điểm</CTableHeaderCell>
+                  </CTableRow>
+                </CTableHead>
+                <CTableBody>
+                  {sortedKnowledgeDifficultyStats.map((item, index) => (
+                    <CTableRow key={item.key}>
+                      <CTableDataCell>{index + 1}</CTableDataCell>
+                      <CTableDataCell style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                        {item.knowledgeNodeTitle}
+                      </CTableDataCell>
+                      <CTableDataCell>{getQuestionDifficultyLabel(item.difficulty)}</CTableDataCell>
+                      <CTableDataCell className='text-end'>{formatCompactNumber(item.questionCount)}</CTableDataCell>
+                      <CTableDataCell className='text-end'>{formatCompactNumber(item.totalScore)}</CTableDataCell>
+                    </CTableRow>
+                  ))}
+                  <CTableRow>
+                    <CTableDataCell colSpan={3} className='fw-semibold text-end'>Tổng cộng</CTableDataCell>
+                    <CTableDataCell className='text-end fw-semibold'>{formatCompactNumber(knowledgeDifficultyTotals.questionCount)}</CTableDataCell>
+                    <CTableDataCell className='text-end fw-semibold'>{formatCompactNumber(knowledgeDifficultyTotals.totalScore)}</CTableDataCell>
+                  </CTableRow>
+                </CTableBody>
+              </CTable>
+            </div>
+          </div>
+        ) : null}
         {questions.length === 0 ? <div className='text-body-secondary'>Chưa có câu hỏi trong phần này.</div> : (
           <div className='d-grid gap-3'>
             {questions.map((item, index) => (
@@ -281,6 +357,14 @@ export default function AssessmentDetailPage() {
   const [showQuestionEditor, setShowQuestionEditor] = useState(false)
   const [editingAssessmentQuestion, setEditingAssessmentQuestion] = useState(null)
   const [sectionStimuli, setSectionStimuli] = useState([])
+  const [showPreviewQuestionEditor, setShowPreviewQuestionEditor] = useState(false)
+  const [previewEditingQuestion, setPreviewEditingQuestion] = useState(null)
+  const [previewQuestionGuard, setPreviewQuestionGuard] = useState(null)
+  const [loadingPreviewQuestionEditor, setLoadingPreviewQuestionEditor] = useState(false)
+  const [savingPreviewQuestion, setSavingPreviewQuestion] = useState(false)
+  const [previewQuestionDirty, setPreviewQuestionDirty] = useState(false)
+  const [pendingPreviewAnchorId, setPendingPreviewAnchorId] = useState('')
+  const [previewScrollRestoreContext, setPreviewScrollRestoreContext] = useState(null)
 
   const requestedTab = String(searchParams.get('tab') || '').trim()
   const selectedVersionId = String(searchParams.get('version') || '').trim()
@@ -291,8 +375,81 @@ export default function AssessmentDetailPage() {
   const currentVersionIsDraft = String(versionDetail?.versionStatus || currentVersionSummary?.versionStatus || '').trim() === 'draft'
   const currentVersionCanTest = Boolean(currentVersionSummary) && ['draft', 'published'].includes(String(currentVersionSummary?.versionStatus || '').trim())
   const speakingRequired = (versionDetail || currentVersionSummary)?.requiresSpeaking !== false
+  const assessmentSubjectId = String(getEntityId(assessment?.subject) || assessment?.subject?.id || '').trim()
+  const crossSubjectQuestionWarnings = useMemo(() => {
+    if (!assessmentSubjectId) return []
+    const warnings = []
+    const sections = Array.isArray(versionDetail?.sections) ? versionDetail.sections : []
+    for (const section of sections) {
+      const sectionTitle = section?.title || section?.code || `#${getEntityId(section) || ''}`
+      const questions = Array.isArray(section?.assessmentQuestions) ? section.assessmentQuestions : []
+      for (const item of questions) {
+        const question = item?.question
+        const questionSubjectId = String(getEntityId(question?.subject) || question?.subject?.id || '').trim()
+        if (!questionSubjectId || questionSubjectId === assessmentSubjectId) continue
+        warnings.push({
+          sectionTitle,
+          questionCode: question?.code || `#${getEntityId(question) || ''}`,
+          questionSubjectTitle: question?.subject?.title || question?.subject?.code || questionSubjectId,
+        })
+      }
+    }
+    return warnings
+  }, [assessmentSubjectId, versionDetail?.sections])
+  const previewQuestionNotice = useMemo(() => {
+    if (!previewQuestionGuard) return ''
+    const reasons = Array.isArray(previewQuestionGuard?.reasons) ? previewQuestionGuard.reasons : []
+    if (previewQuestionGuard?.blocked) {
+      return [`Câu hỏi đang bị khóa chỉnh sửa trực tiếp.`, ...reasons].filter(Boolean).join('\n')
+    }
+    const references = Array.isArray(previewQuestionGuard?.references?.assessmentQuestions) ? previewQuestionGuard.references.assessmentQuestions : []
+    if (references.length === 0) return ''
+    const sample = references.slice(0, 3).map((item) => item?.label).filter(Boolean)
+    const suffix = references.length > sample.length ? `\n... và ${references.length - sample.length} tham chiếu khác.` : ''
+    return `Câu hỏi đang được tham chiếu trong ${references.length} assessment/question.\n${sample.join('\n')}${suffix}`.trim()
+  }, [previewQuestionGuard])
   const availableTabs = useMemo(() => TABS.filter((item) => item.key !== 'speaking-config' || speakingRequired), [speakingRequired])
   const activeTab = availableTabs.some((item) => item.key === requestedTab) ? requestedTab : 'overview'
+
+  function buildPreviewQuestionAnchorId({ assessment: assessmentEntity, version, section, question }) {
+    const assessmentKey = String(getEntityId(assessmentEntity) || assessmentEntity?.id || 'assessment').trim() || 'assessment'
+    const versionKey = String(getEntityId(version) || version?.id || 'version').trim() || 'version'
+    const sectionKey = String(getEntityId(section) || section?.id || 'section').trim() || 'section'
+    const questionKey = String(getEntityId(question) || question?.id || 'question').trim() || 'question'
+    return `preview-${assessmentKey}-${versionKey}-${sectionKey}-${questionKey}`.replace(/[^a-zA-Z0-9_-]/g, '-')
+  }
+
+  function getScrollableContainer(element) {
+    let current = element?.parentElement || null
+    while (current) {
+      const style = window.getComputedStyle(current)
+      const overflowY = style?.overflowY || ''
+      if ((overflowY === 'auto' || overflowY === 'scroll') && current.scrollHeight > current.clientHeight) {
+        return current
+      }
+      current = current.parentElement
+    }
+    return window
+  }
+
+  function restorePreviewAnchorPosition(anchorId, fallbackTop = null) {
+    if (!anchorId) return
+    const anchorEl = document.getElementById(anchorId)
+    if (!anchorEl) {
+      if (Number.isFinite(fallbackTop)) window.scrollTo({ top: Number(fallbackTop), behavior: 'auto' })
+      return
+    }
+    const scrollable = getScrollableContainer(anchorEl)
+    if (scrollable === window) {
+      const top = anchorEl.getBoundingClientRect().top + window.scrollY - 120
+      window.scrollTo({ top: Math.max(0, top), behavior: 'auto' })
+      return
+    }
+    const containerRect = scrollable.getBoundingClientRect()
+    const anchorRect = anchorEl.getBoundingClientRect()
+    const top = scrollable.scrollTop + (anchorRect.top - containerRect.top) - 80
+    scrollable.scrollTo({ top: Math.max(0, top), behavior: 'auto' })
+  }
 
   useEffect(() => {
     if (activeTab !== requestedTab) {
@@ -322,6 +479,16 @@ export default function AssessmentDetailPage() {
     }
     loadVersionDetail(targetVersionId)
   }, [currentVersionSummary, selectedVersionId])
+
+  useEffect(() => {
+    if (!pendingPreviewAnchorId || !versionDetail || activeTab !== 'preview') return
+    const frame = window.requestAnimationFrame(() => {
+      restorePreviewAnchorPosition(pendingPreviewAnchorId, previewScrollRestoreContext?.scrollTop ?? null)
+      setPendingPreviewAnchorId('')
+      setPreviewScrollRestoreContext(null)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [activeTab, pendingPreviewAnchorId, previewScrollRestoreContext, versionDetail])
 
   async function loadBootstrapAndAssessment() {
     setLoading(true)
@@ -607,6 +774,85 @@ export default function AssessmentDetailPage() {
     return previewRandomQuestions(sectionId, payload)
   }
 
+  async function handleEditPreviewQuestion(context) {
+    if (!context?.question) return
+    const questionRef = context.question.documentId || context.question.id || getEntityId(context.question)
+    if (!questionRef) {
+      setError('Không xác định được câu hỏi cần chỉnh sửa')
+      return
+    }
+
+    const anchorId = context.anchorId || buildPreviewQuestionAnchorId({
+      assessment,
+      version: versionDetail || currentVersionSummary,
+      section: context.section,
+      question: context.question,
+    })
+    const anchorEl = anchorId ? document.getElementById(anchorId) : null
+    const scrollable = anchorEl ? getScrollableContainer(anchorEl) : window
+    const scrollTop = scrollable === window ? window.scrollY : scrollable.scrollTop
+
+    setLoadingPreviewQuestionEditor(true)
+    setError('')
+    setPreviewQuestionGuard(null)
+    try {
+      const [question, protection] = await Promise.all([
+        getQuestionById(questionRef),
+        getQuestionUsageProtection(questionRef),
+      ])
+      if (!question) {
+        throw new Error('Không tải được dữ liệu câu hỏi để chỉnh sửa')
+      }
+      setPreviewEditingQuestion(question)
+      setPreviewQuestionGuard(protection || null)
+      setPreviewScrollRestoreContext({
+        assessmentId: getEntityId(assessment) || null,
+        versionId: getEntityId(versionDetail || currentVersionSummary) || null,
+        sectionId: getEntityId(context.section) || null,
+        questionId: getEntityId(context.question) || null,
+        anchorId,
+        scrollTop,
+      })
+      setShowPreviewQuestionEditor(true)
+    } catch (requestError) {
+      setError(getApiMessage(requestError, 'Không tải được câu hỏi để chỉnh sửa'))
+    } finally {
+      setLoadingPreviewQuestionEditor(false)
+    }
+  }
+
+  function handleClosePreviewQuestionEditor() {
+    if (savingPreviewQuestion || loadingPreviewQuestionEditor) return
+    if (previewQuestionDirty && !window.confirm('Bạn có thay đổi chưa lưu. Đóng mà không lưu?')) return
+    setShowPreviewQuestionEditor(false)
+    setPreviewEditingQuestion(null)
+    setPreviewQuestionGuard(null)
+    setPreviewQuestionDirty(false)
+  }
+
+  async function handleSubmitPreviewQuestion(payload) {
+    if (!previewEditingQuestion) return
+    setSavingPreviewQuestion(true)
+    setError('')
+    setSuccess('')
+    try {
+      const questionRef = previewEditingQuestion.documentId || previewEditingQuestion.id || getEntityId(previewEditingQuestion)
+      await updateQuestion(questionRef, payload)
+      await refreshVersion(getEntityId(versionDetail || currentVersionSummary))
+      setShowPreviewQuestionEditor(false)
+      setPreviewQuestionDirty(false)
+      setPreviewEditingQuestion(null)
+      setPreviewQuestionGuard(null)
+      setPendingPreviewAnchorId(previewScrollRestoreContext?.anchorId || '')
+      setSuccess('Đã cập nhật câu hỏi từ tab xem trước')
+    } catch (requestError) {
+      setError(getApiMessage(requestError, 'Không lưu được câu hỏi'))
+      throw requestError
+    } finally {
+      setSavingPreviewQuestion(false)
+    }
+  }
+
   async function handleQuestionSubmit(payload) {
     if (!editingAssessmentQuestion) return
     setSavingQuestion(true)
@@ -671,13 +917,13 @@ export default function AssessmentDetailPage() {
     } finally {
       setSavingQuestion(false)
     }
+  }
 
-    function openCloneVersionEditor(mode) {
-      setVersionCloneMode(mode)
-      setVersionEditorMode('clone')
-      setVersionEditorValue(buildCloneDraft(versionDetail || currentVersionSummary))
-      setShowVersionEditor(true)
-    }
+  function openCloneVersionEditor(mode) {
+    setVersionCloneMode(mode)
+    setVersionEditorMode('clone')
+    setVersionEditorValue(buildCloneDraft(versionDetail || currentVersionSummary))
+    setShowVersionEditor(true)
   }
 
   if (loading) {
@@ -836,6 +1082,18 @@ export default function AssessmentDetailPage() {
             <CCardBody>
               {versionLoading ? <div className='d-flex align-items-center gap-2'><CSpinner size='sm' /><span>Đang tải cấu trúc đề...</span></div> : !versionDetail ? <div className='text-body-secondary'>Chưa có phiên bản để chỉnh sửa.</div> : sortByOrder(versionDetail.sections).length === 0 ? <div className='text-body-secondary'>Phiên bản này chưa có phần thi nào.</div> : (
                 <div className='d-grid gap-4'>
+                  {crossSubjectQuestionWarnings.length > 0 ? (
+                    <CAlert color='warning'>
+                      {`Phát hiện ${crossSubjectQuestionWarnings.length} câu hỏi khác môn với Assessment hiện tại. Hệ thống không tự động sửa dữ liệu cũ.`}
+                      <ul className='mb-0 mt-2'>
+                        {crossSubjectQuestionWarnings.slice(0, 10).map((item, index) => (
+                          <li key={`${item.sectionTitle}-${item.questionCode}-${index}`}>
+                            {`${item.questionCode} (${item.questionSubjectTitle}) ở phần ${item.sectionTitle}`}
+                          </li>
+                        ))}
+                      </ul>
+                    </CAlert>
+                  ) : null}
                   {sortByOrder(versionDetail.sections).map((section) => (
                     <SectionCard
                       key={getEntityId(section)}
@@ -871,15 +1129,41 @@ export default function AssessmentDetailPage() {
       ) : null}
 
       {activeTab === 'preview' ? (
-        versionLoading ? <div className='d-flex align-items-center gap-2'><CSpinner size='sm' /><span>Đang tải bản xem trước...</span></div> : <AssessmentPreview assessment={assessment} version={versionDetail} showAdminAnswers />
+        versionLoading ? <div className='d-flex align-items-center gap-2'><CSpinner size='sm' /><span>Đang tải bản xem trước...</span></div> : (
+          <>
+            {loadingPreviewQuestionEditor ? <CAlert color='info'>Đang tải dữ liệu câu hỏi...</CAlert> : null}
+            <AssessmentPreview
+              assessment={assessment}
+              version={versionDetail}
+              showAdminAnswers
+              onEditQuestion={handleEditPreviewQuestion}
+              buildQuestionAnchorId={buildPreviewQuestionAnchorId}
+              disableEditQuestion={loadingPreviewQuestionEditor || savingPreviewQuestion}
+            />
+          </>
+        )
       ) : null}
 
       <AssessmentEditorModal visible={showAssessmentEditor} saving={savingAssessment} assessment={assessment} subjects={subjects} onClose={() => { if (!savingAssessment) setShowAssessmentEditor(false) }} onSubmit={handleAssessmentSubmit} />
       <AssessmentVersionEditorModal visible={showVersionEditor} saving={savingVersion} mode={versionEditorMode} cloneMode={versionCloneMode} assessment={assessment} version={versionEditorValue} onClose={() => { if (!savingVersion) { setShowVersionEditor(false); setVersionEditorValue(null) } }} onSubmit={handleVersionSubmit} />
       <AssessmentSectionEditorModal visible={showSectionEditor} saving={savingSection} section={editingSection} versionId={getEntityId(versionDetail || currentVersionSummary)} skills={skills} stimuli={sectionStimuli} assessmentQuestions={editingSection?.assessmentQuestions || []} onClose={() => { if (!savingSection) { setShowSectionEditor(false); setEditingSection(null) } }} onSubmit={handleSectionSubmit} />
-      <AssessmentQuestionPickerModal visible={showQuestionPicker} section={pickerSection} bootstrap={bootstrap} saving={savingQuestion} onClose={() => { if (!savingQuestion) { setShowQuestionPicker(false); setPickerSection(null) } }} onAdd={handleAddQuestions} />
-      <AssessmentRandomQuestionModal visible={showRandomQuestionPicker} section={randomPickerSection} bootstrap={bootstrap} saving={savingQuestion} onClose={() => { if (!savingQuestion) { setShowRandomQuestionPicker(false); setRandomPickerSection(null) } }} onAdd={handleAddRandomQuestions} onPreview={handlePreviewRandomQuestions} />
+      <AssessmentQuestionPickerModal visible={showQuestionPicker} section={pickerSection} assessmentSubject={assessment?.subject || null} bootstrap={bootstrap} saving={savingQuestion} onClose={() => { if (!savingQuestion) { setShowQuestionPicker(false); setPickerSection(null) } }} onAdd={handleAddQuestions} />
+      <AssessmentRandomQuestionModal visible={showRandomQuestionPicker} section={randomPickerSection} assessmentSubject={assessment?.subject || null} saving={savingQuestion} onClose={() => { if (!savingQuestion) { setShowRandomQuestionPicker(false); setRandomPickerSection(null) } }} onAdd={handleAddRandomQuestions} onPreview={handlePreviewRandomQuestions} />
       <AssessmentQuestionEditorModal visible={showQuestionEditor} saving={savingQuestion} item={editingAssessmentQuestion} onClose={() => { if (!savingQuestion) { setShowQuestionEditor(false); setEditingAssessmentQuestion(null) } }} onSubmit={handleQuestionSubmit} />
+      <QuestionEditorModal
+        visible={showPreviewQuestionEditor}
+        saving={savingPreviewQuestion}
+        bootstrap={bootstrap}
+        editingQuestion={previewEditingQuestion}
+        questionStimuli={sectionStimuli}
+        onClose={handleClosePreviewQuestionEditor}
+        onSubmit={handleSubmitPreviewQuestion}
+        title={`Chỉnh sửa câu hỏi${previewEditingQuestion?.code ? ` – ${previewEditingQuestion.code}` : ''}`}
+        notice={previewQuestionNotice}
+        onDirtyChange={setPreviewQuestionDirty}
+        confirmCloseOnDirty={false}
+        disableSave={Boolean(previewQuestionGuard?.blocked)}
+      />
     </>
   )
 }

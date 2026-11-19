@@ -19,6 +19,15 @@ function toRoleName(role) {
   return role?.name || role?.type || `Role #${role?.id || ''}`
 }
 
+function toTenantMemberStatusLabel(status) {
+  const normalized = typeof status === 'string' ? status.trim().toLowerCase() : ''
+  if (normalized === 'pending') return 'pending (chờ duyệt)'
+  if (normalized === 'active') return 'active (đang hoạt động)'
+  if (normalized === 'inactive') return 'inactive (đã vô hiệu)'
+  if (normalized === 'suspended') return 'suspended (đang tạm khóa)'
+  return status || '-'
+}
+
 function normalizeImportText(value) {
   return typeof value === 'string' ? value.trim() : String(value ?? '').trim()
 }
@@ -208,6 +217,7 @@ export default function UserManagementPage() {
 
   const [draftRoleIdsByUserTenant, setDraftRoleIdsByUserTenant] = useState({})
   const [savingByUserTenant, setSavingByUserTenant] = useState({})
+  const [changingStatusByUserTenant, setChangingStatusByUserTenant] = useState({})
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [passwordTargetUser, setPasswordTargetUser] = useState(null)
   const [passwordValue, setPasswordValue] = useState('')
@@ -387,6 +397,35 @@ export default function UserManagementPage() {
     setPasswordConfirmation('')
     setPasswordError('')
     setShowPasswordModal(true)
+  }
+
+  const handleChangeTenantMemberStatus = async (userTenantId, nextStatus, successMessage) => {
+    setChangingStatusByUserTenant((prev) => ({ ...prev, [userTenantId]: true }))
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await api.patch(`/admin/tenant-users/${userTenantId}/status`, {
+        status: nextStatus,
+      })
+
+      if (!response.data?.ok) {
+        setError('Không thể cập nhật trạng thái thành viên tenant')
+        return
+      }
+
+      await fetchUsers()
+      setSuccess(successMessage)
+    } catch (requestError) {
+      const message =
+        requestError?.response?.data?.error?.message
+        || requestError?.response?.data?.message
+        || requestError?.message
+        || 'Không thể cập nhật trạng thái thành viên tenant'
+      setError(message)
+    } finally {
+      setChangingStatusByUserTenant((prev) => ({ ...prev, [userTenantId]: false }))
+    }
   }
 
   const handleClosePasswordModal = () => {
@@ -939,6 +978,8 @@ export default function UserManagementPage() {
               const originalKey = [...originalRoleIds].sort((a, b) => a - b).join(',')
               const dirty = draftKey !== originalKey
               const saving = Boolean(savingByUserTenant[userTenantId])
+              const changingStatus = Boolean(changingStatusByUserTenant[userTenantId])
+              const userTenantStatus = String(item?.userTenantStatus || '').trim().toLowerCase()
 
               return (
                 <tr key={userTenantId}>
@@ -951,7 +992,7 @@ export default function UserManagementPage() {
                       Username: {item?.user?.username || '-'}
                       {item?.user?.fullName ? ` - ${item.user.fullName}` : ''}
                     </div>
-                    <div>Tenant status: {item?.userTenantStatus || '-'}</div>
+                    <div>Tenant status: {toTenantMemberStatusLabel(item?.userTenantStatus)}</div>
                     <div>Confirmed: {item?.user?.confirmed ? 'Yes' : 'No'}</div>
                     <div>Blocked: {item?.user?.blocked ? 'Yes' : 'No'}</div>
                   </td>
@@ -976,15 +1017,46 @@ export default function UserManagementPage() {
                   <td style={{ borderBottom: '1px solid #eee', padding: '10px 8px', verticalAlign: 'top' }}>
                     <button
                       type="button"
-                      disabled={!dirty || saving}
+                      disabled={!dirty || saving || changingStatus}
                       onClick={() => handleSaveRoles(userTenantId)}
-                      style={{ padding: '8px 12px', cursor: !dirty || saving ? 'not-allowed' : 'pointer' }}
+                      style={{ padding: '8px 12px', cursor: !dirty || saving || changingStatus ? 'not-allowed' : 'pointer' }}
                     >
                       {saving ? 'Đang lưu...' : 'Lưu quyền'}
                     </button>
+                    {userTenantStatus === 'pending' ? (
+                      <button
+                        type="button"
+                        onClick={() => handleChangeTenantMemberStatus(userTenantId, 'active', 'Đã duyệt và kích hoạt thành viên tenant')}
+                        disabled={saving || changingStatus}
+                        style={{ padding: '8px 12px', marginTop: 8 }}
+                      >
+                        {changingStatus ? 'Đang xử lý...' : 'Duyệt kích hoạt'}
+                      </button>
+                    ) : null}
+                    {userTenantStatus === 'active' ? (
+                      <button
+                        type="button"
+                        onClick={() => handleChangeTenantMemberStatus(userTenantId, 'inactive', 'Đã vô hiệu hóa thành viên tenant')}
+                        disabled={saving || changingStatus}
+                        style={{ padding: '8px 12px', marginTop: 8 }}
+                      >
+                        {changingStatus ? 'Đang xử lý...' : 'Vô hiệu hóa'}
+                      </button>
+                    ) : null}
+                    {userTenantStatus === 'inactive' ? (
+                      <button
+                        type="button"
+                        onClick={() => handleChangeTenantMemberStatus(userTenantId, 'active', 'Đã kích hoạt lại thành viên tenant')}
+                        disabled={saving || changingStatus}
+                        style={{ padding: '8px 12px', marginTop: 8 }}
+                      >
+                        {changingStatus ? 'Đang xử lý...' : 'Kích hoạt lại'}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => handleOpenPasswordModal(item)}
+                      disabled={saving || changingStatus}
                       style={{ padding: '8px 12px', marginTop: 8 }}
                     >
                       Đặt mật khẩu

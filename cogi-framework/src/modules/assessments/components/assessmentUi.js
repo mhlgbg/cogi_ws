@@ -32,6 +32,11 @@ export const QUESTION_DISPLAY_MODE_LABELS = {
   all: 'Tất cả câu',
   inline_fill: 'Điền trực tiếp trong nội dung',
 }
+export const QUESTION_DIFFICULTY_LABELS = {
+  easy: 'dễ',
+  medium: 'trung bình',
+  hard: 'khó',
+}
 export const RESULT_STATUS_LABELS = {
   pending: 'Chờ xử lý',
   partially_scored: 'Chờ hoàn tất',
@@ -143,6 +148,53 @@ export function computeSectionStats(section) {
     totalQuestions: rows.length,
     totalPoints: rows.reduce((sum, item) => sum + Number(item?.points || 0), 0),
   }
+}
+
+export function getQuestionDifficultyLabel(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (!normalized || normalized === 'unclassified') return 'chưa phân loại'
+  return QUESTION_DIFFICULTY_LABELS[normalized] || normalized
+}
+
+export function computeSectionKnowledgeDifficultyStats(section) {
+  const rows = Array.isArray(section?.assessmentQuestions) ? section.assessmentQuestions : []
+  const grouped = new Map()
+
+  for (const assessmentQuestion of rows) {
+    const question = assessmentQuestion?.question || null
+    const knowledgeNode = question?.knowledgeNode || null
+    const knowledgeNodeId = String(getEntityId(knowledgeNode) || '').trim()
+    const knowledgeNodeTitle = knowledgeNode?.title || knowledgeNode?.code || ''
+    const difficultyRaw = String(question?.difficulty || '').trim().toLowerCase()
+    const normalizedDifficulty = difficultyRaw || 'unclassified'
+    const key = `${knowledgeNodeId || 'unclassified'}::${normalizedDifficulty}`
+    const points = Number(assessmentQuestion?.points || 0)
+
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        key,
+        knowledgeNodeId: knowledgeNodeId || null,
+        knowledgeNodeTitle: knowledgeNodeTitle || 'Chưa phân loại',
+        difficulty: normalizedDifficulty,
+        questionCount: 0,
+        totalScore: 0,
+      })
+    }
+
+    const target = grouped.get(key)
+    target.questionCount += 1
+    target.totalScore += points
+  }
+
+  return Array.from(grouped.values()).sort((left, right) => {
+    const leftLabel = String(left.knowledgeNodeTitle || '')
+    const rightLabel = String(right.knowledgeNodeTitle || '')
+    const labelCompare = leftLabel.localeCompare(rightLabel, 'vi')
+    if (labelCompare !== 0) return labelCompare
+    const leftDifficulty = String(left.difficulty || '')
+    const rightDifficulty = String(right.difficulty || '')
+    return leftDifficulty.localeCompare(rightDifficulty, 'vi')
+  })
 }
 
 export function computeVersionStats(version) {

@@ -1,6 +1,11 @@
+import ExamCampaignListPage from '../pages/ExamCampaignListPage'
+import ExamCampaignDetailPage from '../pages/ExamCampaignDetailPage'
 import ExamRoundListPage from '../pages/ExamRoundListPage'
 import ExamRoundCreatePage from '../pages/ExamRoundCreatePage'
 import ExamRoundDetailPage from '../pages/ExamRoundDetailPage'
+import ExamSlotListPage from '../pages/ExamSlotListPage'
+import AssessmentSessionListPage from '../pages/AssessmentSessionListPage'
+import AssessmentSessionDetailPage from '../pages/AssessmentSessionDetailPage'
 import LearnerExamDetailPage from '../pages/LearnerExamDetailPage'
 import LearnerExamListPage from '../pages/LearnerExamListPage'
 import LearnerExamRegisterProfilePlaceholderPage from '../pages/LearnerExamRegisterProfilePlaceholderPage'
@@ -11,6 +16,42 @@ const DETAIL_FEATURE_KEYS = ['exam-round.manage', 'exam-round.approve']
 const LEARNER_FEATURE_KEY = 'exam-registration.self'
 
 const examManagementRoutes = [
+  {
+    path: '/exam-campaigns',
+    title: 'Quản lý đợt thi',
+    featureKeys: ['exam-campaign.manage', 'exam-slot.manage', 'assessment-session.manage'],
+    component: ExamCampaignListPage,
+  },
+  {
+    path: '/exam-campaigns/:documentId',
+    title: 'Chi tiết đợt thi',
+    featureKeys: ['exam-campaign.manage', 'exam-slot.manage', 'assessment-session.manage'],
+    component: ExamCampaignDetailPage,
+  },
+  {
+    path: '/exam-slots',
+    title: 'Ca thi',
+    featureKeys: ['exam-campaign.manage', 'exam-slot.manage', 'assessment-session.manage'],
+    component: ExamSlotListPage,
+  },
+  {
+    path: '/assessment-sessions',
+    title: 'Phiên thi',
+    featureKeys: ['exam-campaign.manage', 'exam-slot.manage', 'assessment-session.manage'],
+    component: AssessmentSessionListPage,
+  },
+  {
+    path: '/assessment-sessions/:documentId',
+    title: 'Chi tiết phiên thi',
+    featureKeys: ['exam-campaign.manage', 'exam-slot.manage', 'assessment-session.manage'],
+    component: AssessmentSessionDetailPage,
+  },
+  {
+    path: '/assessment-sessions/:id',
+    title: 'Chi tiết phiên thi',
+    featureKeys: ['exam-campaign.manage', 'exam-slot.manage', 'assessment-session.manage'],
+    component: AssessmentSessionDetailPage,
+  },
   {
     path: '/exam-rounds',
     title: 'Đợt thi chuẩn đầu ra',

@@ -10,7 +10,7 @@ const userManagementFeatures = {
       name: 'Manage Users',
       key: 'user.manage',
       order: 2,
-      description: 'Manage tenant users and roles',
+      description: 'Manage tenant users, roles, and membership status',
       path: '/users',
       showInMenu: true,
     },

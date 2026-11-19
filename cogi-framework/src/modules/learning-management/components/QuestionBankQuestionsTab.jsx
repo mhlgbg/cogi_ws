@@ -83,7 +83,7 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
   const [meta, setMeta] = useState(null)
   const [stimuli, setStimuli] = useState([])
   const [qDraft, setQDraft] = useState('')
-  const [filters, setFilters] = useState({ q: '', type: '', subjectId: '', gradeId: '', skillId: '', stimulusId: '', difficulty: '', questionStatus: '' })
+  const [filters, setFilters] = useState({ q: '', type: '', subjectId: '', knowledgeNodeId: '', gradeId: '', skillId: '', stimulusId: '', difficulty: '', questionStatus: '' })
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [error, setError] = useState('')
@@ -104,6 +104,10 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
   const questionTypes = bootstrap?.questionTypes || []
   const questionStatuses = bootstrap?.questionStatuses || []
   const difficulties = bootstrap?.difficulties || []
+  const filteredKnowledgeNodes = useMemo(() => {
+    if (!filters.subjectId) return knowledgeNodes
+    return knowledgeNodes.filter((item) => String(item?.subject?.id ?? item?.subjectId ?? '') === String(filters.subjectId) || !item?.subject)
+  }, [filters.subjectId, knowledgeNodes])
   const pagination = normalizePagination(meta?.pagination)
   const pages = useMemo(() => buildPages(page, pagination.pageCount), [page, pagination.pageCount])
   const canManageQuestions = feature?.hasFeature?.('learning.question.manage') || feature?.hasFeature?.('learning.learning-object.manage')
@@ -113,7 +117,7 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
       <div className='d-flex gap-2'>
         <CButton color='secondary' variant='outline' onClick={() => setShowImport(true)}>Import JSON</CButton>
         {canManageQuestions ? <CButton color='danger' variant='outline' onClick={() => setShowBulkDeleteImported(true)}>Xóa câu hỏi đã import</CButton> : null}
-        {canManageQuestions ? <CButton color='warning' variant='outline' onClick={() => setShowBulkPrefixCleanup(true)}>Làm sạch nội dung</CButton> : null}
+        {canManageQuestions ? <CButton color='warning' variant='outline' onClick={() => setShowBulkPrefixCleanup(true)}>Tìm kiếm & Thay thế</CButton> : null}
         <CButton color='primary' onClick={() => { setEditingQuestion(null); setShowEditor(true) }}>+ Tạo câu hỏi</CButton>
       </div>,
     )
@@ -132,6 +136,7 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
           q: filters.q || undefined,
           type: filters.type || undefined,
           subjectId: filters.subjectId || undefined,
+          knowledgeNodeId: filters.knowledgeNodeId || undefined,
           gradeId: filters.gradeId || undefined,
           skillId: filters.skillId || undefined,
           stimulusId: filters.stimulusId || undefined,
@@ -176,6 +181,7 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
         q: filters.q || undefined,
         type: filters.type || undefined,
         subjectId: filters.subjectId || undefined,
+        knowledgeNodeId: filters.knowledgeNodeId || undefined,
         gradeId: filters.gradeId || undefined,
         skillId: filters.skillId || undefined,
         stimulusId: filters.stimulusId || undefined,
@@ -264,7 +270,8 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
           <CRow className='g-3 align-items-end'>
             <CCol md={4}><CFormInput label='Từ khóa' value={qDraft} onChange={(event) => setQDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { setFilters((prev) => ({ ...prev, q: String(qDraft || '').trim() })); setPage(1) } }} placeholder='Tìm theo code, title, question text...' /></CCol>
             <CCol md={2}><CFormLabel>Loại</CFormLabel><CFormSelect value={filters.type} onChange={(event) => { setFilters((prev) => ({ ...prev, type: event.target.value })); setPage(1) }}><option value=''>Tất cả</option>{questionTypes.map((item) => <option key={item} value={item}>{getQuestionTypeLabel(item)}</option>)}</CFormSelect></CCol>
-            <CCol md={2}><CFormLabel>Môn học</CFormLabel><CFormSelect value={filters.subjectId} onChange={(event) => { setFilters((prev) => ({ ...prev, subjectId: event.target.value })); setPage(1) }}><option value=''>Tất cả</option>{subjects.map((item) => <option key={getEntityId(item)} value={getEntityId(item)}>{item.title || item.code}</option>)}</CFormSelect></CCol>
+            <CCol md={2}><CFormLabel>Môn học</CFormLabel><CFormSelect value={filters.subjectId} onChange={(event) => { setFilters((prev) => ({ ...prev, subjectId: event.target.value, knowledgeNodeId: '' })); setPage(1) }}><option value=''>Tất cả</option>{subjects.map((item) => <option key={getEntityId(item)} value={getEntityId(item)}>{item.title || item.code}</option>)}</CFormSelect></CCol>
+            <CCol md={2}><CFormLabel>Chủ đề kiến thức</CFormLabel><CFormSelect value={filters.knowledgeNodeId} onChange={(event) => { setFilters((prev) => ({ ...prev, knowledgeNodeId: event.target.value })); setPage(1) }}><option value=''>Tất cả</option>{filteredKnowledgeNodes.map((item) => <option key={getEntityId(item)} value={getEntityId(item)}>{item.title || item.code}</option>)}</CFormSelect></CCol>
             <CCol md={2}><CFormLabel>Khối</CFormLabel><CFormSelect value={filters.gradeId} onChange={(event) => { setFilters((prev) => ({ ...prev, gradeId: event.target.value })); setPage(1) }}><option value=''>Tất cả</option>{grades.map((item) => <option key={getEntityId(item)} value={getEntityId(item)}>{item.title || item.code}</option>)}</CFormSelect></CCol>
             <CCol md={2}><CFormLabel>Kỹ năng</CFormLabel><CFormSelect value={filters.skillId} onChange={(event) => { setFilters((prev) => ({ ...prev, skillId: event.target.value })); setPage(1) }}><option value=''>Tất cả</option>{skills.map((item) => <option key={getEntityId(item)} value={getEntityId(item)}>{item.title || item.code}</option>)}</CFormSelect></CCol>
             <CCol md={3}><CFormLabel>Stimulus</CFormLabel><CFormSelect value={filters.stimulusId} onChange={(event) => { setFilters((prev) => ({ ...prev, stimulusId: event.target.value })); setPage(1) }}><option value=''>Tất cả</option>{stimuli.map((item) => <option key={getEntityId(item)} value={getEntityId(item)}>{`${item.code || '-'} • ${item.title || '-'} • ${item.type || '-'}`}</option>)}</CFormSelect></CCol>
@@ -272,7 +279,7 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
             <CCol md={2}><CFormLabel>Trạng thái</CFormLabel><CFormSelect value={filters.questionStatus} onChange={(event) => { setFilters((prev) => ({ ...prev, questionStatus: event.target.value })); setPage(1) }}><option value=''>Tất cả</option>{questionStatuses.map((item) => <option key={item} value={item}>{item}</option>)}</CFormSelect></CCol>
             <CCol md={5} className='d-flex gap-2'>
               <CButton color='primary' onClick={() => { setFilters((prev) => ({ ...prev, q: String(qDraft || '').trim() })); setPage(1) }} disabled={loading}>Search</CButton>
-              <CButton color='secondary' variant='outline' onClick={() => { setQDraft(''); setFilters({ q: '', type: '', subjectId: '', gradeId: '', skillId: '', stimulusId: '', difficulty: '', questionStatus: '' }); setPage(1) }} disabled={loading}>Đặt lại</CButton>
+              <CButton color='secondary' variant='outline' onClick={() => { setQDraft(''); setFilters({ q: '', type: '', subjectId: '', knowledgeNodeId: '', gradeId: '', skillId: '', stimulusId: '', difficulty: '', questionStatus: '' }); setPage(1) }} disabled={loading}>Đặt lại</CButton>
             </CCol>
           </CRow>
         </CCardBody>
@@ -448,9 +455,9 @@ export default function QuestionBankQuestionsTab({ bootstrap, feature, setWorksp
           const blockedCount = Number(result?.result?.blockedCount || 0)
           const failedCount = Number(result?.result?.failedCount || 0)
           if (failedCount > 0) {
-            setError(`Làm sạch hoàn tất với lỗi. Updated: ${updatedCount}, Blocked: ${blockedCount}, Failed: ${failedCount}`)
+            setError(`Thay thế hoàn tất với lỗi. Updated: ${updatedCount}, Blocked: ${blockedCount}, Failed: ${failedCount}`)
           } else {
-            setSuccess(`Làm sạch nội dung thành công. Updated: ${updatedCount}, Blocked: ${blockedCount}, Failed: ${failedCount}`)
+            setSuccess(`Tìm kiếm & Thay thế thành công. Updated: ${updatedCount}, Blocked: ${blockedCount}, Failed: ${failedCount}`)
           }
           await Promise.all([loadQuestions(), onRefreshBootstrap?.()])
         }}
